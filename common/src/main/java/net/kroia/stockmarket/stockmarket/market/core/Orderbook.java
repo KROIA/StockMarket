@@ -65,12 +65,22 @@ public class Orderbook implements ServerSaveable
     //    virtualOrderbook.setDefaultVolumeProvider(volumeProvider);
     //}
     /**
-     * T-210: see {@link VirtualOrderbook#setAskMonotoneFrom}.
-     * @param askMonotoneFrom raw price from which the default ask volume is non-increasing, or null
+     * T-211: see {@link VirtualOrderbook#setDepthReady}.
+     * @param ready true when a volume distribution plugin drives the default provider
      */
-    public void setVirtualAskMonotoneFrom(@Nullable java.util.function.LongSupplier askMonotoneFrom)
+    public void setVirtualDepthReady(boolean ready)
     {
-        virtualOrderbook.setAskMonotoneFrom(askMonotoneFrom);
+        virtualOrderbook.setDepthReady(ready);
+    }
+
+    /**
+     * Trend accumulation: see {@link VirtualOrderbook#setDepthSideFactors}.
+     * @param bidFactor bid side recovery multiplier (1 = neutral)
+     * @param askFactor ask side recovery multiplier (1 = neutral)
+     */
+    public void setVirtualDepthSideFactors(float bidFactor, float askFactor)
+    {
+        virtualOrderbook.setDepthSideFactors(bidFactor, askFactor);
     }
 
     /** @return the virtual order book (tests only: depth memory setup and direct searches) */

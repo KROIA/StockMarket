@@ -88,6 +88,12 @@ public class MarketCache {
         virtualOrderBookCache.resetVirtualVolume();
     }
 
+    /** Trend accumulation: see {@link VirtualOrderBookCache#setVirtualDepthSideFactors}. */
+    public void setVirtualDepthSideFactors(float bidFactor, float askFactor)
+    {
+        virtualOrderBookCache.setVirtualDepthSideFactors(bidFactor, askFactor);
+    }
+
     public void setNextTargetPrice(double nextTargetPrice)
     {
         this.nextTargetPrice = nextTargetPrice;

@@ -160,6 +160,17 @@ public interface IPluginOrderBook {
 
     void resetVirtualVolume();
 
+    /**
+     * Sets how fast the remembered virtual depth outside the editable range recovers, per side. A factor
+     * f &gt; 1 refills that side's missing volume f times faster and removes its excess f times slower;
+     * f &lt; 1 the other way round; 1 = the configured recovery half-life. Applied with the other cached
+     * manipulations; values stay until set again (or the volume distribution plugin is removed). Default: no-op.
+     *
+     * @param bidFactor multiplier for the buy side (prices below the editable range)
+     * @param askFactor multiplier for the sell side (prices above the editable range)
+     */
+    default void setVirtualDepthSideFactors(float bidFactor, float askFactor) {}
+
 
 
     /**

@@ -18,25 +18,4 @@ public interface IVolumeDistributionCalculator {
      */
     float getVolume(double marketPrice, double volumePickPrice);
 
-    /**
-     * T-210: lower bound of the real price range where this calculator's ask volume only shrinks.
-     * <p><b>Contract:</b> for every pair of real prices {@code bound <= p1 <= p2},
-     * {@code |getVolume(marketPrice, p2)| <= |getVolume(marketPrice, p1)|}: the ask volume is
-     * non-increasing upward from the returned price.</p>
-     * <p>The matching walk relies on it: once a price level at or above the bound holds less than half a
-     * raw unit of default volume, every default level above it rounds to 0, so the walk jumps straight to
-     * the next remembered depth (or ends) instead of reading up to millions of empty levels.</p>
-     * <p>The default {@link Double#POSITIVE_INFINITY} means "no such bound known": nothing is skipped
-     * and every level is read, which is always exact, only slower. Override it only with a value the
-     * formula provably satisfies. A bound that is too low (volume rises again above it) breaks matching
-     * exactness: the walk skips ask volume that exists, so orders fill at worse prices or not at all.</p>
-     *
-     * @param marketPrice the current real market price (same value {@link #getVolume} receives)
-     * @return real price from which the ask volume is non-increasing, or {@link Double#POSITIVE_INFINITY}
-     */
-    default double askMonotoneFrom(double marketPrice)
-    {
-        return Double.POSITIVE_INFINITY;
-    }
-
 }

@@ -106,6 +106,19 @@ public class PluginTestSuite extends TestSuite {
         addTest("t208_noProfit_diamond", () -> test_t208NoProfit("diamond_default", T208_NO_PROFIT_DIAMOND));
         addTest("t208_noProfit_dirt", () -> test_t208NoProfit("dirt", T208_NO_PROFIT_DIRT));
         addTest("t208_organic_movesPrice", this::test_t208OrganicMovesPrice);
+        // Trend accumulation
+        addTest("volumeDistribution_trendFactor_math", this::test_volumeDistribution_trendFactorMath);
+        addTest("volumeDistribution_trend_codec_legacy", this::test_volumeDistribution_trendCodec);
+        addTest("volumeDistribution_trend_reachesBook", this::test_volumeDistribution_trendReachesBook);
+        addTest("trend_onOff_report", this::test_trendOnOffReport);
+        // T-214: depth per relative price, sized to the max order
+        addTest("depthScale_diamond_matchesOld", this::test_depthScale_diamondMatchesOld);
+        addTest("depthScale_scaleInvariance", this::test_depthScale_scaleInvariance);
+        addTest("depthScale_rule_markets", this::test_depthScale_rule);
+        addTest("depthScale_netheriteFloor", this::test_depthScale_netheriteFloor);
+        addTest("depthScale_totalAskDepth_comparable", this::test_depthScale_totalAskDepth);
+        addTest("depthScale_maxOrderChange_resets", this::test_depthScale_maxOrderChange);
+        addTest("depthScale_migration_resetsOnce", this::test_depthScale_migration);
         // T-207 regression probes (run only with -Dstockmarket.t207=true)
         addTest("t207_netFlow_matchesFills", this::test_t207_netFlow);
         addTest("t207_spike_holds", this::test_t207_spike);
@@ -689,7 +702,8 @@ public class PluginTestSuite extends TestSuite {
 
             MarketCache cache = new MarketCache(market);
             cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
-                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(defaultPrice, abundance));
+                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(defaultPrice,
+                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(defaultPrice, maxOrder, 1f)));
             market.test_resetVirtualOrderBookVolume();
             List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
 
@@ -1045,6 +1059,30 @@ public class PluginTestSuite extends TestSuite {
         }
     }
 
+    /**
+     * c5: how an exploiter really sells its leftover position (instead of the mark-to-book valuation). Each
+     * runs at most {@link #LIMIT_WAIT_TICKS}; what is still unsold then is valued at 0.
+     */
+    private enum Liquidation {
+        /** max-order market sells, one per 10 ticks (the plain market exit) */
+        ONE_SHOT,
+        /** one market sell every {@link #SLICE_PAUSE_TICKS}: at least 1% of the position, or what the bids within 1% of the price hold */
+        SLICED,
+        /** resting sell limits at +0 / 0.5 / 1 / 1.5 / 2% above the price, re-quoted every {@link #SLICE_PAUSE_TICKS} */
+        LADDER
+    }
+
+    /** c5: pause between two sliced sells / two ladder re-quotes (30 s). */
+    private static final int SLICE_PAUSE_TICKS = 600;
+    /** c5: ladder rungs above the current price. */
+    private static final double[] LADDER_STEPS = {0, 0.005, 0.01, 0.015, 0.02};
+    /**
+     * c5: liquidation strategy of the next {@link #replayPlayers} runs, null = legacy (market exit as planned,
+     * leftovers valued by {@link #markToBook}). Set, the exits of {@link Exit#MARKET} plans, the leftovers of
+     * {@link Exit#LIMIT} plans and the excess of dump plans are sold this way, and unsold items count 0.
+     */
+    private static Liquidation harnessLiquidation = null;
+
     /** How a {@link PlayerPlan} leaves its position after the hold. */
     private enum Exit {
         /** keeps the items (organic buyer, spike, dump-and-rebuy) */
@@ -1104,7 +1142,13 @@ public class PluginTestSuite extends TestSuite {
      * Profit = money change + items gained valued by {@link #markToBook} (items lost valued at the default price).
      */
     private record PlayersResult(double[] profit, double[] spent, double maxPrice, String path, double endPrice,
-                                 long ticks, long wallNanos, List<double[]> checkpoints, float[] pricePath, String notes) {
+                                 long ticks, long wallNanos, List<double[]> checkpoints, float[] pricePath, String notes,
+                                 double[] unsold) {
+        /** @return a copy with other notes */
+        PlayersResult withNotes(String n) {
+            return new PlayersResult(profit, spent, maxPrice, path, endPrice, ticks, wallNanos, checkpoints, pricePath, n, unsold);
+        }
+
         /** @return simulated ticks per wall second */
         double ticksPerSecond() { return wallNanos > 0 ? ticks * 1e9 / wallNanos : 0; }
     }
@@ -1175,7 +1219,8 @@ public class PluginTestSuite extends TestSuite {
 
             MarketCache cache = new MarketCache(market);
             cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
-                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(defaultPrice, s.abundance()));
+                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(defaultPrice,
+                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(defaultPrice, maxOrder, 1f)));
             market.test_resetVirtualOrderBookVolume();
             List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
             IPluginOrderBook book = cache.getPluginOrderBook();
@@ -1212,8 +1257,15 @@ public class PluginTestSuite extends TestSuite {
             };
             for (int t = 0; t < warmup; t++) tick.run();
 
-            // Per-player state: 0 wait, 1 dump sell, 2 dump hold, 3 buy, 4 hold, 5 market exit, 6 limit exit, 7 done
+            // Per-player state: 0 wait, 1 dump sell, 2 dump hold, 3 buy, 4 hold, 5 market exit, 6 limit exit, 7 done,
+            // 8 c5 liquidation (sliced / ladder)
             int[] phase = new int[n], phaseTick = new int[n], buys = new int[n];
+            Liquidation liqMode = harnessLiquidation;
+            boolean[] liq = new boolean[n];
+            long[] liqStart = new long[n];
+            for (int i = 0; i < n; i++) liq[i] = liqMode != null && (plans[i].exit() != Exit.NONE || plans[i].startItems() > 0);
+            // c5: market exit (5) for the legacy / one-shot path, else the strategy phase (8)
+            int liqPhase = liqMode == null || liqMode == Liquidation.ONE_SHOT ? 5 : 8;
             List<List<Order>> asks = new java.util.ArrayList<>();
             for (int i = 0; i < n; i++) asks.add(new java.util.ArrayList<>());
             int holdStart0 = -1, nextCheckpoint = 0;
@@ -1268,17 +1320,46 @@ public class PluginTestSuite extends TestSuite {
                                 System.currentTimeMillis(), players[i], accounts[i].getAccountNumber()));
                         bought[i] = true;
                         if (++buys[i] == pl.buyOrders()) {
-                            phase[i] = pl.startItems() > 0 || pl.exit() == Exit.NONE ? 7 : 4;
+                            phase[i] = pl.startItems() > 0 || pl.exit() == Exit.NONE ? (liq[i] ? liqPhase : 7) : 4;
                             phaseTick[i] = t + 1;
                             if (i == 0) holdStart0 = t + 1;
                         }
                     } else if (phase[i] == 4 && t - phaseTick[i] >= pl.holdTicks()) {
-                        phase[i] = pl.exit() == Exit.MARKET ? 5 : 6;
+                        phase[i] = pl.exit() == Exit.MARKET ? liqPhase : 6;
                         phaseTick[i] = t;
                     }
+                    // c5: items this player may still sell (dump plans keep their start holding)
+                    long sellable = Math.max(0, Math.min(items.getBalance(), items.getTotalBalance() - pl.startItems() * sf));
                     if (phase[i] == 5 && (t - phaseTick[i]) % 10 == 0) {
-                        if (items.getBalance() > 0 && t - phaseTick[i] < LIMIT_WAIT_TICKS) sell(market, items, Math.min(items.getBalance(), maxOrder * sf), players[i], accounts[i]);
-                        else { exitNote(notes, i, "exit", t, price, items.getBalance() / (double) sf, book); phase[i] = 7; }
+                        if (sellable > 0 && t - phaseTick[i] < LIMIT_WAIT_TICKS) sell(market, items, Math.min(sellable, maxOrder * sf), players[i], accounts[i]);
+                        else { exitNote(notes, i, "exit", t, price, sellable / (double) sf, book); phase[i] = 7; }
+                    } else if (phase[i] == 8) {
+                        int rel8 = t - phaseTick[i];
+                        if (rel8 == 0) liqStart[i] = sellable;
+                        if (rel8 % SLICE_PAUSE_TICKS == 0) {
+                            List<Order> mine = asks.get(i);
+                            cancelAll(market, mine);
+                            sellable = Math.max(0, Math.min(items.getBalance(), items.getTotalBalance() - pl.startItems() * sf));
+                            if (sellable <= 0 || rel8 >= LIMIT_WAIT_TICKS) {
+                                exitNote(notes, i, liqMode.name().toLowerCase(Locale.ROOT), t, price, sellable / (double) sf, book);
+                                phase[i] = 7;
+                            } else if (liqMode == Liquidation.SLICED) {
+                                long onePct = Math.max(1, liqStart[i] / 100);
+                                long within1Pct = (long) (Math.max(0, book.getRealVirtualVolume(price * 0.99, price)) * sf);
+                                sell(market, items, Math.min(Math.min(sellable, maxOrder * sf), Math.max(onePct, within1Pct)), players[i], accounts[i]);
+                            } else {
+                                long part = sellable / LADDER_STEPS.length;
+                                for (int j = 0; j < LADDER_STEPS.length; j++) {
+                                    long amount = j == LADDER_STEPS.length - 1 ? sellable - part * j : part;
+                                    if (amount <= 0) continue;
+                                    items.lockAmount(amount);
+                                    Order o = new Order(itemID, Order.Type.LIMIT, -amount, MarketManager.convertToRawAmountStatic(price * (1 + LADDER_STEPS[j])),
+                                            System.currentTimeMillis(), players[i], accounts[i].getAccountNumber());
+                                    market.putOrder(o);
+                                    mine.add(o);
+                                }
+                            }
+                        }
                     } else if (phase[i] == 6) {
                         List<Order> mine = asks.get(i);
                         if (mine.isEmpty()) {
@@ -1294,7 +1375,13 @@ public class PluginTestSuite extends TestSuite {
                         }
                         boolean all = true;
                         for (Order o : mine) all &= o.isFilled();
-                        if (all || t - phaseTick[i] >= LIMIT_WAIT_TICKS) phase[i] = 7;
+                        if (all || t - phaseTick[i] >= LIMIT_WAIT_TICKS) {
+                            if (liq[i]) {   // c5: take the unfilled limits back and liquidate the rest
+                                cancelAll(market, mine);
+                                phase[i] = liqPhase;
+                                phaseTick[i] = t + 1;
+                            } else phase[i] = 7;
+                        }
                     }
                 }
                 tick.run();
@@ -1312,11 +1399,14 @@ public class PluginTestSuite extends TestSuite {
             }
             long wall = System.nanoTime() - wallStart;
             double endPrice = MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice());
-            double[] profit = new double[n];
+            double[] profit = new double[n], unsold = new double[n];
             for (int i = 0; i < n; i++) {
+                if (liq[i]) cancelAll(market, asks.get(i));
                 double gained = accounts[i].getBank(itemID).getTotalBalance() / (double) sf - plans[i].startItems();
+                // c5: a liquidating player's unsold items are worth 0; otherwise mark-to-book
+                if (liq[i] && gained > 0) unsold[i] = gained;
                 profit[i] = MarketManager.convertToRealAmountStatic(accounts[i].getBank(moneyID).getTotalBalance() - startMoney)
-                        + (gained > 0 ? markToBook(book, endPrice, gained) : gained * defaultPrice);
+                        + (gained > 0 ? (liq[i] ? 0 : markToBook(book, endPrice, gained)) : gained * defaultPrice);
             }
             float[] pp = null;
             if (pricePath != null) {
@@ -1324,7 +1414,7 @@ public class PluginTestSuite extends TestSuite {
                 for (int i = 0; i < pp.length; i++) pp[i] = pricePath.get(i);
             }
             return new PlayersResult(profit, spent, maxPrice, path.toString(), endPrice, t + (long) warmup, wall, checkpoints, pp,
-                    notes.toString() + (t >= MAX_REPLAY_TICKS ? " hit MAX_REPLAY_TICKS" : ""));
+                    notes.toString() + (t >= MAX_REPLAY_TICKS ? " hit MAX_REPLAY_TICKS" : ""), unsold);
         } finally {
             modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(prevHalfLife);
             modSettings.PROFIT_ALERT_THRESHOLD.set(prevAlert);
@@ -1348,6 +1438,77 @@ public class PluginTestSuite extends TestSuite {
         notes.append(String.format(Locale.ROOT, " p%d %s @%.1fmin: unsold %.6g, price %.6g, bids(50-100%%) %.6g;", player + 1, what,
                 t / 1200.0, unsold, price, book.getRealVirtualVolume(price * 0.5, price)));
     }
+
+    /** c5: cancels this player's resting limit sells (unfilled rest unlocked) and clears the list. */
+    private static void cancelAll(ServerMarket market, List<Order> orders) {
+        for (Order o : orders)
+            if (!o.isFilled())
+                market.cancelOrder(o.getExecutorPlayerUUID(), o.getTime(), o.getType(), o.getStartPrice(), o.getTargetVolume());
+        orders.clear();
+    }
+
+    /**
+     * c5: one T-208 scenario, liquidated. Exploit scenarios run once per {@link Liquidation} strategy (the
+     * replay is deterministic, so every run reaches the same book state before its exit); the result is the
+     * strategy with the highest exploit profit (the exploiter's best case). Other scenarios run once, legacy.
+     *
+     * @param series time-series CSV body of the best run, or null
+     */
+    private T208Exec t208Exec(ReplaySetup s, String scenario, int sampleEvery, StringBuilder series) {
+        T208Scenario sc = t208Scenario(scenario, s.maxOrder());
+        if (!sc.exploit()) {
+            PlayersResult r = replayPlayers(s, T208_WARMUP, sc.minTicks(), sc.checkpoints(), sampleEvery, series,
+                    scenario.equals("spike"), sc.plans());
+            return new T208Exec(r, null, null, null);
+        }
+        Liquidation[] all = Liquidation.values();
+        double[] profit = new double[all.length], unsold = new double[all.length];
+        PlayersResult best = null;
+        Liquidation bestMode = null;
+        StringBuilder bestSeries = null;
+        try {
+            for (int k = 0; k < all.length; k++) {
+                harnessLiquidation = all[k];
+                StringBuilder sb = series != null ? new StringBuilder() : null;
+                PlayersResult r = replayPlayers(s, T208_WARMUP, sc.minTicks(), sc.checkpoints(), sampleEvery, sb,
+                        false, sc.plans());
+                profit[k] = exploitProfit(scenario, r);
+                for (double u : r.unsold()) unsold[k] += u;
+                if (best == null || profit[k] > exploitProfit(scenario, best)) { best = r; bestMode = all[k]; bestSeries = sb; }
+            }
+        } finally {
+            harnessLiquidation = null;
+        }
+        if (series != null) series.append(bestSeries);
+        StringBuilder note = new StringBuilder(" liquidation:");
+        for (int k = 0; k < all.length; k++)
+            note.append(String.format(Locale.ROOT, " %s %+.0f (unsold %.6g)", liqName(all[k]), profit[k], unsold[k]));
+        note.append(" best ").append(liqName(bestMode)).append(';');
+        return new T208Exec(best.withNotes(note + best.notes()), bestMode, profit, unsold);
+    }
+
+    /** c5: lower-case report name of a strategy ("one_shot", "sliced", "ladder"). */
+    private static String liqName(Liquidation l) {
+        return l.name().toLowerCase(Locale.ROOT);
+    }
+
+    /** Exploit profit of a T-208 run: the pumper's for pumpPlusOrganic, else all players together. */
+    private static double exploitProfit(String scenario, PlayersResult r) {
+        if (scenario.startsWith("pumpPlusOrganic")) return r.profit()[0];
+        double sum = 0;
+        for (double x : r.profit()) sum += x;
+        return sum;
+    }
+
+    /**
+     * c5: result of {@link #t208Exec}.
+     *
+     * @param best     the best run (notes start with the per-strategy line)
+     * @param bestMode its strategy, null for a non-exploit scenario (single legacy run)
+     * @param profit   exploit profit per {@link Liquidation} (ordinal), null if not an exploit
+     * @param unsold   unsold items per {@link Liquidation} (ordinal), null if not an exploit
+     */
+    private record T208Exec(PlayersResult best, Liquidation bestMode, double[] profit, double[] unsold) {}
 
     /** Locks {@code raw} items and places a player market sell of them. */
     private void sell(ServerMarket market, IServerBank items, long raw, UUID player, IServerBankAccount account) {
@@ -1439,9 +1600,9 @@ public class PluginTestSuite extends TestSuite {
     private static final String[] T208_TUNE_SET = {"spike", "pump5", "pump10", "pump30", "pump60", "dump5", "limitWide",
             "limitTight", "organic60"};
     /** Stage B markets. */
-    private static final String[] T208_MARKETS = {"diamond_default", "diamond_legacy", "dirt"};
+    private static final String[] T208_MARKETS = {"diamond_default", "diamond_legacy", "dirt", "netherite"};
     /** Stage B scenarios (every market). */
-    private static final String[] T208_GATE_SET = {"pump5", "pump10", "pump30", "pump60", "pump24h", "dump5", "dump60",
+    private static final String[] T208_GATE_SET = {"pump0", "pump5", "pump10", "pump30", "pump60", "pump24h", "dump5", "dump60",
             "limitWide", "limitTight", "organic10", "organic60", "organic360", "twoPumpers10", "twoPumpers60",
             "pumpPlusOrganic10", "pumpPlusOrganic60"};
     /** 24 h hold: mark-to-book checkpoints in minutes after the buy leg (the executed exit follows the last). */
@@ -1450,6 +1611,9 @@ public class PluginTestSuite extends TestSuite {
     private static final int T208_WARMUP = 200;
     /** Hold before a limit exit is placed (minutes). */
     private static final int T208_LIMIT_HOLD_MIN = 5;
+
+    /** c5: the last {@link #t208Run}'s per-strategy result (charts). */
+    private T208Exec lastT208Exec;
 
     /** Result rows per stage (report tables, rewritten to disk after every T-208 test). */
     private static final java.util.Map<String, List<java.util.Map<String, Object>>> T208_ROWS = new java.util.LinkedHashMap<>();
@@ -1477,14 +1641,16 @@ public class PluginTestSuite extends TestSuite {
 
     /**
      * A T-208 market at today's defaults (volatility, θ, net flow half-life, bot): diamond_default (price 160,
-     * abundance 50), diamond_legacy (the same with maxPriceMult 20) or dirt (price 0.1, abundance 2,000).
+     * abundance 50), diamond_legacy (the same with maxPriceMult 20), dirt (price 0.1, abundance 2,000) or
+     * T-214 netherite (price 22,000, abundance 5, max order 320: the depth floor case).
      */
     private ReplaySetup t208Market(String name) {
         VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
         float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
-        boolean dirt = name.equals("dirt");
-        float abundance = dirt ? 2000 : 50;
-        return new ReplaySetup(name, dirt ? 0.1 : 160, abundance, MarketSettings.defaultMaxOrderVolume(abundance),
+        boolean dirt = name.equals("dirt"), netherite = name.equals("netherite");
+        float abundance = dirt ? 2000 : netherite ? 5 : 50;
+        double price = dirt ? 0.1 : netherite ? 22_000 : 160;
+        return new ReplaySetup(name, price, abundance, MarketSettings.defaultMaxOrderVolume(abundance),
                 vs.flowSensitivity(), name.equals("diamond_legacy") ? 20 : vs.maxPriceMult(), vs.permanentImpact(), hl,
                 TargetPriceBot.Settings.createDefault());
     }
@@ -1537,8 +1703,9 @@ public class PluginTestSuite extends TestSuite {
     private PlayersResult t208Run(String stage, String test, ReplaySetup s, String scenario, int sampleEvery,
                                   StringBuilder series) throws java.io.IOException {
         T208Scenario sc = t208Scenario(scenario, s.maxOrder());
-        PlayersResult r = replayPlayers(s, T208_WARMUP, sc.minTicks(), sc.checkpoints(), sampleEvery, series,
-                scenario.equals("spike"), sc.plans());
+        T208Exec exec = t208Exec(s, scenario, sampleEvery, series);
+        lastT208Exec = exec;
+        PlayersResult r = exec.best();
         double p = s.price();
         java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
         row.put("stage", stage);
@@ -1567,6 +1734,12 @@ public class PluginTestSuite extends TestSuite {
         row.put("max_price_pct_of_default", 100 * r.maxPrice() / p);
         row.put("end_price_pct_of_default", 100 * r.endPrice() / p);
         row.put("exploit", sc.exploit());
+        // c5: executed liquidation per strategy; profit_money / exploit columns are the best one
+        row.put("best_strategy", exec.bestMode() != null ? liqName(exec.bestMode()) : "");
+        for (Liquidation l : Liquidation.values()) {
+            row.put("profit_" + liqName(l) + "_money", exec.profit() != null ? exec.profit()[l.ordinal()] : "");
+            row.put("unsold_" + liqName(l) + "_items", exec.unsold() != null ? exec.unsold()[l.ordinal()] : "");
+        }
         row.put("notes", r.notes().isEmpty() ? "" : "\"" + r.notes().trim() + "\"");
         // pumpPlusOrganic: the exploit is the pumper's (p1) profit; otherwise all players together
         row.put("exploit_profit_pct_of_spent", !sc.exploit() ? "" : scenario.startsWith("pumpPlusOrganic")
@@ -1684,6 +1857,7 @@ public class PluginTestSuite extends TestSuite {
                 String name = "t208_gate_" + market + "_" + scenario;
                 addTest(name, () -> test_t208Gate(name, market, scenario));
             }
+        addTest("t208_gate_determinism_dirt_pump0", this::test_t208Determinism);
         for (String chart : new String[]{"spike", "pump", "dump", "limit", "organic", "dirt", "profitVsHold"}) {
             String name = "t208_charts_" + chart;
             addTest(name, () -> test_t208Chart(name, chart));
@@ -1707,12 +1881,42 @@ public class PluginTestSuite extends TestSuite {
         }
     }
 
+    /**
+     * T-214 c0: the harness is deterministic. dirt pump0 runs twice in the same JVM; every strategy's profit,
+     * the end / max price and the per-minute price path must be identical.
+     */
+    private TestResult test_t208Determinism() {
+        String name = "t208_gate_determinism_dirt_pump0";
+        if (!t208Requested("gate", name)) return skip("T-208 gate not requested");
+        harnessRefill = true;
+        try {
+            ReplaySetup s = t208Market("dirt");
+            T208Exec a = t208Exec(s, "pump0", 0, null), b = t208Exec(s, "pump0", 0, null);
+            String ra = java.util.Arrays.toString(a.profit()) + " end " + a.best().endPrice() + " max " + a.best().maxPrice() + a.best().path();
+            String rb = java.util.Arrays.toString(b.profit()) + " end " + b.best().endPrice() + " max " + b.best().maxPrice() + b.best().path();
+            return ra.equals(rb) ? pass("identical: " + ra) : fail("run 1: " + ra + " | run 2: " + rb);
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
     /** T-208 Stage B: one scenario on one market at today's defaults. */
     private TestResult test_t208Gate(String name, String market, String scenario) {
         if (!t208Requested("gate", name)) return skip("T-208 gate not requested");
         harnessRefill = true;
         try {
-            return pass(t208Line(scenario, t208Run("gate", name, t208Market(market), scenario, 0, null)));
+            ReplaySetup s = t208Market(market);
+            PlayersResult r = t208Run("gate", name, s, scenario, 0, null);
+            String line = t208Line(scenario, r);
+            if (scenario.equals("organic60")) {
+                // T-214: organic demand band, see t208Organic60MinPct
+                double end = 100 * r.endPrice() / s.price(), min = t208Organic60MinPct(market);
+                if (end < min || end > T208_ORGANIC60_MAX_PCT)
+                    return fail(String.format(Locale.ROOT, "organic60 ends at %.1f%%, outside [%.0f, %.0f]: ", end, min, T208_ORGANIC60_MAX_PCT) + line);
+            }
+            return pass(line);
         } catch (Exception e) {
             return fail("Exception: " + e);
         } finally {
@@ -1733,14 +1937,16 @@ public class PluginTestSuite extends TestSuite {
             String lastLine = null;
             if (chart.equals("profitVsHold")) {
                 ReplaySetup s = t208Market("diamond_default");
-                csv.append("hold_min,kind,profit_money,profit_pct_of_spent\n");
+                csv.append("hold_min,kind,profit_money,profit_pct_of_spent,best_strategy,profit_one_shot_money,profit_sliced_money,profit_ladder_money\n");
                 PlayersResult day = t208Run("charts", name, s, "pump24h", 0, null);
+                String dayCols = strategyCols(lastT208Exec);
                 for (double[] c : day.checkpoints())
-                    csv.append(String.format(Locale.ROOT, "%d,mark_to_book,%.6g,%.6g%n", (int) c[0], c[1], pct(c[1], day.spent()[0])));
-                csv.append(String.format(Locale.ROOT, "1440,executed,%.6g,%.6g%n", day.profit()[0], pct(day.profit()[0], day.spent()[0])));
-                for (int hold : new int[]{5, 10, 30, 60}) {
+                    csv.append(String.format(Locale.ROOT, "%d,mark_to_book,%.6g,%.6g,,,,%n", (int) c[0], c[1], pct(c[1], day.spent()[0])));
+                csv.append(String.format(Locale.ROOT, "1440,executed,%.6g,%.6g%s%n", day.profit()[0], pct(day.profit()[0], day.spent()[0]), dayCols));
+                for (int hold : new int[]{0, 5, 10, 30, 60}) {
                     PlayersResult r = t208Run("charts", name, s, "pump" + hold, 0, null);
-                    csv.append(String.format(Locale.ROOT, "%d,executed,%.6g,%.6g%n", hold, r.profit()[0], pct(r.profit()[0], r.spent()[0])));
+                    csv.append(String.format(Locale.ROOT, "%d,executed,%.6g,%.6g%s%n", hold, r.profit()[0], pct(r.profit()[0], r.spent()[0]),
+                            strategyCols(lastT208Exec)));
                 }
             } else {
                 String market = chart.equals("dirt") ? "dirt" : "diamond_default";
@@ -1768,12 +1974,31 @@ public class PluginTestSuite extends TestSuite {
         }
     }
 
+    /** c5: ",best,one_shot,sliced,ladder" chart columns of a {@link #t208Exec} result. */
+    private static String strategyCols(T208Exec e) {
+        if (e == null || e.profit() == null) return ",,,,";
+        StringBuilder b = new StringBuilder(",").append(liqName(e.bestMode()));
+        for (double x : e.profit()) b.append(String.format(Locale.ROOT, ",%.6g", x));
+        return b.toString();
+    }
+
     /** T-208 ungated no-profit gate scenarios on diamond (default market). */
-    private static final String[] T208_NO_PROFIT_DIAMOND = {"pump5", "pump30", "dump5", "limitTight", "twoPumpers10"};
+    private static final String[] T208_NO_PROFIT_DIAMOND = {"pump0", "pump5", "pump30", "dump5", "limitTight", "twoPumpers10"};
     /** T-208 ungated no-profit gate scenarios on dirt (exits hit the 60 min cap, so fewer rows). */
-    private static final String[] T208_NO_PROFIT_DIRT = {"pump5", "dump5", "limitTight", "twoPumpers10"};
+    private static final String[] T208_NO_PROFIT_DIRT = {"pump0", "pump5", "dump5", "limitTight", "twoPumpers10"};
     /** Organic demand must still move the price: organic 60 min on diamond ends at least this far above default (Stage B: 126.7%). */
     private static final double T208_ORGANIC60_MIN_PCT = 110;
+    /** T-214: organic 60 min must not run away either: upper bound of the Stage B organic60 band (% of default). */
+    private static final double T208_ORGANIC60_MAX_PCT = 150;
+
+    /**
+     * T-214: lower bound of the Stage B organic60 band of a market (% of default). Netherite gets 105%: its book
+     * sits on the depth floor (0.1 items per tick), deliberately deeper than the max order rule, so the same organic
+     * demand (in max orders) moves it less. Every other market keeps {@link #T208_ORGANIC60_MIN_PCT}.
+     */
+    private static double t208Organic60MinPct(String market) {
+        return market.equals("netherite") ? 105 : T208_ORGANIC60_MIN_PCT;
+    }
 
     /**
      * T-208 gate (ungated): at the defaults with book refill, none of the given exploit scenarios makes a profit
@@ -1789,12 +2014,14 @@ public class PluginTestSuite extends TestSuite {
             StringBuilder out = new StringBuilder();
             boolean ok = true;
             for (String name : scenarios) {
-                T208Scenario sc = t208Scenario(name, s.maxOrder());
-                PlayersResult r = replayPlayers(s, T208_WARMUP, sc.minTicks(), null, 0, null, false, sc.plans());
-                double profit = 0;
-                for (double p : r.profit()) profit += p;
+                long wall = System.nanoTime();
+                T208Exec e = t208Exec(s, name, 0, null);
+                double profit = exploitProfit(name, e.best());
                 ok &= profit <= 0;
-                out.append(String.format(Locale.ROOT, "\n%s: %+.0f (%.1f s)", name, profit, r.wallNanos() / 1e9));
+                out.append(String.format(Locale.ROOT, "\n%s: best %+.0f (%s) |", name, profit, liqName(e.bestMode())));
+                for (Liquidation l : Liquidation.values())
+                    out.append(String.format(Locale.ROOT, " %s %+.0f unsold %.6g |", liqName(l), e.profit()[l.ordinal()], e.unsold()[l.ordinal()]));
+                out.append(String.format(Locale.ROOT, " %.1f s", (System.nanoTime() - wall) / 1e9));
             }
             return ok ? pass(out.toString()) : fail("profitable exploit on " + market + ":" + out);
         } catch (Exception e) {
@@ -1843,7 +2070,351 @@ public class PluginTestSuite extends TestSuite {
         DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
         p.setLoggerEnabled(false);
         p.onMarketSubscribed(itemID);
+        if (!Float.isNaN(harnessTrendMaxFactor))
+            applySettings(p, DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC, trendSettings(harnessTrendMaxFactor));
+        lastHarnessRefill = p;
         return p;
+    }
+
+    /** Default volume distribution settings with another trend max factor (1 = trend off). */
+    private static DefaultOrderbookVolumeDistributionPlugin.Settings trendSettings(float maxFactor) {
+        return DefaultOrderbookVolumeDistributionPlugin.Settings.createDefault().withTrend(
+                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_TREND_PERIOD_MINUTES,
+                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_TREND_GAIN, maxFactor);
+    }
+
+    /** Trend accumulation: max factor for {@link #newHarnessRefill} (NaN = plugin default, 1 = trend off). */
+    private static float harnessTrendMaxFactor = Float.NaN;
+    /** The refill plugin of the last harness run (trend report). */
+    private DefaultOrderbookVolumeDistributionPlugin lastHarnessRefill;
+
+    /** Trend accumulation: factor = clamp(exp(k ln(P/MA)), 1/F, F); neutral at the average, for k 0 or F 1. */
+    private TestResult test_volumeDistribution_trendFactorMath() {
+        float k = 10, f = 4;
+        double ln = Math.log(100);
+        if (DefaultOrderbookVolumeDistributionPlugin.trendAskFactor(ln, ln, k, f) != 1f) return fail("At the average the factor must be 1");
+        float up = DefaultOrderbookVolumeDistributionPlugin.trendAskFactor(Math.log(105), ln, k, f);
+        float down = DefaultOrderbookVolumeDistributionPlugin.trendAskFactor(Math.log(95), ln, k, f);
+        if (!(up > 1) || !(down < 1)) return fail("Above the average asks speed up, below they slow down: " + up + " / " + down);
+        if (Math.abs(up - Math.exp(10 * Math.log(1.05))) > 1e-4) return fail("5% above with k 10 should be 1.05^10, is " + up);
+        if (Math.abs(DefaultOrderbookVolumeDistributionPlugin.trendAskFactor(Math.log(1000), ln, k, f) - 4f) > 1e-5
+                || Math.abs(DefaultOrderbookVolumeDistributionPlugin.trendAskFactor(Math.log(1), ln, k, f) - 0.25f) > 1e-6)
+            return fail("Factor must clamp to [1/4, 4]");
+        if (DefaultOrderbookVolumeDistributionPlugin.trendAskFactor(Math.log(150), ln, k, 1f) != 1f
+                || DefaultOrderbookVolumeDistributionPlugin.trendAskFactor(Math.log(150), ln, 0f, f) != 1f
+                || DefaultOrderbookVolumeDistributionPlugin.trendAskFactor(Double.NaN, ln, k, f) != 1f)
+            return fail("Max factor 1, gain 0 or NaN input must be neutral");
+        return pass("neutral at the MA, exp(k d) inside the clamp, off at F 1 / k 0");
+    }
+
+    /** Trend accumulation: the old 5-field settings payload decodes with the trend defaults; new ones round-trip. */
+    private TestResult test_volumeDistribution_trendCodec() {
+        ByteBuf old = Unpooled.buffer();
+        old.writeFloat(2f); old.writeFloat(0.1f); old.writeFloat(0.2f); old.writeFloat(0.03f); old.writeBoolean(true);
+        DefaultOrderbookVolumeDistributionPlugin.Settings a = DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.decode(old);
+        old.release();
+        if (a.volumeScale() != 2f || a.decumulationRate() != 0.03f || !a.resetVolume()
+                || a.trendPeriodMinutes() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_TREND_PERIOD_MINUTES
+                || a.trendGain() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_TREND_GAIN
+                || a.trendMaxFactor() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_TREND_MAX_FACTOR)
+            return fail("Old payload decoded as " + a);
+        DefaultOrderbookVolumeDistributionPlugin.Settings b = a.withTrend(3f, 7f, 2.5f);
+        ByteBuf buf = Unpooled.buffer();
+        DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.encode(buf, b);
+        DefaultOrderbookVolumeDistributionPlugin.Settings c = DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.decode(buf);
+        buf.release();
+        return b.equals(c) ? pass("old payload -> defaults, new payload round-trips") : fail(b + " -> " + c);
+    }
+
+    /**
+     * Trend accumulation, engine path: a price above the plugin's average reaches the book's depth memory as
+     * ask factor &gt; 1 and bid factor = 1 / ask (through the cache apply); max factor 1 sends neutral factors.
+     */
+    private TestResult test_volumeDistribution_trendReachesBook() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        long originalPrice = market.getCurrentMarketPrice();
+        var vob = market.test_getVirtualOrderbook();
+        try {
+            MarketCache cache = new MarketCache(market);
+            List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+            DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
+            p.setLoggerEnabled(false);
+            p.onMarketSubscribed(itemID);
+            p.update(markets);
+            cache.apply();
+            if (vob.getAskSideFactor() != 1f) return fail("At the fresh average the ask factor must be 1, is " + vob.getAskSideFactor());
+            market.test_setCurrentMarketPrice(originalPrice * 11 / 10);   // 10% above the fresh average
+            p.update(markets);
+            cache.apply();
+            float ask = vob.getAskSideFactor(), bid = vob.getBidSideFactor();
+            if (!(ask > 1.5f) || Math.abs(ask * bid - 1) > 1e-4) return fail("Ask " + ask + " / bid " + bid);
+            if (ask != p.test_getTrendAskFactor(itemID)) return fail("Book " + ask + " vs plugin " + p.test_getTrendAskFactor(itemID));
+            applySettings(p, DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC, trendSettings(1f));
+            p.update(markets);
+            cache.apply();
+            if (vob.getAskSideFactor() != 1f || vob.getBidSideFactor() != 1f) return fail("Max factor 1 must send neutral factors");
+            return pass(String.format(Locale.ROOT, "10%% above the MA: ask %.3f, bid %.3f; max factor 1 -> neutral", ask, bid));
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            vob.setDepthSideFactors(1f, 1f);
+            market.test_setCurrentMarketPrice(originalPrice);
+        }
+    }
+
+    /** T-214: production calculator of a market at its default price (volumeScale 1). */
+    private static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator t214Calc(double d, double maxOrder) {
+        return new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(d,
+                DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(d, maxOrder, 1f));
+    }
+
+    /**
+     * T-214: relative price move one buy of {@code items} walks through the asks of {@code calc} at {@code p}
+     * (ask ticks from the first one above p; the move to the tick that fills the last item).
+     */
+    private static double t214Walk(DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc, double p, double items) {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        long k = Math.round(p / tick);
+        for (int i = 1; i < 10_000_000; i++) {
+            items -= calc.getVolume(p, (k + i) * tick);
+            if (items <= 0) return (k + i) * tick / p - 1;
+        }
+        return Double.POSITIVE_INFINITY;
+    }
+
+    /** T-214: diamond (160, max order 3,200) keeps its depth scale 50 = the old 1 x abundance 50, so the book is unchanged at P = D. */
+    private TestResult test_depthScale_diamondMatchesOld() {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        float ds = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(160, 3200, 1f);
+        double expected = 250 * 3200 * tick / 160;
+        if (Math.abs(ds - expected) > 1e-4 * expected) return fail("depthScale " + ds + ", expected " + expected);
+        if (tick == 0.01 && ds != 50f) return fail("At tick 0.01 the diamond depth scale must be exactly 50, is " + ds);
+        var now = t214Calc(160, 3200);
+        var old = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(160, ds);
+        for (double p : new double[]{100, 150, 159.99, 160.01, 161.6, 200, 400})
+            if (now.getVolume(160, p) != old.getVolume(160, p)) return fail("Volume at " + p + " differs at P = D");
+        if (ds != DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(160, 3200, 1f))
+            return fail("not deterministic");
+        // maxOrder 0 falls back to the default formula (64 x abundance)
+        double eff = DefaultOrderbookVolumeDistributionPlugin.effectiveMaxOrder(0, 50);
+        if (eff != 3200 || DefaultOrderbookVolumeDistributionPlugin.effectiveMaxOrder(500, 50) != 500
+                || DefaultOrderbookVolumeDistributionPlugin.effectiveMaxOrder(0, 0.5f) != 64)
+            return fail("effectiveMaxOrder fallback wrong: " + eff);
+        return pass("diamond depthScale " + ds + ", identical book at P = D; max order 0 -> " + eff);
+    }
+
+    /**
+     * T-214: markets with the same max order but different default prices hold the same depth per unit of
+     * relative price at P = D (volume per tick x D / tick), and at P = 2D a tick holds half the volume of the
+     * same relative distance at P = D on the core shape side (the D / P normalisation).
+     */
+    private TestResult test_depthScale_scaleInvariance() {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        StringBuilder out = new StringBuilder();
+        double[] ref = null;
+        double[] ds = {0.002, 0.01, 0.05, 0.2};
+        for (double d : new double[]{16, 160, 1600, 16000}) {
+            var c = t214Calc(d, 3200);
+            double[] dens = new double[ds.length];
+            for (int i = 0; i < ds.length; i++) {
+                double p = Math.round(d * (1 + ds[i]) / tick) * tick;
+                // density per relative price at the exact relative distance of the sampled tick
+                dens[i] = c.getVolume(d, p) * d / tick;
+            }
+            out.append(String.format(Locale.ROOT, " D %.0f: %.4g/%.4g/%.4g/%.4g;", d, dens[0], dens[1], dens[2], dens[3]));
+            if (ref == null) { ref = dens; continue; }
+            for (int i = 1; i < ds.length; i++)   // d = 0.2% falls between ticks differently at D 16 (rounding)
+                if (Math.abs(dens[i] / ref[i] - 1) > 0.02) return fail("Density differs at " + ds[i] + ":" + out);
+        }
+        // D / P: the same calculator at P = 2D gives D / P = 1/2 of the shape term at the same relative distance
+        var c = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(1000, 10f);
+        var noCluster = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(0, 10f);
+        double atD = noCluster.getVolume(1000, 1100), at2D = noCluster.getVolume(2000, 2200);
+        double withNorm = c.getVolume(2000, 2200) - 0.4 * 10 * 0.5 * Math.exp(-(1.2 * 1.2) / (2 * 0.15 * 0.15));
+        if (Math.abs(at2D - atD) > 1e-3 * atD) return fail("Unnormalised shape must not depend on P: " + atD + " vs " + at2D);
+        if (Math.abs(withNorm / at2D - 0.5) > 1e-3) return fail("At P = 2D the volume must be halved, ratio " + withNorm / at2D);
+        return pass(out + " P = 2D halves the volume per tick");
+    }
+
+    /**
+     * T-214 rule on the plan's markets: one max order walks diamond-like markets (non-floor, P >= 2) about 0.36%,
+     * cheap markets (dirt 0.1, item 1.0) stay inside one price step, the floor applies only below 0.1 items per tick.
+     */
+    private TestResult test_depthScale_rule() {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        double[][] markets = {{0.1, 2000}, {1.0, 2000}, {160, 50}, {1400, 5}, {22_000, 5}};
+        StringBuilder out = new StringBuilder();
+        for (double[] m : markets) {
+            double d = m[0];
+            double maxOrder = MarketSettings.defaultMaxOrderVolume((float) m[1], MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR);
+            float ds = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(d, maxOrder, 1f);
+            double raw = 250 * maxOrder * tick / d;
+            boolean floor = raw < 0.1;
+            if (Math.abs(ds - Math.max(raw, 0.1)) > 1e-4 * Math.max(raw, 0.1)) return fail("depthScale of " + d + " is " + ds);
+            double walk = t214Walk(t214Calc(d, maxOrder), d, maxOrder);
+            out.append(String.format(Locale.ROOT, " D %.4g max %.0f: scale %.4g%s walk %.3f%%;", d, maxOrder, ds, floor ? " (floor)" : "", 100 * walk));
+            if (!floor && d >= 2 && (walk < 0.0025 || walk > 0.005)) return fail("One max order must walk about 0.36%:" + out);
+            if (d < 2 && walk > tick / d + 1e-9) return fail("One max order must stay inside the first step:" + out);
+            if (floor && walk > 0.005) return fail("The floor book must be at least as deep as the rule:" + out);
+        }
+        return pass(out.toString());
+    }
+
+    /**
+     * T-214 fix (a): total default ask depth from the price to 3x the price, in max orders, is comparable on dirt
+     * (0.1), an item at 1.0 and diamond (160): the core term no longer thins out with the tick-to-price ratio.
+     */
+    private TestResult test_depthScale_totalAskDepth() {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        double[][] markets = {{0.1, 2000}, {1.0, 2000}, {160, 50}};
+        double[] total = new double[markets.length];
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < markets.length; i++) {
+            double d = markets[i][0];
+            double maxOrder = MarketSettings.defaultMaxOrderVolume((float) markets[i][1], MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR);
+            var c = t214Calc(d, maxOrder);
+            long k0 = Math.round(d / tick), k1 = Math.round(3 * d / tick);
+            double sum = 0;
+            for (long k = k0 + 1; k <= k1; k++) sum += c.getVolume(d, k * tick);
+            total[i] = sum / maxOrder;
+            out.append(String.format(Locale.ROOT, " D %.4g: %.1f max orders;", d, total[i]));
+        }
+        // Coarse steps sample the density at the step's far end, so cheap items may hold less; within 25% of diamond.
+        for (int i = 0; i < 2; i++)
+            if (total[i] < 0.75 * total[2] || total[i] > 1.25 * total[2]) return fail("Ask depth not comparable:" + out);
+        return pass(out.toString());
+    }
+
+    /** T-214: netherite (22,000, max order 320) sits on the floor 0.1 x volumeScale; the floor scales with volumeScale. */
+    private TestResult test_depthScale_netheriteFloor() {
+        float a = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(22_000, 320, 1f);
+        float b = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(22_000, 320, 2f);
+        float z = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(0, 320, 1f);
+        if (Math.abs(a - 0.1f) > 1e-6 || Math.abs(b - 0.2f) > 1e-6 || Math.abs(z - 0.1f) > 1e-6)
+            return fail("floor " + a + " / x2 " + b + " / D 0 " + z);
+        return pass("netherite depthScale " + a + ", x2 volumeScale " + b);
+    }
+
+    /**
+     * T-214: the plugin recomputes the depth scale when the market's max order changes and hard-resets the book
+     * (a hard reset restarts the trend average, so it reads NaN right after that update); max order 0 falls back
+     * to 64 x abundance; an unchanged market does not reset.
+     */
+    private TestResult test_depthScale_maxOrderChange() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        MarketSettings settings = market.getSettings();
+        long prevDefault = settings.defaultPrice, prevMaxOrder = settings.maxOrderVolume, originalPrice = market.getCurrentMarketPrice();
+        float prevAbundance = settings.naturalAbundance;
+        try {
+            settings.defaultPrice = MarketManager.convertToRawAmountStatic(160);
+            settings.naturalAbundance = 50;
+            settings.maxOrderVolume = 3200;
+            market.test_setCurrentMarketPrice(settings.defaultPrice);
+            MarketCache cache = new MarketCache(market);
+            List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+            DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
+            p.setLoggerEnabled(false);
+            p.onMarketSubscribed(itemID);
+            var calc = p.test_getCalculator(itemID);
+            p.update(markets);
+            cache.apply();
+            if (Double.isNaN(p.test_getTrendLnMA(itemID))) return fail("First binding must not reset");
+            float s1 = calc.getVolumeScale();
+            settings.maxOrderVolume = 6400;
+            p.update(markets);
+            cache.apply();
+            if (!Double.isNaN(p.test_getTrendLnMA(itemID))) return fail("Max order change must hard-reset the book");
+            float s2 = calc.getVolumeScale();
+            if (Math.abs(s2 / s1 - 2) > 1e-5) return fail("Double max order must double the depth scale: " + s1 + " -> " + s2);
+            p.update(markets);
+            cache.apply();
+            if (Double.isNaN(p.test_getTrendLnMA(itemID))) return fail("Unchanged market must not reset");
+            settings.maxOrderVolume = 0;
+            p.update(markets);
+            cache.apply();
+            float s3 = calc.getVolumeScale();
+            if (!Double.isNaN(p.test_getTrendLnMA(itemID)) || s3 != s1) return fail("Max order 0 must fall back to 3,200 and reset: " + s3);
+            settings.defaultPrice = MarketManager.convertToRawAmountStatic(320);
+            p.update(markets);
+            cache.apply();
+            if (!Double.isNaN(p.test_getTrendLnMA(itemID)) || calc.getDefaultPrice() != 320)
+                return fail("Default price change must reset and move the calculator");
+            return pass(String.format(Locale.ROOT, "scale %.4g -> %.4g (x2 max order) -> %.4g (max order 0); resets on change only", s1, s2, s3));
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            settings.defaultPrice = prevDefault;
+            settings.naturalAbundance = prevAbundance;
+            settings.maxOrderVolume = prevMaxOrder;
+            market.test_setCurrentMarketPrice(originalPrice);
+            market.test_resetVirtualOrderBookVolume();
+        }
+    }
+
+    /** T-214: a save without the depth model key resets the book once on load; a current save does not. */
+    private TestResult test_depthScale_migration() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        long originalPrice = market.getCurrentMarketPrice();
+        try {
+            MarketCache cache = new MarketCache(market);
+            List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+            DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
+            p.setLoggerEnabled(false);
+            p.onMarketSubscribed(itemID);
+            p.update(markets);
+            cache.apply();
+            CompoundTag oldTag = new CompoundTag();
+            ListTag list = new ListTag();
+            CompoundTag m = new CompoundTag();
+            itemID.save(m);
+            m.putFloat("volumeScale", 1f);
+            list.add(m);
+            oldTag.put("marketData", list);
+            p.load(oldTag);
+            p.update(markets);
+            cache.apply();
+            if (!Double.isNaN(p.test_getTrendLnMA(itemID))) return fail("Pre-T-214 save must reset the book once");
+            p.update(markets);
+            cache.apply();
+            CompoundTag current = new CompoundTag();
+            p.save(current);
+            p.load(current);
+            p.update(markets);
+            cache.apply();
+            if (Double.isNaN(p.test_getTrendLnMA(itemID))) return fail("Current save must not reset");
+            return pass("old save resets once, current save keeps the book");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            market.test_setCurrentMarketPrice(originalPrice);
+            market.test_resetVirtualOrderBookVolume();
+        }
+    }
+
+    /** Trend accumulation report (always passes): diamond pump5 / dump5 / organic60 with trend on (defaults) vs off (max factor 1). */
+    private TestResult test_trendOnOffReport() {
+        harnessRefill = true;
+        try {
+            ReplaySetup s = t208Market("diamond_default");
+            StringBuilder out = new StringBuilder();
+            for (float maxFactor : new float[]{ Float.NaN, 1f }) {
+                harnessTrendMaxFactor = maxFactor;
+                out.append(Float.isNaN(maxFactor) ? "\ntrend ON (defaults)" : "\ntrend OFF (max factor 1)");
+                for (String name : new String[]{ "pump5", "dump5", "organic60" }) {
+                    PlayersResult r = t208Exec(s, name, 0, null).best();
+                    double profit = exploitProfit(name, r);
+                    out.append(String.format(Locale.ROOT, "\n  %s: profit %+.0f | max %.1f%% | end %.1f%% of default | last ask factor %.3f",
+                            name, profit, 100 * r.maxPrice() / s.price(), 100 * r.endPrice() / s.price(),
+                            lastHarnessRefill != null ? lastHarnessRefill.test_getTrendAskFactor(itemID) : Float.NaN));
+                }
+            }
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+            harnessTrendMaxFactor = Float.NaN;
+        }
     }
 
     /** T-207 gate. */
@@ -1889,6 +2460,13 @@ public class PluginTestSuite extends TestSuite {
          * @param maxMult   VolatilityPlugin maxPriceMult
          */
         T207Env(double price, float abundance, long maxOrder, float sens, float maxMult) {
+            this(price, abundance, maxOrder, sens, maxMult, 1f);
+        }
+
+        /**
+         * @param volumeScale T-214: volume plugin volumeScale of the book ({@code depthScaleFor(price, maxOrder, volumeScale)})
+         */
+        T207Env(double price, float abundance, long maxOrder, float sens, float maxMult, float volumeScale) {
             defaultPrice = price;
             this.maxOrder = maxOrder;
             modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(modSettings.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue());
@@ -1902,7 +2480,8 @@ public class PluginTestSuite extends TestSuite {
             market.resetNetPlayerItemFlow();
             cache = new MarketCache(market);
             cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
-                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(price, abundance));
+                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(price,
+                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(price, maxOrder, volumeScale)));
             market.test_resetVirtualOrderBookVolume();
             markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
             vol = new VolatilityPlugin();
@@ -1970,8 +2549,14 @@ public class PluginTestSuite extends TestSuite {
         }
     }
 
-    /** T-207 diamond as in the reported in-game diamond setup: price 160, abundance 5, max order 10,000, sens 500, max mult 20. */
-    private T207Env t207World() { return new T207Env(160, 5, 10_000, 500, 20); }
+    /**
+     * T-207 diamond as in the reported in-game diamond setup: price 160, abundance 5, max order 10,000, sens 500, max mult 20.
+     * T-214: volumeScale 0.032 keeps the pre-T-214 thin book (depth scale 5 = abundance), so these tests keep their intent.
+     */
+    private T207Env t207World() { return new T207Env(160, 5, 10_000, 500, 20, T207_THIN_VOLUME_SCALE); }
+
+    /** T-214: volumeScale that gives the thin diamond ({@link #t207World}) its pre-T-214 depth scale 5. */
+    private static final float T207_THIN_VOLUME_SCALE = 0.032f;
 
     /** T-207 diamond at today's defaults: abundance 50, max order 3,200, sens 2000, max mult 3. */
     private T207Env t207Default() { return new T207Env(160, 50, 3_200, 2000, 3); }
@@ -2243,7 +2828,8 @@ public class PluginTestSuite extends TestSuite {
         harnessRefill = true;
         double step = MarketManager.convertToRealAmountStatic(1);
         try {
-            for (double flow : new double[]{2, 20}) {
+            // T-214: dirt's book is ~14 max orders per step, so 2 max orders stay inside one step, 200 cross it
+            for (double flow : new double[]{2, 200}) {
                 try (T207Env env = new T207Env(0.1, 2000, MarketSettings.defaultMaxOrderVolume(2000), 2000, 3)) {
                     IPluginMarket pm = env.markets.get(0).market;
                     for (int t = 0; t < 200; t++) env.tick();

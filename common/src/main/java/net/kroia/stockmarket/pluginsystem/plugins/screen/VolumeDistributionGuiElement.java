@@ -34,6 +34,12 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         public static final Component SPEED_TOOLTIP = Component.translatable(PREFIX + "speed.tooltip");
         public static final Component ACCUMULATION_RATE_TOOLTIP = Component.translatable(PREFIX + "accumulation_rate.tooltip");
         public static final Component DECUMULATION_RATE_TOOLTIP = Component.translatable(PREFIX + "decumulation_rate.tooltip");
+        public static final Component TREND_PERIOD = Component.translatable(PREFIX + "trend_period");
+        public static final Component TREND_GAIN = Component.translatable(PREFIX + "trend_gain");
+        public static final Component TREND_MAX_FACTOR = Component.translatable(PREFIX + "trend_max_factor");
+        public static final Component TREND_PERIOD_TOOLTIP = Component.translatable(PREFIX + "trend_period.tooltip");
+        public static final Component TREND_GAIN_TOOLTIP = Component.translatable(PREFIX + "trend_gain.tooltip");
+        public static final Component TREND_MAX_FACTOR_TOOLTIP = Component.translatable(PREFIX + "trend_max_factor.tooltip");
     }
 
     private final Label volumeScaleLabel;
@@ -44,6 +50,12 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     private final TextBox accumulationRateTextBox;
     private final Label decumulationRateLabel;
     private final TextBox decumulationRateTextBox;
+    private final Label trendPeriodLabel;
+    private final TextBox trendPeriodTextBox;
+    private final Label trendGainLabel;
+    private final TextBox trendGainTextBox;
+    private final Label trendMaxFactorLabel;
+    private final TextBox trendMaxFactorTextBox;
     private final Button applyButton;
     private final Button applyAllButton;
     private final Button resetVolumeButton;
@@ -76,6 +88,21 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         decumulationRateTextBox = new TextBox();
         decumulationRateTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
 
+        trendPeriodLabel = new Label(Texts.TREND_PERIOD.getString());
+        trendPeriodLabel.setAlignment(Alignment.RIGHT);
+        trendPeriodTextBox = new TextBox();
+        trendPeriodTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
+        trendGainLabel = new Label(Texts.TREND_GAIN.getString());
+        trendGainLabel.setAlignment(Alignment.RIGHT);
+        trendGainTextBox = new TextBox();
+        trendGainTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
+        trendMaxFactorLabel = new Label(Texts.TREND_MAX_FACTOR.getString());
+        trendMaxFactorLabel.setAlignment(Alignment.RIGHT);
+        trendMaxFactorTextBox = new TextBox();
+        trendMaxFactorTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
         applyButton = new Button(Texts.APPLY.getString(), this::onApply);
         resetVolumeButton = new Button(Texts.RESET_VOLUME.getString(), this::onResetVolume);
         // Apply-to-all never resets the volume (resetVolume = false)
@@ -87,6 +114,9 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         setSettingTooltip(Texts.SPEED_TOOLTIP, speedLabel, speedTextBox);
         setSettingTooltip(Texts.ACCUMULATION_RATE_TOOLTIP, accumulationRateLabel, accumulationRateTextBox);
         setSettingTooltip(Texts.DECUMULATION_RATE_TOOLTIP, decumulationRateLabel, decumulationRateTextBox);
+        setSettingTooltip(Texts.TREND_PERIOD_TOOLTIP, trendPeriodLabel, trendPeriodTextBox);
+        setSettingTooltip(Texts.TREND_GAIN_TOOLTIP, trendGainLabel, trendGainTextBox);
+        setSettingTooltip(Texts.TREND_MAX_FACTOR_TOOLTIP, trendMaxFactorLabel, trendMaxFactorTextBox);
 
         addChild(volumeScaleLabel);
         addChild(volumeScaleTextBox);
@@ -96,14 +126,20 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         addChild(accumulationRateTextBox);
         addChild(decumulationRateLabel);
         addChild(decumulationRateTextBox);
+        addChild(trendPeriodLabel);
+        addChild(trendPeriodTextBox);
+        addChild(trendGainLabel);
+        addChild(trendGainTextBox);
+        addChild(trendMaxFactorLabel);
+        addChild(trendMaxFactorTextBox);
         addChild(applyButton);
         addChild(applyAllButton);
         addChild(resetVolumeButton);
         if (defaultsButton != null) addChild(defaultsButton);
 
-        // 4 label+field rows, 1 button row with Apply + Apply-to-all + Reset side by side,
+        // 7 label+field rows, 1 button row with Apply + Apply-to-all + Reset side by side,
         // and the Defaults button in its own row
-        setHeight((defaultsButton != null ? 6 : 5) * (defaultElementHeight + spacing) + padding);
+        setHeight((defaultsButton != null ? 9 : 8) * (defaultElementHeight + spacing) + padding);
     }
 
     @Override
@@ -158,6 +194,7 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
             speedTextBox.setText(s.speed(), 6);
             accumulationRateTextBox.setText(s.accumulationRate(), 6);
             decumulationRateTextBox.setText(s.decumulationRate(), 6);
+            showTrend(s);
             currentVolumeScale = s.volumeScale();
         }
     }
@@ -174,6 +211,14 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         speedTextBox.setText(s.speed(), 6);
         accumulationRateTextBox.setText(s.accumulationRate(), 6);
         decumulationRateTextBox.setText(s.decumulationRate(), 6);
+        showTrend(s);
+    }
+
+    /** Fills the trend accumulation fields from {@code s}. */
+    private void showTrend(DefaultOrderbookVolumeDistributionPlugin.Settings s) {
+        trendPeriodTextBox.setText(s.trendPeriodMinutes(), 6);
+        trendGainTextBox.setText(s.trendGain(), 6);
+        trendMaxFactorTextBox.setText(s.trendMaxFactor(), 6);
     }
 
     @Override
@@ -201,7 +246,10 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
                 (float) speedTextBox.getDouble(),
                 (float) accumulationRateTextBox.getDouble(),
                 (float) decumulationRateTextBox.getDouble(),
-                resetVolume
+                resetVolume,
+                (float) trendPeriodTextBox.getDouble(),
+                (float) trendGainTextBox.getDouble(),
+                (float) trendMaxFactorTextBox.getDouble()
         );
     }
 
@@ -244,6 +292,18 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         decumulationRateTextBox.setBounds(decumulationRateLabel.getRight() + spacing, y, fieldW, eh);
 
         y = decumulationRateTextBox.getBottom() + spacing;
+        trendPeriodLabel.setBounds(padding, y, labelW, eh);
+        trendPeriodTextBox.setBounds(trendPeriodLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = trendPeriodTextBox.getBottom() + spacing;
+        trendGainLabel.setBounds(padding, y, labelW, eh);
+        trendGainTextBox.setBounds(trendGainLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = trendGainTextBox.getBottom() + spacing;
+        trendMaxFactorLabel.setBounds(padding, y, labelW, eh);
+        trendMaxFactorTextBox.setBounds(trendMaxFactorLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = trendMaxFactorTextBox.getBottom() + spacing;
         int buttonW = (w - 2 * padding - 2 * spacing) / 3;
         applyButton.setBounds(padding, y, buttonW, eh);
         applyAllButton.setBounds(applyButton.getRight() + spacing, y, buttonW, eh);

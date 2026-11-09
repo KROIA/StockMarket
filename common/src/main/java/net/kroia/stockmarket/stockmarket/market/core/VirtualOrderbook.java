@@ -10,7 +10,6 @@ import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Function;
-import java.util.function.LongSupplier;
 
 public class VirtualOrderbook implements ServerSaveable
 {
@@ -23,15 +22,28 @@ public class VirtualOrderbook implements ServerSaveable
 
     private final DynamicIndexedArray dynamicArray;
     private Function<Long, Float> defaultVolumeProvider = null;
+    /** T-211 test hook: false disables the skip of memory segments that read 0 in {@link #findVolume}. */
+    private static boolean zeroSlotSkip = true;
     /**
-     * T-210: raw price from which the provider's ask volume is non-increasing ({@link Long#MAX_VALUE} =
-     * unknown); null = no bound. Lets {@link #findVolume} skip the empty default asks far above the price.
+     * T-211: true when the provider is the real depth model (a volume distribution plugin, or any provider
+     * of a standalone book), so the depth memory may be initialised from it. The owning market sets it
+     * false while only its built-in fallback provider is active; then the memory stays empty (pending)
+     * and the outside levels read the fallback as before.
      */
-    private @Nullable LongSupplier askMonotoneFrom = null;
-    /** T-210 test hook: false disables the ask slot skip in {@link #findVolume} (equivalence tests). */
-    private static boolean askSlotSkip = true;
-    /** Below this |raw volume| a default ask level reads 0 ({@link #roundConservative} truncates below 1). */
-    private static final float EMPTY_ASK_LEVEL = 0.5f;
+    private boolean depthReady = true;
+    /**
+     * Trend accumulation: recovery rate multipliers of the depth memory's bid and ask sides, set by the volume
+     * distribution plugin (1 = neutral). A factor f &gt; 1 lets that side refill f times faster (half-life / f)
+     * and lose its excess f times slower (half-life x f); f &lt; 1 the other way round.
+     */
+    private float bidSideFactor = 1f, askSideFactor = 1f;
+    /** T-211: centre and age (tick seconds) of the memory's cached recovery targets, see {@link #fadeDepthMemory}. */
+    private long targetCentre = Long.MIN_VALUE;
+    private double targetAgeSeconds = 0;
+    /** T-211: the targets are rebuilt when the centre moved more than this fraction since the last build ... */
+    private static final double TARGET_REFRESH_MOVE = 0.005;
+    /** ... or after this many seconds (picks up plugin setting changes). */
+    private static final double TARGET_REFRESH_SECONDS = 10;
     private long currentMarketPrice = 0;
     /**
      * Sticky-clear flag. When true the shift-fill provider ({@link #getDefaultVolume(long)})
@@ -97,24 +109,68 @@ public class VirtualOrderbook implements ServerSaveable
 
 
     /**
-     * T-210: sets where the default provider's ask volume becomes non-increasing (contract of
-     * {@code IVolumeDistributionCalculator.askMonotoneFrom}, in raw prices).
+     * T-211: marks whether the provider is the real depth model the memory may be initialised from (see
+     * {@link #depthReady}). Turning it on fills every pending slot side once with its default sum at the
+     * current centre; turning it off forgets the memory (the outside levels read the provider again).
      *
-     * @param askMonotoneFrom supplies the raw bound at the current price ({@link Long#MAX_VALUE} = unknown),
-     *                        or null for none; a bound that is too low makes {@link #findVolume} skip real volume
+     * @param ready true when a volume distribution plugin drives the provider
      */
-    public void setAskMonotoneFrom(@Nullable LongSupplier askMonotoneFrom)
+    public void setDepthReady(boolean ready)
     {
-        this.askMonotoneFrom = askMonotoneFrom;
+        if(depthReady == ready) return;
+        depthReady = ready;
+        if(ready) initDepthMemory();
+        else
+        {
+            depthMemory.clear();
+            bidSideFactor = askSideFactor = 1f;   // the plugin that set them is gone
+        }
+        cachedSeg = null;
     }
 
     /**
-     * T-210 test hook: turns the ask slot skip of {@link #findVolume} on or off for every book (equivalence
-     * tests compare both). On by default.
+     * T-211: fills the pending slot sides of the depth memory with their default sum at the current window
+     * and centre, from the floor up to the ask ceiling (see {@link DepthMemory#init}). No-op when the memory
+     * is off, the provider is not ready, or nothing is pending.
      */
-    public static void test_setAskSlotSkip(boolean enabled)
+    private void initDepthMemory()
     {
-        askSlotSkip = enabled;
+        if(!depthReady || !isDepthMemoryEnabled() || !hasDefaultVolume() || depthMemory.isInitialised()) return;
+        long winStart = dynamicArray.getIndexOffset();
+        depthMemory.init(winStart, winStart + dynamicArray.getSize() - 1,
+                DepthMemory.slotOf(Math.max(getAskCeiling(), 1)), defaultDepth);
+        targetCentre = Long.MIN_VALUE;   // build the recovery targets at the next step
+        targetAgeSeconds = 0;            // T-214 c0: no age carried over from an earlier memory (determinism)
+        fadeClockSeconds = 0;            // T-202: a new memory restarts the 1 s step phase
+        cachedSeg = null;
+    }
+
+    /**
+     * Trend accumulation: sets the per-side recovery rate multipliers of the depth memory (see
+     * {@link #bidSideFactor}). Non-finite or non-positive values count as 1 (neutral).
+     *
+     * @param bidFactor multiplier for the bid side (prices below the window)
+     * @param askFactor multiplier for the ask side (prices above the window)
+     */
+    public void setDepthSideFactors(float bidFactor, float askFactor)
+    {
+        bidSideFactor = Float.isFinite(bidFactor) && bidFactor > 0 ? bidFactor : 1f;
+        askSideFactor = Float.isFinite(askFactor) && askFactor > 0 ? askFactor : 1f;
+    }
+
+    /** @return the bid side recovery multiplier (1 = neutral), see {@link #setDepthSideFactors} */
+    public float getBidSideFactor() { return bidSideFactor; }
+
+    /** @return the ask side recovery multiplier (1 = neutral), see {@link #setDepthSideFactors} */
+    public float getAskSideFactor() { return askSideFactor; }
+
+    /**
+     * T-211 test hook: turns the skip of memory segments that read 0 in {@link #findVolume} on or off for every
+     * book (equivalence tests compare both). On by default.
+     */
+    public static void test_setZeroSlotSkip(boolean enabled)
+    {
+        zeroSlotSkip = enabled;
     }
 
     /**
@@ -253,6 +309,8 @@ public class VirtualOrderbook implements ServerSaveable
     public void fadeDepthMemory(double dtSeconds)
     {
         cachedSeg = null;   // the provider may have changed its shape since the last tick
+        initDepthMemory();  // T-211: memory switched on, or a sparse save waiting for its one-time init
+        if(!depthReady) return;   // T-211: no recovery toward the fallback (e.g. a loaded memory before the plugin attaches)
         if(depthMemory.isEmpty())
         {
             // T-202: restart the 1 s step phase with each new memory, so a leftover fraction from an
@@ -272,8 +330,43 @@ public class VirtualOrderbook implements ServerSaveable
         if(fadeClockSeconds < 1) return;
         double steps = Math.floor(fadeClockSeconds);
         fadeClockSeconds -= steps;
+        fadeStep(halfLife, steps);
+    }
+
+    /**
+     * T-211: one recovery step of {@code steps} seconds. The per-slot targets are rebuilt only when the centre
+     * moved more than {@link #TARGET_REFRESH_MOVE} since the last build, or every {@link #TARGET_REFRESH_SECONDS}.
+     */
+    private void fadeStep(double halfLife, double steps)
+    {
+        // ponytail: markets refresh in the step their own trigger fires, not staggered by market; stagger by item
+        // id if many busy markets ever line up in the same tick
+        targetAgeSeconds += steps;
+        boolean refresh = targetCentre == Long.MIN_VALUE || targetAgeSeconds >= TARGET_REFRESH_SECONDS
+                || Math.abs(currentMarketPrice - targetCentre) > TARGET_REFRESH_MOVE * Math.max(targetCentre, 1);
+        if(refresh)
+        {
+            targetCentre = currentMarketPrice;
+            targetAgeSeconds = 0;
+        }
         long winStart = dynamicArray.getIndexOffset();
-        depthMemory.fade(ServerMarket.fade(1.0, halfLife, steps), winStart, winStart + dynamicArray.getSize() - 1, defaultDepth);
+        // Trend accumulation: per side, refill with half-life / f, excess decay with half-life x f
+        depthMemory.fade(ServerMarket.fade(1.0, halfLife / bidSideFactor, steps), ServerMarket.fade(1.0, halfLife * bidSideFactor, steps),
+                ServerMarket.fade(1.0, halfLife / askSideFactor, steps), ServerMarket.fade(1.0, halfLife * askSideFactor, steps),
+                winStart, winStart + dynamicArray.getSize() - 1,
+                DepthMemory.slotOf(Math.max(getAskCeiling(), 1)), refresh, defaultDepth);
+    }
+
+    /**
+     * T-211 test hook: runs one 1 s recovery step now (with a target rebuild if {@code refreshTargets}).
+     * @return the step's wall time in nanoseconds
+     */
+    public long test_fadeStepNanos(boolean refreshTargets)
+    {
+        if(refreshTargets) targetCentre = Long.MIN_VALUE;
+        long t0 = System.nanoTime();
+        fadeStep(depthMemoryHalfLifeSeconds(), 1);
+        return System.nanoTime() - t0;
     }
 
     /** @return true if the depth memory is on (half-life &gt; 0) */
@@ -446,7 +539,10 @@ public class VirtualOrderbook implements ServerSaveable
     public void resetVolumeDistribution()
     {
         depthMemory.clear();   // T-198: a reset starts from the full default everywhere
+        targetCentre = Long.MIN_VALUE;   // T-214 c0: a reset forgets the recovery target phase too, so two runs
+        targetAgeSeconds = 0;            // after a reset refresh their targets in the same ticks
         dynamicArray.resetToDefaultValues();
+        initDepthMemory();     // T-211: ... stored in every slot from now on
     }
 
     /**
@@ -760,11 +856,9 @@ public class VirtualOrderbook implements ServerSaveable
      * upward search never passes {@code max(window end, }{@link #getAskCeiling()}{@code )}: there is
      * no default ask volume above the ceiling. A downward search ends at the caller's floor (&ge; 1),
      * so every search is finite.
-     * <p>T-210: an upward ask search above the window and at or above the provider's monotone bound
-     * ({@link #setAskMonotoneFrom}) that meets a level of a non-remembered slot reading less than half a
-     * raw unit knows every non-remembered level above it reads 0 too (the ask volume only shrinks there).
-     * It jumps to the next remembered slot side with volume, or ends. Remembered slots are read as before.
-     * Bids have no such bound (the default demand grows toward the floor), so they are not skipped.</p>
+     * <p>T-211: a stored segment whose every tick holds less than one raw unit
+     * ({@link DepthMemory.Segment#readsZero()}) is skipped in one step as well, on both sides. With the dense
+     * memory that covers the far, recovered-but-tiny depth up to the ceiling.</p>
      *
      * @param from    first raw price level to check
      * @param to      last raw price level to check
@@ -790,11 +884,6 @@ public class VirtualOrderbook implements ServerSaveable
             }
         }
         boolean memory = defaults && !depthMemory.isEmpty() && isDepthMemoryEnabled();
-        // T-210: skip the empty default asks above the monotone bound (see the method doc)
-        long bound = Long.MAX_VALUE;
-        if(askSide && step > 0 && defaults && askSlotSkip && askMonotoneFrom != null)
-            bound = askMonotoneFrom.getAsLong();
-        boolean skipAsks = bound != Long.MAX_VALUE;
         for(long p = from; ; p += step)
         {
             if(!defaults && (p < winStart || p > winEnd))
@@ -804,27 +893,16 @@ public class VirtualOrderbook implements ServerSaveable
                 else if(step < 0 && p > winEnd && winEnd >= to) p = winEnd;
                 else return NO_VOLUME;
             }
-            else if((memory || skipAsks) && p >= 1 && (p < winStart || p > winEnd))
+            else if(memory && p >= 1 && (p < winStart || p > winEnd))
             {
-                // T-198: a remembered empty segment (volume 0) reads 0 at every tick: skip it in one step
-                DepthMemory.Segment seg = memory ? segmentAt(p, winStart, winEnd) : null;
-                if(seg != null && seg.isZero())
+                // T-198: a remembered empty segment (volume 0) reads 0 at every tick: skip it in one step.
+                // T-211: so does one whose every tick holds less than one raw unit.
+                DepthMemory.Segment seg = segmentAt(p, winStart, winEnd);
+                if(seg.isZero() || (zeroSlotSkip && seg.readsZero()))
                 {
                     long edge = step > 0 ? seg.hi : seg.lo;
                     if(step > 0 ? edge >= to : edge <= to) return NO_VOLUME;
                     p = edge;   // the loop step moves past the segment
-                    continue;
-                }
-                // T-210: a default-only level past the bound reading < 0.5: every default-only level above
-                // reads 0 as well, only remembered slots can still hold asks
-                if(skipAsks && p > winEnd && p >= bound && (seg == null || !seg.stored)
-                        && Math.abs(providerVolume(p)) < EMPTY_ASK_LEVEL)
-                {
-                    int next = memory ? depthMemory.nextStoredAbove(DepthMemory.slotOf(p)) : -1;
-                    if(next < 0) return NO_VOLUME;
-                    long nextLo = DepthMemory.segmentRange(next, true, winStart, winEnd)[0];
-                    if(nextLo > to) return NO_VOLUME;
-                    p = nextLo - 1;   // the loop step lands on the remembered slot
                     continue;
                 }
             }
@@ -906,7 +984,7 @@ public class VirtualOrderbook implements ServerSaveable
     {
         VirtualOrderbook c = new VirtualOrderbook(dynamicArray.getSize());
         c.defaultVolumeProvider = defaultVolumeProvider;
-        c.askMonotoneFrom = askMonotoneFrom;
+        c.depthReady = depthReady;
         c.currentMarketPrice = currentMarketPrice;
         c.cleared = cleared;
         c.disabled = disabled;

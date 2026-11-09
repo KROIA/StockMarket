@@ -8,6 +8,7 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin.FlowBand;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin.Settings;
@@ -67,7 +68,7 @@ public class VolatilityPluginTestSuite extends TestSuite {
         addTest("update_saturates_flow_and_buyback_moves_price", this::test_update_saturatesFlow_buybackMovesPrice);
         // T-208 permanent impact θ
         addTest("theta_bound_diamond", () -> test_thetaBound(160.0, 50f, new double[]{100, 3_200, 32_000, 192_000}));
-        addTest("theta_bound_dirt", () -> test_thetaBound(0.1, 2000f, new double[]{5_000, 20_000, 128_000}));
+        addTest("theta_bound_dirt", () -> test_thetaBound(0.1, 2000f, new double[]{128_000, 1_280_000, 12_800_000}));
         addTest("theta_codec_round_trip_and_legacy", this::test_theta_codec);
         addTest("theta_nbt_round_trip_and_legacy", this::test_theta_nbt);
     }
@@ -85,7 +86,9 @@ public class VolatilityPluginTestSuite extends TestSuite {
     private static double walkEndPrice(DoubleUnaryOperator volumeAt, double p0, double volume, boolean buy) {
         long k = Math.round(p0 / TICK);
         long kMax = Math.round(p0 * 1000 / TICK);
-        if (!buy) k--;
+        // T-214: buys start at the first level above p0, sells at the first below (the level at p0 itself is the
+        // spread boundary). Starting a buy at p0 let flows smaller than a 10% dirt step "walk" 0.
+        k += buy ? 1 : -1;
         double rem = volume;
         while (k >= 1 && k <= kMax) {
             double v = Math.abs(volumeAt.applyAsDouble(k * TICK));
@@ -97,13 +100,15 @@ public class VolatilityPluginTestSuite extends TestSuite {
     }
 
     /**
-     * T-208: for the default book of a market (production DistributionCalculator, volume scale 1 x
-     * abundance), the equilibrium log move of a flow F is at most θ x the log move of F walked through
+     * T-208: for the default book of a market (production DistributionCalculator; T-214: depth scale sized to the
+     * default max order of the abundance), the equilibrium log move of a flow F is at most θ x the log move of F walked through
      * that book in one go, buy and sell, at the default settings.
      */
     private TestResult test_thetaBound(double p0, float abundance, double[] flows) {
         DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc =
-                new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(p0, abundance);
+                new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(p0,
+                        DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(p0, MarketSettings.defaultMaxOrderVolume(abundance,
+                                MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR), 1f));
         DoubleUnaryOperator volumeAt = pick -> calc.getVolume(p0, pick);
         Settings s = defaults();
         double eFold = VolatilityPlugin.bookEFoldDepth(volumeAt, p0, TICK, Math.log(s.minPriceMult()), Math.log(s.maxPriceMult()));

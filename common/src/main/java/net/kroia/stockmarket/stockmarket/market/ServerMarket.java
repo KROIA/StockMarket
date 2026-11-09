@@ -33,7 +33,6 @@ import java.util.PriorityQueue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import java.util.function.DoubleSupplier;
 import java.util.function.Function;
 
 public class ServerMarket implements ServerSaveable, IServerMarket {
@@ -82,12 +81,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      * Output Real volume at the price
      */
     private @Nullable Function<Double, Float> defaultVolumeProviderFunction;
-    /**
-     * T-210: real price from which {@link #defaultVolumeProviderFunction}'s ask volume is non-increasing
-     * (see {@code IVolumeDistributionCalculator.askMonotoneFrom}); null = unknown, never skip.
-     * Reset whenever the provider function changes.
-     */
-    private @Nullable DoubleSupplier askMonotoneFromFunction;
 
     private long candleStartTime = System.currentTimeMillis();
     private long candleOpenPrice;
@@ -117,7 +110,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                                         this::onOrderConsumed,
                                         this::onOrderCanceled,
                                         this::defaultVolumeProvider);
-        this.orderbook.setVirtualAskMonotoneFrom(this::askMonotoneFromRaw);
+        // T-211: the depth memory is initialised from a plugin's depth model, never from the fallback
+        this.orderbook.setVirtualDepthReady(volumeProvider != null);
         this.matchingEngine = new MatchingEngine(this.itemID, this.orderbook,
                 buyMarketOrders_inputBuffer,
                 sellMarketOrders_inputBuffer,
@@ -202,35 +196,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public void test_setDefaultVolumeProviderFunction(Function<Double, Float> defaultVolumeProviderFunction)
     {
         this.defaultVolumeProviderFunction = defaultVolumeProviderFunction;
-        this.askMonotoneFromFunction = null;   // T-210: the bound belonged to the old provider
-    }
-
-    /**
-     * T-210: sets where the default provider's ask volume becomes non-increasing. Must be called after
-     * {@link #test_setDefaultVolumeProviderFunction}, which resets it.
-     *
-     * @param askMonotoneFrom real price bound at the current market price ({@code +inf} = unknown),
-     *                        or null for none (the matching walk then reads every level)
-     */
-    public void setDefaultVolumeAskMonotoneFrom(@Nullable DoubleSupplier askMonotoneFrom)
-    {
-        this.askMonotoneFromFunction = askMonotoneFrom;
-    }
-
-    /**
-     * T-210: {@link #askMonotoneFromFunction} as a raw price for the virtual order book.
-     *
-     * @return raw price from which the default ask volume is non-increasing; {@link Long#MAX_VALUE} without
-     *         a plugin provider (the built-in fallback has no bound) or when the bound is unknown
-     */
-    private long askMonotoneFromRaw()
-    {
-        DoubleSupplier f = askMonotoneFromFunction;
-        if(f == null || defaultVolumeProviderFunction == null) return Long.MAX_VALUE;
-        double real = f.getAsDouble();
-        if(!(real < 1e15)) return Long.MAX_VALUE;   // +inf, NaN or beyond any raw price
-        // +1: the conversion may round down, the raw bound must not lie below the real one
-        return Math.max(0, MarketManager.convertToRawAmountStatic(real)) + 1;
+        // T-211: a plugin provider initialises the pending depth memory once; the fallback forgets it
+        this.orderbook.setVirtualDepthReady(defaultVolumeProviderFunction != null);
     }
     @Override
     public void test_resetVirtualOrderBookVolume()

@@ -3,6 +3,7 @@ package net.kroia.stockmarket.stockmarket.market.core;
 import net.kroia.modutilities.NbtCompat;
 import net.minecraft.nbt.CompoundTag;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.LongToDoubleFunction;
@@ -20,18 +21,22 @@ import java.util.function.LongToDoubleFunction;
  *       (those returned by {@link #slotOf(long)}) are ever used, neighbours are found by price.</li>
  *   <li><b>Value (T-199):</b> the REAL summed absolute raw volume {@code V} of the part of slot
  *       {@code k} that lies outside the window (the "segment", length {@code S} from the geometry).
- *       No sign is stored: the caller signs it by the current price at read time. Stored sparse:
- *       a missing slot side means "read the default provider" (full default depth).</li>
+ *       No sign is stored: the caller signs it by the current price at read time.</li>
+ *   <li><b>Dense (T-211):</b> once initialised ({@link #init}) every slot side from the floor to the ask
+ *       ceiling holds a stored volume, and only stored volume is read: the default provider is never
+ *       read as volume, it is only the target the volumes recover toward. Slots above the ceiling at
+ *       init time start at 0 and recover like any other. Before the init (memory just cleared, or a
+ *       sparse T-210 save) a side may be "pending" ({@code NaN}): it still reads the provider until
+ *       {@link #init} fills it once.</li>
  *   <li><b>Sides:</b> each slot keeps one value for its part BELOW the window and one for its part
  *       ABOVE it. Above 50x the window size a slot (2% of the price) is wider than the window
  *       and has outside ticks on both sides at once; one shared value would smear the consumed
  *       side's deficit onto the untouched side. Map key = {@code 2k + (above ? 1 : 0)}.</li>
  *   <li><b>Profile:</b> see {@link Segment}: density {@code rho = V / S} spread as two linear pieces
  *       whose cells sum to exactly {@code V}.</li>
- *   <li><b>Recovery:</b> {@code V} fades toward the slot's current default sum {@code D}
- *       ({@link #fade}); a slot side is dropped (= back to the provider) once
- *       {@code |V - D| < }{@link #DROP_TOLERANCE}{@code  * max(D, 1)}. No read cap: the stored volume
- *       is used as it is (it may be thicker than today's default until it faded).</li>
+ *   <li><b>Recovery:</b> {@code V} fades toward the slot's default sum {@code D} ({@link #fade}), with
+ *       {@code D} taken from a cached table that is refreshed when the centre moved (see {@link #fade}).
+ *       No slot is ever dropped. No read cap: the stored volume is used as it is.</li>
  * </ul>
  * Not thread-safe; used on the server thread like the rest of the orderbook.
  */
@@ -44,8 +49,6 @@ public final class DepthMemory
      */
     public static final double SLOT_GROWTH = 1.02;
     private static final double LN_GROWTH = Math.log(SLOT_GROWTH);
-    /** A slot side whose volume is within this fraction of its default sum (at least 1 raw unit) is dropped. */
-    public static final double DROP_TOLERANCE = 0.005;
 
     /**
      * The default depth the memory recovers toward, owned by the {@link VirtualOrderbook} (provider at the
@@ -67,8 +70,16 @@ public final class DepthMemory
         double sum(long lo, long hi);
     }
 
-    /** Sparse slot-side volumes, key {@link #key}; a missing key means "default provider". */
-    private final HashMap<Integer, Float> volumes = new HashMap<>();
+    /**
+     * T-211: dense slot-side volumes, index = {@link #key}. {@code null} = nothing stored (every side
+     * pending). {@code NaN} = pending side (reads the provider until {@link #init}). Indices past the end
+     * read 0 once {@link #initialised}, else pending.
+     */
+    private float[] volumes = null;
+    /** True after {@link #init}: sides never written read 0 (stored, empty) instead of pending. */
+    private boolean initialised = false;
+    /** T-211: cached full-slot default sums per key (recovery targets), NaN = not cached. See {@link #fade}. */
+    private double[] targets = null;
     /** Incremented on every change, so callers can cache {@link Segment}s. */
     private int modCount;
 
@@ -126,22 +137,33 @@ public final class DepthMemory
 
     // ── Volumes ────────────────────────────────────────────────────────────
 
-    /** @return true if no slot is remembered (every read uses the default provider) */
+    /** @return true if nothing is stored (every side is pending and reads the default provider) */
     public boolean isEmpty()
     {
-        return volumes.isEmpty();
+        return volumes == null;
     }
 
-    /** @return number of remembered slot sides */
+    /** @return true once {@link #init} ran: no pending side is left in the initialised range */
+    public boolean isInitialised()
+    {
+        return initialised;
+    }
+
+    /** @return number of stored (non-pending) slot sides */
     public int size()
     {
-        return volumes.size();
+        if (volumes == null) return 0;
+        int n = 0;
+        for (float v : volumes) if (!Float.isNaN(v)) n++;
+        return n;
     }
 
-    /** Forgets every slot (all reads back to the default provider). */
+    /** Forgets every slot (all sides pending: reads go back to the default provider until {@link #init}). */
     public void clear()
     {
-        volumes.clear();
+        volumes = null;
+        targets = null;
+        initialised = false;
         modCount++;
     }
 
@@ -151,8 +173,9 @@ public final class DepthMemory
      */
     public void copyFrom(DepthMemory other)
     {
-        volumes.clear();
-        volumes.putAll(other.volumes);
+        volumes = other.volumes == null ? null : other.volumes.clone();
+        targets = other.targets == null ? null : other.targets.clone();
+        initialised = other.initialised;
         modCount++;
     }
 
@@ -168,19 +191,43 @@ public final class DepthMemory
         return 2 * k + (above ? 1 : 0);
     }
 
-    /**
-     * @param k     slot index
-     * @param above true for the slot's part above the window, false for the part below it
-     * @return the remembered summed |raw volume| of that slot side, {@code NaN} if not remembered
-     */
-    public double getVolume(int k, boolean above)
+    /** @return the stored value of a key: NaN if pending, 0 past the end once initialised */
+    private float raw(int key)
     {
-        Float v = volumes.get(key(k, above));
-        return v == null ? Double.NaN : v;
+        if (volumes == null || key >= volumes.length) return initialised ? 0f : Float.NaN;
+        return volumes[key];
+    }
+
+    /** Grows {@link #volumes} to hold {@code key}; new entries are 0 once initialised, else pending. */
+    private void ensure(int key)
+    {
+        if (volumes != null && key < volumes.length) return;
+        int old = volumes == null ? 0 : volumes.length;
+        int len = Math.max(key + 1, old * 3 / 2 + 2);
+        volumes = volumes == null ? new float[len] : Arrays.copyOf(volumes, len);
+        Arrays.fill(volumes, old, len, initialised ? 0f : Float.NaN);
+    }
+
+    /** Stores {@code v} (clamped to &ge; 0) under {@code key}. */
+    private void put(int key, double v)
+    {
+        ensure(key);
+        volumes[key] = (float) Math.max(0, v);
+        modCount++;
     }
 
     /**
-     * Stores the summed |raw volume| of one slot side as it is (no drop check; used by tests and NBT).
+     * @param k     slot index
+     * @param above true for the slot's part above the window, false for the part below it
+     * @return the stored summed |raw volume| of that slot side, {@code NaN} if pending
+     */
+    public double getVolume(int k, boolean above)
+    {
+        return raw(key(k, above));
+    }
+
+    /**
+     * Stores the summed |raw volume| of one slot side as it is (used by tests and NBT).
      *
      * @param k      slot index
      * @param above  true for the slot's part above the window, false for the part below it
@@ -188,34 +235,32 @@ public final class DepthMemory
      */
     public void setVolume(int k, boolean above, double volume)
     {
-        modCount++;
-        volumes.put(key(k, above), (float) Math.max(0, volume));
+        put(key(k, above), volume);
     }
 
     /**
-     * T-210: the next remembered slot side above the window that holds volume.
+     * T-211: fills every pending slot side from the floor up to slot {@code kTop} with its default sum at
+     * the current window and centre, once; afterwards every side is stored (sides past {@code kTop} read 0
+     * and recover from there). Stored sides keep their volume (sparse T-210 saves migrate this way).
      *
-     * @param k slot index to search above (exclusive)
-     * @return the smallest {@code k' > k} whose above-window side is remembered with a volume &gt; 0, or -1
+     * @param winStart first raw price of the array window
+     * @param winEnd   last raw price of the array window
+     * @param kTop     highest slot to initialise (the slot of the ask ceiling)
+     * @param def      default depth at the current centre
      */
-    public int nextStoredAbove(int k)
+    public void init(long winStart, long winEnd, int kTop, DefaultDepth def)
     {
-        // ponytail: linear scan of the sparse map (a few hundred entries at most); a TreeMap if it grows
-        int best = -1;
-        for (var e : volumes.entrySet())
+        ensure(key(kTop, true));
+        for (int key = 0; key < volumes.length; key++)
         {
-            int key = e.getKey(), sk = key >> 1;
-            if ((key & 1) == 1 && sk > k && e.getValue() > 0 && (best < 0 || sk < best)) best = sk;
+            if (!Float.isNaN(volumes[key])) continue;
+            int k = key >> 1;
+            boolean above = (key & 1) != 0;
+            long[] g = segmentRange(k, above, winStart, winEnd);
+            volumes[key] = k > kTop || g[1] < g[0] ? 0f : (float) def.sum(g[0], g[1]);
         }
-        return best;
-    }
-
-    /** Stores {@code v}, or removes the slot side if {@code v} is within {@link #DROP_TOLERANCE} of its default sum {@code d}. */
-    private void putOrDrop(int key, double v, double d)
-    {
+        initialised = true;
         modCount++;
-        if (Math.abs(v - d) < DROP_TOLERANCE * Math.max(d, 1)) volumes.remove(key);
-        else volumes.put(key, (float) Math.max(0, v));
     }
 
     // ── Profile ────────────────────────────────────────────────────────────
@@ -300,6 +345,17 @@ public final class DepthMemory
             return stored && rho <= 0;
         }
 
+        /**
+         * T-211: true if every tick of a stored segment holds less than one raw unit, so it reads 0 after
+         * {@code roundConservative}. A cell is the mean of the piecewise-linear profile over the cell, so it
+         * is at most the largest node value {@code max(eL, m, eR)}. The margin below 1 keeps a value that
+         * the float cast would round up to 1.0f out of the skip.
+         */
+        public boolean readsZero()
+        {
+            return stored && !(Math.max(eL, Math.max(m, eR)) >= 0.999);
+        }
+
         /** @return profile value at the relative continuous coordinate {@code x} (0 .. len) */
         private double valueAt(double x)
         {
@@ -341,8 +397,8 @@ public final class DepthMemory
         boolean above = price > winEnd;
         long[] r = segmentRange(k, above, winStart, winEnd);
         long lo = r[0], hi = r[1];
-        Float v = volumes.get(key(k, above));
-        if (v == null) return new Segment(k, lo, hi);
+        float v = raw(key(k, above));
+        if (Float.isNaN(v)) return new Segment(k, lo, hi);
         double rho = v / (double) (hi - lo + 1);
         double eL = lo == winEnd + 1 ? boundaryEdge(rho, boundaryValue.applyAsDouble(winEnd))
                                      : neighbourEdge(rho, lo - 1, above, winStart, winEnd, def);
@@ -359,14 +415,15 @@ public final class DepthMemory
 
     /**
      * Edge toward the neighbour tick {@code adj} on the same side of the window: {@code min(rho, rho_n)}
-     * for a remembered neighbour, {@code min(rho, |default(adj)|)} for a missing one, {@code rho} below price 1.
+     * for a stored neighbour, {@code rho} below price 1. Only a pending neighbour (before {@link #init})
+     * uses {@code min(rho, |default(adj)|)}; once initialised the profile no longer depends on the centre.
      */
     private double neighbourEdge(double rho, long adj, boolean above, long winStart, long winEnd, DefaultDepth def)
     {
         if (adj < 1) return rho;
         int nk = slotOf(adj);
-        Float nv = volumes.get(key(nk, above));
-        if (nv == null) return Math.min(rho, def.at(adj));
+        float nv = raw(key(nk, above));
+        if (Float.isNaN(nv)) return Math.min(rho, def.at(adj));
         long ns = outside(nk, above, winStart, winEnd);
         return ns > 0 ? Math.min(rho, nv / (double) ns) : rho;
     }
@@ -450,7 +507,9 @@ public final class DepthMemory
      * the ticks that left into this side, {@code g} = gap ticks taken from this side (the target side gains
      * them at volume 0). A missing side stays missing if only {@code E} and/or a source gap touched it (the
      * rest still reads the default); it materialises when ticks leave into it or it is a gap target.
-     * {@code S_new = 0} removes the side; {@code V'} within {@link #DROP_TOLERANCE} of {@code D(G_new)} drops it.
+     * {@code S_new = 0} (the side is inside the window now, its volume moved into the array) stores 0.
+     * T-211: once initialised every side is stored, so only the first line's {@code V} applies; the
+     * {@code D(G_old)} base and the "stays missing" rule only matter for pending sides before {@link #init}.
      *
      * @param oldStart first price of the old window
      * @param oldEnd   last price of the old window
@@ -468,17 +527,17 @@ public final class DepthMemory
             double[] d = e.getValue();
             long sOld = outside(k, above, oldStart, oldEnd);
             long sNew = outside(k, above, newStart, newEnd);
-            Float stored = volumes.get(e.getKey());
+            float stored = raw(e.getKey());
+            boolean pending = Float.isNaN(stored);
             if (sNew <= 0)
             {
-                modCount++;
-                volumes.remove(e.getKey());
+                if (volumes != null) put(e.getKey(), 0);
                 continue;
             }
-            if (stored == null && d[1] == 0 && d[4] == 0)
+            if (pending && d[1] == 0 && d[4] == 0)
                 continue;   // only entering ticks / source gap: the remaining part still reads the default
             double base;
-            if (stored != null) base = stored;
+            if (!pending) base = stored;
             else if (sOld > 0)
             {
                 long[] g = segmentRange(k, above, oldStart, oldEnd);
@@ -487,77 +546,127 @@ public final class DepthMemory
             else base = 0;
             double kept = sOld > 0 ? base * (1 - d[3] / sOld) : 0;
             double v = Math.max(0, kept - d[2] + d[0]);
-            long[] g = segmentRange(k, above, newStart, newEnd);
-            putOrDrop(e.getKey(), v, def.sum(g[0], g[1]));
+            put(e.getKey(), v);
         }
     }
 
     // ── Recovery ───────────────────────────────────────────────────────────
 
     /**
-     * Fades every remembered volume toward the slot side's current default sum
-     * {@code D = D(G)} (segment at the current window and centre): {@code V <- D + (V - D) * factor}.
-     * Sides within {@link #DROP_TOLERANCE} of {@code D} (or without outside ticks) are removed.
-     * Cost: one {@link DefaultDepth#sum} per remembered side.
+     * Fades every stored volume toward its slot side's default sum {@code D}: {@code V <- D + (V - D) * factor}.
+     * Pending sides are left alone ({@link #init} fills them). Once initialised, the sides up to {@code kTop}
+     * are all faded, so slots that came into range above the init ceiling recover from 0.
+     * <p>T-211: {@code D} of a whole slot comes from a cached table that is only rebuilt when
+     * {@code refreshTargets} is set (the caller decides: centre moved, or periodically); a segment clipped by
+     * the window is summed every time (only the few slots around the window).
+     * Cost: a refresh is one {@link DefaultDepth#sum} per side (&le; 9 provider calls each for wide slots),
+     * a plain step is one multiply-add per side.
      *
-     * @param factor   multiplier for {@code V - D}, in [0, 1] (e.g. {@code 2^(-dt / halfLife)})
-     * @param winStart first raw price of the array window
-     * @param winEnd   last raw price of the array window
-     * @param def      default depth at the current centre
+     * @param factor         multiplier for {@code V - D}, in [0, 1] (e.g. {@code 2^(-dt / halfLife)})
+     * @param winStart       first raw price of the array window
+     * @param winEnd         last raw price of the array window
+     * @param kTop           highest slot to recover (slot of the ask ceiling)
+     * @param refreshTargets true to rebuild the cached targets from {@code def}
+     * @param def            default depth at the current centre
      */
-    public void fade(double factor, long winStart, long winEnd, DefaultDepth def)
+    public void fade(double factor, long winStart, long winEnd, int kTop, boolean refreshTargets, DefaultDepth def)
     {
+        fade(factor, factor, factor, factor, winStart, winEnd, kTop, refreshTargets, def);
+    }
+
+    /**
+     * Trend accumulation: {@link #fade(double, long, long, int, boolean, DefaultDepth)} with its own factor per
+     * side (below the window = bids, above = asks) and direction (V below its target = refill, above = excess
+     * decay). Each factor multiplies {@code V - D} like the single factor does.
+     *
+     * @param bidRefill  factor for a bid side with {@code V < D}
+     * @param bidExcess  factor for a bid side with {@code V >= D}
+     * @param askRefill  factor for an ask side with {@code V < D}
+     * @param askExcess  factor for an ask side with {@code V >= D}
+     * @param winStart       first raw price of the array window
+     * @param winEnd         last raw price of the array window
+     * @param kTop           highest slot to recover (slot of the ask ceiling)
+     * @param refreshTargets true to rebuild the cached targets from {@code def}
+     * @param def            default depth at the current centre
+     */
+    public void fade(double bidRefill, double bidExcess, double askRefill, double askExcess,
+                     long winStart, long winEnd, int kTop, boolean refreshTargets, DefaultDepth def)
+    {
+        if (volumes == null) return;
+        if (initialised) ensure(key(kTop, true));
+        if (targets == null || targets.length < volumes.length)
+        {
+            int old = targets == null ? 0 : targets.length;
+            targets = targets == null ? new double[volumes.length] : Arrays.copyOf(targets, volumes.length);
+            Arrays.fill(targets, old, targets.length, Double.NaN);
+        }
         modCount++;
-        volumes.entrySet().removeIf(en -> {
-            int k = en.getKey() >> 1;
-            boolean above = (en.getKey() & 1) != 0;
+        for (int key = 0; key < volumes.length; key++)
+        {
+            float v = volumes[key];
+            if (Float.isNaN(v)) continue;
+            int k = key >> 1;
+            boolean above = (key & 1) != 0;
             long[] g = segmentRange(k, above, winStart, winEnd);
-            if (g[1] < g[0]) return true;
-            double d = def.sum(g[0], g[1]);
-            double v = d + (en.getValue() - d) * factor;
-            if (Math.abs(v - d) < DROP_TOLERANCE * Math.max(d, 1)) return true;
-            en.setValue((float) Math.max(0, v));
-            return false;
-        });
+            if (g[1] < g[0]) { volumes[key] = 0f; continue; }   // inside the window: the array holds it
+            double d;
+            if (g[0] != slotStart(k) || g[1] != slotEnd(k)) d = def.sum(g[0], g[1]);   // clipped by the window
+            else
+            {
+                if (refreshTargets || Double.isNaN(targets[key])) targets[key] = k > kTop ? 0 : def.sum(g[0], g[1]);
+                d = targets[key];
+            }
+            double factor = above ? (v < d ? askRefill : askExcess) : (v < d ? bidRefill : bidExcess);
+            volumes[key] = (float) Math.max(0, d + (v - d) * factor);
+        }
     }
 
     // ── Persistence ────────────────────────────────────────────────────────
 
     /**
-     * Writes the slots as two int arrays: "k" (slot-side keys {@code 2k + above}) and "v" (float bits of
-     * the summed |raw volume|).
+     * Writes the slots: "d" (T-211 dense format: float bits per key {@code 2k + above}, NaN = pending),
+     * "i" (initialised) and "g" (grid growth).
      * @param tag target tag
      */
     public void save(CompoundTag tag)
     {
-        int[] ks = new int[volumes.size()];
-        int[] vs = new int[volumes.size()];
-        int i = 0;
-        for (Map.Entry<Integer, Float> e : volumes.entrySet())
-        {
-            ks[i] = e.getKey();
-            vs[i++] = Float.floatToIntBits(e.getValue());
-        }
-        tag.putIntArray("k", ks);
-        tag.putIntArray("v", vs);
+        int[] vs = new int[volumes == null ? 0 : volumes.length];
+        for (int i = 0; i < vs.length; i++) vs[i] = Float.floatToIntBits(volumes[i]);
+        tag.putIntArray("d", vs);
+        tag.putBoolean("i", initialised);
         tag.putDouble("g", SLOT_GROWTH);   // T-210: grid of the keys, checked on load
     }
 
     /**
-     * Replaces the slots with the ones in {@code tag} (see {@link #save}). A tag without "v" (no memory,
-     * or the T-198 ratio format "r", which is dropped without conversion) leaves the memory empty.
-     * T-210: so does a save from another grid ("g" missing, i.e. the 1% grid before T-210, or not
-     * {@link #SLOT_GROWTH}): its keys are slot indices of other price ranges. Every slot then reads the
-     * default again, so depth consumed outside the window before the upgrade is restored once.
+     * Replaces the slots with the ones in {@code tag} (see {@link #save}).
+     * <ul>
+     *   <li>Dense "d" (T-211): loaded as it is.</li>
+     *   <li>Sparse "k" + "v" on the same grid (T-210): the stored sides are kept, every other side is
+     *       pending and gets its default sum once at the next {@link #init}.</li>
+     *   <li>Anything else (no "g" = the 1% grid before T-210, another grid, the T-198 ratio format "r", no
+     *       memory): empty, so the whole memory is initialised from the default once.</li>
+     * </ul>
      * @param tag source tag
      */
     public void load(CompoundTag tag)
     {
         clear();
         if (!tag.contains("g") || NbtCompat.getDouble(tag, "g") != SLOT_GROWTH) return;
+        if (tag.contains("d"))
+        {
+            int[] vs = NbtCompat.getIntArray(tag, "d");
+            if (vs.length > 0)
+            {
+                volumes = new float[vs.length];
+                for (int i = 0; i < vs.length; i++) volumes[i] = Float.intBitsToFloat(vs[i]);
+            }
+            initialised = volumes != null && NbtCompat.getBoolean(tag, "i");
+            return;
+        }
         int[] ks = NbtCompat.getIntArray(tag, "k");
         int[] vs = NbtCompat.getIntArray(tag, "v");
         for (int i = 0; i < Math.min(ks.length, vs.length); i++)
             setVolume(ks[i] >> 1, (ks[i] & 1) != 0, Float.intBitsToFloat(vs[i]));
     }
+
 }
