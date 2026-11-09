@@ -2,7 +2,11 @@ package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.modutilities.NbtCompat;
 
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.api.ledger.TradeLogEntry;
+import net.kroia.banksystem.api.ledger.TradeRowKind;
+import net.kroia.banksystem.api.ledger.TradeSide;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
@@ -12,13 +16,19 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
+import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class ServerMarketTestSuite extends TestSuite {
@@ -85,6 +95,14 @@ public class ServerMarketTestSuite extends TestSuite {
         addTest("save_load_closedState_freshMarket", this::test_saveLoad_closedState_freshMarket);
         addTest("maxOrderVolume_saveLoad_and_oldNbt", this::test_maxOrderVolume_saveLoad);
         addTest("maxOrderVolume_applyToAllMarkets", this::test_maxOrderVolume_applyToAllMarkets);
+
+        // BankSystem trade ledger (T-191)
+        addTest("ledger_orderId_monotonic_persisted", this::test_ledger_orderId_monotonic_persisted);
+        addTest("ledger_close_writesOneRow", this::test_ledger_close_writesOneRow);
+        addTest("ledger_marketOrder_oneCloseRow", this::test_ledger_marketOrder_oneCloseRow);
+        addTest("ledger_periodic_onlyWhenChanged", this::test_ledger_periodic_onlyWhenChanged);
+        addTest("ledger_shutdown_partlyFilled", this::test_ledger_shutdown_partlyFilled);
+        addTest("ledger_versionGuard_noRows", this::test_ledger_versionGuard_noRows);
     }
 
     /**
@@ -142,6 +160,7 @@ public class ServerMarketTestSuite extends TestSuite {
 
     @Override
     public void teardown() {
+        releaseLedger();
         // End maintenance + clear so deleteMarket sees no dangling orders, then drop everything.
         if (serverMarket != null) {
             serverMarket.setMaintenance(false);
@@ -884,6 +903,325 @@ public class ServerMarketTestSuite extends TestSuite {
             return fail("Exception: " + e.getMessage());
         } finally {
             if (fresh != null) fresh.setMaintenance(false);
+            resetMarket(100, true);
+        }
+    }
+
+    // ── BankSystem trade ledger (T-191) ─────────────────────────────────────
+
+    /** Rows captured by {@link #captureLedger()} instead of going to the BankSystem ledger. */
+    private final List<TradeLogEntry> ledgerRows = new ArrayList<>();
+
+    /** Routes ledger rows into {@link #ledgerRows} and forces the version guard on. */
+    private void captureLedger() {
+        ledgerRows.clear();
+        OrderLedger.setAvailableOverride(true);
+        OrderLedger.Writer.testSink = ledgerRows::add;
+    }
+
+    /** Restores the real ledger and version detection. */
+    private void releaseLedger() {
+        OrderLedger.Writer.testSink = null;
+        OrderLedger.setAvailableOverride(null);
+    }
+
+    /** @return the captured rows of one regular order */
+    private List<TradeLogEntry> rowsOf(Order order) {
+        String ref = OrderLedger.orderRef(order.getOrderID());
+        List<TradeLogEntry> out = new ArrayList<>();
+        for (TradeLogEntry e : ledgerRows)
+            if (e.ref().equals(ref)) out.add(e);
+        return out;
+    }
+
+    /** Resting player sell limit order put straight into the book (no ID yet, like an order from an old save). */
+    private Order restingSell(long volume) {
+        Order order = new Order(itemID, Order.Type.LIMIT, -volume, 200, System.nanoTime(), UUID.randomUUID(), bankAccountNr);
+        serverMarket.getOrderbook().putOrder(order);
+        return order;
+    }
+
+    /** Cancels a resting order through the normal cancel path. */
+    private boolean cancel(Order order) {
+        return serverMarket.cancelOrder(order.getExecutorPlayerUUID(), order.getTime(), order.getType(),
+                order.getStartPrice(), order.getTargetVolume());
+    }
+
+    /**
+     * Accepted player orders get increasing IDs, bot orders and inter-market legs none; the ID and the
+     * logged state survive the order NBT, legacy NBT loads without an ID, the counter restore never
+     * goes back and the manager save carries the counter.
+     */
+    private TestResult test_ledger_orderId_monotonic_persisted() {
+        try {
+            resetMarket(100, true);
+            Order a = new Order(itemID, Order.Type.LIMIT, 5, 90, 0, UUID.randomUUID(), bankAccountNr);
+            Order b = new Order(itemID, Order.Type.LIMIT, 5, 91, 0, UUID.randomUUID(), bankAccountNr);
+            Order bot = new Order(itemID, Order.Type.LIMIT, 5, 92, 0);
+            Order leg = new Order(itemID, Order.Type.INTER_MARKET, 5, 93, 0, UUID.randomUUID(), bankAccountNr);
+            serverMarket.putOrder(a);
+            serverMarket.putOrder(b);
+            serverMarket.putOrder(bot);
+            serverMarket.putOrder(leg);
+            serverMarket.test_clearIncomingOrderBuffers();
+            TestResult r = assertTrue("first ID > 0", a.getOrderID() > 0);
+            if (!r.passed()) return r;
+            r = assertTrue("second ID > first ID", b.getOrderID() > a.getOrderID());
+            if (!r.passed()) return r;
+            r = assertEquals("bot order gets no ID", 0L, bot.getOrderID());
+            if (!r.passed()) return r;
+            r = assertEquals("inter-market leg gets no ID", 0L, leg.getOrderID());
+            if (!r.passed()) return r;
+            long idA = a.getOrderID();
+            r = assertEquals("assignOrderIdIfMissing keeps an existing ID", idA, a.assignOrderIdIfMissing());
+            if (!r.passed()) return r;
+
+            a.edit(3, -270);
+            a.markLedgerLogged();
+            CompoundTag tag = new CompoundTag();
+            a.save(tag);
+            Order loaded = Order.createFromNBT(tag);
+            r = assertEquals("ID survives NBT", idA, loaded.getOrderID());
+            if (!r.passed()) return r;
+            r = assertEquals("logged volume survives NBT", 3L, loaded.getLoggedFilledVolume());
+            if (!r.passed()) return r;
+            r = assertEquals("logged money survives NBT", -270L, loaded.getLoggedTransferredMoney());
+            if (!r.passed()) return r;
+
+            tag.remove("OrderID");
+            tag.remove("LoggedFilledVolume");
+            tag.remove("LoggedTransferredMoney");
+            Order legacy = Order.createFromNBT(tag);
+            r = assertEquals("legacy NBT loads without ID", 0L, legacy.getOrderID());
+            if (!r.passed()) return r;
+            r = assertEquals("legacy NBT loads with nothing logged", 0L, legacy.getLoggedFilledVolume());
+            if (!r.passed()) return r;
+            r = assertTrue("legacy order gets a new ID on first use", legacy.assignOrderIdIfMissing() > b.getOrderID());
+            if (!r.passed()) return r;
+
+            // Counter: restoring never goes back, a tiny saved value starts at the clock floor.
+            long next = Order.getNextOrderId();
+            Order.restoreOrderIdCounter(next);
+            r = assertTrue("restore keeps the counter", Order.getNextOrderId() >= next);
+            if (!r.passed()) return r;
+            Order.restoreOrderIdCounter(1);
+            r = assertTrue("restore from a tiny saved value starts at the clock floor",
+                    Order.getNextOrderId() >= System.currentTimeMillis() - 1000);
+            if (!r.passed()) return r;
+            Order.restoreOrderIdCounter(next); // back to where the running server was
+
+            // Manager save carries the counter in the "meta" list.
+            ServerMarketManager manager = (ServerMarketManager) backend.MARKET_MANAGER.getSync();
+            Map<String, ListTag> lists = new HashMap<>();
+            manager.save(lists);
+            r = assertTrue("manager save writes the meta list", lists.containsKey("meta"));
+            if (!r.passed()) return r;
+            r = assertEquals("meta holds the counter", Order.getNextOrderId(),
+                    NbtCompat.getLong(NbtCompat.getCompound(lists.get("meta"), 0), "nextOrderId"));
+            if (!r.passed()) return r;
+            return pass("Order IDs are monotonic, skip bots/legs and persist with the logged state");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        }
+    }
+
+    /**
+     * Cancel of a partly filled order writes exactly one CLOSE row with all its fills; a cancel with
+     * nothing new since the last row and a cancel without any fill write none.
+     */
+    private TestResult test_ledger_close_writesOneRow() {
+        try {
+            resetMarket(100, true);
+            captureLedger();
+            Order order = restingSell(500);
+            order.edit(-200, 4000);
+            TestResult r = assertTrue("cancel finds the order", cancel(order));
+            if (!r.passed()) return r;
+            r = assertTrue("canceled legacy order got an ID", order.getOrderID() > 0);
+            if (!r.passed()) return r;
+            List<TradeLogEntry> rows = rowsOf(order);
+            r = assertEquals("one row", 1, rows.size());
+            if (!r.passed()) return r;
+            TradeLogEntry e = rows.get(0);
+            r = assertEquals("kind CLOSE", TradeRowKind.CLOSE, e.rowKind());
+            if (!r.passed()) return r;
+            r = assertEquals("side SELL", TradeSide.SELL, e.side());
+            if (!r.passed()) return r;
+            r = assertEquals("qty = fills", 200L, e.qtyRaw());
+            if (!r.passed()) return r;
+            r = assertEquals("money = fills", 4000L, e.moneyRaw());
+            if (!r.passed()) return r;
+            r = assertEquals("avg price = money * SF / qty", 4000L * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / 200, e.avgPriceRaw());
+            if (!r.passed()) return r;
+            r = assertEquals("account", bankAccountNr, e.accountNumber());
+            if (!r.passed()) return r;
+            r = assertEquals("actor", order.getExecutorPlayerUUID(), e.actorUuid());
+            if (!r.passed()) return r;
+            r = assertEquals("item", itemID, e.item());
+            if (!r.passed()) return r;
+            r = assertEquals("currency", moneyID, e.currency());
+            if (!r.passed()) return r;
+
+            // Everything already logged by a PERIODIC row -> no CLOSE row.
+            Order logged = restingSell(300);
+            logged.edit(-100, 2000);
+            ((ServerMarket) serverMarket).logOpenOrdersToLedger(OrderLedger.PERIODIC);
+            cancel(logged);
+            r = assertEquals("only the PERIODIC row, no empty CLOSE row", 1, rowsOf(logged).size());
+            if (!r.passed()) return r;
+
+            // No fills at all -> no row.
+            Order unfilled = restingSell(300);
+            cancel(unfilled);
+            r = assertEquals("unfilled cancel writes no row", 0, rowsOf(unfilled).size());
+            if (!r.passed()) return r;
+            return pass("CLOSE writes one row with the unlogged fills, none for an empty delta");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            releaseLedger();
+            resetMarket(100, true);
+        }
+    }
+
+    /** A player market order matched in one pass gets exactly one CLOSE row covering all its fills. */
+    private TestResult test_ledger_marketOrder_oneCloseRow() {
+        try {
+            resetMarket(100, true);
+            serverMarket.test_setDefaultVolumeProviderFunction(p -> 5.0f / backend.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor());
+            serverMarket.test_resetVirtualOrderBookVolume();
+            captureLedger();
+            Order buy = new Order(itemID, Order.Type.MARKET, 10, 100, 0, UUID.randomUUID(), bankAccountNr);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+            List<TradeLogEntry> rows = rowsOf(buy);
+            if (buy.getFilledVolume() == 0)
+                return assertEquals("no fill -> no row", 0, rows.size());
+            TestResult r = assertEquals("exactly one row", 1, rows.size());
+            if (!r.passed()) return r;
+            r = assertEquals("kind CLOSE", TradeRowKind.CLOSE, rows.get(0).rowKind());
+            if (!r.passed()) return r;
+            r = assertEquals("side BUY", TradeSide.BUY, rows.get(0).side());
+            if (!r.passed()) return r;
+            r = assertEquals("qty = filled volume", Math.abs(buy.getFilledVolume()), rows.get(0).qtyRaw());
+            if (!r.passed()) return r;
+            return assertEquals("money = transferred money", Math.abs(buy.getTransferredMoney()), rows.get(0).moneyRaw());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            releaseLedger();
+            resetMarket(100, true);
+        }
+    }
+
+    /** The sweep writes a row only when the fill state changed, each row holding only the new fills. */
+    private TestResult test_ledger_periodic_onlyWhenChanged() {
+        try {
+            resetMarket(100, true);
+            captureLedger();
+            ServerMarket market = (ServerMarket) serverMarket;
+            Order order = restingSell(1000);
+            market.logOpenOrdersToLedger(OrderLedger.PERIODIC);
+            TestResult r = assertEquals("no fills -> no row", 0, rowsOf(order).size());
+            if (!r.passed()) return r;
+
+            order.edit(-100, 2000);
+            market.logOpenOrdersToLedger(OrderLedger.PERIODIC);
+            r = assertEquals("first fills -> one row", 1, rowsOf(order).size());
+            if (!r.passed()) return r;
+            market.logOpenOrdersToLedger(OrderLedger.PERIODIC);
+            r = assertEquals("unchanged -> still one row", 1, rowsOf(order).size());
+            if (!r.passed()) return r;
+
+            order.edit(-50, 1100);
+            market.logOpenOrdersToLedger(OrderLedger.PERIODIC);
+            List<TradeLogEntry> rows = rowsOf(order);
+            r = assertEquals("new fills -> second row", 2, rows.size());
+            if (!r.passed()) return r;
+            r = assertEquals("second row holds only the delta qty", 50L, rows.get(1).qtyRaw());
+            if (!r.passed()) return r;
+            r = assertEquals("second row holds only the delta money", 1100L, rows.get(1).moneyRaw());
+            if (!r.passed()) return r;
+            r = assertEquals("PERIODIC kind", TradeRowKind.PERIODIC, rows.get(1).rowKind());
+            if (!r.passed()) return r;
+
+            order.edit(-25, 600);
+            cancel(order);
+            rows = rowsOf(order);
+            r = assertEquals("close adds the rest", 3, rows.size());
+            if (!r.passed()) return r;
+            long qty = 0, money = 0;
+            for (TradeLogEntry e : rows) { qty += e.qtyRaw(); money += e.moneyRaw(); }
+            r = assertEquals("rows sum to the filled volume", Math.abs(order.getFilledVolume()), qty);
+            if (!r.passed()) return r;
+            return assertEquals("rows sum to the transferred money", Math.abs(order.getTransferredMoney()), money);
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            releaseLedger();
+            resetMarket(100, true);
+        }
+    }
+
+    /**
+     * The server-stop flush writes a SHUTDOWN row for a partly filled resting order (not for an unfilled
+     * one); the saved order carries the logged state, so it is not logged again after a restart.
+     */
+    private TestResult test_ledger_shutdown_partlyFilled() {
+        try {
+            resetMarket(100, true);
+            captureLedger();
+            Order partly = restingSell(400);
+            partly.edit(-150, 3000);
+            Order unfilled = restingSell(400);
+            StockMarketModBackend.flushLedgerOnShutdown(null);
+            List<TradeLogEntry> rows = rowsOf(partly);
+            TestResult r = assertEquals("one row for the partly filled order", 1, rows.size());
+            if (!r.passed()) return r;
+            r = assertEquals("kind SHUTDOWN", TradeRowKind.SHUTDOWN, rows.get(0).rowKind());
+            if (!r.passed()) return r;
+            r = assertEquals("qty", 150L, rows.get(0).qtyRaw());
+            if (!r.passed()) return r;
+            r = assertEquals("no row for the unfilled order", 0, rowsOf(unfilled).size());
+            if (!r.passed()) return r;
+
+            CompoundTag tag = new CompoundTag();
+            partly.save(tag);
+            Order reloaded = Order.createFromNBT(tag);
+            r = assertEquals("reloaded order keeps its ID", partly.getOrderID(), reloaded.getOrderID());
+            if (!r.passed()) return r;
+            ledgerRows.clear();
+            r = assertFalse("reloaded order has nothing unlogged", OrderLedger.logDelta(reloaded,
+                    OrderLedger.orderRef(reloaded.getOrderID()), OrderLedger.SHUTDOWN, moneyID));
+            if (!r.passed()) return r;
+            StockMarketModBackend.flushLedgerOnShutdown(null);
+            return assertEquals("second flush writes nothing", 0, rowsOf(partly).size());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            releaseLedger();
+            resetMarket(100, true);
+        }
+    }
+
+    /** With the ledger API unavailable (older BankSystem) closes and sweeps write nothing and do not throw. */
+    private TestResult test_ledger_versionGuard_noRows() {
+        try {
+            resetMarket(100, true);
+            captureLedger();
+            OrderLedger.setAvailableOverride(false);
+            Order order = restingSell(500);
+            order.edit(-200, 4000);
+            ((ServerMarket) serverMarket).logOpenOrdersToLedger(OrderLedger.PERIODIC);
+            TestResult r = assertTrue("cancel still works", cancel(order));
+            if (!r.passed()) return r;
+            r = assertEquals("no rows", 0, ledgerRows.size());
+            if (!r.passed()) return r;
+            return assertEquals("nothing marked as logged", 0L, order.getLoggedFilledVolume());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            releaseLedger();
             resetMarket(100, true);
         }
     }

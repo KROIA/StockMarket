@@ -20,8 +20,8 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
 
     private final DatabaseManager databaseManager;
 
-    public static final String INSERT = "INSERT INTO OrderHistory (itemid, accountid, userid_one, userid_two, type, amount, price, time, intermarket_group_one, intermarket_group_two) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT itemid, accountid, userid_one, userid_two, type, amount, price, time, intermarket_group_one, intermarket_group_two FROM OrderHistory";
+    public static final String INSERT = "INSERT INTO OrderHistory (itemid, accountid, userid_one, userid_two, type, amount, price, time, intermarket_group_one, intermarket_group_two, order_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    public static final String SELECT = "SELECT itemid, accountid, userid_one, userid_two, type, amount, price, time, intermarket_group_one, intermarket_group_two, order_id FROM OrderHistory";
     public static final String DELETE = "DELETE FROM OrderHistory";
     public static final String COUNT  = "SELECT COUNT(*) FROM OrderHistory";
 
@@ -73,6 +73,11 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                 stmt.setLong(9, 0);
                 stmt.setLong(10, 0);
             }
+            // T-191: persisted order ID, NULL for inter-market legs and unknown IDs
+            if (data.orderID() != null)
+                stmt.setLong(11, data.orderID());
+            else
+                stmt.setNull(11, java.sql.Types.INTEGER);
             stmt.addBatch();
         }
         catch(SQLException e){
@@ -230,7 +235,9 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
             long groupMsb = rs.getLong(9);
             long groupLsb = rs.getLong(10);
             UUID groupID = (groupMsb == 0 && groupLsb == 0) ? null : new UUID(groupMsb, groupLsb);
-            return new OrderRecordStruct(rs.getShort(1), rs.getInt(2), new UUID(rs.getLong(3), rs.getLong(4)), rs.getInt(5), rs.getLong(6), rs.getLong(7), rs.getLong(8), groupID);
+            long orderID = rs.getLong(11);
+            Long orderIDOrNull = rs.wasNull() ? null : orderID;
+            return new OrderRecordStruct(rs.getShort(1), rs.getInt(2), new UUID(rs.getLong(3), rs.getLong(4)), rs.getInt(5), rs.getLong(6), rs.getLong(7), rs.getLong(8), groupID, orderIDOrNull);
         }
         catch(SQLException e){
             StockMarketMod.LOGGER.warn("Failed to read MarketPrice record, is the data corrupt?");

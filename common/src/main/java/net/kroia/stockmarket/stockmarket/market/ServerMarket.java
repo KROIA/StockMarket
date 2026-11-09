@@ -342,6 +342,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             return false;
         if(!order.getItemID().equals(itemID))
             return false; // Wrong stockmarket for this order
+        // T-191: accepted player orders get their persisted ID (inter-market legs use the group ID as ledger ref)
+        if(order.isPlayerOrder() && order.getType() != Order.Type.INTER_MARKET)
+            order.assignOrderIdIfMissing();
         if(order.isBuyOrder())
         {
             if(order.isMarketOrder() || order.getType() == Order.Type.INTER_MARKET)
@@ -791,6 +794,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private void onOrderConsumed(Order order)
     {
         unlockRemainingFunds(order);
+        logLedgerClose(order);
         saveOrderRecord(order);
         trackRealizedProfit(order);
     }
@@ -817,6 +821,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private void onOrderCanceled(Order order)
     {
         unlockRemainingFunds(order);
+        logLedgerClose(order);
         saveOrderRecord(order);
         trackRealizedProfit(order);
         notifyMarketOrderNotFullyFilled(order);
@@ -867,6 +872,52 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                 String.format(Locale.ROOT, "%.2f", Math.abs(order.getFilledVolume()) / sf),
                 String.format(Locale.ROOT, "%.2f", Math.abs(order.getTargetVolume()) / sf),
                 itemID.getStack().getHoverName()));
+    }
+
+    /**
+     * T-191: writes the CLOSE ledger row (fills not yet covered by earlier rows) of a finished player
+     * order. Inter-market legs are skipped: the market manager logs them under the group ref.
+     * Also gives orders from older saves their ID, so the OrderHistory row carries it.
+     *
+     * @param order the consumed or canceled order (fill state is final)
+     */
+    private void logLedgerClose(Order order)
+    {
+        if (order.isBotOrder() || order.getType() == Order.Type.INTER_MARKET) return;
+        order.assignOrderIdIfMissing();
+        ItemID currency = ledgerCurrency();
+        if (currency != null)
+            OrderLedger.logDelta(order, OrderLedger.orderRef(order.getOrderID()), OrderLedger.CLOSE, currency);
+    }
+
+    /**
+     * T-191: writes a {@link OrderLedger#PERIODIC} or {@link OrderLedger#SHUTDOWN} row for every resting
+     * player order of this market whose fill state changed since its last row.
+     *
+     * @param rowKind {@link OrderLedger#PERIODIC} or {@link OrderLedger#SHUTDOWN}
+     * @return the number of rows written
+     */
+    public int logOpenOrdersToLedger(String rowKind)
+    {
+        ItemID currency = ledgerCurrency();
+        if (currency == null) return 0;
+        int rows = 0;
+        for (Order order : orderbook.getLimitOrders())
+        {
+            if (order.isBotOrder() || order.getType() == Order.Type.INTER_MARKET) continue;
+            order.assignOrderIdIfMissing();
+            if (OrderLedger.logDelta(order, OrderLedger.orderRef(order.getOrderID()), rowKind, currency))
+                rows++;
+        }
+        return rows;
+    }
+
+    /** @return the trading currency for ledger rows, or null if the market manager is not available */
+    private static @Nullable ItemID ledgerCurrency()
+    {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.MARKET_MANAGER == null || BACKEND_INSTANCES.MARKET_MANAGER.getSync() == null)
+            return null;
+        return BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID();
     }
 
     /**

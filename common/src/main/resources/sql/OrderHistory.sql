@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS OrderHistory (
                                             price INTEGER NOT NULL,
                                             time DATETIME NOT NULL,
                                             intermarket_group_one INTEGER NOT NULL DEFAULT 0,
-                                            intermarket_group_two INTEGER NOT NULL DEFAULT 0
+                                            intermarket_group_two INTEGER NOT NULL DEFAULT 0,
+                                            order_id INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_itemid_userid_time ON OrderHistory (itemid, accountid);

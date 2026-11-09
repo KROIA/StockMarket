@@ -147,6 +147,13 @@ public class DatabaseManager {
         } catch (SQLException ignored) {
             try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
         }
+        // T-191: persisted order ID (ledger ref sm:order:<id>); NULL for older rows and inter-market legs
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("ALTER TABLE OrderHistory ADD COLUMN order_id INTEGER");
+            connection.commit();
+        } catch (SQLException ignored) {
+            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
+        }
     }
 
 

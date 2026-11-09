@@ -19,9 +19,11 @@ import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
+import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.InterMarketExecutor;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -65,6 +67,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     // Trading-hours clock, evaluated once per update() tick (T-158). Cached so the price
     // stream / ServerTimeRequest can report the same minute the markets were evaluated with.
     private int currentTradingMinute = 0;
+    /** T-191: server ticks since the last periodic ledger sweep (game time, not persisted). */
+    private int ledgerSweepTicks = 0;
     private boolean tradingHoursUseRealTime = false;
 
     public ServerMarketManager()
@@ -759,6 +763,13 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             }
         }
 
+        // T-191: every 10 minutes one ledger row per resting player order whose fill state changed.
+        if (++ledgerSweepTicks >= OrderLedger.SWEEP_INTERVAL_TICKS)
+        {
+            ledgerSweepTicks = 0;
+            logOpenOrdersToLedger(OrderLedger.PERIODIC);
+        }
+
         long time = System.currentTimeMillis();
         long candleSaveIntervalMs = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get();
         if(time - candleSaveTimer_lastMs > candleSaveIntervalMs)
@@ -888,6 +899,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
      */
     private void onInterMarketOrderConsumed(InterMarketOrder order)
     {
+        logInterMarketLegs(order, OrderLedger.CLOSE);
         depositTransactionMoneyBalance(order);
         saveInterMarketOrderRecord(order);
         unlockInterMarketRemainingFunds(order);
@@ -900,6 +912,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
      */
     private void onInterMarketOrderCanceled(InterMarketOrder order)
     {
+        logInterMarketLegs(order, OrderLedger.CLOSE);
         depositTransactionMoneyBalance(order);
         saveInterMarketOrderRecord(order);
         unlockInterMarketRemainingFunds(order);
@@ -912,6 +925,45 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
      */
     private void onInterMarketOrderPartialFill(InterMarketOrder order)
     {
+    }
+
+    /**
+     * T-191: writes one ledger row per leg (SELL have-item, BUY want-item) with the fills since the
+     * leg's previous row, both under the ref {@code sm:im:<groupID>}. At close the money of all leg
+     * rows nets out to the {@code transactionMoneyBalance} refund.
+     *
+     * @param order   the inter-market order (bot orders write nothing)
+     * @param rowKind {@link OrderLedger#CLOSE}, {@link OrderLedger#PERIODIC} or {@link OrderLedger#SHUTDOWN}
+     * @return the number of rows written
+     */
+    private int logInterMarketLegs(InterMarketOrder order, String rowKind)
+    {
+        if (order.isBotOrder()) return 0;
+        String ref = OrderLedger.interMarketRef(order.getInterMarketGroupID());
+        ItemID currency = getTradingCurrencyID();
+        int rows = 0;
+        if (OrderLedger.logDelta(order.getSellOrder(), ref, rowKind, currency)) rows++;
+        if (OrderLedger.logDelta(order.getBuyOrder(), ref, rowKind, currency)) rows++;
+        return rows;
+    }
+
+    /**
+     * T-191: writes a ledger row for every open player order (resting limit orders of all markets and
+     * pending inter-market orders) whose fill state changed since its last row. Runs every
+     * {@link OrderLedger#SWEEP_INTERVAL_TICKS} ticks ({@link OrderLedger#PERIODIC}) and on server
+     * stop before the save ({@link OrderLedger#SHUTDOWN}). Master only.
+     *
+     * @param rowKind {@link OrderLedger#PERIODIC} or {@link OrderLedger#SHUTDOWN}
+     * @return the number of rows written
+     */
+    public int logOpenOrdersToLedger(String rowKind)
+    {
+        int rows = 0;
+        for (ServerMarket m : markets.values())
+            rows += m.logOpenOrdersToLedger(rowKind);
+        for (InterMarketOrder order : pendingInterMarketOrders)
+            rows += logInterMarketLegs(order, rowKind);
+        return rows;
     }
 
     /**
@@ -1124,6 +1176,13 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 success = false;
         }
         listTags.put("users", userListTag);
+
+        // T-191: order ID counter
+        CompoundTag metaTag = new CompoundTag();
+        metaTag.putLong("nextOrderId", Order.getNextOrderId());
+        ListTag metaListTag = new ListTag();
+        metaListTag.add(metaTag);
+        listTags.put("meta", metaListTag);
         return success;
     }
 
@@ -1163,6 +1222,17 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         }
         markets.clear();
         markets.putAll(newMarkets);
+
+        // T-191: order ID counter (absent in older saves -> starts at the clock floor)
+        ListTag metaListTag = listTags.get("meta");
+        long savedNextOrderId = 0;
+        if (metaListTag != null && !metaListTag.isEmpty())
+        {
+            CompoundTag metaTag = NbtCompat.getCompound(metaListTag, 0);
+            if (metaTag.contains("nextOrderId"))
+                savedNextOrderId = NbtCompat.getLong(metaTag, "nextOrderId");
+        }
+        Order.restoreOrderIdCounter(savedNextOrderId);
 
         // Load pending inter-market orders
         pendingInterMarketOrders.clear();

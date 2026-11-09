@@ -41,6 +41,8 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
+import net.kroia.stockmarket.stockmarket.market.OrderLedger;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -613,9 +615,33 @@ public class StockMarketModBackend implements StockMarketAPI {
         }
     }
 
+    /**
+     * T-191: writes a SHUTDOWN ledger row for every open player order with fills that are not in the
+     * ledger yet. Must run while BankSystem's database is still open, so Fabric calls it from an
+     * earlier SERVER_STOPPING phase (BankSystem's stop handler runs first there); on NeoForge
+     * StockMarket's stop handler already runs before BankSystem's. Calling it again is harmless:
+     * the second call finds no unlogged fills. Master only (no-op on a slave).
+     *
+     * @param server the stopping server (unused, keeps the lifecycle-callback signature)
+     */
+    public static void flushLedgerOnShutdown(MinecraftServer server)
+    {
+        if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null)
+            return;
+        ServerMarketManager manager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        if (manager == null)
+            return;
+        try {
+            manager.logOpenOrdersToLedger(OrderLedger.SHUTDOWN);
+        } catch (RuntimeException e) {
+            SERVER_INSTANCES.LOGGER.error("[StockMarketModBackend] Failed to write SHUTDOWN ledger rows", e);
+        }
+    }
+
     // Called from the server side
     public static void onServerStop(MinecraftServer server)
     {
+        flushLedgerOnShutdown(server); // T-191: before saveDataToFiles, so the logged state is saved
         if (SERVER_INSTANCES != null && SERVER_INSTANCES.BANK_SYSTEM_API != null) {
             SERVER_INSTANCES.BANK_SYSTEM_API.setItemPriceProvider(null);
         }
