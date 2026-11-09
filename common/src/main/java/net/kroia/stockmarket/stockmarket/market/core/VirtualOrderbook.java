@@ -10,6 +10,7 @@ import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Function;
+import java.util.function.LongSupplier;
 
 public class VirtualOrderbook implements ServerSaveable
 {
@@ -22,6 +23,15 @@ public class VirtualOrderbook implements ServerSaveable
 
     private final DynamicIndexedArray dynamicArray;
     private Function<Long, Float> defaultVolumeProvider = null;
+    /**
+     * T-210: raw price from which the provider's ask volume is non-increasing ({@link Long#MAX_VALUE} =
+     * unknown); null = no bound. Lets {@link #findVolume} skip the empty default asks far above the price.
+     */
+    private @Nullable LongSupplier askMonotoneFrom = null;
+    /** T-210 test hook: false disables the ask slot skip in {@link #findVolume} (equivalence tests). */
+    private static boolean askSlotSkip = true;
+    /** Below this |raw volume| a default ask level reads 0 ({@link #roundConservative} truncates below 1). */
+    private static final float EMPTY_ASK_LEVEL = 0.5f;
     private long currentMarketPrice = 0;
     /**
      * Sticky-clear flag. When true the shift-fill provider ({@link #getDefaultVolume(long)})
@@ -85,6 +95,27 @@ public class VirtualOrderbook implements ServerSaveable
         cachedSeg = null;
     }
 
+
+    /**
+     * T-210: sets where the default provider's ask volume becomes non-increasing (contract of
+     * {@code IVolumeDistributionCalculator.askMonotoneFrom}, in raw prices).
+     *
+     * @param askMonotoneFrom supplies the raw bound at the current price ({@link Long#MAX_VALUE} = unknown),
+     *                        or null for none; a bound that is too low makes {@link #findVolume} skip real volume
+     */
+    public void setAskMonotoneFrom(@Nullable LongSupplier askMonotoneFrom)
+    {
+        this.askMonotoneFrom = askMonotoneFrom;
+    }
+
+    /**
+     * T-210 test hook: turns the ask slot skip of {@link #findVolume} on or off for every book (equivalence
+     * tests compare both). On by default.
+     */
+    public static void test_setAskSlotSkip(boolean enabled)
+    {
+        askSlotSkip = enabled;
+    }
 
     /**
      * Updates the market price and recenters the array window when the price leaves the
@@ -729,6 +760,11 @@ public class VirtualOrderbook implements ServerSaveable
      * upward search never passes {@code max(window end, }{@link #getAskCeiling()}{@code )}: there is
      * no default ask volume above the ceiling. A downward search ends at the caller's floor (&ge; 1),
      * so every search is finite.
+     * <p>T-210: an upward ask search above the window and at or above the provider's monotone bound
+     * ({@link #setAskMonotoneFrom}) that meets a level of a non-remembered slot reading less than half a
+     * raw unit knows every non-remembered level above it reads 0 too (the ask volume only shrinks there).
+     * It jumps to the next remembered slot side with volume, or ends. Remembered slots are read as before.
+     * Bids have no such bound (the default demand grows toward the floor), so they are not skipped.</p>
      *
      * @param from    first raw price level to check
      * @param to      last raw price level to check
@@ -754,6 +790,11 @@ public class VirtualOrderbook implements ServerSaveable
             }
         }
         boolean memory = defaults && !depthMemory.isEmpty() && isDepthMemoryEnabled();
+        // T-210: skip the empty default asks above the monotone bound (see the method doc)
+        long bound = Long.MAX_VALUE;
+        if(askSide && step > 0 && defaults && askSlotSkip && askMonotoneFrom != null)
+            bound = askMonotoneFrom.getAsLong();
+        boolean skipAsks = bound != Long.MAX_VALUE;
         for(long p = from; ; p += step)
         {
             if(!defaults && (p < winStart || p > winEnd))
@@ -763,15 +804,27 @@ public class VirtualOrderbook implements ServerSaveable
                 else if(step < 0 && p > winEnd && winEnd >= to) p = winEnd;
                 else return NO_VOLUME;
             }
-            else if(memory && p >= 1 && (p < winStart || p > winEnd))
+            else if((memory || skipAsks) && p >= 1 && (p < winStart || p > winEnd))
             {
                 // T-198: a remembered empty segment (volume 0) reads 0 at every tick: skip it in one step
-                DepthMemory.Segment seg = segmentAt(p, winStart, winEnd);
-                if(seg.isZero())
+                DepthMemory.Segment seg = memory ? segmentAt(p, winStart, winEnd) : null;
+                if(seg != null && seg.isZero())
                 {
                     long edge = step > 0 ? seg.hi : seg.lo;
                     if(step > 0 ? edge >= to : edge <= to) return NO_VOLUME;
                     p = edge;   // the loop step moves past the segment
+                    continue;
+                }
+                // T-210: a default-only level past the bound reading < 0.5: every default-only level above
+                // reads 0 as well, only remembered slots can still hold asks
+                if(skipAsks && p > winEnd && p >= bound && (seg == null || !seg.stored)
+                        && Math.abs(providerVolume(p)) < EMPTY_ASK_LEVEL)
+                {
+                    int next = memory ? depthMemory.nextStoredAbove(DepthMemory.slotOf(p)) : -1;
+                    if(next < 0) return NO_VOLUME;
+                    long nextLo = DepthMemory.segmentRange(next, true, winStart, winEnd)[0];
+                    if(nextLo > to) return NO_VOLUME;
+                    p = nextLo - 1;   // the loop step lands on the remembered slot
                     continue;
                 }
             }
@@ -853,6 +906,7 @@ public class VirtualOrderbook implements ServerSaveable
     {
         VirtualOrderbook c = new VirtualOrderbook(dynamicArray.getSize());
         c.defaultVolumeProvider = defaultVolumeProvider;
+        c.askMonotoneFrom = askMonotoneFrom;
         c.currentMarketPrice = currentMarketPrice;
         c.cleared = cleared;
         c.disabled = disabled;

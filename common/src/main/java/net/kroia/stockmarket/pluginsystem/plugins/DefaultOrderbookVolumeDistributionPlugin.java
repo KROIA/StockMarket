@@ -165,6 +165,17 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
 
             return (float) ((coreShape + valueCluster + background + demandBoost) * volumeScale);
         }
+
+        /**
+         * T-210: above the price every term only shrinks once {@code p >= max(1.06 P, D)}: the core shape
+         * {@code (d/w + 0.001)^0.4 e^(-d/0.15)} peaks at {@code d = 0.06 - 0.001 w <= 0.06}, the value cluster
+         * falls above the default price {@code D}, the background always falls and the demand boost is 0.
+         */
+        @Override
+        public double askMonotoneFrom(double marketPrice)
+        {
+            return Math.max(1.06 * marketPrice, defaultPrice);
+        }
     }
 
     private static final float DEFAULT_VOLUME_SCALE = 1.0f;

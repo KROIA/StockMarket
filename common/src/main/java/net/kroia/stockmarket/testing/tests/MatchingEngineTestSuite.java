@@ -10,15 +10,22 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.plugin.interaction.IVolumeDistributionCalculator;
+import net.kroia.stockmarket.pluginsystem.interaction.PluginOrderBook;
 import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.market.core.DepthMemory;
 import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
+import net.kroia.stockmarket.stockmarket.market.core.VirtualOrderbook;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
+import java.util.List;
+import java.util.Locale;
+import java.util.Random;
 import java.util.UUID;
 
 public class MatchingEngineTestSuite extends TestSuite {
@@ -117,6 +124,9 @@ public class MatchingEngineTestSuite extends TestSuite {
         addTest("sideVolume_orderOfExactSizeStopsAtTarget", this::test_sideVolume_orderOfExactSizeStopsAtTarget);
         addTest("walk_emptyGap_isFast", this::test_walk_emptyGap_isFast);
         addTest("walk_diamondPreset_priceImpact", this::test_walk_diamondPreset_priceImpact);
+        // T-210: ask slot skip above the monotone bound
+        addTest("askSlotSkip_sameResultsOnOff", this::test_askSlotSkip_sameResultsOnOff);
+        addTest("askSlotSkip_emptyBuyToCeiling_isFast", this::test_askSlotSkip_emptyBuyToCeiling_isFast);
 
         // Inter-market net player flow (issue #36 follow-up)
         addTest("interMarketMarketOrder_creditsFlowOnBothMarkets", this::test_interMarketMarketOrder_creditsFlowOnBothMarkets);
@@ -1253,6 +1263,192 @@ public class MatchingEngineTestSuite extends TestSuite {
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         } finally {
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        }
+    }
+
+    // ── T-210: ask slot skip ──────────────────────────────────────────────────
+
+    /** T-210 test calculator with ask volume only in a band far above the price: not monotone, keeps the default bound. */
+    private static final class FarBandCalculator implements IVolumeDistributionCalculator {
+        @Override
+        public float getVolume(double marketPrice, double volumePickPrice) {
+            double r = volumePickPrice / marketPrice;
+            return r >= 3.0 && r <= 3.05 ? 3f : 0f;
+        }
+    }
+
+    /**
+     * T-210: sets the scratch market's provider and bound the way PluginOrderBook does: sum of |calculator
+     * volume| around the current price, bound = max over the calculators. {@code calcs == null}: no plugin,
+     * the built-in fallback provider without a bound. Empties the books and funds account 1.
+     */
+    private void useCalculators(List<IVolumeDistributionCalculator> calcs, long startPrice) {
+        long sf = scaleFactor;
+        if (calcs == null) {
+            serverMarket.test_setDefaultVolumeProviderFunction(null);
+        } else {
+            serverMarket.test_setDefaultVolumeProviderFunction(real -> {
+                float market = (float) (serverMarket.getCurrentMarketPrice() / (double) sf);
+                float v = 0;
+                for (IVolumeDistributionCalculator c : calcs) v += Math.abs(c.getVolume(market, real));
+                return market > real ? v : -v;
+            });
+            master().setDefaultVolumeAskMonotoneFrom(() ->
+                    PluginOrderBook.askMonotoneFrom(calcs, (float) (serverMarket.getCurrentMarketPrice() / (double) sf)));
+        }
+        serverMarket.test_setCurrentMarketPrice(startPrice);
+        serverMarket.test_clearOrderbook();
+        serverMarket.test_resetVirtualOrderBookVolume();
+        ItemID item = serverMarket.getItemID();
+        bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000_000L);
+        bankAccount1.getBank(item).setBalance(1_000_000_000_000_000L);
+    }
+
+    /**
+     * T-210: one seeded scenario: provider + random remembered slots above the bound (volume 0, thin, thick),
+     * then random market buys and sells and a final buy that walks to the ceiling. Per order it records
+     * filled volume, money, end price and remainder. With {@code checkQueries} it also compares findVolume
+     * and sideVolume with the skip on and off on the same state before every order.
+     *
+     * @return the order records, or a string starting with "MISMATCH" naming the first query that differed
+     */
+    private String askSkipScenario(List<IVolumeDistributionCalculator> calcs, long start, long seed, boolean checkQueries) {
+        useCalculators(calcs, start);
+        serverMarket.update();   // a tick on the empty memory restarts the 1 s recovery phase (same per run)
+        Random rnd = new Random(seed);
+        Random queryRnd = new Random(~seed);   // separate, so the queries do not change the order sequence
+        VirtualOrderbook vob = master().test_getVirtualOrderbook();
+        DepthMemory mem = vob.getDepthMemory();
+        long winStart = vob.getMinEditablePrice(), winEnd = vob.getMaxEditablePrice();
+        int k0 = DepthMemory.slotOf(Math.max(winEnd + 1, start * 106 / 100));
+        int k1 = DepthMemory.slotOf(vob.getAskCeiling());
+        for (int i = 0; i < 8; i++) {
+            int k = k0 + 1 + rnd.nextInt(Math.max(1, k1 - k0));
+            long n = DepthMemory.outside(k, true, winStart, winEnd);
+            int kind = rnd.nextInt(3);   // 0: consumed, 1: thin (< 1 per tick), 2: thick
+            mem.setVolume(k, true, kind == 0 ? 0 : n * (kind == 1 ? 0.6 : 2 + rnd.nextDouble() * 20));
+        }
+        StringBuilder rec = new StringBuilder();
+        ItemID item = serverMarket.getItemID();
+        long unit = Math.max(1, start / 10);
+        for (int i = 0; i <= 6; i++) {
+            long price = serverMarket.getCurrentMarketPrice();
+            if (checkQueries) {
+                long ceil = vob.getAskCeiling();
+                long[] from = { price + 1, price + 1 + (long) (queryRnd.nextDouble() * (ceil - price)) };
+                for (long f : from) {
+                    VirtualOrderbook.test_setAskSlotSkip(true);
+                    long fOn = vob.findVolume(f, ceil, true);
+                    long sOn = vob.sideVolume(f - 1, ceil, true, Long.MAX_VALUE);
+                    VirtualOrderbook.test_setAskSlotSkip(false);
+                    long fOff = vob.findVolume(f, ceil, true);
+                    long sOff = vob.sideVolume(f - 1, ceil, true, Long.MAX_VALUE);
+                    VirtualOrderbook.test_setAskSlotSkip(true);
+                    if (fOn != fOff || sOn != sOff)
+                        return "MISMATCH seed " + seed + " order " + i + " from " + f + ": findVolume " + fOn + "/" + fOff
+                                + ", sideVolume " + sOn + "/" + sOff;
+                }
+            }
+            boolean last = i == 6;
+            boolean buy = last || rnd.nextBoolean();
+            long vol = last ? 1_000_000_000_000L : unit * (1 + rnd.nextInt(2000));
+            Order o = new Order(item, Order.Type.MARKET, buy ? vol : -vol, 0, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(o);
+            serverMarket.update();
+            rec.append(buy ? "B" : "S").append(o.getFilledVolume()).append('/').append(o.getTransferredMoney())
+               .append('/').append(serverMarket.getCurrentMarketPrice()).append('/')
+               .append(vol - Math.abs(o.getFilledVolume())).append(' ');
+        }
+        return rec.toString();
+    }
+
+    /**
+     * T-210: the ask slot skip is exact. Seeded random books and memory states on diamond and dirt depth:
+     * walks (fills, money, end price, remainder) and findVolume / sideVolume are identical with the skip on
+     * and off. Also covers a market with a non-monotone second calculator (bound must be +inf, skip off)
+     * and the no-plugin fallback provider (no bound).
+     */
+    private TestResult test_askSlotSkip_sameResultsOnOff() {
+        StockMarketModSettings.Market ms = backend.SERVER_SETTINGS.MARKET;
+        Float prev = ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
+        try {
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(30f);
+            IVolumeDistributionCalculator diamond = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(160.0, 50f);
+            IVolumeDistributionCalculator dirt = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(0.1, 2000f);
+            List<IVolumeDistributionCalculator> withBand = List.of(diamond, new FarBandCalculator());
+            if (PluginOrderBook.askMonotoneFrom(withBand, 160.0) != Double.POSITIVE_INFINITY)
+                return fail("A calculator without a bound must make the combined bound +inf");
+            if (PluginOrderBook.askMonotoneFrom(List.of(diamond), 160.0) != 160.0 * 1.06)
+                return fail("Diamond bound must be 1.06 x price");
+
+            // name, calculators (null = fallback provider), start price in raw, seeds
+            Object[][] cases = {
+                    { "diamond", List.of(diamond), 160L * scaleFactor, 4 },
+                    { "dirt", List.of(dirt), (long) scaleFactor / 10, 4 },
+                    { "diamond+band", withBand, 160L * scaleFactor, 1 },
+                    { "fallback", null, 160L * scaleFactor, 1 },
+            };
+            StringBuilder out = new StringBuilder();
+            for (Object[] c : cases) {
+                @SuppressWarnings("unchecked")
+                List<IVolumeDistributionCalculator> calcs = (List<IVolumeDistributionCalculator>) c[1];
+                long start = (Long) c[2];
+                long tOn = 0, tOff = 0;
+                for (int seed = 0; seed < (Integer) c[3]; seed++) {
+                    String q = askSkipScenario(calcs, start, seed, true);
+                    if (q.startsWith("MISMATCH")) return fail(c[0] + ": " + q);
+                    VirtualOrderbook.test_setAskSlotSkip(true);
+                    long t0 = System.nanoTime();
+                    String on = askSkipScenario(calcs, start, seed, false);
+                    long t1 = System.nanoTime();
+                    VirtualOrderbook.test_setAskSlotSkip(false);
+                    String off = askSkipScenario(calcs, start, seed, false);
+                    long t2 = System.nanoTime();
+                    VirtualOrderbook.test_setAskSlotSkip(true);
+                    if (!on.equals(off) || !on.equals(q))
+                        return fail(c[0] + " seed " + seed + " walks differ: on " + on + " | off " + off + " | queried " + q);
+                    tOn += t1 - t0;
+                    tOff += t2 - t1;
+                }
+                out.append(String.format(Locale.ROOT, "%s: on %d ms, off %d ms; ", c[0], tOn / 1_000_000, tOff / 1_000_000));
+            }
+            return pass("Identical walks and searches; " + out);
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            VirtualOrderbook.test_setAskSlotSkip(true);
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prev);
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        }
+    }
+
+    /**
+     * T-210: a market buy into empty default depth (diamond shape scaled to nothing) at price 160 walks to
+     * the ceiling (100 x price, ~1.6M levels) in under 50 ms with the skip, at least 10x faster than without.
+     */
+    private TestResult test_askSlotSkip_emptyBuyToCeiling_isFast() {
+        try {
+            IVolumeDistributionCalculator empty = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(160.0, 1e-9f);
+            long[] ms = new long[2];
+            for (int run = 0; run < 2; run++) {
+                VirtualOrderbook.test_setAskSlotSkip(run == 0);
+                useCalculators(List.of(empty), 160L * scaleFactor);
+                Order o = new Order(serverMarket.getItemID(), Order.Type.MARKET, 1_000_000L * scaleFactor, 0, 0, UUID.randomUUID(), bankAccountNr1);
+                serverMarket.putOrder(o);
+                long t0 = System.nanoTime();
+                serverMarket.update();
+                ms[run] = (System.nanoTime() - t0) / 1_000_000;
+                if (o.getFilledVolume() != 0) return fail("Empty book filled " + o.getFilledVolume());
+                if (serverMarket.getCurrentMarketPrice() != 160L * scaleFactor) return fail("Price moved");
+            }
+            if (ms[0] >= 50) return fail("Skip on took " + ms[0] + " ms (off " + ms[1] + " ms)");
+            if (ms[1] < 10 * Math.max(1, ms[0])) return fail("Skip on " + ms[0] + " ms is not 10x faster than off " + ms[1] + " ms");
+            return pass("Empty buy to the ceiling: skip on " + ms[0] + " ms, off " + ms[1] + " ms");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            VirtualOrderbook.test_setAskSlotSkip(true);
             serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
         }
     }

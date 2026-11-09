@@ -64,6 +64,21 @@ public class Orderbook implements ServerSaveable
     //{
     //    virtualOrderbook.setDefaultVolumeProvider(volumeProvider);
     //}
+    /**
+     * T-210: see {@link VirtualOrderbook#setAskMonotoneFrom}.
+     * @param askMonotoneFrom raw price from which the default ask volume is non-increasing, or null
+     */
+    public void setVirtualAskMonotoneFrom(@Nullable java.util.function.LongSupplier askMonotoneFrom)
+    {
+        virtualOrderbook.setAskMonotoneFrom(askMonotoneFrom);
+    }
+
+    /** @return the virtual order book (tests only: depth memory setup and direct searches) */
+    public VirtualOrderbook test_getVirtualOrderbook()
+    {
+        return virtualOrderbook;
+    }
+
     public void resetVirtualVolumeDistribution()
     {
         virtualOrderbook.resetVolumeDistribution();

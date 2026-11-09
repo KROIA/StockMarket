@@ -192,6 +192,24 @@ public final class DepthMemory
         volumes.put(key(k, above), (float) Math.max(0, volume));
     }
 
+    /**
+     * T-210: the next remembered slot side above the window that holds volume.
+     *
+     * @param k slot index to search above (exclusive)
+     * @return the smallest {@code k' > k} whose above-window side is remembered with a volume &gt; 0, or -1
+     */
+    public int nextStoredAbove(int k)
+    {
+        // ponytail: linear scan of the sparse map (a few hundred entries at most); a TreeMap if it grows
+        int best = -1;
+        for (var e : volumes.entrySet())
+        {
+            int key = e.getKey(), sk = key >> 1;
+            if ((key & 1) == 1 && sk > k && e.getValue() > 0 && (best < 0 || sk < best)) best = sk;
+        }
+        return best;
+    }
+
     /** Stores {@code v}, or removes the slot side if {@code v} is within {@link #DROP_TOLERANCE} of its default sum {@code d}. */
     private void putOrDrop(int key, double v, double d)
     {

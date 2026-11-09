@@ -44,6 +44,8 @@ public class PluginOrderBook implements IPluginOrderBook
         // invoking this function and scaling the returned real volume up to raw volume.
         // Therefore no raw/real conversion must be done here.
         serverMarket.test_setDefaultVolumeProviderFunction(this::getDefaultRealVolume);
+        // T-210: where the summed ask volume only shrinks (set after the provider, which resets it)
+        serverMarket.setDefaultVolumeAskMonotoneFrom(this::getAskMonotoneFrom);
         //serverMarket.test_resetVirtualOrderBookVolume();
         this.cache = cache;
     }
@@ -205,6 +207,38 @@ public class PluginOrderBook implements IPluginOrderBook
     public float getDefaultRealVolumeAround(double centerPrice, double pickPrice)
     {
         return computeDefaultRealVolume((float) centerPrice, pickPrice);
+    }
+
+    /**
+     * T-210: real price from which the summed default ask volume ({@link #getDefaultRealVolume}) is
+     * non-increasing, see {@link IVolumeDistributionCalculator#askMonotoneFrom}.
+     *
+     * @return the bound at the current market price, {@link Double#POSITIVE_INFINITY} if unknown
+     */
+    public double getAskMonotoneFrom()
+    {
+        float currentMarketPrice = (float)MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
+        return askMonotoneFrom(volumeDistributionCalculators, currentMarketPrice);
+    }
+
+    /**
+     * T-210: a sum of non-increasing functions is non-increasing above the largest of their bounds, so the
+     * bound of the sum is the max over all calculators; one unknown bound (+inf or NaN) makes it unknown.
+     *
+     * @param calculators the summed calculators (none: the volume is 0 everywhere, so any bound holds)
+     * @param marketPrice the real market price passed to the calculators
+     * @return the combined bound, {@link Double#POSITIVE_INFINITY} if any calculator has none
+     */
+    public static double askMonotoneFrom(List<IVolumeDistributionCalculator> calculators, double marketPrice)
+    {
+        double bound = 0;
+        for(IVolumeDistributionCalculator calculator : calculators)
+        {
+            double b = calculator.askMonotoneFrom(marketPrice);
+            if(!(b < Double.POSITIVE_INFINITY)) return Double.POSITIVE_INFINITY;
+            bound = Math.max(bound, b);
+        }
+        return bound;
     }
 
     @Override
