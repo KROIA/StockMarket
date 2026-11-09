@@ -429,6 +429,19 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
     }
 
     /**
+     * Replaces the custom settings of one market from inside the plugin (e.g. to persist a value the
+     * plugin derived at runtime, T-204 auto deadband): stores them in the per-market map, which is what
+     * gets saved and synced to the UI, and calls {@link #onCustomSettingsApplied}.
+     *
+     * @param marketID the market whose settings are replaced
+     * @param settings the new settings (not null)
+     */
+    public final void replaceCustomSettings(ItemID marketID, @NotNull TSettings settings) {
+        customSettingsMap.put(marketID, settings);
+        onCustomSettingsApplied(marketID, settings);
+    }
+
+    /**
      * Framework method: decodes a single legacy byte[] payload and applies it
      * to all currently subscribed markets. Used for backwards-compatible loading
      * of old save data that stored one settings instance per plugin.

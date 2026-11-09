@@ -7,6 +7,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
+import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.util.NormalizedRandomPriceGenerator;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -61,6 +62,25 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      * (+26..+148% per 10 min by abundance, cap +200%).
      */
     public static final float DEFAULT_MAX_PRICE_MULT = 3.0f;
+    /**
+     * T-204: default net-flow deadband in items. {@code -1} = auto. While
+     * {@link #DEFAULT_DEADBAND_CAPACITY_MULT} is 0 (current default) auto means off: the -1 stays
+     * stored and counts as 0. With k &gt; 0 it would resolve on the first {@link #update} per market to
+     * {@code round(k x capacity)} and be written back (see {@link #resolveAutoDeadband}).
+     */
+    public static final float DEFAULT_DEADBAND_VOLUME = -1f;
+    /**
+     * T-204 (k): the auto deadband in multiples of the flow capacity
+     * ({@code flowSensitivity x naturalAbundance / (1 + volatilityScale)}). User decision 2026-11-09
+     * (after the T-204 sweeps): 0 = the deadband is off by default and is an admin tuning knob in
+     * items. While this is 0 the auto value (-1) stays stored and counts as 0 at runtime; a resolved
+     * value is never persisted.
+     */
+    public static final float DEFAULT_DEADBAND_CAPACITY_MULT = 0f;
+    /** T-204: default rise time (s) of the smoothed flow away from 0; 0 = instant (pre-T-204 behaviour). */
+    public static final float DEFAULT_FLOW_RISE_TIME_SECONDS = 0f;
+    /** T-204: default return time (s) of the smoothed flow towards 0; 0 = instant (pre-T-204 behaviour). */
+    public static final float DEFAULT_FLOW_RETURN_TIME_SECONDS = 0f;
 
     /**
      * Custom per-market settings for the volatility and flow-equilibrium behavior.
@@ -75,6 +95,13 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      *                             players must net-sell to lower the equilibrium price by a
      *                             factor of e (~2.72x). Higher = more inert market.
      *                             Values &lt;= 0 disable the flow influence
+     * @param deadbandVolume       T-204: net flow (items, both directions) without any price effect;
+     *                             beyond it only the excess counts, so there is no jump at the edge.
+     *                             0 = off, &lt; 0 = auto ({@link #DEFAULT_DEADBAND_VOLUME})
+     * @param flowRiseTimeSeconds  T-204: time constant (s) with which the smoothed flow follows the
+     *                             faded flow away from 0; &lt;= 0 = instant
+     * @param flowReturnTimeSeconds T-204: time constant (s) with which the smoothed flow follows the
+     *                             faded flow back towards 0 (or across it); &lt;= 0 = instant
      * @param minPriceMult         lower clamp for the equilibrium as a multiple of the
      *                             default price (0.05 = never below 5% of default).
      *                             Must be in (0, 1); invalid values fall back to the default
@@ -83,7 +110,30 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      *                             Must be &gt; 1; invalid values fall back to the default
      */
     public record Settings(float volatilityScale, boolean flowInfluenceEnabled,
-                           float flowSensitivity, float minPriceMult, float maxPriceMult) {
+                           float flowSensitivity, float deadbandVolume,
+                           float flowRiseTimeSeconds, float flowReturnTimeSeconds,
+                           float minPriceMult, float maxPriceMult) {
+        /**
+         * Pre-T-204 field set: deadband 0 (off) and no flow smoothing (0 / 0), i.e. exactly the
+         * pre-T-204 flow mechanics. Used by tests that exercise the raw flow math.
+         */
+        public Settings(float volatilityScale, boolean flowInfluenceEnabled,
+                        float flowSensitivity, float minPriceMult, float maxPriceMult) {
+            this(volatilityScale, flowInfluenceEnabled, flowSensitivity, 0f, 0f, 0f, minPriceMult, maxPriceMult);
+        }
+
+        /** @return a copy with the given deadband volume (items, 0 = off, &lt; 0 = auto) */
+        public Settings withDeadbandVolume(float deadband) {
+            return new Settings(volatilityScale, flowInfluenceEnabled, flowSensitivity, deadband,
+                    flowRiseTimeSeconds, flowReturnTimeSeconds, minPriceMult, maxPriceMult);
+        }
+
+        /** @return a copy with the given flow smoothing time constants (seconds, 0 = instant) */
+        public Settings withFlowTimes(float riseSeconds, float returnSeconds) {
+            return new Settings(volatilityScale, flowInfluenceEnabled, flowSensitivity, deadbandVolume,
+                    riseSeconds, returnSeconds, minPriceMult, maxPriceMult);
+        }
+
         public static final StreamCodec<ByteBuf, Settings> CODEC = new StreamCodec<>() {
             @Override
             public Settings decode(ByteBuf buf) {
@@ -94,14 +144,20 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                 // buffer, so "no bytes left" reliably identifies the old format.
                 if (!buf.isReadable()) {
                     return new Settings(volatilityScale, DEFAULT_FLOW_INFLUENCE_ENABLED,
-                            DEFAULT_FLOW_SENSITIVITY, DEFAULT_MIN_PRICE_MULT, DEFAULT_MAX_PRICE_MULT);
+                            DEFAULT_FLOW_SENSITIVITY, DEFAULT_DEADBAND_VOLUME,
+                            DEFAULT_FLOW_RISE_TIME_SECONDS, DEFAULT_FLOW_RETURN_TIME_SECONDS,
+                            DEFAULT_MIN_PRICE_MULT, DEFAULT_MAX_PRICE_MULT);
                 }
                 boolean flowInfluenceEnabled = buf.readBoolean();
                 float flowSensitivity = buf.readFloat();
                 float minPriceMult = buf.readFloat();
                 float maxPriceMult = buf.readFloat();
+                // T-204 fields are appended; pre-T-204 payloads (5 fields) end here.
+                float deadband = buf.isReadable() ? buf.readFloat() : DEFAULT_DEADBAND_VOLUME;
+                float rise = buf.isReadable() ? buf.readFloat() : DEFAULT_FLOW_RISE_TIME_SECONDS;
+                float ret = buf.isReadable() ? buf.readFloat() : DEFAULT_FLOW_RETURN_TIME_SECONDS;
                 return new Settings(volatilityScale, flowInfluenceEnabled,
-                        flowSensitivity, minPriceMult, maxPriceMult);
+                        flowSensitivity, deadband, rise, ret, minPriceMult, maxPriceMult);
             }
             @Override
             public void encode(ByteBuf buf, Settings s) {
@@ -110,13 +166,18 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                 buf.writeFloat(s.flowSensitivity());
                 buf.writeFloat(s.minPriceMult());
                 buf.writeFloat(s.maxPriceMult());
+                buf.writeFloat(s.deadbandVolume());
+                buf.writeFloat(s.flowRiseTimeSeconds());
+                buf.writeFloat(s.flowReturnTimeSeconds());
             }
         };
 
         /** Creates a Settings instance with all default values. */
         public static Settings createDefault() {
             return new Settings(DEFAULT_VOLATILITY_SCALE, DEFAULT_FLOW_INFLUENCE_ENABLED,
-                    DEFAULT_FLOW_SENSITIVITY, DEFAULT_MIN_PRICE_MULT, DEFAULT_MAX_PRICE_MULT);
+                    DEFAULT_FLOW_SENSITIVITY, DEFAULT_DEADBAND_VOLUME,
+                    DEFAULT_FLOW_RISE_TIME_SECONDS, DEFAULT_FLOW_RETURN_TIME_SECONDS,
+                    DEFAULT_MIN_PRICE_MULT, DEFAULT_MAX_PRICE_MULT);
         }
     }
     /**
@@ -127,6 +188,11 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         final NormalizedRandomPriceGenerator priceGenerator;
         final TimerMillis timer;
         Settings settings = Settings.createDefault();
+        /**
+         * T-204: smoothed net flow (items) that the deadband and the equilibrium read; follows the
+         * faded flow with the rise/return time constants. Saved with the plugin state.
+         */
+        double effFlow = 0;
 
         MarketData() {
             priceGenerator = new NormalizedRandomPriceGenerator(5);
@@ -159,6 +225,12 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             MarketData data = marketData.get(market.market.getMarketID());
             if (data == null) continue;
 
+            // T-204: resolve the auto deadband (-1) once abundance is known; written back so the
+            // UI and sync show the real item count. No-op while k == 0 (stays -1, counts as 0).
+            Settings resolved = resolveAutoDeadband(data.settings, market.market.getNaturalAbundance(),
+                    DEFAULT_DEADBAND_CAPACITY_MULT);
+            if (resolved != data.settings) replaceCustomSettings(market.market.getMarketID(), resolved);
+
             // Saturate the market's net-flow counters at the band where the equilibrium
             // already sits at minPriceMult/maxPriceMult. Flow beyond it has no price
             // effect; storing it would only create a dead zone that players must trade
@@ -175,6 +247,12 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                     market.market.setFadedNetPlayerItemFlow(Math.min(Math.max(faded, band.lower()), band.upper()));
                 }
             }
+
+            // T-204: the smoothed flow follows the (clamped) faded flow every tick, also for markets
+            // without a virtual orderbook, so its state stays continuous.
+            data.effFlow = smoothFlow(data.effFlow, market.market.getFadedNetPlayerItemFlow(),
+                    ServerMarket.TICK_SECONDS, data.settings.flowRiseTimeSeconds(),
+                    data.settings.flowReturnTimeSeconds());
 
             // The random-walk target price is only meaningful for markets whose
             // virtual orderbook is enabled — the downstream consumers (e.g.
@@ -193,7 +271,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             // price range and heavy player buying permanently raises it.
             double defaultPrice = market.market.getDefaultRealPrice();
             double equilibrium = computeEquilibriumPrice(defaultPrice,
-                    market.market.getFadedNetPlayerItemFlow(),
+                    data.effFlow,
                     market.market.getNaturalAbundance(),
                     data.settings);
 
@@ -209,7 +287,8 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      * Formula (all values in real/double units):
      * <pre>
      * capacity    = flowSensitivity * naturalAbundance / (1 + volatilityScale)
-     * exponent    = clamp(-netPlayerItemFlow / capacity, ln(minPriceMult), ln(maxPriceMult))
+     * f           = sign(netPlayerItemFlow) * max(0, |netPlayerItemFlow| - deadband)   (T-204)
+     * exponent    = clamp(-f / capacity, ln(minPriceMult), ln(maxPriceMult))
      * equilibrium = defaultPrice * e^exponent
      * </pre>
      * SIGN CONVENTION (verified against ServerMarket.trackPlayerNetFlow):
@@ -253,7 +332,10 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         // Negative sign flips the direction: net-sold items (flow > 0) push the
         // exponent negative and therefore the price down; net-bought items
         // (flow < 0) push it positive and the price up.
-        double exponent = -netPlayerItemFlow / band.capacity();
+        // T-204 deadband: flow within +-deadband has no effect; beyond it only the excess counts
+        // (continuous at the edge, symmetric for buy and sell). Deadband 0 leaves f bit-identical.
+        double f = Math.signum(netPlayerItemFlow) * Math.max(0.0, Math.abs(netPlayerItemFlow) - band.deadband());
+        double exponent = -f / band.capacity();
         // Clamp BEFORE exp so extreme flows can neither overflow to infinity
         // nor underflow the price to 0.
         exponent = Math.min(Math.max(exponent, band.lnMinMult()), band.lnMaxMult());
@@ -268,20 +350,24 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      * @param lnMinMult ln(minPriceMult) (sanitized), the lowest allowed exponent (&lt; 0)
      * @param lnMaxMult ln(maxPriceMult) (sanitized), the highest allowed exponent (&gt; 0)
      * @param lower     net flow at which the equilibrium reaches maxPriceMult
-     *                  (= -capacity * ln(maxPriceMult), negative: players net-BOUGHT)
+     *                  (= -capacity * ln(maxPriceMult) - deadband, negative: players net-BOUGHT)
      * @param upper     net flow at which the equilibrium reaches minPriceMult
-     *                  (= -capacity * ln(minPriceMult), positive: players net-SOLD)
+     *                  (= -capacity * ln(minPriceMult) + deadband, positive: players net-SOLD)
+     * @param deadband  T-204: effective deadband in items (&gt;= 0, auto already resolved)
      */
-    public record FlowBand(double capacity, double lnMinMult, double lnMaxMult, double lower, double upper) {}
+    public record FlowBand(double capacity, double lnMinMult, double lnMaxMult, double lower, double upper,
+                           double deadband) {}
 
     /**
      * Single source of the capacity / saturation formula used by
      * {@link #computeEquilibriumPrice} and by the net-flow saturation in {@link #update}.
      * <pre>
      * capacity = flowSensitivity * naturalAbundance / (1 + volatilityScale)
-     * lower    = -capacity * ln(maxPriceMult)   (buy side, price at ceiling)
-     * upper    = -capacity * ln(minPriceMult)   (sell side, price at floor)
+     * lower    = -capacity * ln(maxPriceMult) - deadband   (buy side, price at ceiling)
+     * upper    = -capacity * ln(minPriceMult) + deadband   (sell side, price at floor)
      * </pre>
+     * A deadband &lt; 0 (auto, unresolved) counts as {@link #autoDeadband} (0 while k == 0); NaN and
+     * infinity count as 0.
      * Net flow outside [lower, upper] has no further price effect.
      *
      * @param naturalAbundance the market item's natural abundance
@@ -290,16 +376,28 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      *         influence disabled, or capacity not strictly positive and finite)
      */
     public static FlowBand flowBand(float naturalAbundance, Settings settings) {
+        return flowBand(naturalAbundance, settings, DEFAULT_DEADBAND_CAPACITY_MULT);
+    }
+
+    /**
+     * {@link #flowBand(float, Settings)} with an explicit auto-deadband multiple k (for tests and
+     * tuning; production uses {@link #DEFAULT_DEADBAND_CAPACITY_MULT}).
+     *
+     * @param naturalAbundance the market item's natural abundance
+     * @param settings         the per-market plugin settings (may be null)
+     * @param k                multiple of the capacity an auto deadband (-1) counts as (&lt;= 0 = off)
+     * @return the band, or null if the flow term is inactive
+     */
+    public static FlowBand flowBand(float naturalAbundance, Settings settings, float k) {
         if (settings == null || !settings.flowInfluenceEnabled()) return null;
 
-        // Items needed to move the price by a factor of e. Dividing by
-        // (1 + volatilityScale) makes highly volatile markets react slightly
-        // faster to player flow.
-        double capacity = (double) settings.flowSensitivity() * naturalAbundance
-                / (1.0 + settings.volatilityScale());
+        double capacity = capacity(naturalAbundance, settings);
         // Disable the flow term if capacity is invalid (<= 0, NaN or infinite),
         // e.g. abundance or sensitivity set to 0/negative by an admin.
         if (!(capacity > 0.0) || Double.isInfinite(capacity)) return null;
+        float db = settings.deadbandVolume();
+        double deadband = db < 0 ? autoDeadband(capacity, k)
+                : (db > 0 && !Float.isInfinite(db) ? db : 0.0);
 
         // Sanitize clamp multipliers: enforce 0 < minPriceMult < 1 < maxPriceMult.
         // (The "!(x > y)" form also catches NaN.)
@@ -310,7 +408,98 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
 
         double lnMin = Math.log(minMult);
         double lnMax = Math.log(maxMult);
-        return new FlowBand(capacity, lnMin, lnMax, -capacity * lnMax, -capacity * lnMin);
+        // T-204: widen by the deadband, otherwise the saturation clamp would stop the flow
+        // before the price reaches its cap.
+        return new FlowBand(capacity, lnMin, lnMax, -capacity * lnMax - deadband, -capacity * lnMin + deadband, deadband);
+    }
+
+    /**
+     * Items needed to move the equilibrium by a factor of e:
+     * {@code flowSensitivity x naturalAbundance / (1 + volatilityScale)}. Not validated.
+     *
+     * @param naturalAbundance the market item's natural abundance
+     * @param settings         the per-market plugin settings (not null)
+     * @return the capacity in items (may be &lt;= 0, NaN or infinite for invalid settings)
+     */
+    public static double capacity(float naturalAbundance, Settings settings) {
+        // Dividing by (1 + volatilityScale) makes highly volatile markets react slightly
+        // faster to player flow.
+        return (double) settings.flowSensitivity() * naturalAbundance / (1.0 + settings.volatilityScale());
+    }
+
+    /**
+     * T-204: the auto deadband for a capacity, {@code round(k x capacity)} as a float (the value that
+     * is stored on resolution, so runtime and stored value match exactly). 0 if k &lt;= 0 or the
+     * capacity is invalid.
+     *
+     * @param capacity items for a factor-e move
+     * @param k        deadband in multiples of the capacity
+     * @return the deadband in items, &gt;= 0
+     */
+    public static float autoDeadband(double capacity, float k) {
+        if (!(k > 0) || !(capacity > 0.0) || Double.isInfinite(capacity)) return 0f;
+        return (float) Math.round(k * capacity);
+    }
+
+    /**
+     * T-204: resolves an auto deadband (&lt; 0) to {@link #autoDeadband}. Guard: while
+     * {@code k <= 0}, or if the capacity is invalid, the settings are returned unchanged (the -1
+     * stays stored and counts as 0 at runtime), so a resolved value is never persisted for k == 0.
+     *
+     * @param settings         the market's current settings (may be null)
+     * @param naturalAbundance the market item's natural abundance
+     * @param k                deadband in multiples of the capacity ({@link #DEFAULT_DEADBAND_CAPACITY_MULT})
+     * @return {@code settings} itself if there is nothing to resolve, else a copy with the resolved deadband
+     */
+    public static Settings resolveAutoDeadband(Settings settings, float naturalAbundance, float k) {
+        if (settings == null || !(settings.deadbandVolume() < 0) || !(k > 0)) return settings;
+        double cap = capacity(naturalAbundance, settings);
+        if (!(cap > 0.0) || Double.isInfinite(cap)) return settings;
+        return settings.withDeadbandVolume(autoDeadband(cap, k));
+    }
+
+    /**
+     * T-204: one tick of the asymmetric flow smoothing.
+     * <ul>
+     *   <li>away from 0 (same sign, or {@code eff == 0}, and {@code |in| > |eff|}): first-order lag
+     *       with {@code riseSeconds};</li>
+     *   <li>otherwise (towards 0, or the sign flipped): first-order lag with {@code returnSeconds}.
+     *       If that step crosses 0, the result is clamped to 0 when {@code riseSeconds > 0} (it then
+     *       rises on the new side from the next tick), else it is {@code in}.</li>
+     * </ul>
+     * A time constant &lt;= 0 is instant; with both &lt;= 0 the result is exactly {@code in}.
+     *
+     * @param eff           the current smoothed flow
+     * @param in            the input flow (faded and clamped)
+     * @param dtSeconds     tick length in seconds
+     * @param riseSeconds   time constant away from 0
+     * @param returnSeconds time constant towards 0
+     * @return the new smoothed flow ({@code eff} unchanged if {@code in} is NaN)
+     */
+    public static double smoothFlow(double eff, double in, double dtSeconds, float riseSeconds, float returnSeconds) {
+        if (Double.isNaN(in)) return eff;
+        if (Double.isNaN(eff)) eff = 0;
+        boolean away = Math.abs(in) > Math.abs(eff) && (eff == 0 || Math.signum(in) == Math.signum(eff));
+        if (away) return lag(eff, in, dtSeconds, riseSeconds);
+        double next = lag(eff, in, dtSeconds, returnSeconds);
+        if (eff != 0 && Math.signum(next) == -Math.signum(eff))
+            return riseSeconds > 0 ? 0.0 : in;
+        return next;
+    }
+
+    /** First-order lag step towards {@code in}; {@code tau <= 0} (or NaN) returns {@code in} exactly. */
+    private static double lag(double eff, double in, double dt, float tau) {
+        if (!(tau > 0)) return in;
+        return eff + (in - eff) * (1.0 - Math.exp(-dt / tau));
+    }
+
+    /**
+     * @param marketID the market
+     * @return the T-204 smoothed net flow (items) the equilibrium uses, 0 for unknown markets
+     */
+    public double getEffectiveFlow(ItemID marketID) {
+        MarketData data = marketData.get(marketID);
+        return data != null ? data.effFlow : 0;
     }
 
     @Override
@@ -354,6 +543,10 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             marketTag.putFloat("flowSensitivity", s.flowSensitivity());
             marketTag.putFloat("minPriceMult", s.minPriceMult());
             marketTag.putFloat("maxPriceMult", s.maxPriceMult());
+            marketTag.putFloat("deadbandVolume", s.deadbandVolume());
+            marketTag.putFloat("flowRiseTimeSeconds", s.flowRiseTimeSeconds());
+            marketTag.putFloat("flowReturnTimeSeconds", s.flowReturnTimeSeconds());
+            marketTag.putDouble("effFlow", entry.getValue().effFlow);
             marketsTag.add(marketTag);
         }
         tag.put("marketData", marketsTag);
@@ -383,8 +576,13 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                                 marketTag.contains("volatilityScale") ? NbtCompat.getFloat(marketTag, "volatilityScale") : cur.volatilityScale(),
                                 marketTag.contains("flowInfluenceEnabled") ? NbtCompat.getBoolean(marketTag, "flowInfluenceEnabled") : cur.flowInfluenceEnabled(),
                                 marketTag.contains("flowSensitivity") ? NbtCompat.getFloat(marketTag, "flowSensitivity") : cur.flowSensitivity(),
+                                // T-204: missing keys (pre-T-204 saves) -> auto deadband, no smoothing
+                                marketTag.contains("deadbandVolume") ? NbtCompat.getFloat(marketTag, "deadbandVolume") : DEFAULT_DEADBAND_VOLUME,
+                                marketTag.contains("flowRiseTimeSeconds") ? NbtCompat.getFloat(marketTag, "flowRiseTimeSeconds") : DEFAULT_FLOW_RISE_TIME_SECONDS,
+                                marketTag.contains("flowReturnTimeSeconds") ? NbtCompat.getFloat(marketTag, "flowReturnTimeSeconds") : DEFAULT_FLOW_RETURN_TIME_SECONDS,
                                 marketTag.contains("minPriceMult") ? NbtCompat.getFloat(marketTag, "minPriceMult") : cur.minPriceMult(),
                                 marketTag.contains("maxPriceMult") ? NbtCompat.getFloat(marketTag, "maxPriceMult") : cur.maxPriceMult());
+                        data.effFlow = marketTag.contains("effFlow") ? NbtCompat.getDouble(marketTag, "effFlow") : 0;
                     }
                 }
             }
