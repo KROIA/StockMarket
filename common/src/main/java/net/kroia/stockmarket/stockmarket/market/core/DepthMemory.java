@@ -15,7 +15,7 @@ import java.util.function.LongToDoubleFunction;
  * was consumed stays thin after it left the window (and comes back thin when the price returns).
  * <ul>
  *   <li><b>Grid:</b> one fixed, global, log-spaced grid. Slot {@code k} covers the raw prices
- *       {@code [ceil(1.01^k), ceil(1.01^(k+1)))}, i.e. 1% of the price per slot. The grid never
+ *       {@code [ceil(1.02^k), ceil(1.02^(k+1)))}, i.e. 2% of the price per slot (T-210, was 1%). The grid never
  *       re-centres. At very low raw prices several slots are empty; only non-empty slots
  *       (those returned by {@link #slotOf(long)}) are ever used, neighbours are found by price.</li>
  *   <li><b>Value (T-199):</b> the REAL summed absolute raw volume {@code V} of the part of slot
@@ -23,7 +23,7 @@ import java.util.function.LongToDoubleFunction;
  *       No sign is stored: the caller signs it by the current price at read time. Stored sparse:
  *       a missing slot side means "read the default provider" (full default depth).</li>
  *   <li><b>Sides:</b> each slot keeps one value for its part BELOW the window and one for its part
- *       ABOVE it. Above roughly 50x the window size a slot (1% of the price) is wider than the window
+ *       ABOVE it. Above 50x the window size a slot (2% of the price) is wider than the window
  *       and has outside ticks on both sides at once; one shared value would smear the consumed
  *       side's deficit onto the untouched side. Map key = {@code 2k + (above ? 1 : 0)}.</li>
  *   <li><b>Profile:</b> see {@link Segment}: density {@code rho = V / S} spread as two linear pieces
@@ -37,8 +37,12 @@ import java.util.function.LongToDoubleFunction;
  */
 public final class DepthMemory
 {
-    /** Growth factor between two slot starts (1% of the price per slot). Constant by design (T-198). */
-    public static final double SLOT_GROWTH = 1.01;
+    /**
+     * Growth factor between two slot starts (2% of the price per slot). Constant by design (T-198);
+     * T-210 raised it from 1.01 to 1.02 (half as many slots). Saved with the memory ({@link #save}); a save
+     * from another grid is dropped on load, because its slot indices mean other price ranges.
+     */
+    public static final double SLOT_GROWTH = 1.02;
     private static final double LN_GROWTH = Math.log(SLOT_GROWTH);
     /** A slot side whose volume is within this fraction of its default sum (at least 1 raw unit) is dropped. */
     public static final double DROP_TOLERANCE = 0.005;
@@ -72,7 +76,7 @@ public final class DepthMemory
 
     /**
      * @param k slot index (&ge; 0)
-     * @return the first raw price of slot {@code k}: {@code ceil(1.01^k)}
+     * @return the first raw price of slot {@code k}: {@code ceil(SLOT_GROWTH^k)}
      */
     public static long slotStart(int k)
     {
@@ -518,16 +522,21 @@ public final class DepthMemory
         }
         tag.putIntArray("k", ks);
         tag.putIntArray("v", vs);
+        tag.putDouble("g", SLOT_GROWTH);   // T-210: grid of the keys, checked on load
     }
 
     /**
      * Replaces the slots with the ones in {@code tag} (see {@link #save}). A tag without "v" (no memory,
      * or the T-198 ratio format "r", which is dropped without conversion) leaves the memory empty.
+     * T-210: so does a save from another grid ("g" missing, i.e. the 1% grid before T-210, or not
+     * {@link #SLOT_GROWTH}): its keys are slot indices of other price ranges. Every slot then reads the
+     * default again, so depth consumed outside the window before the upgrade is restored once.
      * @param tag source tag
      */
     public void load(CompoundTag tag)
     {
         clear();
+        if (!tag.contains("g") || NbtCompat.getDouble(tag, "g") != SLOT_GROWTH) return;
         int[] ks = NbtCompat.getIntArray(tag, "k");
         int[] vs = NbtCompat.getIntArray(tag, "v");
         for (int i = 0; i < Math.min(ks.length, vs.length); i++)

@@ -500,7 +500,7 @@ public class VirtualOrderbook implements ServerSaveable
      * <p>
      * Layout: the linear array covers {@code [offset, offset + size - 1]}, one slot per raw tick, and
      * re-centres ({@code offset = price - size/2}) once the price leaves {@code [offset + size/4, offset + 3*(size/4)]}.
-     * Outside it the {@link DepthMemory} log grid (slot {@code k} = {@code [ceil(1.01^k), ceil(1.01^(k+1)))})
+     * Outside it the {@link DepthMemory} log grid (slot {@code k} = {@code [ceil(SLOT_GROWTH^k), ceil(SLOT_GROWTH^(k+1)))})
      * runs from raw price 1 upward; the two slots that straddle the window edges are only used for their
      * outside parts. Above the ask ceiling there is no default ask volume.
      *

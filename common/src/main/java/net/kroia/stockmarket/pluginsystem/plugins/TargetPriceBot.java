@@ -356,8 +356,8 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
 
 
     /**
-     * T-207: width of the gap window as a fraction of the current price (1%, the size of a depth
-     * memory band). The bot only trades if this first part of its way to the target holds liquidity.
+     * T-207: width of the gap window as a fraction of the current price (1% of the price; T-210:
+     * half a depth memory slot). The bot only trades if this first part of its way to the target holds liquidity.
      */
     public static final double GAP_WINDOW_FRACTION = 0.01;
 

@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -608,7 +609,10 @@ public class VirtualOrderbookTestSuite extends TestSuite {
         up.setCurrentMarketPrice(5000);                    // gap [1050, 4949]
         VirtualOrderbook down = memoryBook(5000);
         down.setCurrentMarketPrice(1000);                  // gap [1050, 4949]
-        for (long p = 1100; p <= 4900; p++) {
+        // Only slots fully inside the gap: a slot straddling a window edge also holds the depth that left the window.
+        long gapLo = DepthMemory.slotEnd(DepthMemory.slotOf(1050)) + 1;
+        long gapHi = DepthMemory.slotStart(DepthMemory.slotOf(4949)) - 1;
+        for (long p = gapLo; p <= gapHi; p++) {
             if (Math.abs(up.getVolume(p)) > EPSILON) return fail("Up-jump gap tick " + p + " reads " + up.getVolume(p));
             if (Math.abs(down.getVolume(p)) > EPSILON) return fail("Down-jump gap tick " + p + " reads " + down.getVolume(p));
         }
@@ -706,6 +710,17 @@ public class VirtualOrderbookTestSuite extends TestSuite {
             for (boolean above : new boolean[]{ false, true })
                 if (Double.compare(a.getVolume(k, above), b.getVolume(k, above)) != 0)
                     return fail("Slot " + k + "/" + above + ": " + a.getVolume(k, above) + " -> " + b.getVolume(k, above));
+        // T-210: a save from the 1% grid (no "g", or "g" = 1.01) is dropped, empty memory
+        CompoundTag mem = NbtCompat.getCompound(tag, "lowRes");
+        if (!(NbtCompat.getDouble(mem, "g") == DepthMemory.SLOT_GROWTH)) return fail("Save must store the grid growth");
+        for (boolean withOldG : new boolean[]{ false, true }) {
+            CompoundTag legacy = tag.copy();
+            CompoundTag legacyMem = NbtCompat.getCompound(legacy, "lowRes");
+            if (withOldG) legacyMem.putDouble("g", 1.01); else legacyMem.remove("g");
+            loaded.load(legacy);
+            if (!loaded.getDepthMemory().isEmpty())
+                return fail("1% grid save (" + (withOldG ? "g = 1.01" : "no g") + ") must load with empty memory");
+        }
         // T-198 ratio format: "k" + "r" -> dropped, empty memory
         CompoundTag old = new CompoundTag();
         old.putIntArray("k", new int[]{ 2 * DepthMemory.slotOf(2000) });
