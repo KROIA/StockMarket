@@ -470,7 +470,13 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         }
     }
 
-    private static final int SAMPLE_COUNT = 64;
+    /**
+     * Samples of the streamed default distribution over {@code [0.01, 2.5 x price]}. The client draws
+     * them linearly interpolated, so features (the peaks next to the price) snap to the sample grid:
+     * with 64 samples (step about 1.6% of the price) the line sat up to about 1.6% off, at 256 it stays
+     * within about 0.4%. Costs 1 KB per market per stream update.
+     */
+    private static final int SAMPLE_COUNT = 256;
 
     @Override
     protected StreamCodec<ByteBuf, RuntimeStreamData> runtimeDataCodec() {
