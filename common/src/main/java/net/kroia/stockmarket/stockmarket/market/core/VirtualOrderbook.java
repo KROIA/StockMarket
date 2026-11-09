@@ -51,6 +51,14 @@ public class VirtualOrderbook implements ServerSaveable
     private boolean suppressDefaults = false;
     /** Test hook: overrides the memory half-life setting (seconds; null = use the setting). */
     private Double halfLifeOverrideSeconds = null;
+    /** T-199: tick time not yet applied to the memory recovery (it runs in whole 1 s steps). */
+    private double fadeClockSeconds = 0;
+    /** T-199: the default depth the memory reads and recovers toward (see {@link #absDefault}, {@link #defaultSum}). */
+    private final DepthMemory.DefaultDepth defaultDepth = new DepthMemory.DefaultDepth()
+    {
+        @Override public double at(long price) { return absDefault(price); }
+        @Override public double sum(long lo, long hi) { return defaultSum(lo, hi); }
+    };
 
     /** Fallback of {@code MARKET.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER} when the settings are not available. */
     public static final float DEFAULT_MAX_PRICE_MULTIPLIER = 100f;
@@ -73,6 +81,7 @@ public class VirtualOrderbook implements ServerSaveable
     public void setDefaultVolumeProvider(@Nullable Function<Long, Float> volumeProvider)
     {
         defaultVolumeProvider = volumeProvider;
+        depthMemory.clear();   // T-199: remembered volume belongs to the old provider's depth
         cachedSeg = null;
     }
 
@@ -104,8 +113,8 @@ public class VirtualOrderbook implements ServerSaveable
      * <p>
      * T-198 (memory on, see {@link #isDepthMemoryEnabled()}): before the shift the ticks that will
      * enter the window are read with the OLD geometry (exactly what {@link #findVolume} and the walk
-     * saw), the ticks that leave it are aggregated into {@link DepthMemory} (fill ratio
-     * |array| / |default|), and a range jumped over outside both windows is recorded as consumed.
+     * saw), the ticks that leave it are aggregated into {@link DepthMemory} (T-199: their summed real
+     * |array| volume), and a range jumped over outside both windows is recorded as consumed.
      * After the shift the entering ticks get the values read before, so a remembered thin region
      * comes back thin. Memory off: the plain shift-fill from the default provider (pre-T-198).
      * The T-164 zeroing of the swept range inside the new window applies in both cases.
@@ -163,28 +172,36 @@ public class VirtualOrderbook implements ServerSaveable
         }
         DepthMemory.MoveLedger ledger = new DepthMemory.MoveLedger();
 
-        // 1. Entering ticks, read with the old geometry (window not moved yet)
+        // 1. Entering ticks, read with the old geometry (window not moved yet). Each carries its memory
+        //    value out of its slot: the profile cell (unclipped, so the slot loses exactly what it held)
+        //    or, for a slot side without memory, the |default|.
         float[] entering = new float[(int)(enterHi - enterLo + 1)];
         DepthMemory.Segment seg = null;
-        for(long p = enterLo; p <= enterHi; p++)
+        for(long p = Math.max(enterLo, 1); p <= enterHi; p++)
         {
-            double ratio = 1;
-            if(p >= 1 && !depthMemory.isEmpty())
+            float value;
+            if(!depthMemory.isEmpty() && (seg == null || p < seg.lo || p > seg.hi))
+                seg = depthMemory.segmentAt(p, oldOffset, oldEnd, this::boundaryValue, defaultDepth);
+            if(seg != null && seg.stored && p >= seg.lo && p <= seg.hi)
             {
-                if(seg == null || p < seg.lo || p > seg.hi)
-                    seg = depthMemory.segmentAt(p, oldOffset, oldEnd, this::boundaryRatio);
-                ratio = seg.cellRatio(p);
+                double cell = seg.cellValue(p);
+                ledger.enter(p, up, cell);
+                value = p > currentMarketPrice && p > getAskCeiling() ? 0f : signed(p, (float) cell);
             }
-            entering[(int)(p - enterLo)] = defaultVolume(p, ratio);
-            if(p >= 1) ledger.enter(p, up, ratio);
+            else
+            {
+                ledger.enter(p, up, absDefault(p));
+                value = providerVolume(p);
+            }
+            entering[(int)(p - enterLo)] = value;
         }
-        // 2. Leaving ticks: fill ratio against the default at the current centre (no memory ratio)
+        // 2. Leaving ticks: their real |array| volume
         for(long p = Math.max(leaveLo, 1); p <= leaveHi; p++)
-            ledger.leave(p, !up, Math.abs(dynamicArray.get(p)), Math.abs(defaultVolumeProvider.apply(p)));
+            ledger.leave(p, !up, Math.abs(dynamicArray.get(p)));
         // 3. Range jumped over outside both windows: consumed
         if(gapLo <= gapHi)
             ledger.gap(gapLo, gapHi, up);
-        depthMemory.applyMove(oldOffset, oldEnd, newOffset, newEnd, ledger);
+        depthMemory.applyMove(oldOffset, oldEnd, newOffset, newEnd, ledger, defaultDepth);
 
         // 4. Shift without the (discarded) provider fill, then write the entering values
         suppressDefaults = true;
@@ -194,9 +211,11 @@ public class VirtualOrderbook implements ServerSaveable
     }
 
     /**
-     * Fades the depth memory by one step of {@code dtSeconds} (deficit {@code 1 - r} halves every
-     * {@code MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES}). With the half-life 0 (memory off) the
-     * memory is wiped. Called every server tick, also while the market is closed.
+     * Advances the depth memory recovery by {@code dtSeconds} of tick time: every remembered volume moves
+     * toward the default sum {@code D} of its segment at the current window and centre,
+     * {@code V <- D + (V - D) * 2^(-dt / H)} with {@code H = MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES},
+     * so {@code |V - D|} halves every half-life. With the half-life 0 (memory off) the memory is wiped.
+     * Called every server tick, also while the market is closed.
      *
      * @param dtSeconds elapsed time
      */
@@ -206,9 +225,18 @@ public class VirtualOrderbook implements ServerSaveable
         if(depthMemory.isEmpty()) return;
         double halfLife = depthMemoryHalfLifeSeconds();
         if(!(halfLife > 0))
+        {
             depthMemory.clear();
-        else
-            depthMemory.fade(ServerMarket.fade(1.0, halfLife, dtSeconds));
+            return;
+        }
+        // ponytail: recovery runs in whole 1 s steps of tick time (<= 9 provider calls per slot side per step);
+        // per tick would cost 20x the provider calls for the same curve. Shorten the step if 1 s looks coarse.
+        fadeClockSeconds += dtSeconds;
+        if(fadeClockSeconds < 1) return;
+        double steps = Math.floor(fadeClockSeconds);
+        fadeClockSeconds -= steps;
+        long winStart = dynamicArray.getIndexOffset();
+        depthMemory.fade(ServerMarket.fade(1.0, halfLife, steps), winStart, winStart + dynamicArray.getSize() - 1, defaultDepth);
     }
 
     /** @return true if the depth memory is on (half-life &gt; 0) */
@@ -260,29 +288,66 @@ public class VirtualOrderbook implements ServerSaveable
         return ceiling >= Long.MAX_VALUE ? Long.MAX_VALUE : (long) ceiling;
     }
 
-    /**
-     * Ratio of a window boundary tick: |array| / |default| at the current centre, clamped to [0, 1]
-     * (1 if the default is 0). Used as the profile edge where a memory segment touches the window.
-     */
-    private double boundaryRatio(long price)
+    /** |array| of a window boundary tick: the profile edge where a memory segment touches the window. */
+    private double boundaryValue(long price)
     {
-        float def = defaultVolumeProvider == null ? 0f : Math.abs(defaultVolumeProvider.apply(price));
-        if(def <= 0) return 1;
-        return Math.min(1, Math.abs(dynamicArray.get(price)) / def);
+        return Math.abs(dynamicArray.get(price));
     }
 
     /**
-     * @return the memory ratio at {@code price}: 1 inside the window, without memory or for prices
-     *         below 1; otherwise the profile of the remembered slot
+     * @return |default provider volume| at {@code price} at the current centre; 0 without provider, below
+     *         price 1 and for asks above the ceiling ({@link #getAskCeiling()})
      */
-    private double memoryRatio(long price)
+    private double absDefault(long price)
     {
-        if(depthMemory.isEmpty() || price < 1) return 1;
+        if(defaultVolumeProvider == null || price < 1) return 0;
+        if(price > currentMarketPrice && price > getAskCeiling()) return 0;
+        Float v = defaultVolumeProvider.apply(price);
+        return v == null ? 0 : Math.abs(v);
+    }
+
+    /**
+     * T-199: default sum {@code D} of a price range (what a slot segment holds without memory):
+     * {@code sum |provider|} at the current centre, clipped at the ask ceiling and the floor 1.
+     *
+     * @param lo first raw price (inclusive)
+     * @param hi last raw price (inclusive)
+     * @return the summed |default raw volume|
+     */
+    private double defaultSum(long lo, long hi)
+    {
+        lo = Math.max(lo, 1);
+        hi = Math.min(hi, getAskCeiling());   // the ceiling is >= the price, so only asks are clipped
+        if(hi < lo) return 0;
+        long n = hi - lo + 1;
+        double s = 0;
+        if(n <= 32)
+        {
+            for(long p = lo; p <= hi; p++) s += absDefault(p);
+            return s;
+        }
+        // ponytail: 8-interval Simpson on sampled ticks (9 provider calls) instead of summing every tick of a
+        // wide slot; exact enough for the smooth default shape. Loop exactly if a provider gets sharp features.
+        double h = (hi - lo) / 8.0;
+        for(int i = 0; i <= 8; i++)
+            s += (i == 0 || i == 8 ? 1 : (i % 2 == 1 ? 4 : 2)) * absDefault(Math.round(lo + i * h));
+        double integral = s * h / 3;              // integral of the default over [lo, hi]
+        return integral / (hi - lo) * n;          // mean value times the n ticks
+    }
+
+    /**
+     * @return the remembered |volume| at {@code price} (profile cell of a remembered slot side), or
+     *         {@code NaN} where the default provider applies: inside the window, without memory, below 1
+     */
+    private double memoryValue(long price)
+    {
+        if(depthMemory.isEmpty() || price < 1) return Double.NaN;
         long winStart = dynamicArray.getIndexOffset();
         long winEnd = winStart + dynamicArray.getSize() - 1;
-        if(price >= winStart && price <= winEnd) return 1;
-        if(!isDepthMemoryEnabled()) return 1;
-        return segmentAt(price, winStart, winEnd).cellRatio(price);
+        if(price >= winStart && price <= winEnd) return Double.NaN;
+        if(!isDepthMemoryEnabled()) return Double.NaN;
+        DepthMemory.Segment seg = segmentAt(price, winStart, winEnd);
+        return seg.stored ? seg.cellValue(price) : Double.NaN;
     }
 
     // Last built memory segment and the inputs it depends on (window, centre, memory state and the
@@ -302,7 +367,7 @@ public class VirtualOrderbook implements ServerSaveable
                 && currentMarketPrice == cachedCentre && depthMemory.modCount() == cachedMod
                 && boundLo == cachedBoundLo && boundHi == cachedBoundHi)
             return seg;
-        seg = depthMemory.segmentAt(price, winStart, winEnd, this::boundaryRatio);
+        seg = depthMemory.segmentAt(price, winStart, winEnd, this::boundaryValue, defaultDepth);
         cachedSeg = seg;
         cachedWinStart = winStart;
         cachedWinEnd = winEnd;
@@ -313,20 +378,25 @@ public class VirtualOrderbook implements ServerSaveable
         return seg;
     }
 
+    /** Signs a volume by the current price: asks (above) negative, bids (below) positive, the price tick as is. */
+    private float signed(long price, float volume)
+    {
+        if(price > currentMarketPrice)
+            return -Math.abs(volume);
+        else if(price < currentMarketPrice)
+            return Math.abs(volume);
+        return volume;
+    }
+
     /**
-     * Shared default read (T-198): {@code provider(price) x ratio}, signed by the current price, 0
-     * above the ask ceiling, when cleared/disabled or without provider.
+     * Plain provider read (no memory): {@code provider(price)} signed by the current price, 0 above the
+     * ask ceiling, when cleared/disabled or without provider.
      */
-    private float defaultVolume(long price, double ratio)
+    private float providerVolume(long price)
     {
         if(cleared || disabled || defaultVolumeProvider == null) return 0f;
         if(price > currentMarketPrice && price > getAskCeiling()) return 0f;
-        float result = (float)(defaultVolumeProvider.apply(price) * ratio);
-        if(price > currentMarketPrice)
-            return -Math.abs(result);
-        else if(price < currentMarketPrice)
-            return Math.abs(result);
-        return result;
+        return signed(price, defaultVolumeProvider.apply(price));
     }
 
     /**
@@ -589,7 +659,7 @@ public class VirtualOrderbook implements ServerSaveable
      * </ul>
      * There is no cheaper exact way for a provider-backed book: the provider is an arbitrary
      * plugin function, so only a provider that declared where its volume ends could be skipped
-     * faster. T-198: a remembered empty memory segment (ratio 0) is skipped in one step, and an
+     * faster. T-198: a remembered empty memory segment (volume 0) is skipped in one step, and an
      * upward search never passes {@code max(window end, }{@link #getAskCeiling()}{@code )}: there is
      * no default ask volume above the ceiling. A downward search ends at the caller's floor (&ge; 1),
      * so every search is finite.
@@ -629,7 +699,7 @@ public class VirtualOrderbook implements ServerSaveable
             }
             else if(memory && p >= 1 && (p < winStart || p > winEnd))
             {
-                // T-198: a remembered empty segment (ratio 0) reads 0 at every tick: skip it in one step
+                // T-198: a remembered empty segment (volume 0) reads 0 at every tick: skip it in one step
                 DepthMemory.Segment seg = segmentAt(p, winStart, winEnd);
                 if(seg.isZero())
                 {
@@ -663,6 +733,12 @@ public class VirtualOrderbook implements ServerSaveable
     public long sideVolume(long from, long to, boolean askSide, long cap)
     {
         if(disabled) return 0;
+        // T-199: with remembered depth, every window re-centre during the walk re-shapes the remembered
+        // slot ahead of it (new window-boundary edge, shorter segment). The slot keeps its volume but the
+        // per-tick split changes, so a read with today's geometry misses the walk's end by a few ticks.
+        // Count on a copy that re-centres exactly like the walk instead.
+        if(hasDefaultVolume() && !depthMemory.isEmpty() && isDepthMemoryEnabled())
+            return walkCopy().walkSideVolume(from, to, askSide, cap);
         int step = to >= from ? 1 : -1;
         long sum = 0;
         for(long p = from; sum < cap; p += step)
@@ -673,6 +749,54 @@ public class VirtualOrderbook implements ServerSaveable
             if(p == to) break;
         }
         return sum;
+    }
+
+    /**
+     * T-199: {@link #sideVolume} on a {@link #walkCopy()}: visits the levels in the order of the matching
+     * walk ({@code MatchingEngine.drainVirtualBuy/Sell}): re-centre on the level, read it; after a level
+     * with volume step one tick on, after an empty level search the next one with {@link #findVolume}
+     * (current geometry, like the walk). Consumption is not simulated: it only empties levels behind the
+     * walk, and those leave the window on the other side than the remembered depth ahead.
+     * Modifies this book (window position, memory), so only call it on a copy.
+     */
+    private long walkSideVolume(long from, long to, boolean askSide, long cap)
+    {
+        int step = to >= from ? 1 : -1;
+        long sum = 0;
+        long p = from;
+        while(sum < cap)
+        {
+            updateDynamicArrayOffset(p);
+            long v = dynamicArray.getRounded(p);
+            boolean hit = askSide ? v < 0 : v > 0;
+            if(hit) sum += Math.abs(v);
+            if(p == to) break;
+            if(hit)
+                p += step;
+            else if((p = findVolume(p + step, to, askSide)) == NO_VOLUME)
+                break;
+        }
+        return sum;
+    }
+
+    /**
+     * @return a scratch copy of this book (window, array values, memory, provider, price, flags) for
+     *         {@link #walkSideVolume}; O(window size), no provider calls
+     */
+    private VirtualOrderbook walkCopy()
+    {
+        VirtualOrderbook c = new VirtualOrderbook(dynamicArray.getSize());
+        c.defaultVolumeProvider = defaultVolumeProvider;
+        c.currentMarketPrice = currentMarketPrice;
+        c.cleared = cleared;
+        c.disabled = disabled;
+        c.halfLifeOverrideSeconds = halfLifeOverrideSeconds;
+        c.suppressDefaults = true;   // the values are copied right after; skip the shift-fill
+        try { c.dynamicArray.setOffset(dynamicArray.getIndexOffset()); }
+        finally { c.suppressDefaults = false; }
+        c.dynamicArray.set(dynamicArray.getIndexOffset(), dynamicArray.getArray().clone());
+        c.depthMemory.copyFrom(depthMemory);
+        return c;
     }
 
     /**
@@ -719,11 +843,12 @@ public class VirtualOrderbook implements ServerSaveable
         // Returning 0 here keeps the "cleared" state persistent across such moves.
         // Disabled also short-circuits — a disabled VO shift-fills as 0.
         // suppressDefaults: the memory path overwrites the shift-fill anyway (see shiftWithMemory).
-        // T-198: the value is provider x memory ratio (1 inside the window / without memory),
-        // and 0 for asks above the ceiling (getAskCeiling).
+        // T-199: a remembered slot side outside the window returns its stored real volume (profile cell,
+        // no provider); everywhere else the provider. 0 for asks above the ceiling (getAskCeiling).
         if(cleared || disabled || suppressDefaults || defaultVolumeProvider == null) return 0f;
         if(price > currentMarketPrice && price > getAskCeiling()) return 0f;
-        return defaultVolume(price, memoryRatio(price));
+        double mem = memoryValue(price);
+        return Double.isNaN(mem) ? providerVolume(price) : signed(price, (float) mem);
     }
     public long getDefaultVolumeRounded(long price)
     {
@@ -771,7 +896,7 @@ public class VirtualOrderbook implements ServerSaveable
             CompoundTag arrayTag = NbtCompat.getCompound(tag, "array");
             success &= dynamicArray.load(arrayTag);
         }
-        // T-198: old saves have no "lowRes" -> empty memory
+        // T-198: old saves have no "lowRes" -> empty memory; T-199: the ratio format ("r") loads empty
         if(tag.contains("lowRes"))
             depthMemory.load(NbtCompat.getCompound(tag, "lowRes"));
         else

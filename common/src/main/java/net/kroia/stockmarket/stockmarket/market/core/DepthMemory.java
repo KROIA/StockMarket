@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.function.LongToDoubleFunction;
 
 /**
- * T-198: low-resolution "memory" of the virtual depth OUTSIDE the hi-res array window of a
+ * T-198 / T-199: low-resolution "memory" of the virtual depth OUTSIDE the hi-res array window of a
  * {@link VirtualOrderbook}.
  * <p>
  * When the window moves, the ticks leaving it are aggregated into coarse slots, so depth that
@@ -18,19 +18,20 @@ import java.util.function.LongToDoubleFunction;
  *       {@code [ceil(1.01^k), ceil(1.01^(k+1)))}, i.e. 1% of the price per slot. The grid never
  *       re-centres. At very low raw prices several slots are empty; only non-empty slots
  *       (those returned by {@link #slotOf(long)}) are ever used, neighbours are found by price.</li>
- *   <li><b>Value:</b> a fill RATIO {@code r_k} in [0, 1] per slot = remaining / default volume,
- *       side-less. The volume read at a tick is {@code default(p, current centre) * ratio(p)};
- *       the caller applies the sign. Stored sparse: a missing slot means ratio 1 (full default).</li>
- *   <li><b>Meaning:</b> {@code r_k} is the MEAN ratio over the part of slot {@code k} that lies
- *       outside the window (the "segment"). Inside the window the array is the only truth.</li>
- *   <li><b>Sides:</b> each slot keeps one ratio for its part BELOW the window and one for its part
+ *   <li><b>Value (T-199):</b> the REAL summed absolute raw volume {@code V} of the part of slot
+ *       {@code k} that lies outside the window (the "segment", length {@code S} from the geometry).
+ *       No sign is stored: the caller signs it by the current price at read time. Stored sparse:
+ *       a missing slot side means "read the default provider" (full default depth).</li>
+ *   <li><b>Sides:</b> each slot keeps one value for its part BELOW the window and one for its part
  *       ABOVE it. Above roughly 50x the window size a slot (1% of the price) is wider than the window
- *       and has outside ticks on both sides at once; one shared ratio would smear the consumed
- *       side's deficit onto the untouched side (a walk through a wide slot would read the asks
- *       ahead of it thinner). Map key = {@code 2k + (above ? 1 : 0)}.</li>
- *   <li><b>Profile:</b> see {@link Segment}: two linear pieces whose mean is exactly {@code r_k}.</li>
- *   <li><b>Recovery:</b> the deficit {@code d = 1 - r} fades exponentially ({@link #fade(double)});
- *       a slot is dropped (= back to full default) once {@code d < }{@link #DROP_DEFICIT}.</li>
+ *       and has outside ticks on both sides at once; one shared value would smear the consumed
+ *       side's deficit onto the untouched side. Map key = {@code 2k + (above ? 1 : 0)}.</li>
+ *   <li><b>Profile:</b> see {@link Segment}: density {@code rho = V / S} spread as two linear pieces
+ *       whose cells sum to exactly {@code V}.</li>
+ *   <li><b>Recovery:</b> {@code V} fades toward the slot's current default sum {@code D}
+ *       ({@link #fade}); a slot side is dropped (= back to the provider) once
+ *       {@code |V - D| < }{@link #DROP_TOLERANCE}{@code  * max(D, 1)}. No read cap: the stored volume
+ *       is used as it is (it may be thicker than today's default until it faded).</li>
  * </ul>
  * Not thread-safe; used on the server thread like the rest of the orderbook.
  */
@@ -39,11 +40,31 @@ public final class DepthMemory
     /** Growth factor between two slot starts (1% of the price per slot). Constant by design (T-198). */
     public static final double SLOT_GROWTH = 1.01;
     private static final double LN_GROWTH = Math.log(SLOT_GROWTH);
-    /** A slot whose deficit {@code 1 - r} falls below this value is dropped (treated as full default). */
-    public static final double DROP_DEFICIT = 0.005;
+    /** A slot side whose volume is within this fraction of its default sum (at least 1 raw unit) is dropped. */
+    public static final double DROP_TOLERANCE = 0.005;
 
-    /** Sparse slot-side ratios, key {@link #key}; a missing key means ratio 1. */
-    private final HashMap<Integer, Float> ratios = new HashMap<>();
+    /**
+     * The default depth the memory recovers toward, owned by the {@link VirtualOrderbook} (provider at the
+     * current centre, floor 1, ask ceiling).
+     */
+    public interface DefaultDepth
+    {
+        /**
+         * @param price raw price
+         * @return |default raw volume| at {@code price}; 0 below 1 and above the ask ceiling
+         */
+        double at(long price);
+
+        /**
+         * @param lo first raw price (inclusive)
+         * @param hi last raw price (inclusive)
+         * @return sum of {@link #at} over {@code [lo, hi]} (may be a sampled approximation for long ranges)
+         */
+        double sum(long lo, long hi);
+    }
+
+    /** Sparse slot-side volumes, key {@link #key}; a missing key means "default provider". */
+    private final HashMap<Integer, Float> volumes = new HashMap<>();
     /** Incremented on every change, so callers can cache {@link Segment}s. */
     private int modCount;
 
@@ -81,28 +102,57 @@ public final class DepthMemory
         return slotStart(k + 1) - 1;
     }
 
-    // ── Ratios ─────────────────────────────────────────────────────────────
+    /**
+     * Segment geometry: the part of slot {@code k} below ({@code above = false}) or above the window.
+     *
+     * @return {@code {lo, hi}} (inclusive); empty if {@code hi < lo}
+     */
+    public static long[] segmentRange(int k, boolean above, long winStart, long winEnd)
+    {
+        long s = slotStart(k), e = slotEnd(k);
+        return above ? new long[]{ Math.max(s, winEnd + 1), e } : new long[]{ s, Math.min(e, winStart - 1) };
+    }
 
-    /** @return true if no slot is remembered (every ratio is 1) */
+    /** @return number of raw prices of slot k below (above = false) or above the window [winStart, winEnd] */
+    public static long outside(int k, boolean above, long winStart, long winEnd)
+    {
+        long[] r = segmentRange(k, above, winStart, winEnd);
+        return Math.max(0, r[1] - r[0] + 1);
+    }
+
+    // ── Volumes ────────────────────────────────────────────────────────────
+
+    /** @return true if no slot is remembered (every read uses the default provider) */
     public boolean isEmpty()
     {
-        return ratios.isEmpty();
+        return volumes.isEmpty();
     }
 
-    /** @return number of remembered slots */
+    /** @return number of remembered slot sides */
     public int size()
     {
-        return ratios.size();
+        return volumes.size();
     }
 
-    /** Forgets every slot (all ratios back to 1). */
+    /** Forgets every slot (all reads back to the default provider). */
     public void clear()
     {
-        ratios.clear();
+        volumes.clear();
         modCount++;
     }
 
-    /** @return a counter that changes whenever any ratio changes (segment cache key) */
+    /**
+     * Replaces the slots with a copy of {@code other}'s (for scratch copies of an order book).
+     * @param other memory to copy
+     */
+    public void copyFrom(DepthMemory other)
+    {
+        volumes.clear();
+        volumes.putAll(other.volumes);
+        modCount++;
+    }
+
+    /** @return a counter that changes whenever any volume changes (segment cache key) */
     public int modCount()
     {
         return modCount;
@@ -117,54 +167,57 @@ public final class DepthMemory
     /**
      * @param k     slot index
      * @param above true for the slot's part above the window, false for the part below it
-     * @return the remembered ratio of that slot side, 1 if not remembered
+     * @return the remembered summed |raw volume| of that slot side, {@code NaN} if not remembered
      */
-    public float getRatio(int k, boolean above)
+    public double getVolume(int k, boolean above)
     {
-        Float r = ratios.get(key(k, above));
-        return r == null ? 1f : r;
+        Float v = volumes.get(key(k, above));
+        return v == null ? Double.NaN : v;
     }
 
     /**
-     * Sets the ratio of one slot side (used by tests and by {@link #applyMove}). The value is
-     * clamped to [0, 1]; a side with a deficit below {@link #DROP_DEFICIT} is removed.
+     * Stores the summed |raw volume| of one slot side as it is (no drop check; used by tests and NBT).
      *
-     * @param k     slot index
-     * @param above true for the slot's part above the window, false for the part below it
-     * @param ratio remaining / default volume of that outside part
+     * @param k      slot index
+     * @param above  true for the slot's part above the window, false for the part below it
+     * @param volume summed absolute raw volume of that outside part, clamped to &ge; 0
      */
-    public void setRatio(int k, boolean above, double ratio)
+    public void setVolume(int k, boolean above, double volume)
     {
         modCount++;
-        double r = Math.max(0, Math.min(1, ratio));
-        if (1 - r < DROP_DEFICIT) ratios.remove(key(k, above));
-        else ratios.put(key(k, above), (float) r);
+        volumes.put(key(k, above), (float) Math.max(0, volume));
     }
 
-    /** @return ratio of the given side of the slot that contains {@code price}, 1 for prices below 1 */
-    private float ratioOfSlotAt(long price, boolean above)
+    /** Stores {@code v}, or removes the slot side if {@code v} is within {@link #DROP_TOLERANCE} of its default sum {@code d}. */
+    private void putOrDrop(int key, double v, double d)
     {
-        return price < 1 ? 1f : getRatio(slotOf(price), above);
+        modCount++;
+        if (Math.abs(v - d) < DROP_TOLERANCE * Math.max(d, 1)) volumes.remove(key);
+        else volumes.put(key, (float) Math.max(0, v));
     }
 
     // ── Profile ────────────────────────────────────────────────────────────
 
     /**
-     * The part of one slot that lies outside the window, with its ratio profile.
+     * The part of one slot that lies outside the window.
      * <p>
-     * Shape: two linear pieces {@code eL -> m -> eR} over the continuous price coordinate
-     * {@code [lo, hi + 1)}, kink at {@code c}. The edges are {@code eL = min(r_{k-1}, r_k)} and
-     * {@code eR = min(r_k, r_{k+1})} (missing neighbour = 1), so adjacent slots meet at the same
-     * value; an edge that touches the window uses the boundary tick's ratio instead, so the profile
-     * also continues the array. With the kink in the middle, {@code m = 2 r - (eL + eR) / 2} gives a
-     * mean of exactly {@code r} (each piece's mean is the average of its ends:
-     * {@code ((eL + m) / 2 + (m + eR) / 2) / 2 = r}) and {@code m <= 2r}.
+     * Not remembered ({@link #stored} false): the default provider applies, the profile is unused.
+     * <p>
+     * Remembered: a density profile in raw volume per tick, mean {@code rho = V / S}. Shape: two linear
+     * pieces {@code eL -> m -> eR} over the continuous price coordinate {@code [lo, hi + 1)}, kink at
+     * {@code c}. The edges are {@code eL = min(rho, rho_left)} and {@code eR = min(rho, rho_right)},
+     * where a remembered same-side neighbour contributes its density and a missing neighbour the
+     * |default| of its tick next to this segment, so adjacent segments meet at the same value; an edge
+     * that touches the window uses the boundary tick's |array| instead (not capped), so the profile also
+     * continues the array. With the kink in the middle, {@code m = 2 rho - (eL + eR) / 2} gives a mean of
+     * exactly {@code rho} (each piece's mean is the average of its ends:
+     * {@code ((eL + m) / 2 + (m + eR) / 2) / 2 = rho}).
      * {@code m} can only become negative when a window-boundary edge is large (the other edge is
-     * {@code <= r}); then {@code m = 0} and the kink moves to {@code x = (eR - 2r) / (eR - eL)} of the
-     * length, which keeps the mean at {@code r} ({@code (eL x + eR (1 - x)) / 2 = r}) and the profile
+     * {@code <= rho}); then {@code m = 0} and the kink moves to {@code x = (eR - 2 rho) / (eR - eL)} of the
+     * length, which keeps the mean at {@code rho} ({@code (eL x + eR (1 - x)) / 2 = rho}) and the profile
      * non-negative. Each tick's value is the exact integral of the profile over its cell
-     * {@code [p, p + 1)}, so the segment's tick values average to exactly {@code r}.
-     * If {@code r = 0} every tick reads 0 ({@link #isZero()}).
+     * {@code [p, p + 1)}, so the segment's tick values sum to exactly {@code V = rho * S}.
+     * If {@code V = 0} every tick reads 0 ({@link #isZero()}).
      */
     public static final class Segment
     {
@@ -172,24 +225,39 @@ public final class DepthMemory
         public final int k;
         /** First and last raw price of the segment (inclusive). */
         public final long lo, hi;
-        /** Mean ratio of the segment. */
-        public final double r;
-        /** Edge ratios and kink value. */
+        /** True if the slot side is remembered; false = read the default provider. */
+        public final boolean stored;
+        /** Mean density (raw volume per tick) of a remembered segment, {@code V / S}. */
+        public final double rho;
+        /** Edge densities and kink value. */
         public final double eL, m, eR;
         /** Kink position, relative to {@code lo} (0 .. hi - lo + 1). */
         private final double c;
         private final double len;
 
-        Segment(int k, long lo, long hi, double r, double eL, double eR)
+        /** A segment without memory (the default provider applies). */
+        Segment(int k, long lo, long hi)
         {
             this.k = k;
             this.lo = lo;
             this.hi = hi;
-            this.r = r;
+            this.stored = false;
+            this.rho = this.eL = this.m = this.eR = Double.NaN;
+            this.len = hi - lo + 1;
+            this.c = len / 2;
+        }
+
+        Segment(int k, long lo, long hi, double rho, double eL, double eR)
+        {
+            this.k = k;
+            this.lo = lo;
+            this.hi = hi;
+            this.stored = true;
+            this.rho = rho;
             this.eL = eL;
             this.eR = eR;
             this.len = hi - lo + 1;
-            double mid = 2 * r - (eL + eR) / 2;
+            double mid = 2 * rho - (eL + eR) / 2;
             if (mid >= 0)
             {
                 this.m = mid;
@@ -199,7 +267,7 @@ public final class DepthMemory
             {
                 // Large boundary edge: hold the mean with m = 0 and a shifted kink (see class doc)
                 this.m = 0;
-                double x = eR == eL ? 0.5 : (eR - 2 * r) / (eR - eL);
+                double x = eR == eL ? 0.5 : (eR - 2 * rho) / (eR - eL);
                 this.c = len * Math.max(0, Math.min(1, x));
             }
         }
@@ -207,7 +275,7 @@ public final class DepthMemory
         /** @return true if every tick of the segment reads 0, so a search may skip it in one step */
         public boolean isZero()
         {
-            return r <= 0;
+            return stored && rho <= 0;
         }
 
         /** @return profile value at the relative continuous coordinate {@code x} (0 .. len) */
@@ -219,12 +287,12 @@ public final class DepthMemory
         }
 
         /**
-         * @param price raw price inside {@code [lo, hi]}
-         * @return the ratio of that tick: the profile integrated over the tick's cell
+         * @param price raw price inside {@code [lo, hi]} of a {@link #stored} segment
+         * @return the |raw volume| of that tick: the profile integrated over the tick's cell
          */
-        public double cellRatio(long price)
+        public double cellValue(long price)
         {
-            if (r <= 0) return 0;
+            if (!(rho > 0)) return 0;
             double a = price - lo, b = a + 1;
             double v;
             if (b <= c || a >= c)
@@ -241,40 +309,44 @@ public final class DepthMemory
      * @param price         raw price outside the window, &ge; 1
      * @param winStart      first raw price of the array window
      * @param winEnd        last raw price of the array window
-     * @param boundaryRatio ratio of a window boundary tick (|array| / |default|), only called when
-     *                      the segment touches the window
-     * @return the segment
+     * @param boundaryValue |array| of a window boundary tick, only called when the segment touches the window
+     * @param def           default depth, for the edge next to a missing neighbour
+     * @return the segment ({@link Segment#stored} false if the slot side is not remembered)
      */
-    public Segment segmentAt(long price, long winStart, long winEnd, LongToDoubleFunction boundaryRatio)
+    public Segment segmentAt(long price, long winStart, long winEnd, LongToDoubleFunction boundaryValue, DefaultDepth def)
     {
         int k = slotOf(price);
-        long s = slotStart(k), e = slotEnd(k);
         boolean above = price > winEnd;
-        double r = getRatio(k, above);
-        long lo, hi;
-        double eL, eR;
-        // Neighbour edges use the same side: a neighbour slot on this side of the window lies
-        // entirely on this side, so its ratio for this side is the one that applies.
-        if (!above)
-        {
-            lo = s;
-            hi = Math.min(e, winStart - 1);
-            eL = Math.min(r, ratioOfSlotAt(s - 1, false));
-            eR = hi == winStart - 1 ? clamp01(boundaryRatio.applyAsDouble(winStart)) : Math.min(r, ratioOfSlotAt(e + 1, false));
-        }
-        else
-        {
-            lo = Math.max(s, winEnd + 1);
-            hi = e;
-            eL = lo == winEnd + 1 ? clamp01(boundaryRatio.applyAsDouble(winEnd)) : Math.min(r, ratioOfSlotAt(s - 1, true));
-            eR = Math.min(r, ratioOfSlotAt(e + 1, true));
-        }
-        return new Segment(k, lo, hi, r, eL, eR);
+        long[] r = segmentRange(k, above, winStart, winEnd);
+        long lo = r[0], hi = r[1];
+        Float v = volumes.get(key(k, above));
+        if (v == null) return new Segment(k, lo, hi);
+        double rho = v / (double) (hi - lo + 1);
+        double eL = lo == winEnd + 1 ? boundaryEdge(rho, boundaryValue.applyAsDouble(winEnd))
+                                     : neighbourEdge(rho, lo - 1, above, winStart, winEnd, def);
+        double eR = hi == winStart - 1 ? boundaryEdge(rho, boundaryValue.applyAsDouble(winStart))
+                                       : neighbourEdge(rho, hi + 1, above, winStart, winEnd, def);
+        return new Segment(k, lo, hi, rho, eL, eR);
     }
 
-    private static double clamp01(double v)
+    /** Window edge: the boundary tick's |array| (&ge; 0, not capped). */
+    private static double boundaryEdge(double rho, double value)
     {
-        return Double.isNaN(v) ? 1 : Math.max(0, Math.min(1, v));
+        return Double.isNaN(value) ? rho : Math.max(0, value);
+    }
+
+    /**
+     * Edge toward the neighbour tick {@code adj} on the same side of the window: {@code min(rho, rho_n)}
+     * for a remembered neighbour, {@code min(rho, |default(adj)|)} for a missing one, {@code rho} below price 1.
+     */
+    private double neighbourEdge(double rho, long adj, boolean above, long winStart, long winEnd, DefaultDepth def)
+    {
+        if (adj < 1) return rho;
+        int nk = slotOf(adj);
+        Float nv = volumes.get(key(nk, above));
+        if (nv == null) return Math.min(rho, def.at(adj));
+        long ns = outside(nk, above, winStart, winEnd);
+        return ns > 0 ? Math.min(rho, nv / (double) ns) : rho;
     }
 
     // ── Window moves ───────────────────────────────────────────────────────
@@ -286,8 +358,8 @@ public final class DepthMemory
      */
     public static final class MoveLedger
     {
-        /** Per slot side ({@link DepthMemory#key}): { sum |array| of leaving ticks, sum |default| of
-         *  leaving ticks, leaving ticks, sum of entering tick ratios, gap ticks taken from this side }. */
+        /** Per slot side ({@link DepthMemory#key}): { L = sum |array| of leaving ticks, leaving ticks,
+         *  E = sum of entering tick values, g = gap ticks taken from this side, 1 if gap target }. */
         private final HashMap<Integer, double[]> slots = new HashMap<>();
 
         private double[] of(int k, boolean above)
@@ -300,31 +372,29 @@ public final class DepthMemory
          * @param price  raw price (&ge; 1)
          * @param above  side it leaves to: true on a down move (it is now above the window)
          * @param absArr |array value| of the tick
-         * @param absDef |default volume| of the tick at the current centre (no ratio)
          */
-        public void leave(long price, boolean above, double absArr, double absDef)
+        public void leave(long price, boolean above, double absArr)
         {
             double[] d = of(slotOf(price), above);
             d[0] += absArr;
-            d[1] += absDef;
-            d[2] += 1;
+            d[1] += 1;
         }
 
         /**
-         * A tick enters the window; it carries away its profile ratio (read with the old geometry).
+         * A tick enters the window; it carries away its value (read with the old geometry).
          * @param price raw price (&ge; 1)
          * @param above side it comes from: true on an up move (it was above the window)
-         * @param ratio the tick's ratio
+         * @param value the tick's |raw volume| as the memory held it (profile cell or |default|)
          */
-        public void enter(long price, boolean above, double ratio)
+        public void enter(long price, boolean above, double value)
         {
-            of(slotOf(price), above)[3] += ratio;
+            of(slotOf(price), above)[2] += value;
         }
 
         /**
          * A price range outside both the old and new window was jumped over; it is recorded as
-         * consumed (ratio 0). It moves from the side it was on ({@code fromAbove}) to the other one:
-         * the source side loses it at its average ratio, the target side gains it with ratio 0.
+         * consumed (volume 0). It moves from the side it was on ({@code fromAbove}) to the other one:
+         * the source side loses it at its average density, the target side gains it with volume 0.
          * O(slots in range).
          * @param from      first raw price (inclusive)
          * @param to        last raw price (inclusive)
@@ -337,42 +407,37 @@ public final class DepthMemory
             {
                 int k = slotOf(p);
                 long end = Math.min(slotEnd(k), to);
-                of(k, fromAbove)[4] += end - p + 1;
-                of(k, !fromAbove);   // the target side must be re-normalised: its S grows by the gap
+                of(k, fromAbove)[3] += end - p + 1;
+                of(k, !fromAbove)[4] = 1;   // target side: materialise, its S grows by the gap at volume 0
                 p = end + 1;
             }
         }
-    }
-
-    /** @return number of raw prices of slot k below (above = false) or above the window [winStart, winEnd] */
-    private static long outside(int k, boolean above, long winStart, long winEnd)
-    {
-        long s = slotStart(k), e = slotEnd(k);
-        return above ? Math.max(0, e - Math.max(s, winEnd + 1) + 1)
-                     : Math.max(0, Math.min(e, winStart - 1) - s + 1);
     }
 
     /**
      * Updates the slots for one window move from {@code [oldStart, oldEnd]} to
      * {@code [newStart, newEnd]}.
      * <p>
-     * Per slot side, with {@code S_old} / {@code S_new} = ticks of that side outside the old / new window:
+     * Per touched slot side, with {@code S_old} / {@code S_new} = ticks of that side outside the old / new
+     * window and {@code G} the matching segment:
      * <pre>
-     *   mass  = r * (S_old - gap)           old outside part, minus the gap that moved to the other side
-     *         - sum(entering ratios)        ticks that moved into the array (exact, old profile)
-     *         + q * leaving                 ticks that left the array, q = sum|array| / sum|default|
-     *   r'    = clamp(mass / S_new, 0, 1)   (side removed if S_new = 0 or 1 - r' &lt; DROP_DEFICIT)
+     *   base = stored ? V : (S_old &gt; 0 ? D(G_old) : 0)      D = default sum ({@link DefaultDepth#sum})
+     *   V'   = max(0, base * (1 - g / S_old) - E + L)
      * </pre>
-     * Without gap and entering ticks this is the spec's {@code (r S + q n) / (S + n)}. Leaving ticks
-     * whose default is 0 count with q (all-zero defaults: q = 1, nothing to remember).
+     * {@code E} = values of the ticks that entered the window (exact old profile), {@code L} = |array| of
+     * the ticks that left into this side, {@code g} = gap ticks taken from this side (the target side gains
+     * them at volume 0). A missing side stays missing if only {@code E} and/or a source gap touched it (the
+     * rest still reads the default); it materialises when ticks leave into it or it is a gap target.
+     * {@code S_new = 0} removes the side; {@code V'} within {@link #DROP_TOLERANCE} of {@code D(G_new)} drops it.
      *
      * @param oldStart first price of the old window
      * @param oldEnd   last price of the old window
      * @param newStart first price of the new window
      * @param newEnd   last price of the new window
      * @param ledger   collected tick data
+     * @param def      default depth at the current centre
      */
-    public void applyMove(long oldStart, long oldEnd, long newStart, long newEnd, MoveLedger ledger)
+    public void applyMove(long oldStart, long oldEnd, long newStart, long newEnd, MoveLedger ledger, DefaultDepth def)
     {
         for (Map.Entry<Integer, double[]> e : ledger.slots.entrySet())
         {
@@ -381,33 +446,55 @@ public final class DepthMemory
             double[] d = e.getValue();
             long sOld = outside(k, above, oldStart, oldEnd);
             long sNew = outside(k, above, newStart, newEnd);
+            Float stored = volumes.get(e.getKey());
             if (sNew <= 0)
             {
                 modCount++;
-                ratios.remove(e.getKey());
+                volumes.remove(e.getKey());
                 continue;
             }
-            double q = d[1] > 0 ? Math.min(1, d[0] / d[1]) : 1;
-            double mass = getRatio(k, above) * (sOld - d[4]) - d[3] + q * d[2];
-            setRatio(k, above, mass / sNew);
+            if (stored == null && d[1] == 0 && d[4] == 0)
+                continue;   // only entering ticks / source gap: the remaining part still reads the default
+            double base;
+            if (stored != null) base = stored;
+            else if (sOld > 0)
+            {
+                long[] g = segmentRange(k, above, oldStart, oldEnd);
+                base = def.sum(g[0], g[1]);
+            }
+            else base = 0;
+            double kept = sOld > 0 ? base * (1 - d[3] / sOld) : 0;
+            double v = Math.max(0, kept - d[2] + d[0]);
+            long[] g = segmentRange(k, above, newStart, newEnd);
+            putOrDrop(e.getKey(), v, def.sum(g[0], g[1]));
         }
     }
 
     // ── Recovery ───────────────────────────────────────────────────────────
 
     /**
-     * Fades every deficit {@code d = 1 - r} by {@code factor} (e.g. {@code 2^(-dt / halfLife)});
-     * slots whose deficit drops below {@link #DROP_DEFICIT} are removed.
+     * Fades every remembered volume toward the slot side's current default sum
+     * {@code D = D(G)} (segment at the current window and centre): {@code V <- D + (V - D) * factor}.
+     * Sides within {@link #DROP_TOLERANCE} of {@code D} (or without outside ticks) are removed.
+     * Cost: one {@link DefaultDepth#sum} per remembered side.
      *
-     * @param factor multiplier for the deficit, in [0, 1]
+     * @param factor   multiplier for {@code V - D}, in [0, 1] (e.g. {@code 2^(-dt / halfLife)})
+     * @param winStart first raw price of the array window
+     * @param winEnd   last raw price of the array window
+     * @param def      default depth at the current centre
      */
-    public void fade(double factor)
+    public void fade(double factor, long winStart, long winEnd, DefaultDepth def)
     {
         modCount++;
-        ratios.entrySet().removeIf(en -> {
-            double d = (1 - en.getValue()) * factor;
-            if (d < DROP_DEFICIT) return true;
-            en.setValue((float) (1 - d));
+        volumes.entrySet().removeIf(en -> {
+            int k = en.getKey() >> 1;
+            boolean above = (en.getKey() & 1) != 0;
+            long[] g = segmentRange(k, above, winStart, winEnd);
+            if (g[1] < g[0]) return true;
+            double d = def.sum(g[0], g[1]);
+            double v = d + (en.getValue() - d) * factor;
+            if (Math.abs(v - d) < DROP_TOLERANCE * Math.max(d, 1)) return true;
+            en.setValue((float) Math.max(0, v));
             return false;
         });
     }
@@ -415,34 +502,35 @@ public final class DepthMemory
     // ── Persistence ────────────────────────────────────────────────────────
 
     /**
-     * Writes the slots as two int arrays: "k" (slot-side keys {@code 2k + above}) and "r" (float bits of the ratios).
+     * Writes the slots as two int arrays: "k" (slot-side keys {@code 2k + above}) and "v" (float bits of
+     * the summed |raw volume|).
      * @param tag target tag
      */
     public void save(CompoundTag tag)
     {
-        int[] ks = new int[ratios.size()];
-        int[] rs = new int[ratios.size()];
+        int[] ks = new int[volumes.size()];
+        int[] vs = new int[volumes.size()];
         int i = 0;
-        for (Map.Entry<Integer, Float> e : ratios.entrySet())
+        for (Map.Entry<Integer, Float> e : volumes.entrySet())
         {
             ks[i] = e.getKey();
-            rs[i++] = Float.floatToIntBits(e.getValue());
+            vs[i++] = Float.floatToIntBits(e.getValue());
         }
         tag.putIntArray("k", ks);
-        tag.putIntArray("r", rs);
+        tag.putIntArray("v", vs);
     }
 
     /**
-     * Replaces the slots with the ones in {@code tag} (see {@link #save}). A tag without data
-     * (old saves) leaves the memory empty.
+     * Replaces the slots with the ones in {@code tag} (see {@link #save}). A tag without "v" (no memory,
+     * or the T-198 ratio format "r", which is dropped without conversion) leaves the memory empty.
      * @param tag source tag
      */
     public void load(CompoundTag tag)
     {
         clear();
         int[] ks = NbtCompat.getIntArray(tag, "k");
-        int[] rs = NbtCompat.getIntArray(tag, "r");
-        for (int i = 0; i < Math.min(ks.length, rs.length); i++)
-            setRatio(ks[i] >> 1, (ks[i] & 1) != 0, Float.intBitsToFloat(rs[i]));
+        int[] vs = NbtCompat.getIntArray(tag, "v");
+        for (int i = 0; i < Math.min(ks.length, vs.length); i++)
+            setVolume(ks[i] >> 1, (ks[i] & 1) != 0, Float.intBitsToFloat(vs[i]));
     }
 }

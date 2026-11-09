@@ -288,6 +288,9 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         if (hardReset) {
             // Hard reset: write the target distribution directly, skipping convergence.
             // Clone so the manipulation cache does not hold a reference to our cached array.
+            // T-199: the reset (applied before the SET) also wipes the depth memory outside the window,
+            // so the whole book starts from the new distribution.
+            orderBook.resetVirtualVolume();
             orderBook.setRawVolume(rangeStart, targets.clone());
             return;
         }
