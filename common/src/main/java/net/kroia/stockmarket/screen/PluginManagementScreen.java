@@ -157,6 +157,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             orderbookVolumeHistogram.setShowArrayBorders(checked);
         });
         PluginGuiElement.setSettingTooltip(Texts.DEBUG_MARKERS_TOOLTIP, debugMarkersCheckBox);
+        // setSettingTooltip anchors the tooltip's top-right corner at the mouse (opens left, for the
+        // right-hand settings panels); this checkbox sits at the left screen edge, so open it to the right.
+        debugMarkersCheckBox.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_LEFT);
         performanceBar = new PluginPerformanceBar();
 
         listView = new VerticalListView();
@@ -233,7 +236,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         // Title label takes most of the width, add plugin button on the right
         int addBtnWidth = 80;
         // Debug markers checkbox sits in the title row above the chart / volume display
-        int debugW = Math.min(debugMarkersCheckBox.getTextWidth(Texts.DEBUG_MARKERS.getString()) + 20, width / 2);
+        // Width from the label's font width in the active language: CheckBox gives its label
+        // width - box (eh - 4) - 5 px, plus a few px for the label's own padding.
+        int debugW = Math.min(debugMarkersCheckBox.getTextWidth(Texts.DEBUG_MARKERS.getString()) + (eh - 4) + 5 + 8, width / 2);
         debugMarkersCheckBox.setBounds(padding, padding, debugW, eh);
         titleLabel.setBounds(debugMarkersCheckBox.getRight() + spacing, padding, width - debugW - addBtnWidth - 2 * spacing, eh);
         addPluginButton.setBounds(titleLabel.getRight() + spacing, padding, addBtnWidth, eh);
