@@ -102,6 +102,10 @@ public class PluginTestSuite extends TestSuite {
         addTest("t206g_pumpPlusOrganic_" + tag + "_long", () -> test_t206TwoPlayers(tag, hl, move, true, new int[]{30, 60}));
         // T-208 price model harness (run only with -Dstockmarket.t208=tune|gate|charts)
         registerT208Tests();
+        // T-208 (ungated): exploits lose money at the defaults, organic demand still moves the price
+        addTest("t208_noProfit_diamond", () -> test_t208NoProfit("diamond_default", T208_NO_PROFIT_DIAMOND));
+        addTest("t208_noProfit_dirt", () -> test_t208NoProfit("dirt", T208_NO_PROFIT_DIRT));
+        addTest("t208_organic_movesPrice", this::test_t208OrganicMovesPrice);
         // T-207 regression probes (run only with -Dstockmarket.t207=true)
         addTest("t207_netFlow_matchesFills", this::test_t207_netFlow);
         addTest("t207_spike_holds", this::test_t207_spike);
@@ -1414,8 +1418,8 @@ public class PluginTestSuite extends TestSuite {
 
     // ── T-208 price model harness (gated: -Dstockmarket.t208=tune|gate|charts) ──────────────────
     //
-    // Report only. The pump, dump and limit exit noProfit assertions are promoted to ungated tests once
-    // Stage B has confirmed the tuned defaults; asserting them now would fail the matrix before the tuning.
+    // Report only. Stage B confirmed the defaults; the pump, dump-and-rebuy, limit exit and two-pumper
+    // no-profit assertions and the organic price check run ungated (t208_noProfit_*, t208_organic_movesPrice).
     //
     // System properties:
     //   stockmarket.t208        comma separated stages: tune (Stage A), gate (Stage B), charts
@@ -1754,6 +1758,59 @@ public class PluginTestSuite extends TestSuite {
             }
             java.nio.file.Files.writeString(t208Dir().resolve("chart_" + chart + ".csv"), csv.toString());
             return pass("chart_" + chart + ".csv" + (lastLine != null ? lastLine : ""));
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /** T-208 ungated no-profit gate scenarios on diamond (default market). */
+    private static final String[] T208_NO_PROFIT_DIAMOND = {"pump5", "pump30", "dump5", "limitTight", "twoPumpers10"};
+    /** T-208 ungated no-profit gate scenarios on dirt (exits hit the 60 min cap, so fewer rows). */
+    private static final String[] T208_NO_PROFIT_DIRT = {"pump5", "dump5", "limitTight", "twoPumpers10"};
+    /** Organic demand must still move the price: organic 60 min on diamond ends at least this far above default (Stage B: 126.7%). */
+    private static final double T208_ORGANIC60_MIN_PCT = 110;
+
+    /**
+     * T-208 gate (ungated): at the defaults with book refill, none of the given exploit scenarios makes a profit
+     * (two pumpers: combined profit).
+     *
+     * @param market    T-208 market name (see {@link #t208Market})
+     * @param scenarios T-208 scenario names (see {@link #t208Scenario})
+     */
+    private TestResult test_t208NoProfit(String market, String[] scenarios) {
+        harnessRefill = true;
+        try {
+            ReplaySetup s = t208Market(market);
+            StringBuilder out = new StringBuilder();
+            boolean ok = true;
+            for (String name : scenarios) {
+                T208Scenario sc = t208Scenario(name, s.maxOrder());
+                PlayersResult r = replayPlayers(s, T208_WARMUP, sc.minTicks(), null, 0, null, false, sc.plans());
+                double profit = 0;
+                for (double p : r.profit()) profit += p;
+                ok &= profit <= 0;
+                out.append(String.format(Locale.ROOT, "\n%s: %+.0f (%.1f s)", name, profit, r.wallNanos() / 1e9));
+            }
+            return ok ? pass(out.toString()) : fail("profitable exploit on " + market + ":" + out);
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /** T-208 gate (ungated): organic buying for 60 min on diamond still lifts the price noticeably. */
+    private TestResult test_t208OrganicMovesPrice() {
+        harnessRefill = true;
+        try {
+            ReplaySetup s = t208Market("diamond_default");
+            T208Scenario sc = t208Scenario("organic60", s.maxOrder());
+            PlayersResult r = replayPlayers(s, T208_WARMUP, sc.minTicks(), null, 0, null, false, sc.plans());
+            double end = 100 * r.endPrice() / s.price();
+            String msg = String.format(Locale.ROOT, "organic 60 min ends at %.1f%% of default (min %.0f%%)", end, T208_ORGANIC60_MIN_PCT);
+            return end >= T208_ORGANIC60_MIN_PCT ? pass(msg) : fail(msg);
         } catch (Exception e) {
             return fail("Exception: " + e);
         } finally {
