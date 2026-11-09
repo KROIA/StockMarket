@@ -131,6 +131,16 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
     }
 
     /**
+     * Test hook: the bot's current rate-limited target on {@code marketID} (real price).
+     *
+     * @return the target, or NaN if not subscribed
+     */
+    public double test_getTargetPrice(ItemID marketID) {
+        RuntimeData data = marketData.get(marketID);
+        return data == null ? Double.NaN : data.targetPrice;
+    }
+
+    /**
      * Creates the bot's PID with its output limited to [-1, 1], the range the bot actually uses
      * as order fraction. Without the limit the output filter winds up while the price sits far
      * from the target and the bot keeps pushing past the target for several cycles (T-178).

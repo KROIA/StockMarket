@@ -360,9 +360,9 @@ public class VolatilityPluginTestSuite extends TestSuite {
     }
 
     /**
-     * T-174 scenario: a huge sell saturates the market's counter at the band edge
-     * during update(), and a 1-item buy-back raises the equilibrium immediately.
-     * Huge buy saturates symmetrically at the lower edge.
+     * T-174/T-207 scenario: a huge sell saturates only the plugin-private flow at the band edge;
+     * the market's counter stays exact (uncapped). A 1-item buy-back still raises the
+     * equilibrium immediately. Huge buy saturates symmetrically; an admin reset zeroes it.
      */
     private TestResult test_update_saturatesFlow_buybackMovesPrice() {
         ItemID id = new ItemID((short) 1);
@@ -372,24 +372,38 @@ public class VolatilityPluginTestSuite extends TestSuite {
         plugin.replaceCustomSettings(id, defaults()); // deadband 0: tests the T-174 saturation itself
         FlowBand band = VolatilityPlugin.flowBand(market.getNaturalAbundance(), defaults());
         List<MarketInterface> markets = List.of(new MarketInterface(market, null));
+        double halfLife = ServerMarket.netFlowHalfLifeSeconds(); // the plugin assumes the market fades by one tick
 
         market.netFlow = 1e9; // huge net sell
         plugin.update(markets);
-        if (market.netFlow != band.upper())
-            return fail("Counter must saturate at " + band.upper() + ", got " + market.netFlow);
+        if (market.netFlow != 1e9)
+            return fail("Market counter must stay exact (1e9), got " + market.netFlow);
+        if (plugin.getSaturatedFlow(id) != band.upper())
+            return fail("Saturated flow must sit at " + band.upper() + ", got " + plugin.getSaturatedFlow(id));
 
-        double atFloor = VolatilityPlugin.computeEquilibriumPrice(DEFAULT_PRICE, market.netFlow, market.getNaturalAbundance(), defaults());
-        market.netFlow -= 1; // buy back one item
+        double atFloor = VolatilityPlugin.computeEquilibriumPrice(DEFAULT_PRICE, plugin.getSaturatedFlow(id), market.getNaturalAbundance(), defaults());
+        // One market tick: fade, then buy back one item
+        double expected = ServerMarket.fade(market.netFlow, halfLife, ServerMarket.TICK_SECONDS) - 1;
+        market.netFlow = expected;
         plugin.update(markets);
-        double after = VolatilityPlugin.computeEquilibriumPrice(DEFAULT_PRICE, market.netFlow, market.getNaturalAbundance(), defaults());
+        if (market.netFlow != expected)
+            return fail("Market counter must stay exact (" + expected + "), got " + market.netFlow);
+        double after = VolatilityPlugin.computeEquilibriumPrice(DEFAULT_PRICE, plugin.getSaturatedFlow(id), market.getNaturalAbundance(), defaults());
         if (!(after > atFloor))
             return fail("1-item buy-back must raise the equilibrium immediately: " + atFloor + " -> " + after);
 
         market.netFlow = -1e9; // huge net buy
         plugin.update(markets);
-        if (market.netFlow != band.lower())
-            return fail("Counter must saturate at " + band.lower() + ", got " + market.netFlow);
-        return pass("Counter saturates at the band; buy-back moves the price immediately");
+        if (market.netFlow != -1e9)
+            return fail("Market counter must stay exact (-1e9), got " + market.netFlow);
+        if (plugin.getSaturatedFlow(id) != band.lower())
+            return fail("Saturated flow must sit at " + band.lower() + ", got " + plugin.getSaturatedFlow(id));
+
+        market.netFlow = 0; // admin Reset
+        plugin.update(markets);
+        if (plugin.getSaturatedFlow(id) != 0)
+            return fail("Admin reset must zero the saturated flow, got " + plugin.getSaturatedFlow(id));
+        return pass("Market counter stays exact; saturated flow clamps at the band; buy-back moves the price immediately");
     }
     // ── T-204 deadband ──────────────────────────────────────────────────────
 
@@ -664,7 +678,7 @@ public class VolatilityPluginTestSuite extends TestSuite {
         // legacy: strip the T-204 keys
         ListTag list = (ListTag) tag.get("marketData");
         CompoundTag m = list.getCompound(0);
-        for (String k : new String[]{"deadbandVolume", "flowRiseTimeSeconds", "flowReturnTimeSeconds", "effFlow"}) m.remove(k);
+        for (String k : new String[]{"deadbandVolume", "flowRiseTimeSeconds", "flowReturnTimeSeconds", "effFlow", "satFlow", "lastFaded"}) m.remove(k); // T-207 keys too
         VolatilityPlugin legacy = new VolatilityPlugin();
         legacy.onMarketSubscribed(id);
         legacy.load(tag);

@@ -619,7 +619,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
     /** @return the configured net flow half-life in seconds, 0 = no fading (also before the settings exist). */
-    private static double netFlowHalfLifeSeconds()
+    public static double netFlowHalfLifeSeconds()
     {
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null) return 0;
         Float minutes = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.get();

@@ -193,6 +193,17 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
          * faded flow with the rise/return time constants. Saved with the plugin state.
          */
         double effFlow = 0;
+        /**
+         * T-207: plugin-private saturated copy of the market's faded net flow (items). Follows the
+         * faded flow's per-tick change but is clamped to the {@link FlowBand}, so flow beyond the
+         * band leaves no dead zone (T-174) while the market's own counters stay exact and uncapped.
+         * Never written to the market. Saved with the plugin state.
+         */
+        double satFlow = 0;
+        /** T-207: the market's faded net flow (items) seen on the previous update; saved with the plugin state. */
+        double lastFaded = 0;
+        /** T-207: false until satFlow/lastFaded are seeded from the market (new market or pre-T-207 save). */
+        boolean satSeeded = false;
 
         MarketData() {
             priceGenerator = new NormalizedRandomPriceGenerator(5);
@@ -231,26 +242,17 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                     DEFAULT_DEADBAND_CAPACITY_MULT);
             if (resolved != data.settings) replaceCustomSettings(market.market.getMarketID(), resolved);
 
-            // Saturate the market's net-flow counters at the band where the equilibrium
-            // already sits at minPriceMult/maxPriceMult. Flow beyond it has no price
-            // effect; storing it would only create a dead zone that players must trade
-            // back before the price moves again (T-174). #89: the real and the faded
-            // flow are each clamped independently; the equilibrium reads the faded one.
+            // T-207: the market's net-flow counters are exact and never touched here. Saturation
+            // at the band (where the equilibrium already sits at minPriceMult/maxPriceMult) only
+            // happens on the plugin-private satFlow, so a buy-back after a huge one-sided trade
+            // still moves the price at once (T-174) without capping the stored flow.
             FlowBand band = flowBand(market.market.getNaturalAbundance(), data.settings);
-            if (band != null) {
-                double flow = market.market.getNetPlayerItemFlow();
-                if (flow < band.lower() || flow > band.upper()) {
-                    market.market.setNetPlayerItemFlow(Math.min(Math.max(flow, band.lower()), band.upper()));
-                }
-                double faded = market.market.getFadedNetPlayerItemFlow();
-                if (faded < band.lower() || faded > band.upper()) {
-                    market.market.setFadedNetPlayerItemFlow(Math.min(Math.max(faded, band.lower()), band.upper()));
-                }
-            }
+            data.satFlow = saturatedFlow(data, market.market.getFadedNetPlayerItemFlow(),
+                    market.market.getNetPlayerItemFlow(), band, ServerMarket.netFlowHalfLifeSeconds());
 
-            // T-204: the smoothed flow follows the (clamped) faded flow every tick, also for markets
+            // T-204: the smoothed flow follows the saturated flow every tick, also for markets
             // without a virtual orderbook, so its state stays continuous.
-            data.effFlow = smoothFlow(data.effFlow, market.market.getFadedNetPlayerItemFlow(),
+            data.effFlow = smoothFlow(data.effFlow, data.satFlow,
                     ServerMarket.TICK_SECONDS, data.settings.flowRiseTimeSeconds(),
                     data.settings.flowReturnTimeSeconds());
 
@@ -502,6 +504,52 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         return data != null ? data.effFlow : 0;
     }
 
+    /**
+     * @param marketID the market
+     * @return the T-207 plugin-private saturated flow (items), 0 for unknown markets
+     */
+    public double getSaturatedFlow(ItemID marketID) {
+        MarketData data = marketData.get(marketID);
+        return data != null ? data.satFlow : 0;
+    }
+
+    /**
+     * T-207: advances the plugin-private saturated flow by one tick and records {@code faded}
+     * as the last-seen faded flow. The market's own counters are only read.
+     * <p>
+     * Since the last tick the market faded its flow by one tick and then added the fills, so
+     * {@code fills = faded - fade(lastFaded)}. The saturated copy gets the same fade and fills:
+     * {@code sat = clamp(fade(sat) + fills, band)}. Inside the band it equals the faded flow
+     * exactly; beyond it, it stays at the edge so any trade back moves it at once.
+     * <ul>
+     *   <li>Not seeded yet (new market, pre-T-207 save): {@code sat = clamp(faded)}.</li>
+     *   <li>Admin Reset (raw and faded both 0 while the last faded was not): {@code sat = 0}.</li>
+     *   <li>No band (flow influence off / invalid capacity): {@code sat = faded}.</li>
+     * </ul>
+     *
+     * @param data            the market's plugin data (lastFaded/satSeeded are updated)
+     * @param faded           the market's faded net flow now (items)
+     * @param raw             the market's raw net flow now (items), only used to detect a reset
+     * @param band            the saturation band, or null for none
+     * @param halfLifeSeconds the market's net-flow half-life, &lt;= 0 = no fading
+     * @return the new saturated flow (items)
+     */
+    static double saturatedFlow(MarketData data, double faded, double raw, FlowBand band, double halfLifeSeconds) {
+        double sat;
+        if (!data.satSeeded) {
+            sat = faded;
+            data.satSeeded = true;
+        } else if (faded == 0 && raw == 0 && data.lastFaded != 0) {
+            sat = 0;
+        } else {
+            double fills = faded - ServerMarket.fade(data.lastFaded, halfLifeSeconds, ServerMarket.TICK_SECONDS);
+            sat = ServerMarket.fade(data.satFlow, halfLifeSeconds, ServerMarket.TICK_SECONDS) + fills;
+        }
+        data.lastFaded = faded;
+        if (band == null) return faded;
+        return Math.min(Math.max(sat, band.lower()), band.upper());
+    }
+
     @Override
     public void finalize(List<MarketInterface> markets) {
 
@@ -547,6 +595,10 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             marketTag.putFloat("flowRiseTimeSeconds", s.flowRiseTimeSeconds());
             marketTag.putFloat("flowReturnTimeSeconds", s.flowReturnTimeSeconds());
             marketTag.putDouble("effFlow", entry.getValue().effFlow);
+            if (entry.getValue().satSeeded) { // T-207; unseeded = seed from the market on the next tick
+                marketTag.putDouble("satFlow", entry.getValue().satFlow);
+                marketTag.putDouble("lastFaded", entry.getValue().lastFaded);
+            }
             marketsTag.add(marketTag);
         }
         tag.put("marketData", marketsTag);
@@ -583,6 +635,10 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                                 marketTag.contains("minPriceMult") ? NbtCompat.getFloat(marketTag, "minPriceMult") : cur.minPriceMult(),
                                 marketTag.contains("maxPriceMult") ? NbtCompat.getFloat(marketTag, "maxPriceMult") : cur.maxPriceMult());
                         data.effFlow = marketTag.contains("effFlow") ? NbtCompat.getDouble(marketTag, "effFlow") : 0;
+                        // T-207: missing keys (pre-T-207 save) -> seeded as clamp(faded) on the first tick
+                        data.satSeeded = marketTag.contains("satFlow") && marketTag.contains("lastFaded");
+                        data.satFlow = data.satSeeded ? NbtCompat.getDouble(marketTag, "satFlow") : 0;
+                        data.lastFaded = data.satSeeded ? NbtCompat.getDouble(marketTag, "lastFaded") : 0;
                     }
                 }
             }
