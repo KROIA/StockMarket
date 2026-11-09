@@ -1593,8 +1593,13 @@ public class PluginTestSuite extends TestSuite {
      * T-207 gap guard: on the reported thin diamond setup (abundance 5, max order 10,000) one max buy sweeps
      * the book from 160 to ~170 and leaves the swept range empty. Without the guard the bot's first,
      * almost zero-sized sell fell through that gap and put the price back at ~160 within 5 ticks. The
-     * price must now keep at least half of the spike for 100 ticks (5 s). On today's default diamond
-     * (dense book) the bot must still trade within those 100 ticks after the same buy.
+     * price must now keep at least half of the spike for 100 ticks (5 s).
+     * <p>
+     * T-208: on today's default diamond (dense book) the same buy barely moves the equilibrium, so the
+     * target sits inside the swept range and the price holding there is intended. The dense case instead
+     * checks that the guard does not freeze the bot when the target lies on the dense, unswept side: the
+     * guard blocks the swept direction (back to the start), not the unswept one, and after the net flow
+     * is pushed to the buy side (target above the peak) the bot trades within 100 ticks.
      */
     private TestResult test_targetPriceBot_emptyGap_noSnapBack() {
         StringBuilder out = new StringBuilder();
@@ -1607,21 +1612,37 @@ public class PluginTestSuite extends TestSuite {
                     env.marketOrder(env.maxOrder);
                     env.tick();
                     double peak = env.price();
+                    if (!(peak > start))
+                        return fail("Harness: the buy did not move the price" + out);
+                    IPluginOrderBook book = env.cache.getPluginOrderBook();
+                    if (!thin) {
+                        boolean swept = TargetPriceBot.crossesEmptyGap(book, peak, start);
+                        boolean unswept = TargetPriceBot.crossesEmptyGap(book, peak, peak * 1.01);
+                        out.append(String.format(Locale.ROOT, "\n default: start %.2f peak %.2f, gap down %b, gap up %b",
+                                start, peak, swept, unswept));
+                        if (!swept) return fail("Guard must block the swept range back to the start" + out);
+                        if (unswept) return fail("Guard must not block the dense, unswept side" + out);
+                        // Net buy flow without a trade: the equilibrium (and the bot's target) moves above the peak.
+                        env.market.setFadedNetPlayerItemFlow(MarketManager.convertToRawAmountStatic(-1e6));
+                    }
                     TargetPriceBot.StepInfo before = env.bot.test_getLastStep(itemID);
                     for (int t = 0; t < 100; t++) env.tick();
                     double after = env.price();
-                    boolean traded = env.bot.test_getLastStep(itemID) != before;
+                    TargetPriceBot.StepInfo last = env.bot.test_getLastStep(itemID);
+                    boolean traded = last != before;
                     out.append(String.format(Locale.ROOT, "\n %s: start %.2f peak %.2f +100 ticks %.2f, bot traded %b",
                             thin ? "thin" : "default", start, peak, after, traded));
-                    if (!(peak > start))
-                        return fail("Harness: the buy did not move the price" + out);
                     if (thin && after < start + 0.5 * (peak - start))
                         return fail("Price snapped back through the empty gap" + out);
-                    if (!thin && !traded)
-                        return fail("Gap guard blocked the bot on a dense book" + out);
+                    if (!thin) {
+                        if (!traded || !(last.amount() > 0))
+                            return fail("Gap guard froze the bot towards a target on the dense side" + out);
+                        if (!(last.target() > last.priceBefore()))
+                            return fail("Bot target must lie above the price (unswept side), got " + last + out);
+                    }
                 }
             }
-            return pass("Spike holds on the thin book; bot still trades on the dense one" + out);
+            return pass("Spike holds on the thin book; on the dense one the guard blocks only the swept side" + out);
         } catch (Exception e) {
             return fail("Exception: " + e + out);
         } finally {
