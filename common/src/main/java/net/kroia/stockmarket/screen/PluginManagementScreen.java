@@ -55,6 +55,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         public static final Component AUTO_SUBSCRIBE_TOOLTIP = Component.translatable(PREFIX + "auto_subscribe.tooltip");
         public static final Component LOGGER_TOOLTIP = Component.translatable(PREFIX + "logger.tooltip");
         public static final Component ADD_PLUGIN_TOOLTIP = Component.translatable(PREFIX + "add_plugin.tooltip");
+        public static final Component DEBUG_MARKERS = Component.translatable(PREFIX + "debug_markers");
+        public static final Component DEBUG_MARKERS_TOOLTIP = Component.translatable(PREFIX + "debug_markers.tooltip");
         public static final Component DELETE_PLUGIN_TOOLTIP = Component.translatable(PREFIX + "delete_plugin.tooltip");
         public static final Component MOVE_UP_TOOLTIP = Component.translatable(PREFIX + "move_up.tooltip");
         public static final Component MOVE_DOWN_TOOLTIP = Component.translatable(PREFIX + "move_down.tooltip");
@@ -65,6 +67,10 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
     private final Label titleLabel;
     private final Button addPluginButton;
+    /** Turns the T-209 virtual order book debug markers in the volume display on or off. */
+    private final CheckBox debugMarkersCheckBox;
+    /** State of {@link #debugMarkersCheckBox}, kept for the game session only (no setting). */
+    private static boolean showDebugMarkers = true;
     /**
      * T-123 / T-125 (untrusted slave gate): red info banner shown across the
      * top of the plugin management screen on an untrusted slave. Every
@@ -143,7 +149,14 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         candlestickChart = new CandlestickChart();
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
-        orderbookVolumeHistogram.setShowArrayBorders(true); // T-209: virtual depth layout markers
+        orderbookVolumeHistogram.setShowArrayBorders(showDebugMarkers); // T-209: virtual depth layout markers
+        debugMarkersCheckBox = new CheckBox(Texts.DEBUG_MARKERS.getString());
+        debugMarkersCheckBox.setChecked(showDebugMarkers);
+        debugMarkersCheckBox.setOnStateChanged(checked -> {
+            showDebugMarkers = checked;
+            orderbookVolumeHistogram.setShowArrayBorders(checked);
+        });
+        PluginGuiElement.setSettingTooltip(Texts.DEBUG_MARKERS_TOOLTIP, debugMarkersCheckBox);
         performanceBar = new PluginPerformanceBar();
 
         listView = new VerticalListView();
@@ -154,6 +167,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         addElement(titleLabel);
         addElement(addPluginButton);
+        addElement(debugMarkersCheckBox);
         addElement(untrustedSlaveBanner1);
         addElement(untrustedSlaveBanner2);
         addElement(untrustedSlaveBanner3);
@@ -218,7 +232,10 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         // Title label takes most of the width, add plugin button on the right
         int addBtnWidth = 80;
-        titleLabel.setBounds(padding, padding, width - addBtnWidth - spacing, eh);
+        // Debug markers checkbox sits in the title row above the chart / volume display
+        int debugW = Math.min(debugMarkersCheckBox.getTextWidth(Texts.DEBUG_MARKERS.getString()) + 20, width / 2);
+        debugMarkersCheckBox.setBounds(padding, padding, debugW, eh);
+        titleLabel.setBounds(debugMarkersCheckBox.getRight() + spacing, padding, width - debugW - addBtnWidth - 2 * spacing, eh);
         addPluginButton.setBounds(titleLabel.getRight() + spacing, padding, addBtnWidth, eh);
 
         // T-123 / T-125 banner: three stacked lines sitting under the title

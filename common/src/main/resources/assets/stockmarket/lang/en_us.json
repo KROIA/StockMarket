@@ -173,6 +173,8 @@
   "gui.stockmarket.plugin_management_screen.auto_subscribe": "Auto-subscribe",
   "gui.stockmarket.plugin_management_screen.add_plugin": "Add Plugin",
   "gui.stockmarket.plugin_management_screen.add_plugin_title": "Add Plugin",
+  "gui.stockmarket.plugin_management_screen.debug_markers": "Orderbook debug markers",
+  "gui.stockmarket.plugin_management_screen.debug_markers.tooltip": "Shows the virtual order book layout in the volume display: linear array edges and re-centre borders, log grid edges and the ask ceiling. Hover a line for its price.",
   "gui.stockmarket.plugin_management_screen.delete_plugin": "x",
   "gui.stockmarket.plugin_management_screen.subscribe_close": "Close",
   "gui.stockmarket.create_market_tab.title": "Create Markets",

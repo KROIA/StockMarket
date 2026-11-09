@@ -173,6 +173,8 @@
   "gui.stockmarket.plugin_management_screen.auto_subscribe": "Auto-Abo",
   "gui.stockmarket.plugin_management_screen.add_plugin": "Plugin hinzufügen",
   "gui.stockmarket.plugin_management_screen.add_plugin_title": "Plugin hinzufügen",
+  "gui.stockmarket.plugin_management_screen.debug_markers": "Orderbuch-Debugmarker",
+  "gui.stockmarket.plugin_management_screen.debug_markers.tooltip": "Zeigt das Layout des virtuellen Orderbuchs in der Volumenanzeige: Grenzen des linearen Arrays und der Neuzentrierung, Log-Raster-Grenzen und die Ask-Obergrenze. Für den Preis mit der Maus auf eine Linie zeigen.",
   "gui.stockmarket.plugin_management_screen.delete_plugin": "x",
   "gui.stockmarket.plugin_management_screen.subscribe_close": "Schließen",
   "gui.stockmarket.create_market_tab.title": "Märkte erstellen",
