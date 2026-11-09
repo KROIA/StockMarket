@@ -386,7 +386,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
      * (almost) empty stretch of the book, so even a tiny order would move the price far in one tick.
      * <p>
      * The window is the first {@link #GAP_WINDOW_FRACTION} of the price towards the target (or up to the
-     * target if it is closer). The bot may trade only if the one-sided virtual volume in that window is
+     * target if it is closer), but at least one price step. The bot may trade only if the one-sided virtual volume in that window is
      * at least one price level of the market's default (undepleted) depth at the window's edge. A swept
      * book (after a big player order) holds ~0 there until the volume distribution refills it; a normal
      * book holds dozens of levels' worth. So this covers both "too little volume up to the target" and
@@ -399,10 +399,13 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
      */
     public static boolean crossesEmptyGap(IPluginOrderBook book, double price, double target) {
         if (!(price > 0) || target == price) return false;
+        // T-208: at least one price step wide. On cheap items (dirt at 0.1, step 0.01 = 10%) 1% of the
+        // price holds no level at all, so the window looked empty and blocked the bot forever.
+        double step = MarketManager.convertToRealAmountStatic(1);
         double windowEnd = target > price
-                ? Math.min(target, price * (1 + GAP_WINDOW_FRACTION))
-                : Math.max(target, price * (1 - GAP_WINDOW_FRACTION));
-        double levels = Math.max(1, Math.abs(windowEnd - price) / MarketManager.convertToRealAmountStatic(1));
+                ? Math.max(Math.min(target, price * (1 + GAP_WINDOW_FRACTION)), price + step)
+                : Math.min(Math.max(target, price * (1 - GAP_WINDOW_FRACTION)), price - step);
+        double levels = Math.max(1, Math.abs(windowEnd - price) / step);
         double minVolume = gapMinFill * Math.abs(book.getDefaultRealVolume(windowEnd)) * levels;
         if (!(minVolume > 0)) return false;
         // capped at minVolume: stops scanning as soon as enough volume is found
@@ -481,6 +484,12 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         // price, and leaving them out only makes the order smaller.
         // Signed like the book: negative = asks to buy through (target above), positive = bids to sell into.
         float volumeToTarget = market.oderBook.getRealVirtualVolumeToPrice(data.targetPrice, limit);
+        // T-208: a target less than one price step away can't be reached without passing it (T-200), so
+        // the bot waits. The reference still advances, otherwise it would stay stuck next to the price.
+        if (Math.abs(data.targetPrice - currentPrice) < MarketManager.convertToRealAmountStatic(1)) {
+            data.ref = next;
+            return;
+        }
         // T-207: don't trade into an empty price gap (e.g. right after a big player order swept the
         // book). Even a tiny order would fall through the gap and snap the price back at once.
         // T-208: with an active reference the guard checks the full window in the direction of travel:

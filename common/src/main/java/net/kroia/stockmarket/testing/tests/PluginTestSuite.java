@@ -136,6 +136,7 @@ public class PluginTestSuite extends TestSuite {
         addTest("targetPriceBot_reference_off_is_idle", this::test_targetPriceBot_referenceOff);
         addTest("targetPriceBot_userWorldSpike_reverts", this::test_targetPriceBot_userWorldSpike);
         addTest("targetPriceBot_tracking_report", this::test_targetPriceBot_tracking);
+        addTest("targetPriceBot_dirt_priceStep", this::test_targetPriceBot_dirtPriceStep);
     }
 
     @Override
@@ -1728,9 +1729,52 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /**
+     * T-208 C3c: on dirt (price 0.1, price step 0.01 = 10%) the gap guard window is at least one step,
+     * so the bot trades. A target less than one step away is left alone (it can't be reached without
+     * passing it, T-200); a target one step or more away is reached without overshooting it.
+     */
+    private TestResult test_targetPriceBot_dirtPriceStep() {
+        StringBuilder out = new StringBuilder();
+        harnessRefill = true;
+        double step = MarketManager.convertToRealAmountStatic(1);
+        try {
+            for (double flow : new double[]{2, 20}) {
+                try (T207Env env = new T207Env(0.1, 2000, MarketSettings.defaultMaxOrderVolume(2000), 2000, 3)) {
+                    IPluginMarket pm = env.markets.get(0).market;
+                    for (int t = 0; t < 200; t++) env.tick();
+                    double start = env.price();
+                    env.market.setFadedNetPlayerItemFlow(MarketManager.convertToRawAmountStatic(-flow * env.maxOrder));
+                    TargetPriceBot.StepInfo first = env.bot.test_getLastStep(itemID);
+                    double max = start;
+                    for (int t = 0; t < 1200; t++) {
+                        env.tick();
+                        max = Math.max(max, env.price());
+                    }
+                    double target = pm.getPreviousTargetPrice();
+                    boolean traded = env.bot.test_getLastStep(itemID) != first;
+                    out.append(String.format(Locale.ROOT, " | flow %.0f max orders: start %.4f target %.4f end %.4f max %.4f traded %b",
+                            flow, start, target, env.price(), max, traded));
+                    if (target - start < step) {
+                        if (traded || env.price() != start) return fail("Bot traded toward a target less than one step away." + out);
+                    } else {
+                        if (!traded || env.price() < start + step - 1e-9) return fail("Bot did not trade toward a target one step or more away." + out);
+                        if (max > target + 1e-9) return fail("Bot pushed the price past its target (T-200)." + out);
+                    }
+                }
+            }
+            if (!out.toString().contains("traded true")) return fail("Harness: no flow moved the target one step away." + out);
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e + out);
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /**
      * T-208 C3b report: how closely the bot's price tracks a moved equilibrium on diamond (160, abundance 50),
-     * dirt (0.1, abundance 2000) and a cheap item (1.0, abundance 2000). The faded flow is set to 100 (diamond)
-     * / 2 (others) max orders bought (no trade, so the reference stays idle), then 2,400 ticks run. Row:
+     * dirt (0.1, abundance 2000) and a cheap item (1.0, abundance 2000). The faded flow is set to 100 (diamond),
+     * 20 (dirt) / 2 (cheap) max orders bought (no trade, so the reference stays idle), then 2,400 ticks run. Row:
      * target, price after 200 / 2,400 ticks, the last tick the price was 1% or more off the target, the mean
      * |ln(price/target)| in % and the number of bot orders.
      */
@@ -1738,7 +1782,7 @@ public class PluginTestSuite extends TestSuite {
         StringBuilder out = new StringBuilder();
         harnessRefill = true;
         String[] names = {"diamond", "dirt", "cheap"};
-        double[] prices = {160, 0.1, 1.0}, flows = {100, 2, 2};
+        double[] prices = {160, 0.1, 1.0}, flows = {100, 20, 2};
         float[] abundances = {50, 2000, 2000};
         try {
             for (int i = 0; i < names.length; i++) {
