@@ -30,6 +30,8 @@ import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.util.ProfitAlerts;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.codec.StreamCodec;
 
 import java.lang.reflect.Proxy;
@@ -128,6 +130,11 @@ public class PluginTestSuite extends TestSuite {
         addTest("netFlow_randomTrades_exact", this::test_netFlow_randomTrades_exact);
         // T-207 (ungated): the bot does not trade through an empty gap right after a big order
         addTest("targetPriceBot_emptyGap_noSnapBack", this::test_targetPriceBot_emptyGap_noSnapBack);
+        // T-208 bot reference (setpoint) model
+        addTest("targetPriceBot_reference_invariants", this::test_targetPriceBot_referenceInvariants);
+        addTest("targetPriceBot_reference_codec_nbt_legacy", this::test_targetPriceBot_referenceCodecNbt);
+        addTest("targetPriceBot_reference_off_is_idle", this::test_targetPriceBot_referenceOff);
+        addTest("targetPriceBot_userWorldSpike_reverts", this::test_targetPriceBot_userWorldSpike);
     }
 
     @Override
@@ -331,6 +338,7 @@ public class PluginTestSuite extends TestSuite {
                     case "getMaxRealOrderVolume" -> 0.0; // unlimited: this scenario is about PID behavior, not the size cap
                     case "getPreviousTargetPrice", "getTargetPrice" -> target;
                     case "getPrice" -> price[0];
+                    case "getNetPlayerItemFlow" -> 0.0; // no player fills: T-208 reference stays idle
                     case "placeOrder" -> {
                         lastOrder[0] = (Double) args[0];
                         if (!frozen[0]) price[0] += lastOrder[0] / depth;
@@ -390,6 +398,7 @@ public class PluginTestSuite extends TestSuite {
                     case "getMaxRealOrderVolume" -> playerLimit;
                     case "getPreviousTargetPrice", "getTargetPrice" -> 1000.0;
                     case "getPrice" -> 100.0; // far below target, huge depth -> PID wants a big buy
+                    case "getNetPlayerItemFlow" -> 0.0; // no player fills: T-208 reference stays idle
                     case "placeOrder" -> {
                         maxOrder[0] = Math.max(maxOrder[0], Math.abs((Double) args[0]));
                         yield 0L;
@@ -1587,6 +1596,201 @@ public class PluginTestSuite extends TestSuite {
         }
         StockMarketMod.LOGGER.info("[T-207 spike] {}", out);
         return bad == 0 ? pass(out.toString()) : fail(bad + " snap-backs" + out);
+    }
+
+    // ── T-208 bot reference (setpoint) model ─────────────────────────────────
+
+    /**
+     * T-208 {@link TargetPriceBot#stepReference} invariants (pure, default settings): after a spike to S
+     * the reference stays in [T, S], swings to a trough below its centre and then a peak above it, mirrors
+     * a dump of the same log size, and is within 10% of the excess after 5 reversion times. A fill towards
+     * T (a ping) keeps the centre; a fill further away resets it.
+     */
+    private TestResult test_targetPriceBot_referenceInvariants() {
+        TargetPriceBot.Settings s = TargetPriceBot.Settings.createDefault();
+        float maxMove = s.maxTargetMovePerSecond();
+        double dt = 0.25, lnT = Math.log(160), excess = Math.log(170.0 / 160);
+        TargetPriceBot.Reference up = TargetPriceBot.anchorReference(TargetPriceBot.Reference.IDLE, lnT, lnT + excess, s, maxMove);
+        TargetPriceBot.Reference dn = TargetPriceBot.anchorReference(TargetPriceBot.Reference.IDLE, lnT, lnT - excess, s, maxMove);
+        if (!up.active() || up.y() != lnT + excess || up.anchor() != up.y())
+            return fail("A spike must start the reference at the price: " + up);
+        int steps = (int) Math.round(5 * s.reversionTimeSeconds() / dt);
+        boolean trough = false, peak = false;
+        for (int i = 0; i < steps; i++) {
+            up = TargetPriceBot.stepReference(up, lnT, s, maxMove, dt);
+            dn = TargetPriceBot.stepReference(dn, lnT, s, maxMove, dt);
+            if (up.active() != dn.active()) return fail("Dump must mirror the spike (idle state) at step " + i);
+            if (!up.active()) break;
+            if (up.y() > up.anchor() + 1e-12 || up.y() < lnT - 1e-12)
+                return fail("Spike reference left [T, S] at step " + i + ": " + up);
+            if (dn.y() < dn.anchor() - 1e-12 || dn.y() > lnT + 1e-12)
+                return fail("Dump reference left [S, T] at step " + i + ": " + dn);
+            if (Math.abs((up.y() - lnT) + (dn.y() - lnT)) > 1e-9)
+                return fail("Dump must mirror the spike at step " + i + ": " + up + " / " + dn);
+            double centre = lnT + up.c();
+            if (up.y() < centre - 1e-9) trough = true;
+            else if (trough && up.y() > centre + 1e-9) peak = true;
+        }
+        if (!trough || !peak) return fail("Expected a trough below the centre, then a peak (trough " + trough + ", peak " + peak + ")");
+        double left = up.active() ? up.y() - lnT : 0;
+        if (Math.abs(left) > 0.1 * excess) return fail("Not within 10% of the excess after 5 reversion times: " + left);
+        // A ping towards T keeps the centre and the velocity; a push further away resets the centre.
+        TargetPriceBot.Reference r = TargetPriceBot.anchorReference(TargetPriceBot.Reference.IDLE, lnT, lnT + excess, s, maxMove);
+        for (int i = 0; i < 40; i++) r = TargetPriceBot.stepReference(r, lnT, s, maxMove, dt);
+        double lnPing = Math.log(165);
+        TargetPriceBot.Reference ping = TargetPriceBot.anchorReference(r, lnT, lnPing, s, maxMove);
+        if (ping.c() != r.c() || ping.v() != r.v() || ping.anchor() != lnPing || ping.y() > lnPing)
+            return fail("A ping towards T must keep the centre and only move the anchor: " + r + " -> " + ping);
+        TargetPriceBot.Reference push = TargetPriceBot.anchorReference(r, lnT, Math.log(175), s, maxMove);
+        if (push.c() != Math.log(175) - lnT || push.y() != Math.log(175))
+            return fail("A push further away must reset the centre: " + push);
+        return pass(String.format(Locale.ROOT, "Stays in [T, S], trough then peak, dump mirrored, %.2e (log) left after 5 tau", left));
+    }
+
+    /**
+     * T-208: the 4 reference settings survive the codec and a 6-field payload gets their defaults; the
+     * reference state survives save/load and a save without the reference keys loads idle.
+     */
+    private TestResult test_targetPriceBot_referenceCodecNbt() {
+        TargetPriceBot.Settings original = TargetPriceBot.Settings.createDefault().withReference(300f, 45f, 0.5f, 0.2f);
+        ByteBuf buf = Unpooled.buffer();
+        try {
+            TargetPriceBot.Settings.CODEC.encode(buf, original);
+            TestResult r = assertEquals("codec round-trip", original, TargetPriceBot.Settings.CODEC.decode(buf));
+            if (!r.passed()) return r;
+            buf.clear();
+            buf.writeFloat(0.5f).writeFloat(0.1f).writeFloat(0f).writeFloat(0.1f).writeFloat(10f).writeFloat(0.005f);
+            r = assertEquals("6-field payload gets the reference defaults", TargetPriceBot.Settings.createDefault(),
+                    TargetPriceBot.Settings.CODEC.decode(buf));
+            if (!r.passed()) return r;
+        } finally {
+            buf.release();
+        }
+        harnessRefill = true;
+        try (T207Env env = t207World()) {
+            for (int t = 0; t < 200; t++) env.tick();
+            env.marketOrder(env.maxOrder);
+            for (int t = 0; t < 40; t++) env.tick();
+            TargetPriceBot.Reference ref = env.bot.test_getReference(itemID);
+            if (ref == null || !ref.active()) return fail("Reference must be active after the spike: " + ref);
+            CompoundTag tag = new CompoundTag();
+            env.bot.save(tag);
+            TargetPriceBot loaded = new TargetPriceBot();
+            loaded.setLoggerEnabled(false);
+            loaded.onMarketSubscribed(itemID);
+            loaded.load(tag);
+            TestResult r = assertEquals("reference after load", ref, loaded.test_getReference(itemID));
+            if (!r.passed()) return r;
+            CompoundTag m = ((ListTag) tag.get("marketData")).getCompound(0);
+            for (String k : new String[]{"refY", "refV", "refC", "refAnchor", "refLastRaw", "refActive"}) m.remove(k);
+            TargetPriceBot legacy = new TargetPriceBot();
+            legacy.setLoggerEnabled(false);
+            legacy.onMarketSubscribed(itemID);
+            legacy.load(tag);
+            return assertEquals("save without reference keys loads idle", TargetPriceBot.Reference.IDLE,
+                    legacy.test_getReference(itemID));
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /**
+     * T-208: reversion time 0 switches the model off: anchoring and stepping return idle, and the bot's
+     * reference stays idle through a real spike (the pre-T-208 rate-limited target path).
+     */
+    private TestResult test_targetPriceBot_referenceOff() {
+        TargetPriceBot.Settings on = TargetPriceBot.Settings.createDefault();
+        TargetPriceBot.Settings off = on.withReference(0f, on.oscillationPeriodSeconds(), on.oscillationDamping(), on.oscillationAmplitude());
+        double lnT = Math.log(160), lnS = Math.log(170);
+        if (TargetPriceBot.anchorReference(TargetPriceBot.Reference.IDLE, lnT, lnS, off, 0.005f).active())
+            return fail("Reversion time 0 must not start a reference");
+        TargetPriceBot.Reference active = TargetPriceBot.anchorReference(TargetPriceBot.Reference.IDLE, lnT, lnS, on, 0.005f);
+        if (TargetPriceBot.stepReference(active, lnT, off, 0.005f, 0.25).active())
+            return fail("Reversion time 0 must drop an active reference");
+        harnessRefill = true;
+        try (T207Env env = t207World()) {
+            applySettings(env.bot, TargetPriceBot.Settings.CODEC, off);
+            for (int t = 0; t < 200; t++) env.tick();
+            env.marketOrder(env.maxOrder);
+            for (int t = 0; t < 400; t++) {
+                env.tick();
+                if (env.bot.test_getReference(itemID).active()) return fail("Reference active at tick " + t + " with reversion time 0");
+            }
+            return pass("Reversion time 0: reference stays idle through a 10k spike");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /**
+     * T-208 user-world spike (thin diamond: abundance 5, max order 10,000, book refill on, bot at defaults):
+     * one max buy to S. The price must keep at least half of the spike at +20 and +100 ticks, swing to a
+     * trough below the reference's centre and then a peak above it, never exceed S, be within 10% of the
+     * (log) excess of the target after 5 reversion times, and no bot order may end past its target (T-200).
+     */
+    private TestResult test_targetPriceBot_userWorldSpike() {
+        StringBuilder out = new StringBuilder();
+        harnessRefill = true;
+        try (T207Env env = t207World()) {
+            TargetPriceBot.Settings s = TargetPriceBot.Settings.createDefault();
+            IPluginMarket pm = env.markets.get(0).market;
+            for (int t = 0; t < 200; t++) env.tick();
+            double start = env.price();
+            env.marketOrder(env.maxOrder);
+            env.tick();
+            double peak = env.price();
+            double excess = Math.log(peak / pm.getPreviousTargetPrice());
+            double tick = MarketManager.convertToRealAmountStatic(1);
+            int total = (int) Math.round(5 * s.reversionTimeSeconds() * 20);
+            double max = peak, at20 = 0, at100 = 0;
+            boolean trough = false, swingPeak = false, refTrough = false, refPeak = false;
+            int overshoots = 0;
+            TargetPriceBot.StepInfo lastStep = env.bot.test_getLastStep(itemID);
+            for (int t = 1; t <= total; t++) {
+                env.tick();
+                double p = env.price();
+                max = Math.max(max, p);
+                if (t == 20) at20 = p;
+                if (t == 100) at100 = p;
+                TargetPriceBot.StepInfo step = env.bot.test_getLastStep(itemID);
+                if (step != null && step != lastStep) {
+                    lastStep = step;
+                    double over = step.amount() > 0 ? p - step.target() : step.target() - p;
+                    if (over > tick + 1e-9) overshoots++;
+                }
+                TargetPriceBot.Reference ref = env.bot.test_getReference(itemID);
+                if (ref.active()) {
+                    double lnCentre = Math.log(pm.getPreviousTargetPrice()) + ref.c();
+                    if (p < Math.exp(lnCentre) - tick) trough = true;
+                    else if (trough && p > Math.exp(lnCentre) + tick) swingPeak = true;
+                    if (ref.y() < lnCentre - 1e-9) refTrough = true;
+                    else if (refTrough && ref.y() > lnCentre + 1e-9) refPeak = true;
+                }
+                if (t % 6000 == 0)
+                    out.append(String.format(Locale.ROOT, " %d:%.2f/%.2f", t / 1200, p, pm.getPreviousTargetPrice()));
+            }
+            double end = env.price(), left = Math.log(end / pm.getPreviousTargetPrice());
+            out.insert(0, String.format(Locale.ROOT,
+                    "start %.2f S %.2f excess %.4f | +20 %.2f +100 %.2f | max %.2f | price trough/peak %b/%b, ref %b/%b | left %.4f | overshoots %d | min:price/target",
+                    start, peak, excess, at20, at100, max, trough, swingPeak, refTrough, refPeak, left, overshoots));
+            StockMarketMod.LOGGER.info("[T-208 spike] {}", out);
+            double half = start + 0.5 * (peak - start);
+            if (!(peak > start)) return fail("Harness: the buy did not move the price. " + out);
+            if (at20 < half || at100 < half) return fail("Less than half of the spike held at +20/+100 ticks. " + out);
+            if (!trough || !swingPeak) return fail("Expected a trough below the centre, then a peak. " + out);
+            if (max > peak + 1e-9) return fail("Price went above S. " + out);
+            if (Math.abs(left) > 0.1 * excess) return fail("Not within 10% of the excess after 5 reversion times. " + out);
+            if (overshoots > 0) return fail("Bot orders past their target (T-200). " + out);
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e + out);
+        } finally {
+            harnessRefill = false;
+        }
     }
 
     /**

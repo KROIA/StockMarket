@@ -58,6 +58,14 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         public static final Component MAX_ORDER_FACTOR_TOOLTIP = Component.translatable(PREFIX + "max_order_factor.tooltip");
         public static final Component LABEL_MAX_TARGET_MOVE = Component.translatable(PREFIX + "max_target_move");
         public static final Component MAX_TARGET_MOVE_TOOLTIP = Component.translatable(PREFIX + "max_target_move.tooltip");
+        public static final Component LABEL_REVERSION_TIME = Component.translatable(PREFIX + "reversion_time");
+        public static final Component REVERSION_TIME_TOOLTIP = Component.translatable(PREFIX + "reversion_time.tooltip");
+        public static final Component LABEL_OSCILLATION_PERIOD = Component.translatable(PREFIX + "oscillation_period");
+        public static final Component OSCILLATION_PERIOD_TOOLTIP = Component.translatable(PREFIX + "oscillation_period.tooltip");
+        public static final Component LABEL_OSCILLATION_DAMPING = Component.translatable(PREFIX + "oscillation_damping");
+        public static final Component OSCILLATION_DAMPING_TOOLTIP = Component.translatable(PREFIX + "oscillation_damping.tooltip");
+        public static final Component LABEL_OSCILLATION_AMPLITUDE = Component.translatable(PREFIX + "oscillation_amplitude");
+        public static final Component OSCILLATION_AMPLITUDE_TOOLTIP = Component.translatable(PREFIX + "oscillation_amplitude.tooltip");
     }
 
     private final CandlestickChart candlestickChart;
@@ -79,6 +87,18 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     /** #89: target rate limit in % per second (TargetPriceBot.Settings#maxTargetMovePerSecond x 100). */
     private final Label maxTargetMoveLabel;
     private final TextBox maxTargetMoveTextBox;
+    /** T-208: reference reversion time in seconds (TargetPriceBot.Settings#reversionTimeSeconds, 0 = off). */
+    private final Label reversionTimeLabel;
+    private final TextBox reversionTimeTextBox;
+    /** T-208: reference oscillation period in seconds. */
+    private final Label oscillationPeriodLabel;
+    private final TextBox oscillationPeriodTextBox;
+    /** T-208: reference oscillation damping ratio. */
+    private final Label oscillationDampingLabel;
+    private final TextBox oscillationDampingTextBox;
+    /** T-208: initial swing towards the target as a fraction of the spike. */
+    private final Label oscillationAmplitudeLabel;
+    private final TextBox oscillationAmplitudeTextBox;
     private final Button applyButton;
     private final Button applyAllButton;
     /** Holds Apply + Apply-to-all side by side as one row of the vertical settings list. */
@@ -141,6 +161,20 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         maxTargetMoveTextBox = new TextBox();
         maxTargetMoveTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 4));
 
+        // T-208 reference model (all non-negative)
+        reversionTimeLabel = new Label(Texts.LABEL_REVERSION_TIME.getString());
+        reversionTimeTextBox = new TextBox();
+        reversionTimeTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 1));
+        oscillationPeriodLabel = new Label(Texts.LABEL_OSCILLATION_PERIOD.getString());
+        oscillationPeriodTextBox = new TextBox();
+        oscillationPeriodTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 1));
+        oscillationDampingLabel = new Label(Texts.LABEL_OSCILLATION_DAMPING.getString());
+        oscillationDampingTextBox = new TextBox();
+        oscillationDampingTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 4, 3));
+        oscillationAmplitudeLabel = new Label(Texts.LABEL_OSCILLATION_AMPLITUDE.getString());
+        oscillationAmplitudeTextBox = new TextBox();
+        oscillationAmplitudeTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 4, 3));
+
         applyButton = new Button(Texts.APPLY_BUTTON.getString(), this::onApplySettings);
         applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
         setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAllButton);
@@ -167,6 +201,10 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         setSettingTooltip(Texts.RATE_TOOLTIP, rateLabel, rateTextBox);
         setSettingTooltip(Texts.MAX_ORDER_FACTOR_TOOLTIP, maxOrderFactorLabel, maxOrderFactorTextBox);
         setSettingTooltip(Texts.MAX_TARGET_MOVE_TOOLTIP, maxTargetMoveLabel, maxTargetMoveTextBox);
+        setSettingTooltip(Texts.REVERSION_TIME_TOOLTIP, reversionTimeLabel, reversionTimeTextBox);
+        setSettingTooltip(Texts.OSCILLATION_PERIOD_TOOLTIP, oscillationPeriodLabel, oscillationPeriodTextBox);
+        setSettingTooltip(Texts.OSCILLATION_DAMPING_TOOLTIP, oscillationDampingLabel, oscillationDampingTextBox);
+        setSettingTooltip(Texts.OSCILLATION_AMPLITUDE_TOOLTIP, oscillationAmplitudeLabel, oscillationAmplitudeTextBox);
 
         settingsListView.addChild(pGainLabel);
         settingsListView.addChild(pGainTextBox);
@@ -180,6 +218,14 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         settingsListView.addChild(maxOrderFactorTextBox);
         settingsListView.addChild(maxTargetMoveLabel);
         settingsListView.addChild(maxTargetMoveTextBox);
+        settingsListView.addChild(reversionTimeLabel);
+        settingsListView.addChild(reversionTimeTextBox);
+        settingsListView.addChild(oscillationPeriodLabel);
+        settingsListView.addChild(oscillationPeriodTextBox);
+        settingsListView.addChild(oscillationDampingLabel);
+        settingsListView.addChild(oscillationDampingTextBox);
+        settingsListView.addChild(oscillationAmplitudeLabel);
+        settingsListView.addChild(oscillationAmplitudeTextBox);
         settingsListView.addChild(applyButtonRow);
 
         addChild(candlestickChart);
@@ -319,6 +365,10 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
             rateTextBox.setText(s.pidRate(), 6);
             maxOrderFactorTextBox.setText(s.maxOrderVolumeFactor(), 3);
             maxTargetMoveTextBox.setText(s.maxTargetMovePerSecond() * 100, 4);
+            reversionTimeTextBox.setText(s.reversionTimeSeconds(), 1);
+            oscillationPeriodTextBox.setText(s.oscillationPeriodSeconds(), 1);
+            oscillationDampingTextBox.setText(s.oscillationDamping(), 3);
+            oscillationAmplitudeTextBox.setText(s.oscillationAmplitude(), 3);
         }
     }
 
@@ -333,7 +383,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         }
     }
 
-    /** Builds the bot settings (PID gains + order volume limit factor) from the current input values. */
+    /** Builds the bot settings (PID gains, limits, T-208 reference model) from the current input values. */
     private TargetPriceBot.Settings readSettings() {
         return new TargetPriceBot.Settings(
                 (float) pGainTextBox.getDouble(),
@@ -341,7 +391,11 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
                 (float) dGainTextBox.getDouble(),
                 (float) rateTextBox.getDouble(),
                 (float) Math.max(0, maxOrderFactorTextBox.getDouble()),
-                (float) Math.max(0, maxTargetMoveTextBox.getDouble() / 100)
+                (float) Math.max(0, maxTargetMoveTextBox.getDouble() / 100),
+                (float) Math.max(0, reversionTimeTextBox.getDouble()),
+                (float) Math.max(0, oscillationPeriodTextBox.getDouble()),
+                (float) Math.max(0, oscillationDampingTextBox.getDouble()),
+                (float) Math.max(0, oscillationAmplitudeTextBox.getDouble())
         );
     }
 

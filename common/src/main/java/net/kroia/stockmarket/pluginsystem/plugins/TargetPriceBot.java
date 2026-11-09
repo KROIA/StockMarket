@@ -35,9 +35,38 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
      *                             of tick time (0.01 = 1%/s, compounding). The bot follows the plugins'
      *                             target through this rate limit, so a sudden target jump (e.g. a pinned
      *                             flow equilibrium) is walked towards slowly. &lt;= 0 = no limit.
+     * @param reversionTimeSeconds T-208: time constant (s) in which the bot's reference (its setpoint) decays
+     *                             from the price a player pushed to back to the plugins' target. &lt;= 0 = off
+     *                             (the bot chases the target through the rate limit only, as before T-208)
+     * @param oscillationPeriodSeconds T-208: period (s) of the reference's damped oscillation around its
+     *                             decaying centre; &lt;= 0 = {@link #DEFAULT_OSCILLATION_PERIOD_SECONDS}
+     * @param oscillationDamping   T-208: damping ratio ζ of that oscillation (0 = undamped, 1 = critical);
+     *                             negative = 0
+     * @param oscillationAmplitude T-208: initial swing towards the target as a fraction of the spike's
+     *                             excess over the target (0 = no swing); negative = 0
      */
     public record Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
-                           float maxTargetMovePerSecond) {
+                           float maxTargetMovePerSecond, float reversionTimeSeconds, float oscillationPeriodSeconds,
+                           float oscillationDamping, float oscillationAmplitude) {
+        /** Settings with the T-208 reference model at its defaults. */
+        public Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
+                        float maxTargetMovePerSecond) {
+            this(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond, DEFAULT_REVERSION_TIME_SECONDS,
+                    DEFAULT_OSCILLATION_PERIOD_SECONDS, DEFAULT_OSCILLATION_DAMPING, DEFAULT_OSCILLATION_AMPLITUDE);
+        }
+
+        /** Creates a Settings instance with all default values. */
+        public static Settings createDefault() {
+            return new Settings(DEFAULT_PID_P, DEFAULT_PID_I, DEFAULT_PID_D, DEFAULT_PID_RATE,
+                    DEFAULT_MAX_ORDER_VOLUME_FACTOR, DEFAULT_MAX_TARGET_MOVE_PER_SECOND);
+        }
+
+        /** @return a copy with the given T-208 reference model parameters */
+        public Settings withReference(float reversionTime, float period, float damping, float amplitude) {
+            return new Settings(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond,
+                    reversionTime, period, damping, amplitude);
+        }
+
         public static final StreamCodec<ByteBuf, Settings> CODEC = new StreamCodec<>() {
             @Override
             public Settings decode(ByteBuf buf) {
@@ -51,7 +80,12 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                 float factor = buf.isReadable() ? buf.readFloat() : DEFAULT_MAX_ORDER_VOLUME_FACTOR;
                 // Same for the target rate limit (#89), added after the volume factor.
                 float maxMove = buf.isReadable() ? buf.readFloat() : DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
-                return new Settings(p, i, d, rate, factor, maxMove);
+                // T-208 reference model, appended after the target rate limit.
+                float reversion = buf.isReadable() ? buf.readFloat() : DEFAULT_REVERSION_TIME_SECONDS;
+                float period = buf.isReadable() ? buf.readFloat() : DEFAULT_OSCILLATION_PERIOD_SECONDS;
+                float damping = buf.isReadable() ? buf.readFloat() : DEFAULT_OSCILLATION_DAMPING;
+                float amplitude = buf.isReadable() ? buf.readFloat() : DEFAULT_OSCILLATION_AMPLITUDE;
+                return new Settings(p, i, d, rate, factor, maxMove, reversion, period, damping, amplitude);
             }
             @Override
             public void encode(ByteBuf buf, Settings s) {
@@ -61,6 +95,10 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                 buf.writeFloat(s.pidRate());
                 buf.writeFloat(s.maxOrderVolumeFactor());
                 buf.writeFloat(s.maxTargetMovePerSecond());
+                buf.writeFloat(s.reversionTimeSeconds());
+                buf.writeFloat(s.oscillationPeriodSeconds());
+                buf.writeFloat(s.oscillationDamping());
+                buf.writeFloat(s.oscillationAmplitude());
             }
         };
     }
@@ -99,6 +137,10 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         public double targetPrice = 0;
         /** Last step that placed an order (diagnostics, see {@link #test_getLastStep}). */
         StepInfo lastStep;
+        /** T-208: the bot's reference (setpoint) state; {@link Reference#IDLE} = follow the target. */
+        Reference ref = Reference.IDLE;
+        /** T-208: the market's raw net player flow at the previous step (NaN = not seeded yet). */
+        double refLastRaw = Double.NaN;
         float pidP, pidI, pidD, pidRate;
 
         RuntimeData(float p, float i, float d, float rate) {
@@ -153,11 +195,121 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         return pid;
     }
 
+    /**
+     * Test hook: the bot's T-208 reference state on {@code marketID}.
+     *
+     * @return the state, or null if not subscribed
+     */
+    public Reference test_getReference(ItemID marketID) {
+        RuntimeData data = marketData.get(marketID);
+        return data == null ? null : data.ref;
+    }
+
     // Default PID gains — configurable via custom settings (per-market)
-    private static final float DEFAULT_PID_P = 0.5f;
-    private static final float DEFAULT_PID_I = 0.1f;
-    private static final float DEFAULT_PID_D = 0.0f;
-    private static final float DEFAULT_PID_RATE = 0.1f;
+    public static final float DEFAULT_PID_P = 0.5f;
+    public static final float DEFAULT_PID_I = 0.1f;
+    public static final float DEFAULT_PID_D = 0.0f;
+    public static final float DEFAULT_PID_RATE = 0.1f;
+    /** T-208: default reversion time constant of the bot's reference, 10 min. */
+    public static final float DEFAULT_REVERSION_TIME_SECONDS = 600f;
+    /** T-208: default oscillation period of the bot's reference, 60 s. */
+    public static final float DEFAULT_OSCILLATION_PERIOD_SECONDS = 60f;
+    /** T-208: default damping ratio of the reference's oscillation. */
+    public static final float DEFAULT_OSCILLATION_DAMPING = 0.3f;
+    /** T-208: default initial swing towards the target, as a fraction of the spike's excess. */
+    public static final float DEFAULT_OSCILLATION_AMPLITUDE = 0.15f;
+    /** T-208: below this (log price) the reference counts as settled and goes idle. */
+    public static final double REFERENCE_EPSILON = 1e-4;
+
+    /**
+     * T-208 state of the bot's reference (its setpoint), in log price. After a player pushes the price
+     * away from the plugins' target T, the reference starts at that price S and relaxes to T: its centre
+     * {@code ln T + c} decays with the reversion time while the reference swings around it as a damped
+     * oscillator. It never leaves [min(ln T, anchor), max(ln T, anchor)], so the bot never trades past
+     * the target nor beyond the last price a player pushed to.
+     *
+     * @param y      the reference, ln(price)
+     * @param v      its velocity (ln price per second)
+     * @param c      excess of the oscillation centre over ln(T); decays with the reversion time
+     * @param anchor ln of the last price a player pushed to (S)
+     * @param active false = idle, the bot follows T through {@link #limitTargetMove} as before T-208
+     */
+    public record Reference(double y, double v, double c, double anchor, boolean active) {
+        /** The idle reference. */
+        public static final Reference IDLE = new Reference(0, 0, 0, 0, false);
+    }
+
+    /** Angular frequency ω of the reference oscillation (rad/s) from the settings. */
+    private static double omega(Settings s) {
+        float period = s.oscillationPeriodSeconds() > 0 ? s.oscillationPeriodSeconds() : DEFAULT_OSCILLATION_PERIOD_SECONDS;
+        return 2 * Math.PI / period;
+    }
+
+    private static double clamp(double x, double lo, double hi) {
+        return Math.max(lo, Math.min(hi, x));
+    }
+
+    /**
+     * T-208: re-anchors the reference after a player fill (a change of the raw net flow). Pure.
+     * <ul>
+     *   <li>A fill that pushes the price further from T than the current centre (or to the other side, or
+     *       while idle) starts a new spike: centre and reference at the price, plus a swing towards T of
+     *       {@code amplitude x ω x excess} (capped by the rate limit).</li>
+     *   <li>A fill towards T (a "ping") keeps the centre and the velocity; only the anchor moves to the
+     *       price, and the reference is pulled inside the new band.</li>
+     * </ul>
+     *
+     * @param r       the current reference
+     * @param lnT     ln of the plugins' target price
+     * @param lnPrice ln of the market price after the fill
+     * @param s       the bot settings (reversionTimeSeconds &lt;= 0 = model off, returns IDLE)
+     * @param maxMove max reference speed (ln price per second); &lt;= 0 = no limit
+     * @return the new reference
+     */
+    public static Reference anchorReference(Reference r, double lnT, double lnPrice, Settings s, float maxMove) {
+        if (!(s.reversionTimeSeconds() > 0) || Double.isNaN(lnT) || Double.isNaN(lnPrice)) return Reference.IDLE;
+        double excess = lnPrice - lnT;
+        boolean ping = r.active() && Math.signum(excess) == Math.signum(r.c()) && Math.abs(excess) <= Math.abs(r.c());
+        if (ping)
+            return new Reference(clamp(r.y(), Math.min(lnT, lnPrice), Math.max(lnT, lnPrice)), r.v(), r.c(), lnPrice, true);
+        if (Math.abs(excess) < REFERENCE_EPSILON) return Reference.IDLE;
+        double v0 = -Math.max(0, s.oscillationAmplitude()) * omega(s) * excess;
+        if (maxMove > 0) v0 = clamp(v0, -maxMove, maxMove);
+        return new Reference(lnPrice, v0, excess, lnPrice, true);
+    }
+
+    /**
+     * T-208: advances the reference by {@code dt}. Pure. The centre's excess decays,
+     * {@code c *= exp(-dt / reversionTime)}; the reference follows it as a damped oscillator,
+     * {@code v += (ω²(ln T + c - y) - 2ζω v) dt}, |v| &lt;= maxMove, {@code y += v dt}, clamped to
+     * [min(ln T, anchor), max(ln T, anchor)] (velocity 0 at the bound). Goes idle once both the centre's
+     * excess and the distance to T are below {@link #REFERENCE_EPSILON}.
+     *
+     * @param r       the current reference (returned unchanged if idle)
+     * @param lnT     ln of the plugins' target price
+     * @param s       the bot settings (reversionTimeSeconds &lt;= 0 = model off, returns IDLE)
+     * @param maxMove max reference speed (ln price per second); &lt;= 0 = no limit
+     * @param dt      step time in seconds
+     * @return the new reference
+     */
+    public static Reference stepReference(Reference r, double lnT, Settings s, float maxMove, double dt) {
+        if (!r.active()) return r;
+        float tau = s.reversionTimeSeconds();
+        if (!(tau > 0) || Double.isNaN(lnT)) return Reference.IDLE;
+        double c = r.c() * Math.exp(-dt / tau);
+        double w = omega(s);
+        double zeta = Math.max(0, s.oscillationDamping());
+        double v = r.v() + (w * w * (lnT + c - r.y()) - 2 * zeta * w * r.v()) * dt;
+        if (maxMove > 0) v = clamp(v, -maxMove, maxMove);
+        double y = r.y() + v * dt;
+        double lo = Math.min(lnT, r.anchor()), hi = Math.max(lnT, r.anchor());
+        if (y < lo || y > hi) {
+            y = clamp(y, lo, hi);
+            v = 0;
+        }
+        if (Math.abs(c) < REFERENCE_EPSILON && Math.abs(y - lnT) < REFERENCE_EPSILON) return Reference.IDLE;
+        return new Reference(y, v, c, r.anchor(), true);
+    }
     /** Default bot order limit: 10x the market's player order limit. */
     public static final float DEFAULT_MAX_ORDER_VOLUME_FACTOR = 10f;
     /**
@@ -292,10 +444,24 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
             return;
         data.tickCounter = 0;
         Settings settings = getCustomSettings(market.market.getMarketID());
-        // #89: chase the plugins' target only through the rate limit (persisted as targetPrice).
-        data.targetPrice = limitTargetMove(data.targetPrice, market.market.getPreviousTargetPrice(),
-                settings != null ? settings.maxTargetMovePerSecond() : DEFAULT_MAX_TARGET_MOVE_PER_SECOND, STEP_SECONDS);
+        Settings s = settings != null ? settings : Settings.createDefault();
+        float maxMove = s.maxTargetMovePerSecond();
+        double rawTarget = market.market.getPreviousTargetPrice();
         double currentPrice = market.market.getPrice();
+        // T-208: re-anchor the reference only on player fills (the raw net flow is an exact counter of
+        // them; bot orders don't change it). An admin reset of the flow (raw back to 0) drops it.
+        double raw = market.market.getNetPlayerItemFlow();
+        if (!(s.reversionTimeSeconds() > 0) || !(rawTarget > 0) || !(currentPrice > 0)
+                || (raw == 0 && data.refLastRaw != 0))
+            data.ref = Reference.IDLE;
+        else if (!Double.isNaN(data.refLastRaw) && raw != data.refLastRaw)
+            data.ref = anchorReference(data.ref, Math.log(rawTarget), Math.log(currentPrice), s, maxMove);
+        data.refLastRaw = raw;
+        Reference next = data.ref.active() ? stepReference(data.ref, Math.log(rawTarget), s, maxMove, STEP_SECONDS) : data.ref;
+        // #89: while the reference is idle, chase the plugins' target only through the rate limit
+        // (persisted as targetPrice). Model off (reversion time 0) = this path only, as before T-208.
+        data.targetPrice = next.active() ? Math.exp(next.y())
+                : limitTargetMove(data.targetPrice, rawTarget, maxMove, STEP_SECONDS);
 
         double output = data.pid.update(data.targetPrice - currentPrice, STEP_SECONDS);
         // Clamp PID output to [-1, 1] as a fraction of how aggressively to push
@@ -314,8 +480,17 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         float volumeToTarget = market.oderBook.getRealVirtualVolumeToPrice(data.targetPrice, limit);
         // T-207: don't trade into an empty price gap (e.g. right after a big player order swept the
         // book). Even a tiny order would fall through the gap and snap the price back at once.
-        if (gapGuardEnabled && crossesEmptyGap(market.oderBook, currentPrice, data.targetPrice))
+        // T-208: with an active reference the guard checks the full window in the direction of travel:
+        // the reference often sits within a level or two of the price, and a window shrunk to it would
+        // stay empty (and the frozen reference with it) until the swept range refills completely.
+        double guardTarget = !next.active() || data.targetPrice == currentPrice ? data.targetPrice
+                : currentPrice * (data.targetPrice > currentPrice ? 1 + GAP_WINDOW_FRACTION : 1 - GAP_WINDOW_FRACTION);
+        if (gapGuardEnabled && crossesEmptyGap(market.oderBook, currentPrice, guardTarget)) {
+            // T-208: the reference freezes while the bot can't trade, so it doesn't run ahead of the price.
+            if (data.ref.active()) data.targetPrice = Math.exp(data.ref.y());
             return;
+        }
+        data.ref = next;
         double absVolumeToTarget = Math.min(limit, Math.abs(volumeToTarget));
         // Direction to the target: +1 buy, -1 sell. The PID output only sets the urgency; if its sign
         // still points the other way (filter lag right after the price crossed the target), don't
@@ -390,8 +565,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
 
     @Override
     protected Settings provideDefaultCustomSettings() {
-        return new Settings(DEFAULT_PID_P, DEFAULT_PID_I, DEFAULT_PID_D, DEFAULT_PID_RATE, DEFAULT_MAX_ORDER_VOLUME_FACTOR,
-                DEFAULT_MAX_TARGET_MOVE_PER_SECOND);
+        return Settings.createDefault();
     }
 
     @Override
@@ -423,6 +597,13 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
             CompoundTag pidTag = new CompoundTag();
             data.pid.save(pidTag);
             marketTag.put("pid", pidTag);
+            // T-208 reference state
+            marketTag.putDouble("refY", data.ref.y());
+            marketTag.putDouble("refV", data.ref.v());
+            marketTag.putDouble("refC", data.ref.c());
+            marketTag.putDouble("refAnchor", data.ref.anchor());
+            marketTag.putDouble("refLastRaw", data.refLastRaw);
+            marketTag.putBoolean("refActive", data.ref.active());
             marketsTag.add(marketTag);
         }
         tag.put("marketData", marketsTag);
@@ -451,6 +632,12 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                         if (marketTag.contains("targetPrice")) data.targetPrice = NbtCompat.getDouble(marketTag, "targetPrice");
                         if (marketTag.contains("tickCounter")) data.tickCounter = NbtCompat.getInt(marketTag, "tickCounter");
                         if (marketTag.contains("pid")) data.pid.load(NbtCompat.getCompound(marketTag, "pid"));
+                        // T-208: missing keys (older save) -> idle reference, flow seeded on the first step
+                        data.ref = marketTag.contains("refActive") && NbtCompat.getBoolean(marketTag, "refActive")
+                                ? new Reference(NbtCompat.getDouble(marketTag, "refY"), NbtCompat.getDouble(marketTag, "refV"),
+                                        NbtCompat.getDouble(marketTag, "refC"), NbtCompat.getDouble(marketTag, "refAnchor"), true)
+                                : Reference.IDLE;
+                        data.refLastRaw = marketTag.contains("refLastRaw") ? NbtCompat.getDouble(marketTag, "refLastRaw") : Double.NaN;
                     }
                 }
             }
