@@ -15,6 +15,12 @@ public class MarketCache {
     private final VirtualOrderBookCache virtualOrderBookCache = new VirtualOrderBookCache();
     private double lastTargetPrice = 0;
     private double nextTargetPrice = 0;
+    /** T-213: equilibrium published this tick (NaN = none yet). */
+    private double nextEquilibrium = Double.NaN;
+    /** T-213: equilibrium of the previous tick (NaN = none). */
+    private double lastEquilibrium = Double.NaN;
+    /** T-213: true once a plugin wrote the target price this tick. */
+    private boolean targetSetThisTick = false;
 
     private final IServerMarket serverMarket;
     private final IPluginMarket pluginMarket;
@@ -50,6 +56,11 @@ public class MarketCache {
 
     public void apply()
     {
+        // T-213: the equilibrium channel and the "target written" flag roll every tick, also outside trading
+        // hours, so a stale value never outlives its publisher (NetFlowPlugin removed -> default price).
+        lastEquilibrium = nextEquilibrium;
+        nextEquilibrium = Double.NaN;
+        targetSetThisTick = false;
         // Outside trading hours: the market would reject the bot orders anyway, so drop them.
         // Pending virtual-orderbook manipulations are kept for the reopen and the target price
         // is not rolled, so the plugins resume from where they stopped.
@@ -97,10 +108,33 @@ public class MarketCache {
     public void setNextTargetPrice(double nextTargetPrice)
     {
         this.nextTargetPrice = nextTargetPrice;
+        targetSetThisTick = true;
     }
     public void addToNextTargetPrice(double delta)
     {
         this.nextTargetPrice += delta;
+        targetSetThisTick = true;
+    }
+
+    /** T-213: @return true if a plugin wrote the target price since the last {@link #apply()} */
+    public boolean isTargetSetThisTick()
+    {
+        return targetSetThisTick;
+    }
+
+    /**
+     * T-213: publishes this tick's equilibrium price.
+     * @param equilibrium the equilibrium in real units
+     */
+    public void setNextEquilibrium(double equilibrium)
+    {
+        this.nextEquilibrium = equilibrium;
+    }
+
+    /** T-213: @return this tick's equilibrium if published, else last tick's, else NaN */
+    public double getEquilibrium()
+    {
+        return Double.isNaN(nextEquilibrium) ? lastEquilibrium : nextEquilibrium;
     }
     public double getNextTargetPrice()
     {

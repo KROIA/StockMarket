@@ -108,6 +108,7 @@ public class PluginTestSuite extends TestSuite {
         addTest("t208_organic_movesPrice", this::test_t208OrganicMovesPrice);
         // T-213 C0: golden hashes of the net-flow price model (refactor equivalence)
         addTest("netFlow_golden_equivalence", this::test_netFlowGolden);
+        addTest("equilibriumChannel_rollsOver", this::test_equilibriumChannel);
         // Trend accumulation
         addTest("volumeDistribution_trendFactor_math", this::test_volumeDistribution_trendFactorMath);
         addTest("volumeDistribution_trend_codec_legacy", this::test_volumeDistribution_trendCodec);
@@ -1708,6 +1709,41 @@ public class PluginTestSuite extends TestSuite {
             return fail(String.format(Locale.ROOT, "golden mismatch (expected script %016x pump %016x): ", GOLDEN_SCRIPT_HASH,
                     GOLDEN_PUMP_HASH) + hashes + out);
         return pass(hashes + out);
+    }
+
+    /**
+     * T-213 C1: the equilibrium channel. Unset = default price; a value set this tick wins over last tick's;
+     * apply() rolls it once (a publisher that stops leaves the default price after two ticks); the
+     * "target written" flag is set by set/addToTargetPrice and cleared by apply().
+     */
+    private TestResult test_equilibriumChannel() {
+        MarketCache cache = new MarketCache((ServerMarket) serverMarket);
+        IPluginMarket m = cache.getPluginMarket();
+        double d = m.getDefaultRealPrice();
+        TestResult r = assertEquals("unset -> default price", d, m.getEquilibriumPrice());
+        if (!r.passed()) return r;
+        r = assertFalse("no target written yet", m.isTargetPriceSetThisTick());
+        if (!r.passed()) return r;
+        m.setEquilibriumPrice(123.5);
+        r = assertEquals("set this tick", 123.5, m.getEquilibriumPrice());
+        if (!r.passed()) return r;
+        m.setTargetPrice(5);
+        r = assertTrue("setTargetPrice marks the tick", m.isTargetPriceSetThisTick());
+        if (!r.passed()) return r;
+        cache.apply();
+        r = assertFalse("apply clears the flag", m.isTargetPriceSetThisTick());
+        if (!r.passed()) return r;
+        r = assertEquals("last tick's value after apply", 123.5, m.getEquilibriumPrice());
+        if (!r.passed()) return r;
+        m.addToTargetPrice(1);
+        r = assertTrue("addToTargetPrice marks the tick", m.isTargetPriceSetThisTick());
+        if (!r.passed()) return r;
+        m.setEquilibriumPrice(99);
+        r = assertEquals("new value wins", 99.0, m.getEquilibriumPrice());
+        if (!r.passed()) return r;
+        cache.apply();
+        cache.apply();
+        return assertEquals("publisher gone for a tick -> default price", d, m.getEquilibriumPrice());
     }
 
     // ── T-208 price model harness (gated: -Dstockmarket.t208=tune|gate|charts) ──────────────────

@@ -100,6 +100,25 @@ public class PluginMarket implements IPluginMarket
         cache.addToNextTargetPrice(delta);
     }
 
+    /** {@inheritDoc} Buffered in the market cache, rolled over by {@link MarketCache#apply()}. */
+    @Override
+    public void setEquilibriumPrice(double equilibriumPrice) {
+        cache.setNextEquilibrium(equilibriumPrice);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public double getEquilibriumPrice() {
+        double e = cache.getEquilibrium();
+        return Double.isNaN(e) ? getDefaultRealPrice() : e;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isTargetPriceSetThisTick() {
+        return cache.isTargetSetThisTick();
+    }
+
     @Override
     public long placeOrder(double amount, double price) {
         Order order = new Order(serverMarket.getItemID(), Order.Type.LIMIT,

@@ -118,6 +118,38 @@ public interface IPluginMarket {
      */
     void addToTargetPrice(double delta);
 
+    /**
+     * T-213: publishes this tick's flow equilibrium price (the price the market settles at without noise).
+     * The NetFlowPlugin writes it; the VolatilityPlugin adds its random walk on top of it. Rolled over once
+     * per tick like the target price.
+     * <p>
+     * The default implementation is a no-op so existing external implementations keep compiling.
+     *
+     * @param equilibriumPrice the equilibrium price in real (scaled) units
+     */
+    default void setEquilibriumPrice(double equilibriumPrice) {}
+
+    /**
+     * T-213: the flow equilibrium price: the value set this tick if any plugin published one, else last tick's,
+     * else the default price (no equilibrium publisher, e.g. the NetFlowPlugin is removed or disabled).
+     * <p>
+     * The default implementation returns {@link #getDefaultRealPrice()}.
+     *
+     * @return the equilibrium price in real (scaled) units
+     */
+    default double getEquilibriumPrice() { return getDefaultRealPrice(); }
+
+    /**
+     * T-213: whether a plugin already wrote the target price this tick ({@link #setTargetPrice} or
+     * {@link #addToTargetPrice}). The NetFlowPlugin only sets the target to the bare equilibrium when nobody
+     * did, so a misordered plugin list never overwrites the VolatilityPlugin's target.
+     * <p>
+     * The default implementation returns false.
+     *
+     * @return true if the target price was written during the current tick
+     */
+    default boolean isTargetPriceSetThisTick() { return false; }
+
 
 
     /**
