@@ -40,6 +40,12 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         public static final Component TREND_PERIOD_TOOLTIP = Component.translatable(PREFIX + "trend_period.tooltip");
         public static final Component TREND_GAIN_TOOLTIP = Component.translatable(PREFIX + "trend_gain.tooltip");
         public static final Component TREND_MAX_FACTOR_TOOLTIP = Component.translatable(PREFIX + "trend_max_factor.tooltip");
+        public static final Component ROUND_LEVEL_SCALE = Component.translatable(PREFIX + "round_level_scale");
+        public static final Component ROUND_LEVEL_WIDTH = Component.translatable(PREFIX + "round_level_width");
+        public static final Component ROUND_LEVEL_RANGE = Component.translatable(PREFIX + "round_level_range");
+        public static final Component ROUND_LEVEL_SCALE_TOOLTIP = Component.translatable(PREFIX + "round_level_scale.tooltip");
+        public static final Component ROUND_LEVEL_WIDTH_TOOLTIP = Component.translatable(PREFIX + "round_level_width.tooltip");
+        public static final Component ROUND_LEVEL_RANGE_TOOLTIP = Component.translatable(PREFIX + "round_level_range.tooltip");
     }
 
     private final Label volumeScaleLabel;
@@ -56,6 +62,13 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     private final TextBox trendGainTextBox;
     private final Label trendMaxFactorLabel;
     private final TextBox trendMaxFactorTextBox;
+    /** T-212 round-level cluster fields: scale S, width sigma, range lambda. */
+    private final Label roundLevelScaleLabel;
+    private final TextBox roundLevelScaleTextBox;
+    private final Label roundLevelWidthLabel;
+    private final TextBox roundLevelWidthTextBox;
+    private final Label roundLevelRangeLabel;
+    private final TextBox roundLevelRangeTextBox;
     private final Button applyButton;
     private final Button applyAllButton;
     private final Button resetVolumeButton;
@@ -103,6 +116,21 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         trendMaxFactorTextBox = new TextBox();
         trendMaxFactorTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
 
+        roundLevelScaleLabel = new Label(Texts.ROUND_LEVEL_SCALE.getString());
+        roundLevelScaleLabel.setAlignment(Alignment.RIGHT);
+        roundLevelScaleTextBox = new TextBox();
+        roundLevelScaleTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
+        roundLevelWidthLabel = new Label(Texts.ROUND_LEVEL_WIDTH.getString());
+        roundLevelWidthLabel.setAlignment(Alignment.RIGHT);
+        roundLevelWidthTextBox = new TextBox();
+        roundLevelWidthTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
+        roundLevelRangeLabel = new Label(Texts.ROUND_LEVEL_RANGE.getString());
+        roundLevelRangeLabel.setAlignment(Alignment.RIGHT);
+        roundLevelRangeTextBox = new TextBox();
+        roundLevelRangeTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
         applyButton = new Button(Texts.APPLY.getString(), this::onApply);
         resetVolumeButton = new Button(Texts.RESET_VOLUME.getString(), this::onResetVolume);
         // Apply-to-all never resets the volume (resetVolume = false)
@@ -117,6 +145,9 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         setSettingTooltip(Texts.TREND_PERIOD_TOOLTIP, trendPeriodLabel, trendPeriodTextBox);
         setSettingTooltip(Texts.TREND_GAIN_TOOLTIP, trendGainLabel, trendGainTextBox);
         setSettingTooltip(Texts.TREND_MAX_FACTOR_TOOLTIP, trendMaxFactorLabel, trendMaxFactorTextBox);
+        setSettingTooltip(Texts.ROUND_LEVEL_SCALE_TOOLTIP, roundLevelScaleLabel, roundLevelScaleTextBox);
+        setSettingTooltip(Texts.ROUND_LEVEL_WIDTH_TOOLTIP, roundLevelWidthLabel, roundLevelWidthTextBox);
+        setSettingTooltip(Texts.ROUND_LEVEL_RANGE_TOOLTIP, roundLevelRangeLabel, roundLevelRangeTextBox);
 
         addChild(volumeScaleLabel);
         addChild(volumeScaleTextBox);
@@ -132,14 +163,20 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         addChild(trendGainTextBox);
         addChild(trendMaxFactorLabel);
         addChild(trendMaxFactorTextBox);
+        addChild(roundLevelScaleLabel);
+        addChild(roundLevelScaleTextBox);
+        addChild(roundLevelWidthLabel);
+        addChild(roundLevelWidthTextBox);
+        addChild(roundLevelRangeLabel);
+        addChild(roundLevelRangeTextBox);
         addChild(applyButton);
         addChild(applyAllButton);
         addChild(resetVolumeButton);
         if (defaultsButton != null) addChild(defaultsButton);
 
-        // 7 label+field rows, 1 button row with Apply + Apply-to-all + Reset side by side,
+        // 10 label+field rows, 1 button row with Apply + Apply-to-all + Reset side by side,
         // and the Defaults button in its own row
-        setHeight((defaultsButton != null ? 9 : 8) * (defaultElementHeight + spacing) + padding);
+        setHeight((defaultsButton != null ? 12 : 11) * (defaultElementHeight + spacing) + padding);
     }
 
     @Override
@@ -214,11 +251,14 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         showTrend(s);
     }
 
-    /** Fills the trend accumulation fields from {@code s}. */
+    /** Fills the trend accumulation and (T-212) round-level cluster fields from {@code s}. */
     private void showTrend(DefaultOrderbookVolumeDistributionPlugin.Settings s) {
         trendPeriodTextBox.setText(s.trendPeriodMinutes(), 6);
         trendGainTextBox.setText(s.trendGain(), 6);
         trendMaxFactorTextBox.setText(s.trendMaxFactor(), 6);
+        roundLevelScaleTextBox.setText(s.roundLevelScale(), 6);
+        roundLevelWidthTextBox.setText(s.roundLevelWidth(), 6);
+        roundLevelRangeTextBox.setText(s.roundLevelRange(), 6);
     }
 
     @Override
@@ -249,7 +289,10 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
                 resetVolume,
                 (float) trendPeriodTextBox.getDouble(),
                 (float) trendGainTextBox.getDouble(),
-                (float) trendMaxFactorTextBox.getDouble()
+                (float) trendMaxFactorTextBox.getDouble(),
+                (float) roundLevelScaleTextBox.getDouble(),
+                (float) roundLevelWidthTextBox.getDouble(),
+                (float) roundLevelRangeTextBox.getDouble()
         );
     }
 
@@ -304,6 +347,18 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         trendMaxFactorTextBox.setBounds(trendMaxFactorLabel.getRight() + spacing, y, fieldW, eh);
 
         y = trendMaxFactorTextBox.getBottom() + spacing;
+        roundLevelScaleLabel.setBounds(padding, y, labelW, eh);
+        roundLevelScaleTextBox.setBounds(roundLevelScaleLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = roundLevelScaleTextBox.getBottom() + spacing;
+        roundLevelWidthLabel.setBounds(padding, y, labelW, eh);
+        roundLevelWidthTextBox.setBounds(roundLevelWidthLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = roundLevelWidthTextBox.getBottom() + spacing;
+        roundLevelRangeLabel.setBounds(padding, y, labelW, eh);
+        roundLevelRangeTextBox.setBounds(roundLevelRangeLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = roundLevelRangeTextBox.getBottom() + spacing;
         int buttonW = (w - 2 * padding - 2 * spacing) / 3;
         applyButton.setBounds(padding, y, buttonW, eh);
         applyAllButton.setBounds(applyButton.getRight() + spacing, y, buttonW, eh);

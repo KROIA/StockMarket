@@ -68,6 +68,9 @@ public class VolatilityPluginTestSuite extends TestSuite {
         // T-208 permanent impact θ
         addTest("theta_bound_diamond", () -> test_thetaBound(160.0, 50f, new double[]{100, 3_200, 32_000, 192_000}));
         addTest("theta_bound_dirt", () -> test_thetaBound(0.1, 2000f, new double[]{128_000, 1_280_000, 12_800_000}));
+        // T-212: the same bound with the default round-level clusters (S = 1) in the book
+        addTest("theta_bound_diamond_clusters", () -> test_thetaBound(160.0, 50f, new double[]{100, 3_200, 32_000, 192_000}, 1f));
+        addTest("theta_bound_dirt_clusters", () -> test_thetaBound(0.1, 2000f, new double[]{128_000, 1_280_000, 12_800_000}, 1f));
         addTest("theta_codec_round_trip_and_legacy", this::test_theta_codec);
         addTest("theta_nbt_round_trip_and_legacy", this::test_theta_nbt);
     }
@@ -104,9 +107,16 @@ public class VolatilityPluginTestSuite extends TestSuite {
      * that book in one go, buy and sell, at the default settings.
      */
     private TestResult test_thetaBound(double p0, float abundance, double[] flows) {
+        return test_thetaBound(p0, abundance, flows, 0f);
+    }
+
+    /** {@link #test_thetaBound(double, float, double[])} with T-212 round-level clusters of scale {@code roundLevelScale}. */
+    private TestResult test_thetaBound(double p0, float abundance, double[] flows, float roundLevelScale) {
         DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc =
                 new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(p0,
-                        DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(p0, abundance, 1f));
+                        DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(p0, abundance, 1f), roundLevelScale,
+                        DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_WIDTH,
+                        DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_RANGE);
         DoubleUnaryOperator volumeAt = pick -> calc.getVolume(p0, pick);
         Settings s = defaults();
         double eFold = VolatilityPlugin.bookEFoldDepth(volumeAt, p0, TICK, Math.log(s.minPriceMult()), Math.log(s.maxPriceMult()));

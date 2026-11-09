@@ -29,6 +29,9 @@ All settings are **per market**. Select a market icon in the plugin entry of the
 | Speed | `0.05` | number >= 0 | Master speed of the drift toward the target; multiplies both rates |
 | Accumulation Rate | `0.1` | number >= 0 | How fast missing volume is refilled |
 | Decumulation Rate | `0.01` | number >= 0 | How fast excess volume is removed |
+| Round Level Scale | `1` | number >= 0 | Extra volume at round prices (100, 200, 250, 300, 500, 1000, ...) as a multiple of the depth near the current price; 0 = off |
+| Round Level Width | `0.03` | 0.005 - 0.5 | Width of a round-price cluster in log price (0.03 = about +-3 % around the level) |
+| Round Level Range | `1.1` | 0.05 - 5 | How far from the current price round-price clusters stay visible (log-price distance at which a cluster drops to 37 %) |
 
 The text fields accept only non-negative numbers.
 
@@ -71,6 +74,18 @@ When the market price has moved away from the default price, the value cluster a
 </p>
 
 When the price moves, price levels that change side (for example from buy to sell) are emptied immediately and refilled with the opposite order type at the configured speed. After a fast price move, the levels the move swept through are empty and refill gradually (time constant `1 / (Accumulation Rate x Speed)`, about 200 s at default settings), so the next trade in the opposite direction can briefly spike the price.
+
+### Round-price clusters
+
+Real traders like round numbers, so the book adds extra volume around round prices: every price of the form `1, 2, 2.5, 3 or 5 x 10^n` (..., 10, 20, 25, 30, 50, 100, 200, ...). The added volume at a level is
+
+```
+Round Level Scale x (mean depth within +-1 % of the current price) x weight x exp(-distance / Round Level Range)
+```
+
+spread over a bell curve of width Round Level Width around the level. `distance` is `|ln(level / current price)|`; the weight is 1 for `1 x 10^n`, 0.8 for `5`, 0.6 for `2` and 0.5 for `2.5` and `3`. The clusters are added on top of the normal shape, so they also show far from the price: on a market at 160, the sell cluster at 1,000 holds about 19 % of the depth near the price and 2,000 about 6 %. Levels too weak to matter (below 3 % of full weight) are skipped, which leaves about 10-20 levels on any market.
+
+A market whose price sits on a round level (dirt at 0.1) gets about twice the depth on that price step, so the same net player flow moves its equilibrium price somewhat less.
 
 ## Settings in Detail
 

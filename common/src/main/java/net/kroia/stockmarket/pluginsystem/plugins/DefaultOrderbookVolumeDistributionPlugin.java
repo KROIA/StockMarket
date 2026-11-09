@@ -33,9 +33,20 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
      * @param trendPeriodMinutes trend accumulation: time constant of the price's moving average (minutes)
      * @param trendGain          trend accumulation: gain k of the side factor {@code exp(k * ln(price / MA))}
      * @param trendMaxFactor     trend accumulation: clamp of the side factor to [1 / max, max]; 1 = off
+     * @param roundLevelScale    T-212: round-level cluster scale S, multiple of the near-price depth; 0 = off
+     * @param roundLevelWidth    T-212: cluster width sigma in ln price
+     * @param roundLevelRange    T-212: distance e-fold lambda in ln price (how far from the price clusters stay visible)
      */
     public record Settings(float volumeScale, float speed, float accumulationRate, float decumulationRate, boolean resetVolume,
-                           float trendPeriodMinutes, float trendGain, float trendMaxFactor) {
+                           float trendPeriodMinutes, float trendGain, float trendMaxFactor,
+                           float roundLevelScale, float roundLevelWidth, float roundLevelRange) {
+        /** Settings with the default round-level clusters. */
+        public Settings(float volumeScale, float speed, float accumulationRate, float decumulationRate, boolean resetVolume,
+                        float trendPeriodMinutes, float trendGain, float trendMaxFactor) {
+            this(volumeScale, speed, accumulationRate, decumulationRate, resetVolume, trendPeriodMinutes, trendGain, trendMaxFactor,
+                    DEFAULT_ROUND_LEVEL_SCALE, DEFAULT_ROUND_LEVEL_WIDTH, DEFAULT_ROUND_LEVEL_RANGE);
+        }
+
         public Settings(float volumeScale, float speed, float accumulationRate, float decumulationRate) {
             this(volumeScale, speed, accumulationRate, decumulationRate, false);
         }
@@ -52,7 +63,14 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
 
         /** @return a copy with other trend accumulation parameters */
         public Settings withTrend(float periodMinutes, float gain, float maxFactor) {
-            return new Settings(volumeScale, speed, accumulationRate, decumulationRate, resetVolume, periodMinutes, gain, maxFactor);
+            return new Settings(volumeScale, speed, accumulationRate, decumulationRate, resetVolume, periodMinutes, gain, maxFactor,
+                    roundLevelScale, roundLevelWidth, roundLevelRange);
+        }
+
+        /** @return a copy with other T-212 round-level cluster parameters */
+        public Settings withRoundLevels(float scale, float width, float range) {
+            return new Settings(volumeScale, speed, accumulationRate, decumulationRate, resetVolume,
+                    trendPeriodMinutes, trendGain, trendMaxFactor, scale, width, range);
         }
 
         public static final StreamCodec<ByteBuf, Settings> CODEC = new StreamCodec<>() {
@@ -68,7 +86,11 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
                 float period = buf.isReadable() ? buf.readFloat() : DEFAULT_TREND_PERIOD_MINUTES;
                 float gain = buf.isReadable() ? buf.readFloat() : DEFAULT_TREND_GAIN;
                 float max = buf.isReadable() ? buf.readFloat() : DEFAULT_TREND_MAX_FACTOR;
-                return new Settings(scale, speed, acc, dec, reset, period, gain, max);
+                // T-212 round-level clusters, appended after the trend floats (older payloads: defaults)
+                float rlScale = buf.isReadable() ? buf.readFloat() : DEFAULT_ROUND_LEVEL_SCALE;
+                float rlWidth = buf.isReadable() ? buf.readFloat() : DEFAULT_ROUND_LEVEL_WIDTH;
+                float rlRange = buf.isReadable() ? buf.readFloat() : DEFAULT_ROUND_LEVEL_RANGE;
+                return new Settings(scale, speed, acc, dec, reset, period, gain, max, rlScale, rlWidth, rlRange);
             }
             @Override
             public void encode(ByteBuf buf, Settings s) {
@@ -80,6 +102,9 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
                 buf.writeFloat(s.trendPeriodMinutes());
                 buf.writeFloat(s.trendGain());
                 buf.writeFloat(s.trendMaxFactor());
+                buf.writeFloat(s.roundLevelScale());
+                buf.writeFloat(s.roundLevelWidth());
+                buf.writeFloat(s.roundLevelRange());
             }
         };
     }
@@ -175,10 +200,148 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             this.volumeScale = volumeScale;
         }
 
+        /**
+         * T-212: round-level cluster scale S (multiple of the near-price depth, 0 = off). The 2-arg constructor
+         * keeps 0, the plugin sets its setting through {@link #setRoundLevels}.
+         */
+        private float roundLevelScale = 0;
+        /** T-212: Gaussian width sigma of a cluster in ln price. */
+        private float roundLevelWidth = DEFAULT_ROUND_LEVEL_WIDTH;
+        /** T-212: distance weighting e-fold lambda in ln price. */
+        private float roundLevelRange = DEFAULT_ROUND_LEVEL_RANGE;
+        /** T-212: one-entry cache of the levels and the reference depth for the last market price. */
+        private volatile RoundLevels roundLevelCache = null;
+
+        /**
+         * @param defaultPrice    see {@link #DistributionCalculator(double, float)}
+         * @param volumeScale     see {@link #DistributionCalculator(double, float)}
+         * @param roundLevelScale T-212 cluster scale S (see {@link #setRoundLevels})
+         * @param roundLevelWidth T-212 cluster width sigma
+         * @param roundLevelRange T-212 distance e-fold lambda
+         */
+        public DistributionCalculator(double defaultPrice, float volumeScale,
+                                      float roundLevelScale, float roundLevelWidth, float roundLevelRange)
+        {
+            this(defaultPrice, volumeScale);
+            setRoundLevels(roundLevelScale, roundLevelWidth, roundLevelRange);
+        }
+
+        /**
+         * T-212: sets the round-level cluster parameters (sanitized like the plugin settings) and drops the level cache.
+         *
+         * @param scale S, multiple of the near-price depth; NaN or &lt; 0 = 0 (off)
+         * @param width sigma in ln price, clamped to [0.005, 0.5] (NaN = default)
+         * @param range lambda in ln price, clamped to [0.05, 5] (NaN = default)
+         */
+        public void setRoundLevels(float scale, float width, float range)
+        {
+            roundLevelScale = sanitizeRoundLevelScale(scale);
+            roundLevelWidth = sanitizeRoundLevelWidth(width);
+            roundLevelRange = sanitizeRoundLevelRange(range);
+            roundLevelCache = null;
+        }
+
+        /** @return the sanitized cluster scale S (0 = off) */
+        public float getRoundLevelScale() { return roundLevelScale; }
+
+        /**
+         * T-212: the round levels kept for a market price, with their reference depth. Immutable, so the volatile
+         * one-entry cache is safe between the plugin thread and the stream.
+         *
+         * @param price    market price the levels were computed for
+         * @param refShape mean smooth shape within +-1% of the price (before the depth scale and the D / P factor)
+         * @param lnLevel  ln of each kept level
+         * @param weight   w(L) x exp(-|ln(L / P)| / lambda) of each kept level
+         */
+        public record RoundLevels(double price, double refShape, double[] lnLevel, double[] weight) {}
+
+        /**
+         * T-212: the round levels and reference depth at {@code marketPrice} (cached for the last price).
+         *
+         * @param marketPrice the market price (real, &gt; 0)
+         * @return the levels; empty when the clusters are off
+         */
+        public RoundLevels roundLevels(double marketPrice)
+        {
+            RoundLevels c = roundLevelCache;
+            if (c != null && c.price == marketPrice) return c;
+            c = computeRoundLevels(marketPrice);
+            roundLevelCache = c;
+            return c;
+        }
+
+        private RoundLevels computeRoundLevels(double p)
+        {
+            if (roundLevelScale <= 0) return new RoundLevels(p, 0, new double[0], new double[0]);
+            double tick = MarketManager.convertToRealAmountStatic(1);
+            double lnP = Math.log(p);
+            // w <= 1, so no kept level is further than lambda x ln(1 / cutoff) from P
+            double maxDist = roundLevelRange * Math.log(1 / ROUND_LEVEL_CUTOFF);
+            int nMin = (int) Math.floor((lnP - maxDist) / Math.log(10)) - 1;
+            int nMax = (int) Math.ceil((lnP + maxDist) / Math.log(10));
+            List<double[]> kept = new ArrayList<>();
+            for (int n = nMin; n <= nMax; n++) {
+                double decade = Math.pow(10, n);
+                for (int i = 0; i < ROUND_LEVEL_MANTISSAS.length; i++) {
+                    double level = ROUND_LEVEL_MANTISSAS[i] * decade;
+                    if (level < tick) continue;
+                    double lnL = Math.log(level);
+                    double w = ROUND_LEVEL_WEIGHTS[i] * Math.exp(-Math.abs(lnL - lnP) / roundLevelRange);
+                    if (w >= ROUND_LEVEL_CUTOFF) kept.add(new double[]{lnL, w});
+                }
+            }
+            double[] lnLevel = new double[kept.size()], weight = new double[kept.size()];
+            for (int i = 0; i < kept.size(); i++) { lnLevel[i] = kept.get(i)[0]; weight[i] = kept.get(i)[1]; }
+            // Reference depth: mean of the continuous smooth shape over [0.99 P, 1.01 P] (midpoint rule). Continuous,
+            // not per tick: dirt (0.1) has no tick inside +-1% besides P itself.
+            double sum = 0;
+            int samples = 2 * REF_SAMPLES_PER_SIDE;
+            for (int i = 0; i < samples; i++)
+                sum += smoothShape(p, p * (1 + REF_DEPTH_RANGE * ((i + 0.5) / REF_SAMPLES_PER_SIDE - 1)));
+            return new RoundLevels(p, sum / samples, lnLevel, weight);
+        }
+
+        /**
+         * T-212: additive cluster term in shape units, {@code S x refShape(P) x sum w x decay x gauss}, summing only
+         * the levels within 5 sigma of the pick price.
+         *
+         * @param marketPrice     market price P (&gt; 0)
+         * @param volumePickPrice pick price p
+         * @return the cluster shape (0 when off or p &lt;= 0)
+         */
+        public double roundLevelShape(double marketPrice, double volumePickPrice)
+        {
+            if (roundLevelScale <= 0 || !(volumePickPrice > 0)) return 0;
+            RoundLevels levels = roundLevels(marketPrice);
+            if (levels.lnLevel.length == 0) return 0;
+            double lnp = Math.log(volumePickPrice);
+            double sigma = roundLevelWidth, sum = 0;
+            for (int i = 0; i < levels.lnLevel.length; i++) {
+                double z = (lnp - levels.lnLevel[i]) / sigma;
+                if (Math.abs(z) < 5) sum += levels.weight[i] * Math.exp(-0.5 * z * z);
+            }
+            return roundLevelScale * levels.refShape * sum;
+        }
+
         @Override
         public float getVolume(double marketPrice, double volumePickPrice) {
             if (marketPrice <= 0) return 0;
+            // T-214: depth per relative price stays constant as the price moves (more ticks per % below D)
+            double priceNorm = defaultPrice > 0 ? defaultPrice / marketPrice : 1;
+            // T-212: the cluster term is added before the depth scale and the normalisation
+            double shape = smoothShape(marketPrice, volumePickPrice) + roundLevelShape(marketPrice, volumePickPrice);
+            return (float) (shape * volumeScale * priceNorm);
+        }
 
+        /**
+         * The smooth depth shape (core, value cluster, background, demand boost) before the depth scale and the
+         * {@code D / P} normalisation.
+         *
+         * @param marketPrice     market price P (&gt; 0)
+         * @param volumePickPrice pick price p
+         * @return the shape (&gt;= 0)
+         */
+        public double smoothShape(double marketPrice, double volumePickPrice) {
             double absDistance = Math.abs((volumePickPrice - marketPrice) / marketPrice);
 
             // Spread gap width: at least one tick (0.01) relative to market price
@@ -212,9 +375,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
                 demandBoost = 0.5 * Math.sqrt(dropFraction);
             }
 
-            // T-214: depth per relative price stays constant as the price moves (more ticks per % below D)
-            double priceNorm = defaultPrice > 0 ? defaultPrice / marketPrice : 1;
-            return (float) ((coreShape + valueCluster + background + demandBoost) * volumeScale * priceNorm);
+            return coreShape + valueCluster + background + demandBoost;
         }
 
         /** @return the depth scale (items per raw tick at the default price) */
@@ -279,6 +440,31 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
     /** Trend accumulation: side factor clamp (1 = off). */
     public static final float DEFAULT_TREND_MAX_FACTOR = 4f;
 
+    // ---- T-212 round-level clusters ----
+    /** T-212: default cluster scale S (multiple of the near-price depth; 0 = off). */
+    public static final float DEFAULT_ROUND_LEVEL_SCALE = 1f;
+    /** T-212: default cluster width sigma in ln price (about +-3%). */
+    public static final float DEFAULT_ROUND_LEVEL_WIDTH = 0.03f;
+    /** T-212: default distance e-fold lambda in ln price; 1,000 on a 160 market holds about 19% of the near-price depth. */
+    public static final float DEFAULT_ROUND_LEVEL_RANGE = 1.1f;
+    /** T-212: mantissas m of the global level grid {@code m x 10^n}. */
+    static final double[] ROUND_LEVEL_MANTISSAS = {1, 2, 2.5, 3, 5};
+    /** T-212: weight w of each mantissa (1 strongest, then 5). */
+    static final double[] ROUND_LEVEL_WEIGHTS = {1.0, 0.6, 0.5, 0.5, 0.8};
+    /** T-212: a level is kept while {@code w x exp(-|ln(L / P)| / lambda)} reaches this (about 16 levels at lambda 1.1). */
+    static final double ROUND_LEVEL_CUTOFF = 0.03;
+    /** T-212: half width of the reference depth window around the price (relative). */
+    static final double REF_DEPTH_RANGE = 0.01;
+    /** T-212: midpoint samples per side for the reference depth. */
+    static final int REF_SAMPLES_PER_SIDE = 20;
+
+    /** @return S sanitized: NaN or &lt; 0 = 0 (off) */
+    public static float sanitizeRoundLevelScale(float s) { return s > 0 ? s : 0f; }
+    /** @return sigma clamped to [0.005, 0.5], NaN = default */
+    public static float sanitizeRoundLevelWidth(float w) { return Float.isNaN(w) ? DEFAULT_ROUND_LEVEL_WIDTH : Math.max(0.005f, Math.min(0.5f, w)); }
+    /** @return lambda clamped to [0.05, 5], NaN = default */
+    public static float sanitizeRoundLevelRange(float r) { return Float.isNaN(r) ? DEFAULT_ROUND_LEVEL_RANGE : Math.max(0.05f, Math.min(5f, r)); }
+
     static class RuntimeData
     {
         public float currentMarketPrice = 0;
@@ -297,6 +483,10 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         public double trendLnMA = Double.NaN;
         /** Trend accumulation: last ask side factor (bid side = 1 / this). */
         public float trendAskFactor = 1f;
+        /** T-212: round-level cluster settings (sanitized by the calculator). */
+        public float roundLevelScale = DEFAULT_ROUND_LEVEL_SCALE;
+        public float roundLevelWidth = DEFAULT_ROUND_LEVEL_WIDTH;
+        public float roundLevelRange = DEFAULT_ROUND_LEVEL_RANGE;
 
         // ---- Target-distribution cache ----
         // The expensive distribution targets (Math.pow/exp/sqrt per price level) are cached
@@ -312,6 +502,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         public RuntimeData()
         {
             calculator = new DistributionCalculator();
+            calculator.setRoundLevels(roundLevelScale, roundLevelWidth, roundLevelRange);
         }
     }
     private final Map<ItemID, RuntimeData> marketData = new HashMap<>();
@@ -612,6 +803,9 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             marketTag.putFloat("trendPeriodMinutes", entry.getValue().trendPeriodMinutes);
             marketTag.putFloat("trendGain", entry.getValue().trendGain);
             marketTag.putFloat("trendMaxFactor", entry.getValue().trendMaxFactor);
+            marketTag.putFloat("roundLevelScale", entry.getValue().roundLevelScale);
+            marketTag.putFloat("roundLevelWidth", entry.getValue().roundLevelWidth);
+            marketTag.putFloat("roundLevelRange", entry.getValue().roundLevelRange);
             if (!Double.isNaN(entry.getValue().trendLnMA)) marketTag.putDouble("trendLnMA", entry.getValue().trendLnMA);
             marketTag.putInt(DEPTH_MODEL_KEY, DEPTH_MODEL);
             marketDataTag.add(marketTag);
@@ -638,6 +832,12 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
                         if (marketTag.contains("trendPeriodMinutes")) data.trendPeriodMinutes = NbtCompat.getFloat(marketTag, "trendPeriodMinutes");
                         if (marketTag.contains("trendGain")) data.trendGain = NbtCompat.getFloat(marketTag, "trendGain");
                         if (marketTag.contains("trendMaxFactor")) data.trendMaxFactor = NbtCompat.getFloat(marketTag, "trendMaxFactor");
+                        // T-212 round-level clusters (older saves: defaults)
+                        if (marketTag.contains("roundLevelScale")) data.roundLevelScale = NbtCompat.getFloat(marketTag, "roundLevelScale");
+                        if (marketTag.contains("roundLevelWidth")) data.roundLevelWidth = NbtCompat.getFloat(marketTag, "roundLevelWidth");
+                        if (marketTag.contains("roundLevelRange")) data.roundLevelRange = NbtCompat.getFloat(marketTag, "roundLevelRange");
+                        data.calculator.setRoundLevels(data.roundLevelScale, data.roundLevelWidth, data.roundLevelRange);
+                        data.cachedTargets = null;
                         data.trendLnMA = marketTag.contains("trendLnMA") ? NbtCompat.getDouble(marketTag, "trendLnMA") : Double.NaN;
 
                         // T-214: books saved before the price-normalised depth are rebuilt once
@@ -674,6 +874,10 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         data.trendPeriodMinutes = settings.trendPeriodMinutes();
         data.trendGain = settings.trendGain();
         data.trendMaxFactor = settings.trendMaxFactor();
+        data.roundLevelScale = settings.roundLevelScale();
+        data.roundLevelWidth = settings.roundLevelWidth();
+        data.roundLevelRange = settings.roundLevelRange();
+        data.calculator.setRoundLevels(data.roundLevelScale, data.roundLevelWidth, data.roundLevelRange);
 
         MarketInterface interf = getMarketInterface(marketID);
         if (interf != null) refreshDepth(data, interf.market, false);   // else the next update() applies it

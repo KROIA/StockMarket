@@ -119,6 +119,17 @@ public class PluginTestSuite extends TestSuite {
         addTest("depthScale_totalAskDepth_comparable", this::test_depthScale_totalAskDepth);
         addTest("depthScale_maxOrderChange_noEffect", this::test_depthScale_maxOrderChange);
         addTest("depthScale_migration_resetsOnce", this::test_depthScale_migration);
+        // T-212: round-level volume clusters
+        addTest("roundLevel_levelSets", this::test_roundLevel_levelSets);
+        addTest("roundLevel_decadeCrossing_smooth", this::test_roundLevel_decadeCrossing);
+        addTest("roundLevel_off_matchesOld", this::test_roundLevel_offMatchesOld);
+        addTest("roundLevel_peakFactor", this::test_roundLevel_peakFactor);
+        addTest("roundLevel_simpson_slotSum", this::test_roundLevel_simpson);
+        addTest("roundLevel_farClusters_visible160", this::test_roundLevel_farClustersVisible);
+        addTest("roundLevel_dirt", this::test_roundLevel_dirt);
+        addTest("roundLevel_codec_legacy", this::test_roundLevel_codec);
+        addTest("roundLevel_nbt_legacy", this::test_roundLevel_nbt);
+        addTest("roundLevel_bandDump_buyBack_noProfit", () -> test_t208NoProfit("dirt", new String[]{"dump5", "dump30"}));
         // T-207 regression probes (run only with -Dstockmarket.t207=true)
         addTest("t207_netFlow_matchesFills", this::test_t207_netFlow);
         addTest("t207_spike_holds", this::test_t207_spike);
@@ -702,8 +713,7 @@ public class PluginTestSuite extends TestSuite {
 
             MarketCache cache = new MarketCache(market);
             cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
-                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(defaultPrice,
-                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(defaultPrice, abundance, 1f)));
+                    harnessCalc(defaultPrice, DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(defaultPrice, abundance, 1f)));
             market.test_resetVirtualOrderBookVolume();
             List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
 
@@ -1219,8 +1229,7 @@ public class PluginTestSuite extends TestSuite {
 
             MarketCache cache = new MarketCache(market);
             cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
-                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(defaultPrice,
-                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(defaultPrice, s.abundance(), 1f)));
+                    harnessCalc(defaultPrice, DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(defaultPrice, s.abundance(), 1f)));
             market.test_resetVirtualOrderBookVolume();
             List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
             IPluginOrderBook book = cache.getPluginOrderBook();
@@ -2383,6 +2392,260 @@ public class PluginTestSuite extends TestSuite {
         }
     }
 
+    // ── T-212: round-level volume clusters ─────────────────────────────────────
+
+    /** T-212: cluster scale of the harness calculators ({@link #harnessCalc}); production default. */
+    private static float harnessRoundLevelScale = DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_SCALE;
+
+    /**
+     * T-212: the production calculator of a harness market: depth scale plus the default round-level clusters
+     * (scale {@link #harnessRoundLevelScale}).
+     */
+    private static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator harnessCalc(double d, float depthScale) {
+        return rlCalc(d, depthScale, harnessRoundLevelScale, DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_WIDTH);
+    }
+
+    /** T-212: calculator with clusters of scale {@code s} and width {@code sigma} (default range). */
+    private static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator rlCalc(double d, float depthScale, float s, float sigma) {
+        return new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(d, depthScale, s, sigma,
+                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_RANGE);
+    }
+
+    /** T-212: production calculator (T-214 depth, default clusters) of a market at its default price. */
+    private static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator rlCalc(double d, float abundance) {
+        return rlCalc(d, DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(d, abundance, 1f),
+                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_SCALE, DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_WIDTH);
+    }
+
+    /** @return the kept levels of {@code c} at price {@code p}, ascending */
+    private static double[] rlLevels(DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator c, double p) {
+        double[] ln = c.roundLevels(p).lnLevel();
+        double[] l = new double[ln.length];
+        for (int i = 0; i < ln.length; i++) l[i] = Math.exp(ln[i]);
+        java.util.Arrays.sort(l);
+        return l;
+    }
+
+    /** @return true if {@code levels} holds {@code x} (relative 1e-9) */
+    private static boolean rlHas(double[] levels, double x) {
+        for (double l : levels) if (Math.abs(l / x - 1) < 1e-9) return true;
+        return false;
+    }
+
+    /** T-212: level sets at 160 / 0.1 / 100k hold the expected round levels, 10-20 of them, none below one tick. */
+    private TestResult test_roundLevel_levelSets() {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        var c = rlCalc(160, 50f, 1f, 0.03f);
+        StringBuilder out = new StringBuilder();
+        double[][] want = {{160, 10, 20, 25, 30, 50, 100, 200, 250, 300, 500, 1000, 2000}, {0.1, 0.1, 0.2, 0.25, 0.3, 0.5, 1},
+                {100_000, 50_000, 100_000, 200_000, 250_000, 300_000, 500_000, 1_000_000}};
+        for (double[] w : want) {
+            double[] l = rlLevels(c, w[0]);
+            out.append(String.format(Locale.ROOT, " P %s: %d levels %s;", w[0], l.length, java.util.Arrays.toString(l)));
+            if (l.length < 10 || l.length > 20) return fail("Level count outside [10, 20]:" + out);
+            for (int i = 1; i < w.length; i++) if (!rlHas(l, w[i])) return fail("Missing level " + w[i] + ":" + out);
+            for (double x : l) if (x < tick * (1 - 1e-9)) return fail("Level below one tick:" + out);
+        }
+        if (rlLevels(rlCalc(160, 50f, 0f, 0.03f), 160).length != 0) return fail("S = 0 must keep no levels");
+        return pass(out.toString());
+    }
+
+    /** T-212: the cluster term changes by less than 1% of the near-price depth when the price crosses 1000 (999 -> 1001). */
+    private TestResult test_roundLevel_decadeCrossing() {
+        var c = rlCalc(1000, 10f, 1f, 0.03f);
+        double ref = c.roundLevels(999).refShape(), worst = 0, at = 0;
+        for (double lnx = Math.log(10); lnx <= Math.log(100_000); lnx += 0.002) {
+            double x = Math.exp(lnx);
+            double d = Math.abs(c.roundLevelShape(1001, x) - c.roundLevelShape(999, x)) / ref;
+            if (d > worst) { worst = d; at = x; }
+        }
+        String msg = String.format(Locale.ROOT, "largest change %.3f%% of the near-price depth at %.4g", 100 * worst, at);
+        return worst < 0.01 ? pass(msg) : fail(msg);
+    }
+
+    /** T-212: S = 0 (and the 2-arg constructor) gives bit-identical volumes to the pre-T-212 calculator. */
+    private TestResult test_roundLevel_offMatchesOld() {
+        var old = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(160, 50f);
+        var off = rlCalc(160, 50f, 0f, 0.03f);
+        var set = rlCalc(160, 50f, 1f, 0.03f);
+        set.setRoundLevels(Float.NaN, 0.03f, 1.1f);   // NaN counts as 0
+        for (double p : new double[]{150, 160}) {
+            for (double x = 0.01; x < 2000; x *= 1.013) {
+                float a = old.getVolume(p, x);
+                if (off.getVolume(p, x) != a || set.getVolume(p, x) != a)
+                    return fail("Volume differs at P " + p + ", p " + x);
+            }
+        }
+        return pass("S = 0 and S = NaN identical to the 2-arg calculator");
+    }
+
+    /**
+     * T-212: at a level away from other levels the extra volume is exactly
+     * {@code S x refShape x w x exp(-|ln(L / P)| / lambda) x depthScale x D / P}.
+     */
+    private TestResult test_roundLevel_peakFactor() {
+        double p = 150, d = 160;
+        float ds = 50f, s = 2f;
+        var on = rlCalc(d, ds, s, 0.03f);
+        var off = rlCalc(d, ds, 0f, 0.03f);
+        double ref = on.roundLevels(p).refShape();
+        double lambda = DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_RANGE;
+        double[][] lw = {{200, 0.6}, {500, 0.8}, {1000, 1.0}, {50, 0.8}};
+        StringBuilder out = new StringBuilder();
+        for (double[] e : lw) {
+            double extra = on.getVolume(p, e[0]) - (double) off.getVolume(p, e[0]);
+            double want = s * ref * e[1] * Math.exp(-Math.abs(Math.log(e[0] / p)) / lambda) * ds * d / p;
+            out.append(String.format(Locale.ROOT, " %s: %.4g vs %.4g;", e[0], extra, want));
+            if (Math.abs(extra - want) > 1e-3 * want + 1e-4) return fail("Peak factor wrong:" + out);
+        }
+        // reference depth = mean smooth shape within +-1% of P
+        double sum = 0;
+        int n = 2000;
+        for (int i = 0; i < n; i++) sum += off.smoothShape(p, p * (0.99 + 0.02 * (i + 0.5) / n));
+        if (Math.abs(sum / n / ref - 1) > 0.01) return fail("refShape " + ref + " vs fine mean " + sum / n);
+        return pass("ref " + ref + out);
+    }
+
+    /**
+     * T-212: the depth memory's 8-interval Simpson slot sum ({@code VirtualOrderbook.defaultSum}) stays within 0.5%
+     * of the exact tick sum with clusters at sigma 0.005 and 0.03 (P = 1,000, slots from 400 to 2,500 that do not
+     * touch the price).
+     */
+    private TestResult test_roundLevel_simpson() {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        double p = 1000;
+        long raw = Math.round(p / tick);
+        StringBuilder out = new StringBuilder();
+        for (float sigma : new float[]{0.005f, 0.03f}) {
+            var c = rlCalc(p, 10f, 1f, sigma);
+            java.util.function.LongToDoubleFunction v = r -> Math.abs(c.getVolume(p, r * tick));
+            double worst = 0;
+            int nearK = net.kroia.stockmarket.stockmarket.market.core.DepthMemory.slotOf(raw);
+            for (int k = net.kroia.stockmarket.stockmarket.market.core.DepthMemory.slotOf(Math.round(400 / tick));
+                 k <= net.kroia.stockmarket.stockmarket.market.core.DepthMemory.slotOf(Math.round(2500 / tick)); k++) {
+                if (Math.abs(k - nearK) <= 1) continue;   // the price's spread cusp is not a cluster feature
+                long lo = net.kroia.stockmarket.stockmarket.market.core.DepthMemory.slotStart(k);
+                long hi = net.kroia.stockmarket.stockmarket.market.core.DepthMemory.slotEnd(k);
+                long n = hi - lo + 1;
+                if (n <= 32) continue;
+                double exact = 0;
+                for (long r = lo; r <= hi; r++) exact += v.applyAsDouble(r);
+                double h = (hi - lo) / 8.0, s = 0;
+                for (int i = 0; i <= 8; i++) s += (i == 0 || i == 8 ? 1 : (i % 2 == 1 ? 4 : 2)) * v.applyAsDouble(Math.round(lo + i * h));
+                double simpson = s * h / 3 / (hi - lo) * n;
+                worst = Math.max(worst, Math.abs(simpson / exact - 1));
+            }
+            out.append(String.format(Locale.ROOT, " sigma %.3f: worst slot error %.3f%%;", sigma, 100 * worst));
+            if (worst > 0.005) return fail("Simpson slot sum off by more than 0.5%:" + out);
+        }
+        return pass(out.toString());
+    }
+
+    /**
+     * T-212 (user decision): on a 160 market the far ask clusters stay visible: the volume per tick at 1,000 is
+     * about 20% (15-25%) of the mean near-price depth (within +-1%), at 2,000 a few % (3-15%); without clusters
+     * both are below 1%.
+     */
+    private TestResult test_roundLevel_farClustersVisible() {
+        var on = rlCalc(160, 50f);
+        var off = t214Calc(160, 50f);
+        double near = 0;
+        int n = 400;
+        for (int i = 0; i < n; i++) near += on.getVolume(160, 160 * (0.99 + 0.02 * (i + 0.5) / n));
+        near /= n;
+        double r1000 = on.getVolume(160, 1000) / near, r2000 = on.getVolume(160, 2000) / near;
+        double r500 = on.getVolume(160, 500) / near, rBid = on.getVolume(160, 100) / near;
+        double off1000 = off.getVolume(160, 1000) / near, off2000 = off.getVolume(160, 2000) / near;
+        String msg = String.format(Locale.ROOT, "near %.4g/tick; 1000 %.1f%%, 2000 %.1f%%, 500 %.1f%%, bid 100 %.1f%%; off: 1000 %.2f%%, 2000 %.2f%%",
+                near, 100 * r1000, 100 * r2000, 100 * r500, 100 * rBid, 100 * off1000, 100 * off2000);
+        if (r1000 < 0.15 || r1000 > 0.25) return fail("1000 outside 15-25%: " + msg);
+        if (r2000 < 0.03 || r2000 > 0.15) return fail("2000 outside 3-15%: " + msg);
+        if (off1000 > 0.01 || off2000 > 0.01) return fail("Without clusters the far asks must be faint: " + msg);
+        return pass(msg);
+    }
+
+    /**
+     * T-212 dirt (0.1, abundance 2,000; the default sits on the level 0.1): the price tick gains S x the near-price
+     * depth, the neighbour ticks (0.09 / 0.11) change by less than 2%, and bookEFold (the flow capacity) grows by
+     * at most x2 (reported, with diamond for comparison).
+     */
+    private TestResult test_roundLevel_dirt() {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+        StringBuilder out = new StringBuilder();
+        for (double d : new double[]{0.1, 160}) {
+            float abundance = d < 1 ? 2000f : 50f;
+            var on = rlCalc(d, abundance);
+            var off = t214Calc(d, abundance);
+            double eOn = VolatilityPlugin.bookEFoldDepth(x -> on.getVolume(d, x), d, tick, Math.log(vs.minPriceMult()), Math.log(vs.maxPriceMult()));
+            double eOff = VolatilityPlugin.bookEFoldDepth(x -> off.getVolume(d, x), d, tick, Math.log(vs.minPriceMult()), Math.log(vs.maxPriceMult()));
+            out.append(String.format(Locale.ROOT, " D %s: bookEFold x%.3f;", d, eOn / eOff));
+            if (!(eOn >= eOff) || eOn > 2 * eOff) return fail("bookEFold ratio outside [1, 2]:" + out);
+            if (d < 1) {
+                double ref = on.roundLevels(d).refShape() * on.getVolumeScale();
+                double atP = on.getVolume(d, d) - (double) off.getVolume(d, d);
+                out.append(String.format(Locale.ROOT, " tick 0.1 +%.4g (ref %.4g);", atP, ref));
+                if (Math.abs(atP / ref - 1) > 1e-3) return fail("Price tick must gain S x ref:" + out);
+                for (double x : new double[]{d - tick, d + tick}) {
+                    double ch = on.getVolume(d, x) / (double) off.getVolume(d, x) - 1;
+                    out.append(String.format(Locale.ROOT, " %.2f %+.3f%%;", x, 100 * ch));
+                    if (Math.abs(ch) > 0.02) return fail("Neighbour tick changed more than 2%:" + out);
+                }
+            }
+        }
+        return pass(out.toString());
+    }
+
+    /** T-212: an 8-float (trend era) payload decodes with the cluster defaults; 11-float payloads round-trip. */
+    private TestResult test_roundLevel_codec() {
+        ByteBuf old = Unpooled.buffer();
+        old.writeFloat(2f); old.writeFloat(0.1f); old.writeFloat(0.2f); old.writeFloat(0.03f); old.writeBoolean(false);
+        old.writeFloat(5f); old.writeFloat(3f); old.writeFloat(2f);
+        DefaultOrderbookVolumeDistributionPlugin.Settings a = DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.decode(old);
+        old.release();
+        if (a.trendMaxFactor() != 2f
+                || a.roundLevelScale() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_SCALE
+                || a.roundLevelWidth() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_WIDTH
+                || a.roundLevelRange() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_RANGE)
+            return fail("8-float payload decoded as " + a);
+        DefaultOrderbookVolumeDistributionPlugin.Settings b = a.withRoundLevels(0.5f, 0.01f, 2f);
+        ByteBuf buf = Unpooled.buffer();
+        DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.encode(buf, b);
+        DefaultOrderbookVolumeDistributionPlugin.Settings c = DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.decode(buf);
+        boolean rest = buf.isReadable();
+        buf.release();
+        if (rest) return fail("11-float payload left bytes");
+        return b.equals(c) ? pass("8-float payload -> cluster defaults, 11-float payload round-trips") : fail(b + " -> " + c);
+    }
+
+    /** T-212: cluster settings survive save/load; a save without the keys loads the defaults. */
+    private TestResult test_roundLevel_nbt() {
+        DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
+        p.setLoggerEnabled(false);
+        p.onMarketSubscribed(itemID);
+        applySettings(p, DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC,
+                DefaultOrderbookVolumeDistributionPlugin.Settings.createDefault().withRoundLevels(0.5f, 0.02f, 2f));
+        if (p.test_getCalculator(itemID).getRoundLevelScale() != 0.5f) return fail("Settings did not reach the calculator");
+        CompoundTag tag = new CompoundTag();
+        p.save(tag);
+        DefaultOrderbookVolumeDistributionPlugin q = new DefaultOrderbookVolumeDistributionPlugin();
+        q.setLoggerEnabled(false);
+        q.onMarketSubscribed(itemID);
+        q.load(tag);
+        if (q.test_getCalculator(itemID).getRoundLevelScale() != 0.5f) return fail("Scale lost on save/load");
+        CompoundTag m = net.kroia.modutilities.NbtCompat.getCompound((ListTag) tag.get("marketData"), 0);
+        m.remove("roundLevelScale");
+        m.remove("roundLevelWidth");
+        m.remove("roundLevelRange");
+        DefaultOrderbookVolumeDistributionPlugin legacy = new DefaultOrderbookVolumeDistributionPlugin();
+        legacy.setLoggerEnabled(false);
+        legacy.onMarketSubscribed(itemID);
+        legacy.load(tag);
+        float s = legacy.test_getCalculator(itemID).getRoundLevelScale();
+        return s == DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_SCALE
+                ? pass("round trip 0.5, legacy save -> default " + s) : fail("Legacy save loaded scale " + s);
+    }
+
     /** Trend accumulation report (always passes): diamond pump5 / dump5 / organic60 with trend on (defaults) vs off (max factor 1). */
     private TestResult test_trendOnOffReport() {
         harnessRefill = true;
@@ -2472,8 +2735,7 @@ public class PluginTestSuite extends TestSuite {
             market.resetNetPlayerItemFlow();
             cache = new MarketCache(market);
             cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
-                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(price,
-                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(price, abundance, volumeScale)));
+                    harnessCalc(price, DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(price, abundance, volumeScale)));
             market.test_resetVirtualOrderBookVolume();
             markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
             vol = new VolatilityPlugin();
