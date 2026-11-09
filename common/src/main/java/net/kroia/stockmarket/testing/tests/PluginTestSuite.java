@@ -26,6 +26,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
+import net.kroia.stockmarket.pluginsystem.plugins.NetFlowPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
@@ -605,12 +606,12 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /**
-     * T-197 tuning knobs of one replay market (diamond preset defaults: VolatilityPlugin defaults,
+     * T-197 tuning knobs of one replay market (diamond preset defaults: NetFlowPlugin defaults,
      * abundance 50, depth memory at the setting's default).
      *
-     * @param flowSensitivity VolatilityPlugin flowSensitivity
+     * @param flowSensitivity NetFlowPlugin flowSensitivity
      * @param abundance       natural abundance (depth scale, flow capacity and player max order = 64 x abundance)
-     * @param maxPriceMult    VolatilityPlugin maxPriceMult
+     * @param maxPriceMult    NetFlowPlugin maxPriceMult
      * @param memoryMinutes   {@code VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES} (0 = memory off)
      * @param warmupTicks     ticks the plugins run before the player acts, so the bot's rate-limited
      *                        target starts at the default price (0 = the bot's first step snaps to the
@@ -654,7 +655,7 @@ public class PluginTestSuite extends TestSuite {
      */
     private ReplayResult replay(float halfLifeMinutes, float maxTargetMovePerSecond, int cycles, int ordersPerLeg, int waitTicks,
                                 float memoryMinutes, long orderItems) {
-        VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+        NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
         return replay(halfLifeMinutes, maxTargetMovePerSecond, cycles, ordersPerLeg, waitTicks, orderItems, true,
                 new ReplayConfig(vs.flowSensitivity(), 50, vs.maxPriceMult(), memoryMinutes, 0), null);
     }
@@ -720,13 +721,10 @@ public class PluginTestSuite extends TestSuite {
             market.test_resetVirtualOrderBookVolume();
             List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
 
-            VolatilityPlugin vol = new VolatilityPlugin();
-            vol.setLoggerEnabled(false);
-            vol.onMarketSubscribed(itemID);
-            VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
-            VolatilityPlugin.Settings volSettings = new VolatilityPlugin.Settings(0f, vs.flowInfluenceEnabled(),
-                    cfg.flowSensitivity(), vs.minPriceMult(), cfg.maxPriceMult());
-            applySettings(vol, VolatilityPlugin.Settings.CODEC, volSettings);
+            NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
+            NetFlowPlugin.Settings volSettings = new NetFlowPlugin.Settings(vs.flowEnabled(), cfg.flowSensitivity(),
+                    vs.minPriceMult(), cfg.maxPriceMult(), vs.permanentImpact()).withCapacityVolatilityScale(0f);
+            HarnessModel vol = new HarnessModel(itemID, volSettings, 0f);
             TargetPriceBot bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
             bot.onMarketSubscribed(itemID);
@@ -765,7 +763,7 @@ public class PluginTestSuite extends TestSuite {
                 for (int t = 0; t < cycleTicks; t++) {
                     if (trace != null && (c * cycleTicks + t) % 100 == 0) {
                         double p = MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice());
-                        double eq = VolatilityPlugin.computeEquilibriumPrice(defaultPrice,
+                        double eq = NetFlowPlugin.computeEquilibriumPrice(defaultPrice,
                                 vol.getSaturatedFlow(itemID), abundance, volSettings, vol.getBookEFold(itemID));
                         trace.append(String.format(Locale.ROOT, " %d:%.0f(max %.0f)/%.0f/%.0f/%.0f/%.0f", c * cycleTicks + t, p, windowMax, eq,
                                 cache.getPluginOrderBook().getRealVirtualVolume(p, eq),
@@ -922,7 +920,7 @@ public class PluginTestSuite extends TestSuite {
     private TestResult test_targetPriceBot_buyBackStopsAtTarget() {
         try {
             float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
-            VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+            NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
             ReplayResult r = replay(hl, TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND, 2, 5, 1200, 0, true,
                     new ReplayConfig(vs.flowSensitivity(), 50, vs.maxPriceMult(), 30, 20), null);
             if (r.botOvershoots() > 0)
@@ -992,7 +990,7 @@ public class PluginTestSuite extends TestSuite {
         try {
             float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
             float move = TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
-            VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+            NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
             StringBuilder out = new StringBuilder();
             for (float mem : new float[]{backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue(), 0f}) {
                 StringBuilder trace = new StringBuilder();
@@ -1034,7 +1032,7 @@ public class PluginTestSuite extends TestSuite {
         boolean t207Row = t207Requested() && name.equals("hl10_move0005") && !longPart;
         if (!t197Requested(true) && !t207Row) return skip("T-206 sweep not requested");
         try {
-            VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+            NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
             ReplayConfig cfg = new ReplayConfig(vs.flowSensitivity(), abundance, vs.maxPriceMult(),
                     backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue(), 20, price);
             long maxOrder = MarketSettings.defaultMaxOrderVolume(abundance);
@@ -1133,9 +1131,9 @@ public class PluginTestSuite extends TestSuite {
      * @param price           default price (real)
      * @param abundance       natural abundance
      * @param maxOrder        player max order (real items; also the chunk size of every scripted order)
-     * @param sens            VolatilityPlugin flowSensitivity
-     * @param maxMult         VolatilityPlugin maxPriceMult
-     * @param theta           VolatilityPlugin permanent impact θ
+     * @param sens            NetFlowPlugin flowSensitivity
+     * @param maxMult         NetFlowPlugin maxPriceMult
+     * @param theta           NetFlowPlugin permanent impact θ
      * @param halfLifeMinutes NET_FLOW_HALF_LIFE_MINUTES
      * @param bot             TargetPriceBot settings
      */
@@ -1175,7 +1173,7 @@ public class PluginTestSuite extends TestSuite {
      * @param plans the players
      */
     private PlayersResult replayPlayers(float hl, float move, PlayerPlan... plans) {
-        VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+        NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
         ReplaySetup setup = new ReplaySetup("diamond", 160, 50, MarketSettings.defaultMaxOrderVolume(50), vs.flowSensitivity(),
                 vs.maxPriceMult(), vs.permanentImpact(), hl, new TargetPriceBot.Settings(0.5f, 0.1f, 0f, 0.1f,
                 TargetPriceBot.DEFAULT_MAX_ORDER_VOLUME_FACTOR, move));
@@ -1236,13 +1234,10 @@ public class PluginTestSuite extends TestSuite {
             market.test_resetVirtualOrderBookVolume();
             List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
             IPluginOrderBook book = cache.getPluginOrderBook();
-            VolatilityPlugin vol = new VolatilityPlugin();
-            vol.setLoggerEnabled(false);
-            vol.onMarketSubscribed(itemID);
-            VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
-            VolatilityPlugin.Settings volSettings = new VolatilityPlugin.Settings(0f, vs.flowInfluenceEnabled(),
-                    s.sens(), vs.minPriceMult(), s.maxMult(), s.theta());
-            applySettings(vol, VolatilityPlugin.Settings.CODEC, volSettings);
+            NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
+            NetFlowPlugin.Settings volSettings = new NetFlowPlugin.Settings(vs.flowEnabled(), s.sens(),
+                    vs.minPriceMult(), s.maxMult(), s.theta()).withCapacityVolatilityScale(0f);
+            HarnessModel vol = new HarnessModel(itemID, volSettings, 0f);
             TargetPriceBot bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
             bot.onMarketSubscribed(itemID);
@@ -1294,7 +1289,7 @@ public class PluginTestSuite extends TestSuite {
                 if (t % 1200 == 0) path.append(String.format(Locale.ROOT, " %d:%.4g", t / 1200, price));
                 if (series != null && sampleEvery > 0 && t % sampleEvery == 0) {
                     series.append(String.format(Locale.ROOT, "%.2f,%.6g,%.6g,%.6g,%.6g", t / 20.0, price, bot.test_getTargetPrice(itemID),
-                            VolatilityPlugin.computeEquilibriumPrice(defaultPrice, vol.getSaturatedFlow(itemID), s.abundance(), volSettings,
+                            NetFlowPlugin.computeEquilibriumPrice(defaultPrice, vol.getSaturatedFlow(itemID), s.abundance(), volSettings,
                                     vol.getBookEFold(itemID)), vol.getSaturatedFlow(itemID)));
                     for (int i = 0; i < n; i++)
                         series.append(String.format(Locale.ROOT, ",%.6g", accounts[i].getBank(itemID).getTotalBalance() / (double) sf));
@@ -1646,13 +1641,12 @@ public class PluginTestSuite extends TestSuite {
                                     harnessCalc(160, DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(160, abundance, 1f)));
                             else market.test_setDefaultVolumeProviderFunction(null);
                             List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
-                            VolatilityPlugin vol = new VolatilityPlugin();
-                            vol.setLoggerEnabled(false);
-                            vol.onMarketSubscribed(itemID);
-                            VolatilityPlugin.Settings vs = new VolatilityPlugin.Settings(scale, flowOn,
-                                    VolatilityPlugin.DEFAULT_FLOW_SENSITIVITY, VolatilityPlugin.DEFAULT_MIN_PRICE_MULT, maxMult);
-                            applySettings(vol, VolatilityPlugin.Settings.CODEC, vs);
-                            double b = VolatilityPlugin.DEFAULT_FLOW_SENSITIVITY * abundance; // ~ one capacity
+                            // T-213: the flow capacity uses the NetFlow capacity scale = the old volatility scale
+                            NetFlowPlugin.Settings vs = new NetFlowPlugin.Settings(flowOn, NetFlowPlugin.DEFAULT_FLOW_SENSITIVITY,
+                                    NetFlowPlugin.DEFAULT_MIN_PRICE_MULT, maxMult, NetFlowPlugin.DEFAULT_PERMANENT_IMPACT)
+                                    .withCapacityVolatilityScale(scale);
+                            HarnessModel vol = new HarnessModel(itemID, vs, scale);
+                            double b = NetFlowPlugin.DEFAULT_FLOW_SENSITIVITY * abundance; // ~ one capacity
                             double raw = 0, faded = 0;
                             long h = 1125899906842597L;
                             for (int t = 0; t < 2400; t++) {
@@ -1674,8 +1668,8 @@ public class PluginTestSuite extends TestSuite {
                                 h = goldenMix(h, vol.getSaturatedFlow(itemID));
                                 if (settings.virtualOrderbookEnabled) {
                                     double d = MarketManager.convertToRealAmountStatic(settings.defaultPrice);
-                                    h = goldenMix(h, VolatilityPlugin.computeEquilibriumPrice(d, vol.getSaturatedFlow(itemID), abundance, vs,
-                                            vol.getBookEFold(itemID)));
+                                    // T-213: the equilibrium the NetFlowPlugin published (pre-T-213: computed from the same inputs)
+                                    h = goldenMix(h, vol.flow.getEquilibrium(itemID));
                                     if (scale == 0f) h = goldenMix(h, cache.getPluginMarket().getTargetPrice());
                                 }
                                 cache.apply();
@@ -1756,7 +1750,7 @@ public class PluginTestSuite extends TestSuite {
     //   stockmarket.t208.filter optional regex, only T-208 tests whose name it finds run
     //   stockmarket.t208.out    output folder (default "t208" in the game directory)
 
-    /** Stage A θ grid (VolatilityPlugin permanent impact). */
+    /** Stage A θ grid (NetFlowPlugin permanent impact). */
     private static final float[] T208_THETAS = {0.25f, 0.5f, 0.75f};
     /** Stage A bot reference reversion time grid (seconds). */
     private static final float[] T208_TAUS = {300, 600, 1800};
@@ -1811,7 +1805,7 @@ public class PluginTestSuite extends TestSuite {
      * T-214 netherite (price 22,000, abundance 5, max order 320: the depth floor case).
      */
     private ReplaySetup t208Market(String name) {
-        VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+        NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
         float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
         boolean dirt = name.equals("dirt"), netherite = name.equals("netherite");
         float abundance = dirt ? 2000 : netherite ? 5 : 50;
@@ -2728,14 +2722,14 @@ public class PluginTestSuite extends TestSuite {
      */
     private TestResult test_roundLevel_dirt() {
         double tick = MarketManager.convertToRealAmountStatic(1);
-        VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+        NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
         StringBuilder out = new StringBuilder();
         for (double d : new double[]{0.1, 160}) {
             float abundance = d < 1 ? 2000f : 50f;
             var on = rlCalc(d, abundance);
             var off = t214Calc(d, abundance);
-            double eOn = VolatilityPlugin.bookEFoldDepth(x -> on.getVolume(d, x), d, tick, Math.log(vs.minPriceMult()), Math.log(vs.maxPriceMult()));
-            double eOff = VolatilityPlugin.bookEFoldDepth(x -> off.getVolume(d, x), d, tick, Math.log(vs.minPriceMult()), Math.log(vs.maxPriceMult()));
+            double eOn = NetFlowPlugin.bookEFoldDepth(x -> on.getVolume(d, x), d, tick, Math.log(vs.minPriceMult()), Math.log(vs.maxPriceMult()));
+            double eOff = NetFlowPlugin.bookEFoldDepth(x -> off.getVolume(d, x), d, tick, Math.log(vs.minPriceMult()), Math.log(vs.maxPriceMult()));
             out.append(String.format(Locale.ROOT, " D %s: bookEFold x%.3f;", d, eOn / eOff));
             if (!(eOn >= eOff) || eOn > 2 * eOff) return fail("bookEFold ratio outside [1, 2]:" + out);
             if (d < 1) {
@@ -2835,6 +2829,45 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /**
+     * T-213: the harness price model, NetFlowPlugin then VolatilityPlugin in production order on one market.
+     * With volatility scale 0 the target is the bare equilibrium (the pre-T-213 VolatilityPlugin with scale 0).
+     */
+    final class HarnessModel {
+        final NetFlowPlugin flow = new NetFlowPlugin();
+        final VolatilityPlugin volatility = new VolatilityPlugin();
+
+        /**
+         * @param itemID          the market
+         * @param flowSettings    NetFlowPlugin settings
+         * @param volatilityScale VolatilityPlugin random-walk scale (0 = deterministic)
+         */
+        HarnessModel(ItemID itemID, NetFlowPlugin.Settings flowSettings, float volatilityScale) {
+            flow.setLoggerEnabled(false);
+            flow.onMarketSubscribed(itemID);
+            applySettings(flow, NetFlowPlugin.Settings.CODEC, flowSettings);
+            volatility.setLoggerEnabled(false);
+            volatility.onMarketSubscribed(itemID);
+            applySettings(volatility, VolatilityPlugin.Settings.CODEC, new VolatilityPlugin.Settings(volatilityScale));
+        }
+
+        /** Runs both plugins' update in production order. */
+        void update(List<MarketInterface> markets) {
+            flow.update(markets);
+            volatility.update(markets);
+        }
+
+        /** @return the NetFlowPlugin's saturated flow (items) */
+        double getSaturatedFlow(ItemID itemID) {
+            return flow.getSaturatedFlow(itemID);
+        }
+
+        /** @return the NetFlowPlugin's cached default book depth */
+        double getBookEFold(ItemID itemID) {
+            return flow.getBookEFold(itemID);
+        }
+    }
+
+    /**
      * T-207: replay market with plugins (VolatilityPlugin scale 0 = deterministic, TargetPriceBot at
      * defaults) and one player, set up like {@link #replayPlayers}. {@link #close()} restores the scratch
      * market and the mod settings.
@@ -2853,8 +2886,8 @@ public class PluginTestSuite extends TestSuite {
         final long maxOrder;
         final MarketCache cache;
         final List<MarketInterface> markets;
-        final VolatilityPlugin vol;
-        final VolatilityPlugin.Settings volSettings;
+        final HarnessModel vol;
+        final NetFlowPlugin.Settings volSettings;
         final TargetPriceBot bot;
         /** Volume distribution plugin refilling the book, only with {@link #harnessRefill}. */
         final DefaultOrderbookVolumeDistributionPlugin refill;
@@ -2868,8 +2901,8 @@ public class PluginTestSuite extends TestSuite {
          * @param price     default price (real)
          * @param abundance natural abundance
          * @param maxOrder  player max order (real items)
-         * @param sens      VolatilityPlugin flowSensitivity
-         * @param maxMult   VolatilityPlugin maxPriceMult
+         * @param sens      NetFlowPlugin flowSensitivity
+         * @param maxMult   NetFlowPlugin maxPriceMult
          */
         T207Env(double price, float abundance, long maxOrder, float sens, float maxMult) {
             this(price, abundance, maxOrder, sens, maxMult, 1f);
@@ -2895,12 +2928,10 @@ public class PluginTestSuite extends TestSuite {
                     harnessCalc(price, DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(price, abundance, volumeScale)));
             market.test_resetVirtualOrderBookVolume();
             markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
-            vol = new VolatilityPlugin();
-            vol.setLoggerEnabled(false);
-            vol.onMarketSubscribed(itemID);
-            VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
-            volSettings = new VolatilityPlugin.Settings(0f, true, sens, vs.minPriceMult(), maxMult);
-            applySettings(vol, VolatilityPlugin.Settings.CODEC, volSettings);
+            NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
+            volSettings = new NetFlowPlugin.Settings(true, sens, vs.minPriceMult(), maxMult, vs.permanentImpact())
+                    .withCapacityVolatilityScale(0f);
+            vol = new HarnessModel(itemID, volSettings, 0f);
             bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
             bot.onMarketSubscribed(itemID);
@@ -2985,7 +3016,7 @@ public class PluginTestSuite extends TestSuite {
         StringBuilder out = new StringBuilder();
         int bad = 0;
         try (T207Env env = t207World()) {
-            VolatilityPlugin.FlowBand band = VolatilityPlugin.flowBand(5, env.volSettings);
+            NetFlowPlugin.FlowBand band = NetFlowPlugin.flowBand(5, env.volSettings);
             out.append(String.format(Locale.ROOT, "band [%.0f, %.0f]", band.lower(), band.upper()));
             for (int t = 0; t < 20; t++) env.tick();
             for (double o : orders) {
@@ -3588,7 +3619,7 @@ public class PluginTestSuite extends TestSuite {
                 maxPrice = Math.max(maxPrice, env.price());
                 if (t % 6000 == 0)
                     path.append(String.format(Locale.ROOT, " %dm:%.2f/eq %.2f", t / 1200, env.price(),
-                            VolatilityPlugin.computeEquilibriumPrice(160, env.vol.getSaturatedFlow(itemID), 50, env.volSettings, env.vol.getBookEFold(itemID))));
+                            NetFlowPlugin.computeEquilibriumPrice(160, env.vol.getSaturatedFlow(itemID), 50, env.volSettings, env.vol.getBookEFold(itemID))));
                 boolean all = true;
                 for (Order o : asks) all &= o.isFilled();
                 if (all) break;
@@ -3615,9 +3646,9 @@ public class PluginTestSuite extends TestSuite {
      * T-207 (ungated): the stored net flow is an exact counter. A seeded random mix of player market
      * buys/sells (walked and partly filled), limit buys/sells (resting, later filled by the bot or by
      * the player's own crossing orders) and inter-market market/limit orders (legs on a second market)
-     * runs on the reported in-game diamond setup (band +-5,761 items, so the VolatilityPlugin saturation is hit).
+     * runs on the reported in-game diamond setup (band +-5,761 items, so the NetFlowPlugin saturation is hit).
      * After every step the raw net flow of both markets must equal minus the player's exact item change
-     * there. Run with and without the VolatilityPlugin, so a mismatch shows whether it comes from the
+     * there. Run with and without the NetFlow + Volatility model, so a mismatch shows whether it comes from the
      * plugin's clamp or from the fill accounting.
      */
     private TestResult test_netFlow_randomTrades_exact() {

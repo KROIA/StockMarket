@@ -53,6 +53,7 @@ import net.kroia.stockmarket.testing.tests.VillagerTradePricingTestSuite;
 import net.kroia.stockmarket.testing.tests.VillagerTradeRewriteTestSuite;
 import net.kroia.stockmarket.testing.tests.VirtualOrderbookTestSuite;
 import net.kroia.stockmarket.testing.tests.VolatilityPluginTestSuite;
+import net.kroia.stockmarket.testing.tests.NetFlowPluginTestSuite;
 
 public class StockMarketTestRegistration {
 
@@ -85,6 +86,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new NormalizedRandomPriceGeneratorTestSuite());
         TestRegistry.register(new VillagerTradePricingTestSuite());
         TestRegistry.register(new VillagerMoneyPaymentTestSuite());
+        TestRegistry.register(new NetFlowPluginTestSuite());
         TestRegistry.register(new VolatilityPluginTestSuite());
         TestRegistry.register(new ModSettingsTestSuite());
         TestRegistry.register(new NewsSystemTestSuite());

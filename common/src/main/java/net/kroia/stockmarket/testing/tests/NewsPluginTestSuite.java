@@ -147,7 +147,7 @@ public class NewsPluginTestSuite extends TestSuite {
         @Override public long convertRealPriceToBackendPrice(double realPrice) { return (long) (realPrice * 100.0); }
         @Override public double getPreviousTargetPrice() { return targetPrice; }
         @Override public double getTargetPrice() { return targetPrice; }
-        @Override public void setTargetPrice(double v) { targetPrice = v; }
+        @Override public void setTargetPrice(double v) { targetPrice = v; targetSet = true; }
         @Override public void addToTargetPrice(double delta) { targetPrice += delta; }
         @Override public long placeOrder(double amount, double price) { return 0; }
         @Override public void placeOrder(double amount) { }
@@ -163,6 +163,12 @@ public class NewsPluginTestSuite extends TestSuite {
         @Override public boolean isVirtualOrderbookEnabled() { return true; }
         @Override public void clearVirtualOrderbook() { }
         @Override public void resetVirtualOrderbook() { }
+        /** T-213 equilibrium channel: last published equilibrium (NaN = none) and the "target written" flag. */
+        double equilibrium = Double.NaN;
+        boolean targetSet;
+        @Override public void setEquilibriumPrice(double v) { equilibrium = v; }
+        @Override public double getEquilibriumPrice() { return Double.isNaN(equilibrium) ? defaultPrice : equilibrium; }
+        @Override public boolean isTargetPriceSetThisTick() { return targetSet; }
     }
 
     /**

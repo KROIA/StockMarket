@@ -649,23 +649,20 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     private boolean loadDefaults() {
         List<ItemID> marketIDs = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getAvailableMarketIDs();
 
-        ServerPlugin plugin1 = addPlugin(Plugins.VOLATILITY_PLUGIN);
-        ServerPlugin plugin2 = addPlugin(Plugins.DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN);
-        ServerPlugin plugin3 = addPlugin(Plugins.TARGET_PRICE_BOT_PLUGIN);
-        ServerPlugin plugin4 = addPlugin(Plugins.NEWS_PLUGIN);
+        // T-213: NetFlow first, so the VolatilityPlugin reads this tick's equilibrium.
+        List<ServerPlugin> defaults = List.of(
+                addPlugin(Plugins.NET_FLOW_PLUGIN),
+                addPlugin(Plugins.VOLATILITY_PLUGIN),
+                addPlugin(Plugins.DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN),
+                addPlugin(Plugins.TARGET_PRICE_BOT_PLUGIN),
+                addPlugin(Plugins.NEWS_PLUGIN));
 
         if (!marketIDs.isEmpty()) {
             ItemID pair = marketIDs.getFirst();
-            plugin1.subscribeToMarket(pair);
-            plugin2.subscribeToMarket(pair);
-            plugin3.subscribeToMarket(pair);
-            plugin4.subscribeToMarket(pair);
+            for (ServerPlugin plugin : defaults) plugin.subscribeToMarket(pair);
         }
 
-        plugin1.setEnabled(true);
-        plugin2.setEnabled(true);
-        plugin3.setEnabled(true);
-        plugin4.setEnabled(true);
+        for (ServerPlugin plugin : defaults) plugin.setEnabled(true);
         return true;
     }
 

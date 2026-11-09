@@ -72,7 +72,11 @@ public class StockMarketTestCategories {
             "stockmarket", "sm_villager_money_payment", "Value-based merchant money payment tests", BOTH, false);
 
     public static final TestCategory VOLATILITY_PLUGIN = new TestCategory(
-            "stockmarket", "sm_volatility_plugin", "VolatilityPlugin flow-equilibrium price tests", BOTH, false);
+            "stockmarket", "sm_volatility_plugin", "VolatilityPlugin random-walk tests", BOTH, false);
+
+    /** T-213: NetFlowPlugin flow-equilibrium price model tests. */
+    public static final TestCategory NET_FLOW_PLUGIN = new TestCategory(
+            "stockmarket", "sm_net_flow_plugin", "NetFlowPlugin flow-equilibrium price tests", BOTH, false);
 
     public static final TestCategory NEWS = new TestCategory(
             "stockmarket", "sm_news", "News event system data model tests (envelope, definitions, library, records)", BOTH, false);
