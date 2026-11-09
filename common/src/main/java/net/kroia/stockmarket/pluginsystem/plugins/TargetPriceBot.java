@@ -463,7 +463,10 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         data.targetPrice = next.active() ? Math.exp(next.y())
                 : limitTargetMove(data.targetPrice, rawTarget, maxMove, STEP_SECONDS);
 
-        double output = data.pid.update(data.targetPrice - currentPrice, STEP_SECONDS);
+        // T-208: relative error in % of the price, so cheap items get the same urgency as
+        // expensive ones; an absolute error left the PID output on dirt at about 0.0025.
+        double error = currentPrice > 0 ? 100 * (data.targetPrice - currentPrice) / currentPrice : 0;
+        double output = data.pid.update(error, STEP_SECONDS);
         // Clamp PID output to [-1, 1] as a fraction of how aggressively to push
         double pidFraction = Math.min(Math.max(-1, output), 1);
 

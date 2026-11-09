@@ -135,6 +135,7 @@ public class PluginTestSuite extends TestSuite {
         addTest("targetPriceBot_reference_codec_nbt_legacy", this::test_targetPriceBot_referenceCodecNbt);
         addTest("targetPriceBot_reference_off_is_idle", this::test_targetPriceBot_referenceOff);
         addTest("targetPriceBot_userWorldSpike_reverts", this::test_targetPriceBot_userWorldSpike);
+        addTest("targetPriceBot_tracking_report", this::test_targetPriceBot_tracking);
     }
 
     @Override
@@ -1721,6 +1722,50 @@ public class PluginTestSuite extends TestSuite {
             return pass("Reversion time 0: reference stays idle through a 10k spike");
         } catch (Exception e) {
             return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /**
+     * T-208 C3b report: how closely the bot's price tracks a moved equilibrium on diamond (160, abundance 50),
+     * dirt (0.1, abundance 2000) and a cheap item (1.0, abundance 2000). The faded flow is set to 100 (diamond)
+     * / 2 (others) max orders bought (no trade, so the reference stays idle), then 2,400 ticks run. Row:
+     * target, price after 200 / 2,400 ticks, the last tick the price was 1% or more off the target, the mean
+     * |ln(price/target)| in % and the number of bot orders.
+     */
+    private TestResult test_targetPriceBot_tracking() {
+        StringBuilder out = new StringBuilder();
+        harnessRefill = true;
+        String[] names = {"diamond", "dirt", "cheap"};
+        double[] prices = {160, 0.1, 1.0}, flows = {100, 2, 2};
+        float[] abundances = {50, 2000, 2000};
+        try {
+            for (int i = 0; i < names.length; i++) {
+                try (T207Env env = new T207Env(prices[i], abundances[i], MarketSettings.defaultMaxOrderVolume(abundances[i]), 2000, 3)) {
+                    IPluginMarket pm = env.markets.get(0).market;
+                    for (int t = 0; t < 200; t++) env.tick();
+                    env.market.setFadedNetPlayerItemFlow(MarketManager.convertToRawAmountStatic(-flows[i] * env.maxOrder));
+                    double at200 = 0, sum = 0;
+                    int settle = 0, orders = 0;
+                    TargetPriceBot.StepInfo last = env.bot.test_getLastStep(itemID);
+                    for (int t = 1; t <= 2400; t++) {
+                        env.tick();
+                        TargetPriceBot.StepInfo step = env.bot.test_getLastStep(itemID);
+                        if (step != null && step != last) { last = step; orders++; }
+                        double err = Math.abs(Math.log(env.price() / pm.getPreviousTargetPrice()));
+                        sum += err;
+                        if (err >= 0.01) settle = t;
+                        if (t == 200) at200 = env.price();
+                    }
+                    out.append(String.format(Locale.ROOT, "%s%s: target %.4g | +200 %.4g | +2400 %.4g | outside1%% until %d | mean err %.2f%% | orders %d",
+                            i == 0 ? "" : " || ", names[i], pm.getPreviousTargetPrice(), at200, env.price(), settle, 100 * sum / 2400, orders));
+                }
+            }
+            StockMarketMod.LOGGER.info("[T-208 tracking] {}", out);
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e + out);
         } finally {
             harnessRefill = false;
         }
