@@ -93,7 +93,7 @@ public class PluginTestSuite extends TestSuite {
             addTest("t197_sweep_sens" + (int) s, () -> test_t197_sweep(s));
         addTest("t197_sweep_memoryOff", this::test_t197_sweep_memoryOff);
         addTest("t197_patientTrace", this::test_t197_patientTrace);
-        // T-204 sweeps (report only; run with -Dstockmarket.t197sweep=trace or =true), split so no
+        // T-206 sweeps (report only; run with -Dstockmarket.t197sweep=trace or =true), split so no
         // single test runs longer than ~1-2 min.
         for (float move : new float[]{0.005f, 0.00125f}) {
             String m = String.valueOf(move).replace(".", "");
@@ -101,14 +101,14 @@ public class PluginTestSuite extends TestSuite {
             addTest("t206_longHoldSweep_move" + m + "_hold30", () -> test_t206_longHold(move, new int[]{30}));
             addTest("t206_longHoldSweep_move" + m + "_hold60", () -> test_t206_longHold(move, new int[]{60}));
         }
-        // T-206 sweep 2: name, hl, move, k, rise, return
+        // T-206 sweep 2: name, hl, move
         // T-206 gate: today's defaults (hl 10, move 0.005) vs the proposed ones (hl 5, move 0.00125)
         for (boolean proposed : new boolean[]{false, true}) {
             String tag = proposed ? "new" : "today";
             float hl = proposed ? 5 : 10, move = proposed ? 0.00125f : 0.005f;
             // dirt preset: price 0.1, abundance 200 x preset scale 10 = 2000
-            addTest("t206g_dirt_" + tag + "_short", () -> test_t206Sweep2("dirt_" + tag, hl, move, 0, 0, 10, 2000, 0.1, false));
-            addTest("t206g_dirt_" + tag + "_long", () -> test_t206Sweep2("dirt_" + tag, hl, move, 0, 0, 10, 2000, 0.1, true));
+            addTest("t206g_dirt_" + tag + "_short", () -> test_t206Sweep2("dirt_" + tag, hl, move, 2000, 0.1, false));
+            addTest("t206g_dirt_" + tag + "_long", () -> test_t206Sweep2("dirt_" + tag, hl, move, 2000, 0.1, true));
             addTest("t206g_twoPumpers_" + tag + "_short", () -> test_t206TwoPlayers(tag, hl, move, false, new int[]{5, 10, 15, 20}));
             addTest("t206g_twoPumpers_" + tag + "_long", () -> test_t206TwoPlayers(tag, hl, move, false, new int[]{30, 60}));
             addTest("t206g_pumpPlusOrganic_" + tag + "_short", () -> test_t206TwoPlayers(tag, hl, move, true, new int[]{5, 10, 15, 20}));
@@ -116,25 +116,10 @@ public class PluginTestSuite extends TestSuite {
         }
         for (float move : new float[]{0.005f, 0.00125f}) {
             String m = String.valueOf(move).replace(".", "");
-            t206Config("hl2_move" + m, 2, move, 0, 0, 10);
-            t206Config("hl5_move" + m, 5, move, 0, 0, 10);
-            t206Config("hl10_move" + m, 10, move, 0, 0, 10);
-            t206Config("rise300_move" + m, 10, move, 0, 300, 10);
-            t206Config("rise900_move" + m, 10, move, 0, 900, 10);
-            t206Config("k025_move" + m, 10, move, 0.25f, 0, 10);
-            t206Config("k05_move" + m, 10, move, 0.5f, 0, 10);
+            t206Config("hl2_move" + m, 2, move);
+            t206Config("hl5_move" + m, 5, move);
+            t206Config("hl10_move" + m, 10, move);
         }
-        addTest("t204_deadbandSweep_low", () -> test_t204_deadbandSweep(new float[]{0, 1, 2}));
-        addTest("t204_deadbandSweep_high", () -> test_t204_deadbandSweep(new float[]{5, 10, 20}));
-        for (float k : new float[]{0, 10})
-            for (float hl : new float[]{10, 30, 60})
-                addTest("t204_halfLifeMoveSweep_k" + (int) k + "_hl" + (int) hl, () -> test_t204_halfLifeMoveSweep(k, hl));
-        for (float k : new float[]{0, 10})
-            for (float rise : new float[]{0, 60, 300, 900})
-                addTest("t204_smoothingSweep_k" + (int) k + "_rise" + (int) rise, () -> test_t204_smoothingSweep(k, rise));
-        for (float k : new float[]{0, 0.25f, 0.5f})
-            for (float rise : new float[]{0, 300})
-                addTest("t204_followUp_k" + String.valueOf(k).replace(".", "") + "_rise" + (int) rise, () -> test_t204_followUp(k, rise));
         // T-207 regression probes (run only with -Dstockmarket.t207=true)
         addTest("t207_netFlow_matchesFills", this::test_t207_netFlow);
         addTest("t207_spike_holds", this::test_t207_spike);
@@ -612,22 +597,13 @@ public class PluginTestSuite extends TestSuite {
      * @param warmupTicks     ticks the plugins run before the player acts, so the bot's rate-limited
      *                        target starts at the default price (0 = the bot's first step snaps to the
      *                        target the player's first order already moved; pre-T-197 behaviour)
-     * @param deadbandVolume  T-204 VolatilityPlugin deadband in items (0 = off)
-     * @param riseSeconds     T-204 VolatilityPlugin flow rise time (0 = instant)
-     * @param returnSeconds   T-204 VolatilityPlugin flow return time (0 = instant)
      * @param defaultPrice    T-206 market default price (real); 160 = the diamond replay
      */
     private record ReplayConfig(float flowSensitivity, float abundance, float maxPriceMult, float memoryMinutes, int warmupTicks,
-                                float deadbandVolume, float riseSeconds, float returnSeconds, double defaultPrice) {
-        /** T-204 config on the diamond price (160). */
-        ReplayConfig(float flowSensitivity, float abundance, float maxPriceMult, float memoryMinutes, int warmupTicks,
-                     float deadbandVolume, float riseSeconds, float returnSeconds) {
-            this(flowSensitivity, abundance, maxPriceMult, memoryMinutes, warmupTicks, deadbandVolume, riseSeconds, returnSeconds, 160);
-        }
-
-        /** Pre-T-204 config: deadband 0, no flow smoothing (the flow mechanics these replays measure). */
+                                double defaultPrice) {
+        /** Config on the diamond price (160). */
         ReplayConfig(float flowSensitivity, float abundance, float maxPriceMult, float memoryMinutes, int warmupTicks) {
-            this(flowSensitivity, abundance, maxPriceMult, memoryMinutes, warmupTicks, 0f, 0f, 0f);
+            this(flowSensitivity, abundance, maxPriceMult, memoryMinutes, warmupTicks, 160);
         }
     }
 
@@ -731,8 +707,7 @@ public class PluginTestSuite extends TestSuite {
             vol.onMarketSubscribed(itemID);
             VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
             VolatilityPlugin.Settings volSettings = new VolatilityPlugin.Settings(0f, vs.flowInfluenceEnabled(),
-                    cfg.flowSensitivity(), cfg.deadbandVolume(), cfg.riseSeconds(), cfg.returnSeconds(),
-                    vs.minPriceMult(), cfg.maxPriceMult());
+                    cfg.flowSensitivity(), vs.minPriceMult(), cfg.maxPriceMult());
             applySettings(vol, VolatilityPlugin.Settings.CODEC, volSettings);
             TargetPriceBot bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
@@ -773,7 +748,7 @@ public class PluginTestSuite extends TestSuite {
                     if (trace != null && (c * cycleTicks + t) % 100 == 0) {
                         double p = MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice());
                         double eq = VolatilityPlugin.computeEquilibriumPrice(defaultPrice,
-                                vol.getEffectiveFlow(itemID), abundance, volSettings);
+                                vol.getSaturatedFlow(itemID), abundance, volSettings, vol.getBookEFold(itemID));
                         trace.append(String.format(Locale.ROOT, " %d:%.0f(max %.0f)/%.0f/%.0f/%.0f/%.0f", c * cycleTicks + t, p, windowMax, eq,
                                 cache.getPluginOrderBook().getRealVirtualVolume(p, eq),
                                 market.getOrderbook().getRealVolumeRounded(Math.min(p, eq), Math.max(p, eq)),
@@ -782,10 +757,10 @@ public class PluginTestSuite extends TestSuite {
                     }
                     if (holdProbe != null && c == 0 && !sellFirst && t >= legTicks && t <= legTicks + waitTicks
                             && ((t - legTicks) % 6000 == 0 || t == legTicks + waitTicks)) {
-                        double flow = vol.getEffectiveFlow(itemID);
+                        double flow = vol.getSaturatedFlow(itemID);
                         holdProbe.append(String.format(Locale.ROOT, " %.1f:%.2f/%.2f/%.2f/%.0f", (t - legTicks) / 1200.0,
                                 MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice()),
-                                VolatilityPlugin.computeEquilibriumPrice(defaultPrice, flow, abundance, volSettings),
+                                VolatilityPlugin.computeEquilibriumPrice(defaultPrice, flow, abundance, volSettings, vol.getBookEFold(itemID)),
                                 bot.test_getTargetPrice(itemID), flow));
                     }
                     long moneyBefore = moneyBank.getTotalBalance();
@@ -1060,122 +1035,9 @@ public class PluginTestSuite extends TestSuite {
             return fail("Exception: " + e);
         }
     }
-    // ── T-204 deadband / half-life / smoothing sweeps (report only) ──────────
-
     /**
-     * One T-204 row on the diamond replay market (abundance 50, sensitivity / maxPriceMult at the
-     * VolatilityPlugin defaults, volatility scale 0, memory at its default, 20 warm-up ticks).
-     * Scenarios (player orders = max order 3,200, one per 10 ticks):
-     * <ul>
-     *   <li>held: 60 max buys, 5 min hold, sell back;</li>
-     *   <li>held 3x: the held sweep 3 times with a 10 min gap after each;</li>
-     *   <li>rapid: 20 x (5 max buys, 1 s wait, sell back);</li>
-     *   <li>patient: 5 x (5 max buys, 60 s hold, sell back);</li>
-     *   <li>dump: start with 192k items, sell 60 max orders, hold 5 min, buy 60 back;</li>
-     *   <li>organic: 3,200 items every 30 s for 10 min, never sold; end / max price in % of 160.</li>
-     * </ul>
-     * Cells: profit $M (profit % of the money spent on buys) max price.
-     *
-     * @param k       deadband in multiples of the replay capacity (sensitivity x abundance, scale 0)
-     * @param hl      NET_FLOW_HALF_LIFE_MINUTES
-     * @param move    TargetPriceBot max target move per second
-     * @param rise    VolatilityPlugin flow rise time (s)
-     * @param ret     VolatilityPlugin flow return time (s)
-     */
-    private String t204Row(float k, float hl, float move, float rise, float ret) {
-        VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
-        float abundance = 50;
-        double capacity = (double) vs.flowSensitivity() * abundance; // volatility scale 0 in the replay
-        float deadband = (float) Math.round(k * capacity);
-        ReplayConfig cfg = new ReplayConfig(vs.flowSensitivity(), abundance, vs.maxPriceMult(),
-                backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue(), 20,
-                deadband, rise, ret);
-        long maxOrder = MarketSettings.defaultMaxOrderVolume(abundance);
-        int organicOrders = (int) ((3200 + maxOrder - 1) / maxOrder);
-        long organicChunk = Math.min(3200, maxOrder);
-        StringBuilder row = new StringBuilder(String.format(Locale.ROOT,
-                "D %.0f items (%.0f x cap) | hl %.0f | move %.5f | rise %.0f | ret %.0f",
-                deadband, deadband / capacity, hl, move, rise, ret));
-        ReplayResult[] runs = {
-                replay(hl, move, 1, 60, 6000, 0, true, cfg, null),
-                replay(hl, move, 3, 60, 6000, 0, true, cfg, null, 12000, 0),
-                replay(hl, move, 20, 5, 20, 0, true, cfg, null),
-                replay(hl, move, 5, 5, 1200, 0, true, cfg, null),
-                replay(hl, move, 1, 60, 6000, 0, true, cfg, null, 0, 60 * maxOrder)};
-        for (ReplayResult r : runs)
-            row.append(String.format(Locale.ROOT, " | %+.2fM (%+.1f%%) max %.0f", r.profit() / 1e6, r.profitPct(), r.maxPrice()));
-        ReplayResult organic = replay(hl, move, 20, organicOrders, 600 - organicOrders * 10, organicChunk, false, cfg, null);
-        row.append(String.format(Locale.ROOT, " | organic end %+.0f%% max %+.0f%%",
-                100 * (organic.endPrice() / 160 - 1), 100 * (organic.maxPrice() / 160 - 1)));
-        // organic 2x: twice the order count per 30 s (2 x 3,200, 10 ticks apart) -> 128k gross in 10 min
-        ReplayResult organic2 = replay(hl, move, 20, 2 * organicOrders, 600 - 2 * organicOrders * 10, organicChunk, false, cfg, null);
-        row.append(String.format(Locale.ROOT, " | organic2x end %+.0f%% max %+.0f%%",
-                100 * (organic2.endPrice() / 160 - 1), 100 * (organic2.maxPrice() / 160 - 1)));
-        StockMarketMod.LOGGER.info("[T-204 row] {}", row);
-        return row.toString();
-    }
-
-    /**
-     * T-204 follow-up: half-life 10, return 10 s, deadband k x capacity, one rise time, bot max target
-     * move 0.005 / 0.0025 / 0.00125.
-     */
-    private TestResult test_t204_followUp(float k, float rise) {
-        if (!t197Requested(true)) return skip("T-204 sweep not requested");
-        try {
-            StringBuilder out = new StringBuilder();
-            for (float m : new float[]{0.005f, 0.0025f, 0.00125f})
-                out.append("\n[T-204f] ").append(t204Row(k, 10f, m, rise, 10f));
-            return pass(out.toString());
-        } catch (Exception e) {
-            return fail("Exception: " + e);
-        }
-    }
-
-    /** T-204 sweep (a): deadband k x capacity, everything else at the defaults. */
-    private TestResult test_t204_deadbandSweep(float[] ks) {
-        if (!t197Requested(true)) return skip("T-204 sweep not requested");
-        try {
-            float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
-            StringBuilder out = new StringBuilder();
-            for (float k : ks)
-                out.append("\n[T-204a] ").append(t204Row(k, hl, TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND, 0, 0));
-            return pass(out.toString());
-        } catch (Exception e) {
-            return fail("Exception: " + e);
-        }
-    }
-
-    /** T-204 sweep (b): at deadband k, one half-life x bot max target move default / 1/2 / 1/4. */
-    private TestResult test_t204_halfLifeMoveSweep(float k, float hl) {
-        if (!t197Requested(true)) return skip("T-204 sweep not requested");
-        try {
-            StringBuilder out = new StringBuilder();
-            float move = TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
-            for (float m : new float[]{move, move / 2, move / 4})
-                out.append("\n[T-204b] ").append(t204Row(k, hl, m, 0, 0));
-            return pass(out.toString());
-        } catch (Exception e) {
-            return fail("Exception: " + e);
-        }
-    }
-
-    /** T-204 sweep (c): at deadband k, one rise time x return 0 / 10 / 60 s. */
-    private TestResult test_t204_smoothingSweep(float k, float rise) {
-        if (!t197Requested(true)) return skip("T-204 sweep not requested");
-        try {
-            float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
-            StringBuilder out = new StringBuilder();
-            for (float ret : new float[]{0, 10, 60})
-                out.append("\n[T-204c] ").append(t204Row(k, hl, TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND, rise, ret));
-            return pass(out.toString());
-        } catch (Exception e) {
-            return fail("Exception: " + e);
-        }
-    }
-
-    /**
-     * T-206 gate: held sweep (60 max buys, hold, sell back) with long holds at k 0, rise / return 0,
-     * half-life 10, one bot max target move. Logs one "[T-206 row]" per hold: profit, max price and
+     * T-206 gate: held sweep (60 max buys, hold, sell back) with long holds at half-life 10, one bot max
+     * target move. Logs one "[T-206 row]" per hold: profit, max price and
      * the hold-phase samples (see {@link #holdProbe}); the last sample is the sell start.
      *
      * @param move  TargetPriceBot max target move per second
@@ -1211,35 +1073,32 @@ public class PluginTestSuite extends TestSuite {
      * Registers the two gated T-206 sweep-2 tests of one config: "_short" (holds 5 / 10 / 15 / 20, dump,
      * organic, organic 2x) and "_long" (holds 30 / 60).
      */
-    private void t206Config(String name, float hl, float move, float k, float rise, float ret) {
-        addTest("t206b_" + name + "_short", () -> test_t206Sweep2(name, hl, move, k, rise, ret, 50, 160, false));
-        addTest("t206b_" + name + "_long", () -> test_t206Sweep2(name, hl, move, k, rise, ret, 50, 160, true));
+    private void t206Config(String name, float hl, float move) {
+        addTest("t206b_" + name + "_short", () -> test_t206Sweep2(name, hl, move, 50, 160, false));
+        addTest("t206b_" + name + "_long", () -> test_t206Sweep2(name, hl, move, 50, 160, true));
     }
 
     /**
-     * T-206 sweep 2 on a replay market (see {@link #t204Row}): held sweep (60 max buys, hold, sell back)
+     * T-206 sweep 2 on a replay market (abundance / price as given, volatility scale 0, memory at its
+     * default, 20 warm-up ticks): held sweep (60 max buys, hold, sell back)
      * per hold, plus (short part) dump-and-rebuy and organic (1 max order per 30 s for 10 min, never
      * sold) / organic 2x. All volumes scale with the market's max order (64 x abundance). Logs one
      * "[T-206b] config | scenario | profit $ | profit % | max % | end %" line per scenario (prices in %
      * of the default price).
      *
      * @param move      TargetPriceBot max target move per second
-     * @param k         deadband in multiples of the replay capacity
      * @param abundance natural abundance of the replay market
      * @param price     default price of the replay market (real)
      * @param longPart  false = holds 5-20 + dump + organic, true = holds 30 / 60
      */
-    private TestResult test_t206Sweep2(String name, float hl, float move, float k, float rise, float ret,
-                                       float abundance, double price, boolean longPart) {
+    private TestResult test_t206Sweep2(String name, float hl, float move, float abundance, double price, boolean longPart) {
         // T-207: today's default diamond rows (short part) also run with -Dstockmarket.t207=true
         boolean t207Row = t207Requested() && name.equals("hl10_move0005") && !longPart;
         if (!t197Requested(true) && !t207Row) return skip("T-206 sweep not requested");
         try {
             VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
-            float deadband = (float) Math.round(k * (double) vs.flowSensitivity() * abundance);
             ReplayConfig cfg = new ReplayConfig(vs.flowSensitivity(), abundance, vs.maxPriceMult(),
-                    backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue(), 20,
-                    deadband, rise, ret, price);
+                    backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue(), 20, price);
             long maxOrder = MarketSettings.defaultMaxOrderVolume(abundance);
             StringBuilder out = new StringBuilder();
             // T-207 rows: book refill on, each row without and with the bot's gap guard
@@ -1293,7 +1152,7 @@ public class PluginTestSuite extends TestSuite {
 
     /**
      * T-206 gate: diamond replay market (as {@link #replay}: price 160, abundance 50, max order 3,200,
-     * memory default, 20 warm-up ticks, k 0, rise 0 / return 10) with several scripted players.
+     * memory default, 20 warm-up ticks) with several scripted players.
      *
      * @param hl    NET_FLOW_HALF_LIFE_MINUTES
      * @param move  TargetPriceBot max target move per second
@@ -1334,7 +1193,7 @@ public class PluginTestSuite extends TestSuite {
             vol.onMarketSubscribed(itemID);
             VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
             applySettings(vol, VolatilityPlugin.Settings.CODEC, new VolatilityPlugin.Settings(0f, vs.flowInfluenceEnabled(),
-                    vs.flowSensitivity(), 0f, 0f, 10f, vs.minPriceMult(), vs.maxPriceMult()));
+                    vs.flowSensitivity(), vs.minPriceMult(), vs.maxPriceMult()));
             TargetPriceBot bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
             bot.onMarketSubscribed(itemID);
@@ -1534,7 +1393,7 @@ public class PluginTestSuite extends TestSuite {
             vol.setLoggerEnabled(false);
             vol.onMarketSubscribed(itemID);
             VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
-            volSettings = new VolatilityPlugin.Settings(0f, true, sens, 0f, 0f, 0f, vs.minPriceMult(), maxMult);
+            volSettings = new VolatilityPlugin.Settings(0f, true, sens, vs.minPriceMult(), maxMult);
             applySettings(vol, VolatilityPlugin.Settings.CODEC, volSettings);
             bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
@@ -1835,8 +1694,8 @@ public class PluginTestSuite extends TestSuite {
             Order[] asks = new Order[4];
             double part = Math.floor(held / 4 * 100) / 100;
             for (int i = 0; i < 4; i++) asks[i] = env.limitSell(part, 160 * mult[i]);
-            out.append(String.format(Locale.ROOT, "bought %.0f for %.0f (avg %.2f), price after buys %.2f, effFlow %.0f",
-                    held, spent, spent / held, env.price(), env.vol.getEffectiveFlow(itemID)));
+            out.append(String.format(Locale.ROOT, "bought %.0f for %.0f (avg %.2f), price after buys %.2f, satFlow %.0f",
+                    held, spent, spent / held, env.price(), env.vol.getSaturatedFlow(itemID)));
             TargetPriceBot.StepInfo last = env.bot.test_getLastStep(itemID);
             int fillTicks = 0, fillTicksWithBotBuy = 0;
             double maxPrice = 0;
@@ -1854,7 +1713,7 @@ public class PluginTestSuite extends TestSuite {
                 maxPrice = Math.max(maxPrice, env.price());
                 if (t % 6000 == 0)
                     path.append(String.format(Locale.ROOT, " %dm:%.2f/eq %.2f", t / 1200, env.price(),
-                            VolatilityPlugin.computeEquilibriumPrice(160, env.vol.getEffectiveFlow(itemID), 50, env.volSettings)));
+                            VolatilityPlugin.computeEquilibriumPrice(160, env.vol.getSaturatedFlow(itemID), 50, env.volSettings, env.vol.getBookEFold(itemID))));
                 boolean all = true;
                 for (Order o : asks) all &= o.isFilled();
                 if (all) break;

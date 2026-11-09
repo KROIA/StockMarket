@@ -429,9 +429,9 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
     }
 
     /**
-     * Replaces the custom settings of one market from inside the plugin (e.g. to persist a value the
-     * plugin derived at runtime, T-204 auto deadband): stores them in the per-market map, which is what
-     * gets saved and synced to the UI, and calls {@link #onCustomSettingsApplied}.
+     * Replaces the custom settings of one market from inside the plugin or a test (e.g. to persist a
+     * value the plugin derived at runtime): stores them in the per-market map, which is what gets saved
+     * and synced to the UI, and calls {@link #onCustomSettingsApplied}.
      *
      * @param marketID the market whose settings are replaced
      * @param settings the new settings (not null)
