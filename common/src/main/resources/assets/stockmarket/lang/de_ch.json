@@ -530,5 +530,6 @@
   "gui.stockmarket.orderbook_volume_histogram.border.recenter_hi": "Neuzentrierung ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "linear ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "Log-Slot ↑ %s (Teil-Slot über linear)",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_slot": "Log-Slot %s: %s – %s",
   "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "Ask-Obergrenze ↑ %s (keine Standard-Asks darüber)"
 }

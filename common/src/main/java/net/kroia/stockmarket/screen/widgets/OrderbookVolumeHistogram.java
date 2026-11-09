@@ -4,6 +4,7 @@ import com.mojang.math.Axis;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.stockmarket.market.core.DepthMemory;
 import net.kroia.stockmarket.stockmarket.market.core.VirtualOrderbook;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -58,6 +59,14 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
     private static final int BORDER_HOVER_PX = 2;
     /** T-209: thickness in pixels of the linear array lines (edges, re-centre borders, connecting vertical). */
     private static final int LINEAR_LINE_PX = 2;
+    /** T-209: minimum pixel spacing of the log slot ticks; closer ticks are skipped (zoomed far out). */
+    private static final int LOG_TICK_MIN_SPACING_PX = 3;
+    /** T-209: hard cap of log slot iterations per frame. */
+    private static final int LOG_TICK_MAX_ITERATIONS = 2000;
+    /** T-209: log slot ticks drawn this frame as {slot k, raw start price, canvas y}, for the tooltip. */
+    private final List<long[]> logTicks = new ArrayList<>();
+    /** T-209: raw units per real price unit, derived from the log floor border (raw price 1). */
+    private long logRawScale = 1;
 
     public OrderbookVolumeHistogram(CandlestickChart parentChart)
     {
@@ -118,6 +127,7 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
             for (Overlay overlay : overlays) {
                 overlay.render(this);
             }
+            renderLogSlotTicks();
             renderArrayBorders();
             disableScissor();
         }
@@ -226,8 +236,72 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
             String price = BigDecimal.valueOf(arrayBorders.get(i)).stripTrailingZeros().toPlainString();
             sb.append(Component.translatable("gui.stockmarket.orderbook_volume_histogram.border." + BORDER_KEYS[i], price).getString());
         }
+        // Log slot ticks (right half only), at most one: they are at least LOG_TICK_MIN_SPACING_PX apart
+        if (mx >= scissorRect.x + scissorRect.width / 2)
+        {
+            for (long[] tick : logTicks)
+            {
+                if (Math.abs(tick[2] - my) > 1) continue;
+                if (!sb.isEmpty()) sb.append('\n');
+                sb.append(Component.translatable("gui.stockmarket.orderbook_volume_histogram.border.log_slot", tick[0],
+                        realPriceText(tick[1]), realPriceText(DepthMemory.slotEnd((int) tick[0]))).getString());
+                break;
+            }
+        }
         if (!sb.isEmpty())
             drawTooltip(sb.toString(), getMousePos());
+    }
+
+    /** T-209: @return a raw price as real price text, using the scale from the log floor (raw 1) */
+    private String realPriceText(long raw)
+    {
+        return BigDecimal.valueOf(raw).divide(BigDecimal.valueOf(logRawScale)).stripTrailingZeros().toPlainString();
+    }
+
+    /**
+     * T-209: draws a half-width orange tick at the start of every log grid slot ({@link DepthMemory})
+     * in the visible range outside the linear window, from the log floor up to the ask ceiling.
+     * The grid is fixed and global, so it is derived here from the borders the response already sends
+     * (the log floor is raw price 1, which also gives the raw/real scale). Ticks closer than
+     * {@link #LOG_TICK_MIN_SPACING_PX} to the last drawn one are skipped (thinning when zoomed out).
+     * Fills {@link #logTicks} for the tooltip.
+     */
+    private void renderLogSlotTicks()
+    {
+        logTicks.clear();
+        if (arrayBorders.size() < VirtualOrderbook.BORDER_COUNT) return;
+        double floor = arrayBorders.get(VirtualOrderbook.BORDER_LOG_FLOOR);
+        if (Double.isNaN(floor) || !(floor > 0)) return; // depth memory off: no log grid
+        logRawScale = Math.max(1, Math.round(1 / floor));
+        double linLo = arrayBorders.get(VirtualOrderbook.BORDER_LINEAR_LO);
+        double linHi = arrayBorders.get(VirtualOrderbook.BORDER_LINEAR_HI);
+        double ceiling = arrayBorders.get(VirtualOrderbook.BORDER_ASK_CEILING);
+        double minVis = Math.max(parentChart.getMinVisiblePrice(), floor);
+        double maxVis = parentChart.getMaxVisiblePrice();
+        if (!Double.isNaN(ceiling)) maxVis = Math.min(maxVis, ceiling);
+        if (!(maxVis >= minVis) || maxVis * logRawScale >= Long.MAX_VALUE / 2) return;
+        long rawLo = Math.max(1, (long) Math.ceil(minVis * logRawScale));
+        long rawHi = (long) Math.floor(maxVis * logRawScale);
+        if (rawLo > rawHi) return;
+        int kLo = DepthMemory.slotOf(rawLo), kHi = DepthMemory.slotOf(rawHi);
+        long linLoRaw = Math.round(linLo * logRawScale), linHiRaw = Math.round(linHi * logRawScale);
+        int x = scissorRect.x + scissorRect.width / 2;
+        int w = scissorRect.width - scissorRect.width / 2;
+        int lastY = Integer.MIN_VALUE;
+        // Stride keeps a frame under LOG_TICK_MAX_ITERATIONS even across the whole grid.
+        int stride = Math.max(1, (kHi - kLo + 1 + LOG_TICK_MAX_ITERATIONS - 1) / LOG_TICK_MAX_ITERATIONS);
+        for (int k = kLo; k <= kHi; k += stride)
+        {
+            long start = DepthMemory.slotStart(k);
+            if (start < rawLo || start > rawHi) continue;
+            if (DepthMemory.slotStart(k + 1) <= start) continue;        // empty slot (low raw prices)
+            if (start >= linLoRaw && start <= linHiRaw) continue;      // inside the linear window
+            int y = parentChart.toCanvasSpaceY(start / (double) logRawScale);
+            if (lastY != Integer.MIN_VALUE && Math.abs(y - lastY) < LOG_TICK_MIN_SPACING_PX) continue;
+            drawRect(x, y, w, 1, BORDER_COLORS[VirtualOrderbook.BORDER_LOG_SLOT_BELOW]);
+            logTicks.add(new long[]{k, start, y});
+            lastY = y;
+        }
     }
     @Override
     protected void layoutChanged() {

@@ -530,5 +530,6 @@
   "gui.stockmarket.orderbook_volume_histogram.border.recenter_hi": "re-centre ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "linear ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "log slot ↑ %s (partial slot above linear)",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_slot": "log slot %s: %s – %s",
   "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "ask ceiling ↑ %s (no default asks above)"
 }

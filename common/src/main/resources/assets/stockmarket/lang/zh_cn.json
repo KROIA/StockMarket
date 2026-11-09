@@ -441,5 +441,6 @@
   "gui.stockmarket.orderbook_volume_histogram.border.recenter_hi": "重新居中 ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "线性 ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "对数槽 ↑ %s（线性区上方的部分槽）",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_slot": "对数槽 %s：%s – %s",
   "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "卖单上限 ↑ %s（上方无默认卖单）"
 }
