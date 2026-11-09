@@ -9,6 +9,7 @@ import net.kroia.stockmarket.testing.StockMarketTestCategories;
 
 import java.sql.Connection;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -60,11 +61,27 @@ public class DatabaseTestSuite extends TestSuite {
      * @param body the test body to execute on the database thread
      * @return the body's result, or a failure on exception/timeout
      */
+    /** Safety cap for draining the db-worker backlog before a test body runs. */
+    private static final long DRAIN_TIMEOUT_MINUTES = 5;
+
     private TestResult onDbThread(Callable<TestResult> body) {
         if (backend.DATABASE_MANAGER == null)
             return fail("DATABASE_MANAGER is null");
+        ExecutorService db = backend.DATABASE_MANAGER.getDatabaseThread();
+        // The db-worker is a FIFO single-thread executor and earlier suites (heavy trading)
+        // can leave a long backlog of writes queued. Drain it first with a no-op barrier so
+        // the 10 s budget below measures the test body, not the backlog. pumpUntil keeps the
+        // server's queued tasks running meanwhile, so the wait cannot deadlock the server thread.
+        Future<?> barrier;
         try {
-            return backend.DATABASE_MANAGER.getDatabaseThread().submit(body).get(10, TimeUnit.SECONDS);
+            barrier = db.submit(() -> {});
+        } catch (RejectedExecutionException e) {
+            return fail("db-worker rejected the drain barrier: " + e);
+        }
+        if (!pumpUntil(barrier::isDone, TimeUnit.MINUTES.toMillis(DRAIN_TIMEOUT_MINUTES)))
+            return fail("db-worker queue did not drain within " + DRAIN_TIMEOUT_MINUTES + " min before the test body could start");
+        try {
+            return db.submit(body).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("Test body failed on db-worker thread: " + e);
         }
