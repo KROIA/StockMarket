@@ -174,7 +174,7 @@
   "gui.stockmarket.plugin_management_screen.add_plugin": "Plugin dezuetue",
   "gui.stockmarket.plugin_management_screen.add_plugin_title": "Plugin dezuetue",
   "gui.stockmarket.plugin_management_screen.debug_markers": "Orderbuech-Debugmarker",
-  "gui.stockmarket.plugin_management_screen.debug_markers.tooltip": "Zeigt s Layout vom virtuelle Orderbuech i de Volumeaazeig: Grenze vom lineare Array und vo de Neuzentrierig, Log-Raster-Grenze und d Ask-Obergrenze. Für de Priis mit de Muus uf e Linie zeige.",
+  "gui.stockmarket.plugin_management_screen.debug_markers.tooltip": "Zeigt s Layout vom virtuelle\nOrderbuech i de Volumeaazeig:\nGrenze vom lineare Array und vo de\nNeuzentrierig, Log-Raster-Grenze\nund d Ask-Obergrenze. Für de Priis\nmit de Muus uf e Linie zeige.",
   "gui.stockmarket.plugin_management_screen.delete_plugin": "x",
   "gui.stockmarket.plugin_management_screen.subscribe_close": "Schlüsse",
   "gui.stockmarket.create_market_tab.title": "Märt erstelle",

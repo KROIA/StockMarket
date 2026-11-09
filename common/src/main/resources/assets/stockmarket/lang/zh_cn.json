@@ -155,7 +155,7 @@
   "gui.stockmarket.plugin_management_screen.add_plugin": "添加插件",
   "gui.stockmarket.plugin_management_screen.add_plugin_title": "添加插件",
   "gui.stockmarket.plugin_management_screen.debug_markers": "订单簿调试标记",
-  "gui.stockmarket.plugin_management_screen.debug_markers.tooltip": "在成交量显示中显示虚拟订单簿布局：线性数组边界和重新居中边界、对数网格边界以及卖价上限。将鼠标悬停在线上可查看其价格。",
+  "gui.stockmarket.plugin_management_screen.debug_markers.tooltip": "在成交量显示中显示虚拟订单簿布局：\n线性数组边界和重新居中边界、\n对数网格边界以及卖价上限。\n将鼠标悬停在线上可查看其价格。",
   "gui.stockmarket.plugin_management_screen.delete_plugin": "x",
   "gui.stockmarket.plugin_management_screen.subscribe_close": "关闭",
   "gui.stockmarket.create_market_tab.title": "创建市场",
