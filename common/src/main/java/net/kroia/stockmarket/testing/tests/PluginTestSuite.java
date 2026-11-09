@@ -106,6 +106,8 @@ public class PluginTestSuite extends TestSuite {
         addTest("t208_noProfit_diamond", () -> test_t208NoProfit("diamond_default", T208_NO_PROFIT_DIAMOND));
         addTest("t208_noProfit_dirt", () -> test_t208NoProfit("dirt", T208_NO_PROFIT_DIRT));
         addTest("t208_organic_movesPrice", this::test_t208OrganicMovesPrice);
+        // T-213 C0: golden hashes of the net-flow price model (refactor equivalence)
+        addTest("netFlow_golden_equivalence", this::test_netFlowGolden);
         // Trend accumulation
         addTest("volumeDistribution_trendFactor_math", this::test_volumeDistribution_trendFactorMath);
         addTest("volumeDistribution_trend_codec_legacy", this::test_volumeDistribution_trendCodec);
@@ -1587,6 +1589,125 @@ public class PluginTestSuite extends TestSuite {
             harnessRefill = false;
             TargetPriceBot.test_setGapGuardEnabled(true);
         }
+    }
+
+    // ── T-213 C0: golden hashes of the net-flow price model ──────────────────────────────────────
+    //
+    // Captured on the pre-T-213 code (cfd6ad3c, flow inside VolatilityPlugin). The refactor (NetFlowPlugin +
+    // VolatilityPlugin, anchor off) must reproduce them bit for bit.
+
+    /** Golden hash of the scripted flow series over all {@link #GOLDEN_SCALES} x flow x calculator x maxMult configs. */
+    private static final long GOLDEN_SCRIPT_HASH = 0xb90fb5bdd92b01f0L;
+    /** Golden hash of the t208 diamond_default pump30 price path (volatility scale 0, book refill on). */
+    private static final long GOLDEN_PUMP_HASH = 0x5f0aef399ff89cc3L;
+    /** Volatility scales of the golden configs (they enter the flow capacity as 1 + scale). */
+    private static final float[] GOLDEN_SCALES = {0f, 0.3f, 1.5f};
+
+    /** Mixes one double into a golden hash (bit exact). */
+    private static long goldenMix(long h, double x) {
+        return 31 * h + Double.doubleToLongBits(x);
+    }
+
+    /**
+     * T-213 C0: scripted net flow series (ramps, sign flips, a band overrun, an admin reset, default price
+     * changes, a stretch with the virtual order book off) through the price model on the scratch market, for
+     * volatility scale {0, 0.3, 1.5} x flow on/off x volume calculator present/absent x maxPriceMult {3, 20}.
+     * Hashes the saturated flow and the equilibrium every tick (plus the target at scale 0, where it equals the
+     * equilibrium; above 0 the random walk is not deterministic). Second hash: the t208 diamond pump30 price path.
+     */
+    private TestResult test_netFlowGolden() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        MarketSettings settings = market.getSettings();
+        long prevDefault = settings.defaultPrice;
+        float prevAbundance = settings.naturalAbundance;
+        boolean prevVo = settings.virtualOrderbookEnabled;
+        long originalPrice = market.getCurrentMarketPrice();
+        StockMarketModSettings.Market modSettings = backend.SERVER_SETTINGS.MARKET;
+        Float prevHalfLife = modSettings.NET_FLOW_HALF_LIFE_MINUTES.get();
+        StringBuilder out = new StringBuilder();
+        long script = 1125899906842597L;
+        try {
+            modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(modSettings.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue());
+            double hl = ServerMarket.netFlowHalfLifeSeconds();
+            float abundance = 50;
+            double rawPerItem = MarketManager.convertToRawAmountStatic(1.0);
+            for (float scale : GOLDEN_SCALES)
+                for (boolean flowOn : new boolean[]{true, false})
+                    for (boolean calcOn : new boolean[]{true, false})
+                        for (float maxMult : new float[]{3f, 20f}) {
+                            settings.defaultPrice = MarketManager.convertToRawAmountStatic(160);
+                            settings.naturalAbundance = abundance;
+                            settings.virtualOrderbookEnabled = true;
+                            market.test_setCurrentMarketPrice(settings.defaultPrice);
+                            market.resetNetPlayerItemFlow();
+                            MarketCache cache = new MarketCache(market);
+                            if (calcOn) cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
+                                    harnessCalc(160, DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(160, abundance, 1f)));
+                            else market.test_setDefaultVolumeProviderFunction(null);
+                            List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+                            VolatilityPlugin vol = new VolatilityPlugin();
+                            vol.setLoggerEnabled(false);
+                            vol.onMarketSubscribed(itemID);
+                            VolatilityPlugin.Settings vs = new VolatilityPlugin.Settings(scale, flowOn,
+                                    VolatilityPlugin.DEFAULT_FLOW_SENSITIVITY, VolatilityPlugin.DEFAULT_MIN_PRICE_MULT, maxMult);
+                            applySettings(vol, VolatilityPlugin.Settings.CODEC, vs);
+                            double b = VolatilityPlugin.DEFAULT_FLOW_SENSITIVITY * abundance; // ~ one capacity
+                            double raw = 0, faded = 0;
+                            long h = 1125899906842597L;
+                            for (int t = 0; t < 2400; t++) {
+                                double fills = 0;
+                                if (t < 300) fills = b * 0.002 * t / 300;                    // sell ramp
+                                else if (t < 600) fills = -b * 0.004;                        // buy ramp
+                                else if (t < 650) fills = b * 0.2;                           // band overrun
+                                else if (t < 900) fills = -b * 0.002;                        // buy back
+                                else if (t > 900 && t < 1200) fills = b * 0.01 * (t % 2 == 0 ? 1 : -1.3); // sign flips
+                                else if (t >= 1500 && t < 1800) fills = b * 0.003;           // sell ramp
+                                if (t == 900) { raw = 0; faded = 0; }                        // admin reset
+                                else { faded = ServerMarket.fade(faded, hl, ServerMarket.TICK_SECONDS) + fills; raw += fills; }
+                                if (t == 1200) settings.defaultPrice = MarketManager.convertToRawAmountStatic(200);
+                                if (t == 1800) settings.defaultPrice = MarketManager.convertToRawAmountStatic(160);
+                                settings.virtualOrderbookEnabled = t < 1300 || t >= 1500;
+                                market.setNetPlayerItemFlow(Math.round(raw * rawPerItem));
+                                market.setFadedNetPlayerItemFlow(faded * rawPerItem);
+                                vol.update(markets);
+                                h = goldenMix(h, vol.getSaturatedFlow(itemID));
+                                if (settings.virtualOrderbookEnabled) {
+                                    double d = MarketManager.convertToRealAmountStatic(settings.defaultPrice);
+                                    h = goldenMix(h, VolatilityPlugin.computeEquilibriumPrice(d, vol.getSaturatedFlow(itemID), abundance, vs,
+                                            vol.getBookEFold(itemID)));
+                                    if (scale == 0f) h = goldenMix(h, cache.getPluginMarket().getTargetPrice());
+                                }
+                                cache.apply();
+                            }
+                            out.append(String.format(Locale.ROOT, " vs%.1f/flow%s/calc%s/max%.0f %016x;", scale, flowOn, calcOn, maxMult, h));
+                            script = 31 * script + h;
+                        }
+        } finally {
+            modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(prevHalfLife);
+            settings.defaultPrice = prevDefault;
+            settings.naturalAbundance = prevAbundance;
+            settings.virtualOrderbookEnabled = prevVo;
+            market.test_setDefaultVolumeProviderFunction(null);
+            market.test_setCurrentMarketPrice(originalPrice);
+            market.resetNetPlayerItemFlow();
+        }
+        long pump = 1125899906842597L;
+        harnessRefill = true;
+        try {
+            ReplaySetup s = t208Market("diamond_default");
+            PlayersResult r = replayPlayers(s, T208_WARMUP, 0, null, 0, null, true, t208Scenario("pump30", s.maxOrder()).plans());
+            for (float p : r.pricePath()) pump = 31 * pump + Float.floatToIntBits(p);
+            for (double p : r.profit()) pump = goldenMix(pump, p);
+            out.append(String.format(Locale.ROOT, " pump30 ticks %d end %.6g profit %.6g", r.pricePath().length, r.endPrice(), r.profit()[0]));
+        } finally {
+            harnessRefill = false;
+        }
+        String hashes = String.format(Locale.ROOT, "script %016x pump %016x;", script, pump);
+        StockMarketMod.LOGGER.info("[T-213 golden] {}{}", hashes, out);
+        if (script != GOLDEN_SCRIPT_HASH || pump != GOLDEN_PUMP_HASH)
+            return fail(String.format(Locale.ROOT, "golden mismatch (expected script %016x pump %016x): ", GOLDEN_SCRIPT_HASH,
+                    GOLDEN_PUMP_HASH) + hashes + out);
+        return pass(hashes + out);
     }
 
     // ── T-208 price model harness (gated: -Dstockmarket.t208=tune|gate|charts) ──────────────────
