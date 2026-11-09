@@ -514,5 +514,13 @@
   "gui.stockmarket.plugin_management_screen.market_button.tooltip": "Click: show this market in the chart and edit its plugin settings.\nX (top-right corner): unsubscribe this market from the plugin.",
   "gui.stockmarket.plugin_management_screen.subscribe_toggle.tooltip": "Click to subscribe or unsubscribe this market.\nGreen = subscribed.",
   "gui.stockmarket.management_screen.plugins.manage.tooltip": "Opens the plugin management: create, delete, reorder and\nconfigure plugins and their market subscriptions.",
-  "gui.stockmarket.management_screen.plugins.enabled.tooltip": "Enabled plugin instances / total plugin instances."
+  "gui.stockmarket.management_screen.plugins.enabled.tooltip": "Enabled plugin instances / total plugin instances.",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_floor": "log grid ↓ %s (lowest price)",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_slot_below": "log slot ↓ %s (partial slot below linear)",
+  "gui.stockmarket.orderbook_volume_histogram.border.linear_lo": "linear ↓ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.recenter_lo": "re-centre ↓ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.recenter_hi": "re-centre ↑ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "linear ↑ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "log slot ↑ %s (partial slot above linear)",
+  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "ask ceiling ↑ %s (no default asks above)"
 }

@@ -6,7 +6,10 @@ import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
+
+import java.math.BigDecimal;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,9 +38,39 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
     private final Rectangle scissorRect = new Rectangle(0,0,0,0);
     private float maxAbsVolumeCache = 0;
 
+    /** T-209: when true the widget fetches and draws the virtual depth layout borders (plugin management only). */
+    private boolean showArrayBorders = false;
+    /** T-209: real border prices from the last response, indexed by {@code VirtualOrderbook.BORDER_*}; NaN = unused. */
+    private List<Double> arrayBorders = List.of();
+
+    /** T-209: lang key suffix per {@code VirtualOrderbook.BORDER_*} index. */
+    private static final String[] BORDER_KEYS = {
+            "log_floor", "log_slot_below", "linear_lo", "recenter_lo",
+            "recenter_hi", "linear_hi", "log_slot_above", "ask_ceiling"
+    };
+    /** T-209: line colour per {@code VirtualOrderbook.BORDER_*} index: magenta = log grid edge, orange = log slot at the window, cyan = linear window, yellow = re-centre band. */
+    private static final int[] BORDER_COLORS = {
+            0xFFFF55FF, 0xFFFF9933, 0xFF33CCFF, 0xFFFFFF55,
+            0xFFFFFF55, 0xFF33CCFF, 0xFFFF9933, 0xFFFF55FF
+    };
+    /** T-209: hover distance in pixels for a border tooltip. */
+    private static final int BORDER_HOVER_PX = 2;
+
     public OrderbookVolumeHistogram(CandlestickChart parentChart)
     {
         this.parentChart = parentChart;
+    }
+
+    /**
+     * T-209: shows the virtual depth layout borders (linear window, re-centre band, log grid edges, ask ceiling)
+     * as coloured lines with a hover tooltip. Used by the plugin management screen to check the array layout.
+     *
+     * @param show true to fetch and draw the borders
+     */
+    public void setShowArrayBorders(boolean show)
+    {
+        showArrayBorders = show;
+        if (!show) arrayBorders = List.of();
     }
 
     public void addOverlay(Overlay overlay) { overlays.add(overlay); }
@@ -82,6 +115,7 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
             for (Overlay overlay : overlays) {
                 overlay.render(this);
             }
+            renderArrayBorders();
             disableScissor();
         }
     }
@@ -97,14 +131,59 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
             updateRequestTickCounter = 0;
             double startPrice = parentChart.getMinVisiblePrice();
             double endPrice = parentChart.getMaxVisiblePrice();
-            market.requestOrderbookVolume(startPrice, endPrice, 50).thenAccept(response -> {
+            market.requestOrderbookVolume(startPrice, endPrice, 50, showArrayBorders).thenAccept(response -> {
                 this.startPrice = response.startPrice();
                 this.endPrice = response.endPrice();
                 //this.startPrice = startPrice;
                 //this.endPrice = endPrice;
                 this.volumeChunks = response.volumes();
+                if (showArrayBorders) this.arrayBorders = response.arrayBorders();
             });
         }
+        renderArrayBorderTooltip();
+    }
+
+    /** T-209: @return the canvas Y of border {@code i}, or {@code Integer.MIN_VALUE} if unused or off screen */
+    private int borderY(int i)
+    {
+        double price = arrayBorders.get(i);
+        if (Double.isNaN(price) || price < parentChart.getMinVisiblePrice() || price > parentChart.getMaxVisiblePrice())
+            return Integer.MIN_VALUE;
+        return parentChart.toCanvasSpaceY(price);
+    }
+
+    /** T-209: draws one full-width line per visible border (off-screen borders are skipped). */
+    private void renderArrayBorders()
+    {
+        if (arrayBorders.isEmpty()) return;
+        // Same height renderHistogram() uses; set here too so the lines show while the book is empty.
+        scissorRect.height = parentChart.toCanvasSpaceY(parentChart.getMinVisiblePrice()) - padding;
+        int n = Math.min(arrayBorders.size(), BORDER_COLORS.length);
+        for (int i = 0; i < n; i++)
+        {
+            int y = borderY(i);
+            if (y != Integer.MIN_VALUE)
+                drawRect(scissorRect.x, y, scissorRect.width, 1, BORDER_COLORS[i]);
+        }
+    }
+
+    /** T-209: tooltip naming every border within {@link #BORDER_HOVER_PX} of the mouse, e.g. "linear ↑ 172.00". */
+    private void renderArrayBorderTooltip()
+    {
+        if (arrayBorders.isEmpty() || !isMouseOver()) return;
+        int my = getMouseY();
+        StringBuilder sb = new StringBuilder();
+        int n = Math.min(arrayBorders.size(), BORDER_KEYS.length);
+        for (int i = 0; i < n; i++)
+        {
+            int y = borderY(i);
+            if (y == Integer.MIN_VALUE || Math.abs(y - my) > BORDER_HOVER_PX) continue;
+            if (!sb.isEmpty()) sb.append('\n');
+            String price = BigDecimal.valueOf(arrayBorders.get(i)).stripTrailingZeros().toPlainString();
+            sb.append(Component.translatable("gui.stockmarket.orderbook_volume_histogram.border." + BORDER_KEYS[i], price).getString());
+        }
+        if (!sb.isEmpty())
+            drawTooltip(sb.toString(), getMousePos());
     }
     @Override
     protected void layoutChanged() {

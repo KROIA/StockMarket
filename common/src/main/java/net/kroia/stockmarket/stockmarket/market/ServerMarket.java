@@ -283,6 +283,15 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
 
+    /**
+     * T-209: raw border prices of the virtual depth layout (linear window, re-centre band, log grid edges,
+     * ask ceiling), indexed by the {@code VirtualOrderbook.BORDER_*} constants. Display only.
+     */
+    public long[] getVirtualArrayBorders()
+    {
+        return orderbook.getVirtualArrayBorders();
+    }
+
     @Override
     public long getRawVolume(long startPrice, long endPrice)
     {

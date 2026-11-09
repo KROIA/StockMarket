@@ -330,6 +330,12 @@ public class Orderbook implements ServerSaveable
         return (float)MarketManager.convertToRealAmountStatic(getRawVolumeRounded(rawStartPrice, rawEndPrice));
     }
 
+    /** T-209: raw virtual depth layout borders, see {@link VirtualOrderbook#getArrayBorders()}. */
+    public long[] getVirtualArrayBorders()
+    {
+        return virtualOrderbook.getArrayBorders();
+    }
+
     public @NotNull Tuple<@NotNull Double,@NotNull  Double> getEditableRealPriceRange()
     {
         if(virtualOrderbook != null)

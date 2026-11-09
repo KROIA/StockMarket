@@ -143,6 +143,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         candlestickChart = new CandlestickChart();
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
+        orderbookVolumeHistogram.setShowArrayBorders(true); // T-209: virtual depth layout markers
         performanceBar = new PluginPerformanceBar();
 
         listView = new VerticalListView();

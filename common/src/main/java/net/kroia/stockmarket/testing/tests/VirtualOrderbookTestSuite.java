@@ -49,6 +49,7 @@ public class VirtualOrderbookTestSuite extends TestSuite {
         addTest("depth_memory_conservation_flat_and_production", this::test_depthMemory_conservation);
         addTest("depth_memory_jump_gap_recorded_zero", this::test_depthMemory_jumpGap);
         addTest("depth_memory_fade_half_life_and_off", this::test_depthMemory_fade);
+        addTest("array_borders_match_layout", this::test_arrayBorders);
         addTest("depth_memory_nbt_round_trip", this::test_depthMemory_nbt);
         addTest("depth_memory_reset_clears", this::test_depthMemory_resetClears);
         // T-199: real volume
@@ -614,6 +615,42 @@ public class VirtualOrderbookTestSuite extends TestSuite {
         if (Math.abs(up.getVolume(900) - FLAT) > EPSILON || Math.abs(down.getVolume(5200) + FLAT) > EPSILON)
             return fail("Untouched depth changed: " + up.getVolume(900) + ", " + down.getVolume(5200));
         return pass("Jump gap recorded as 0 both ways, untouched depth unchanged");
+    }
+
+    /**
+     * T-209: the display borders match the real layout: linear window edges, the log slots straddling them,
+     * log entries off without memory, and the re-centre band edges are exactly where the window starts to move.
+     */
+    private TestResult test_arrayBorders() {
+        long[] b = VirtualOrderbook.arrayBorders(1000, 200, 100_000, true);
+        if (b[VirtualOrderbook.BORDER_LINEAR_LO] != 1000 || b[VirtualOrderbook.BORDER_LINEAR_HI] != 1199)
+            return fail("Linear edges wrong: " + b[VirtualOrderbook.BORDER_LINEAR_LO] + ".." + b[VirtualOrderbook.BORDER_LINEAR_HI]);
+        if (b[VirtualOrderbook.BORDER_RECENTER_LO] != 1050 || b[VirtualOrderbook.BORDER_RECENTER_HI] != 1150)
+            return fail("Re-centre band wrong: " + b[VirtualOrderbook.BORDER_RECENTER_LO] + ".." + b[VirtualOrderbook.BORDER_RECENTER_HI]);
+        long below = b[VirtualOrderbook.BORDER_LOG_SLOT_BELOW], above = b[VirtualOrderbook.BORDER_LOG_SLOT_ABOVE];
+        if (below > 999 || DepthMemory.slotEnd(DepthMemory.slotOf(below)) < 999 || DepthMemory.slotStart(DepthMemory.slotOf(below)) != below)
+            return fail("Log slot below the window wrong: " + below);
+        if (above < 1200 || DepthMemory.slotStart(DepthMemory.slotOf(above)) > 1200 || DepthMemory.slotEnd(DepthMemory.slotOf(above)) != above)
+            return fail("Log slot above the window wrong: " + above);
+        if (b[VirtualOrderbook.BORDER_LOG_FLOOR] != 1 || b[VirtualOrderbook.BORDER_ASK_CEILING] != 100_000)
+            return fail("Outer edges wrong");
+        long[] off = VirtualOrderbook.arrayBorders(1000, 200, 100_000, false);
+        if (off[VirtualOrderbook.BORDER_LOG_FLOOR] != VirtualOrderbook.NO_BORDER || off[VirtualOrderbook.BORDER_LOG_SLOT_ABOVE] != VirtualOrderbook.NO_BORDER)
+            return fail("Log borders must be NO_BORDER without memory");
+
+        // The band edges are the last prices that keep the window in place.
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.setCurrentMarketPrice(1000);
+        long[] w = vob.getArrayBorders();
+        long start = vob.getMinEditablePrice();
+        if (w[VirtualOrderbook.BORDER_LINEAR_LO] != start || w[VirtualOrderbook.BORDER_LINEAR_HI] != vob.getMaxEditablePrice())
+            return fail("Live linear edges do not match the window");
+        vob.setCurrentMarketPrice(w[VirtualOrderbook.BORDER_RECENTER_HI]);
+        vob.setCurrentMarketPrice(w[VirtualOrderbook.BORDER_RECENTER_LO]);
+        if (vob.getMinEditablePrice() != start) return fail("Window moved inside the re-centre band");
+        vob.setCurrentMarketPrice(w[VirtualOrderbook.BORDER_RECENTER_HI] + 1);
+        if (vob.getMinEditablePrice() == start) return fail("Window did not move above the re-centre band");
+        return pass("Borders match the layout");
     }
 
     /**

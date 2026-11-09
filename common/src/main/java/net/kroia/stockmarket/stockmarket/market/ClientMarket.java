@@ -739,7 +739,15 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     }
     public CompletableFuture<OrderbookVolumeRequest.OutputData> requestOrderbookVolume(double startPrice, double endPrice, int chunkCount)
     {
-        OrderbookVolumeRequest.InputData inp = new OrderbookVolumeRequest.InputData(itemID, startPrice, endPrice, chunkCount);
+        return requestOrderbookVolume(startPrice, endPrice, chunkCount, false);
+    }
+    /**
+     * @param withArrayBorders T-209: also fetch the virtual depth layout borders
+     *                         ({@link OrderbookVolumeRequest.OutputData#arrayBorders()})
+     */
+    public CompletableFuture<OrderbookVolumeRequest.OutputData> requestOrderbookVolume(double startPrice, double endPrice, int chunkCount, boolean withArrayBorders)
+    {
+        OrderbookVolumeRequest.InputData inp = new OrderbookVolumeRequest.InputData(itemID, startPrice, endPrice, chunkCount, withArrayBorders);
         return BACKEND_INSTANCES.NETWORKING.ORDERBOOK_VOLUME_REQUEST.sendRequestToServer(inp);
     }
 

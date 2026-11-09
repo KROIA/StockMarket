@@ -425,5 +425,13 @@
   "gui.stockmarket.plugin_management_screen.market_button.tooltip": "点击：在图表中显示此市场并编辑其插件设置。\nX（右上角）：将此市场从插件中取消订阅。",
   "gui.stockmarket.plugin_management_screen.subscribe_toggle.tooltip": "点击以订阅或取消订阅此市场。\n绿色 = 已订阅。",
   "gui.stockmarket.management_screen.plugins.manage.tooltip": "打开插件管理：创建、删除、排序和配置插件\n及其市场订阅。",
-  "gui.stockmarket.management_screen.plugins.enabled.tooltip": "已启用的插件实例 / 插件实例总数。"
+  "gui.stockmarket.management_screen.plugins.enabled.tooltip": "已启用的插件实例 / 插件实例总数。",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_floor": "对数网格 ↓ %s（最低价格）",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_slot_below": "对数槽 ↓ %s（线性区下方的部分槽）",
+  "gui.stockmarket.orderbook_volume_histogram.border.linear_lo": "线性 ↓ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.recenter_lo": "重新居中 ↓ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.recenter_hi": "重新居中 ↑ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "线性 ↑ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "对数槽 ↑ %s（线性区上方的部分槽）",
+  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "卖单上限 ↑ %s（上方无默认卖单）"
 }

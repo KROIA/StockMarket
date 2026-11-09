@@ -472,6 +472,66 @@ public class VirtualOrderbook implements ServerSaveable
         return dynamicArray.getVirtualIndex(dynamicArray.getSize()-1);
     }
 
+    // ── T-209: array borders (debug markers in the plugin management histogram) ──
+
+    /** Index into {@link #arrayBorders}: lowest price of the log grid ({@link DepthMemory}), raw 1. */
+    public static final int BORDER_LOG_FLOOR = 0;
+    /** Index: first price of the log slot that touches the linear window from below (its partial segment ends at window start - 1). */
+    public static final int BORDER_LOG_SLOT_BELOW = 1;
+    /** Index: first price of the linear 1-slot-per-tick window. */
+    public static final int BORDER_LINEAR_LO = 2;
+    /** Index: the window re-centres when the price drops below this. */
+    public static final int BORDER_RECENTER_LO = 3;
+    /** Index: the window re-centres when the price rises above this. */
+    public static final int BORDER_RECENTER_HI = 4;
+    /** Index: last price of the linear window. */
+    public static final int BORDER_LINEAR_HI = 5;
+    /** Index: last price of the log slot that touches the linear window from above. */
+    public static final int BORDER_LOG_SLOT_ABOVE = 6;
+    /** Index: ask ceiling, no default ask volume above it ({@link #getAskCeiling()}). */
+    public static final int BORDER_ASK_CEILING = 7;
+    /** Length of the {@link #arrayBorders} result. */
+    public static final int BORDER_COUNT = 8;
+    /** Marks a border that does not exist (log grid entries while the depth memory is off). */
+    public static final long NO_BORDER = Long.MIN_VALUE;
+
+    /**
+     * T-209: raw border prices of the virtual depth layout, for display only.
+     * <p>
+     * Layout: the linear array covers {@code [offset, offset + size - 1]}, one slot per raw tick, and
+     * re-centres ({@code offset = price - size/2}) once the price leaves {@code [offset + size/4, offset + 3*(size/4)]}.
+     * Outside it the {@link DepthMemory} log grid (slot {@code k} = {@code [ceil(1.01^k), ceil(1.01^(k+1)))})
+     * runs from raw price 1 upward; the two slots that straddle the window edges are only used for their
+     * outside parts. Above the ask ceiling there is no default ask volume.
+     *
+     * @param offset       first raw price of the linear window
+     * @param size         linear window size in ticks
+     * @param askCeiling   raw ask ceiling
+     * @param memoryActive true if the log grid is in use; false sets the log entries to {@link #NO_BORDER}
+     * @return raw prices indexed by the {@code BORDER_*} constants
+     */
+    public static long[] arrayBorders(long offset, int size, long askCeiling, boolean memoryActive)
+    {
+        long hi = offset + size - 1;
+        long[] b = new long[BORDER_COUNT];
+        b[BORDER_LOG_FLOOR]      = memoryActive ? 1 : NO_BORDER;
+        b[BORDER_LOG_SLOT_BELOW] = memoryActive && offset > 1 ? DepthMemory.slotStart(DepthMemory.slotOf(offset - 1)) : NO_BORDER;
+        b[BORDER_LINEAR_LO]      = offset;
+        b[BORDER_RECENTER_LO]    = offset + size / 4;
+        b[BORDER_RECENTER_HI]    = offset + (size / 4) * 3;
+        b[BORDER_LINEAR_HI]      = hi;
+        b[BORDER_LOG_SLOT_ABOVE] = memoryActive ? DepthMemory.slotEnd(DepthMemory.slotOf(Math.max(hi + 1, 1))) : NO_BORDER;
+        b[BORDER_ASK_CEILING]    = askCeiling;
+        return b;
+    }
+
+    /** @return {@link #arrayBorders} of this book's current window (see there) */
+    public long[] getArrayBorders()
+    {
+        return arrayBorders(dynamicArray.getIndexOffset(), dynamicArray.getSize(), getAskCeiling(),
+                isDepthMemoryEnabled() && hasDefaultVolume());
+    }
+
 
     /**
      * Sets the given volume at the given price.

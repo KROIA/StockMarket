@@ -514,5 +514,13 @@
   "gui.stockmarket.plugin_management_screen.market_button.tooltip": "Klick: Markt im Chart aazeige und sini Plugin-Iistellige bearbeite.\nX (Egge obe rechts): Markt vo dem Plugin abbstelle.",
   "gui.stockmarket.plugin_management_screen.subscribe_toggle.tooltip": "Klicke, zum de Markt z abonniere oder abzbstelle.\nGrüen = abonniert.",
   "gui.stockmarket.management_screen.plugins.manage.tooltip": "Öffnet d Plugin-Verwaltig: Plugins erstelle, lösche, sortiere\nund konfiguriere sowie ihri Markt-Abonnement verwalte.",
-  "gui.stockmarket.management_screen.plugins.enabled.tooltip": "Aktivierti Plugin-Instanze / alli Plugin-Instanze."
+  "gui.stockmarket.management_screen.plugins.enabled.tooltip": "Aktivierti Plugin-Instanze / alli Plugin-Instanze.",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_floor": "Log-Raster ↓ %s (tiefster Preis)",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_slot_below": "Log-Slot ↓ %s (Teil-Slot unter linear)",
+  "gui.stockmarket.orderbook_volume_histogram.border.linear_lo": "linear ↓ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.recenter_lo": "Neuzentrierung ↓ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.recenter_hi": "Neuzentrierung ↑ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "linear ↑ %s",
+  "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "Log-Slot ↑ %s (Teil-Slot über linear)",
+  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "Ask-Obergrenze ↑ %s (keine Standard-Asks darüber)"
 }
