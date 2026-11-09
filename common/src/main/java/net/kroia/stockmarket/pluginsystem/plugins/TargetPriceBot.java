@@ -141,6 +141,11 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         Reference ref = Reference.IDLE;
         /** T-208: the market's raw net player flow at the previous step (NaN = not seeded yet). */
         double refLastRaw = Double.NaN;
+        /**
+         * Bot steps since the last player fill (raw net flow change); {@link Integer#MAX_VALUE} = no fill seen
+         * yet. Limits the gap guard to {@link #GAP_GUARD_MAX_BLOCK_SECONDS} after a fill.
+         */
+        int stepsSinceFill = Integer.MAX_VALUE;
         float pidP, pidI, pidD, pidRate;
 
         RuntimeData(float p, float i, float d, float rate) {
@@ -366,6 +371,15 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
      */
     public static void test_setGapGuardEnabled(boolean enabled) { gapGuardEnabled = enabled; }
 
+    /**
+     * T-208: the gap guard blocks the bot for at most this long after the last player fill. The guard exists so
+     * the bot does not snap the price back through the gap a big order just swept; once the book had a minute
+     * to refill that job is done. Without the limit, steady player buying (one order every 30 s) kept the
+     * window below the minimum fill for good, so the bot never traded and the price ignored the plugins'
+     * equilibrium. Each new fill restarts the window.
+     */
+    public static final double GAP_GUARD_MAX_BLOCK_SECONDS = 60;
+
     /** T-207: default of {@link #gapMinFill}. */
     public static final double DEFAULT_GAP_MIN_FILL = 0.25;
     /**
@@ -459,6 +473,9 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
             data.ref = Reference.IDLE;
         else if (!Double.isNaN(data.refLastRaw) && raw != data.refLastRaw)
             data.ref = anchorReference(data.ref, Math.log(rawTarget), Math.log(currentPrice), s, maxMove);
+        // T-208: restart the gap guard window on every player fill
+        if (!Double.isNaN(data.refLastRaw) && raw != data.refLastRaw) data.stepsSinceFill = 0;
+        else if (data.stepsSinceFill < Integer.MAX_VALUE) data.stepsSinceFill++;
         data.refLastRaw = raw;
         Reference next = data.ref.active() ? stepReference(data.ref, Math.log(rawTarget), s, maxMove, STEP_SECONDS) : data.ref;
         // #89: while the reference is idle, chase the plugins' target only through the rate limit
@@ -497,7 +514,9 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         // stay empty (and the frozen reference with it) until the swept range refills completely.
         double guardTarget = !next.active() || data.targetPrice == currentPrice ? data.targetPrice
                 : currentPrice * (data.targetPrice > currentPrice ? 1 + GAP_WINDOW_FRACTION : 1 - GAP_WINDOW_FRACTION);
-        if (gapGuardEnabled && crossesEmptyGap(market.oderBook, currentPrice, guardTarget)) {
+        // T-208: only within GAP_GUARD_MAX_BLOCK_SECONDS of the last player fill
+        boolean guardWindow = data.stepsSinceFill * STEP_SECONDS < GAP_GUARD_MAX_BLOCK_SECONDS;
+        if (gapGuardEnabled && guardWindow && crossesEmptyGap(market.oderBook, currentPrice, guardTarget)) {
             // T-208: the reference freezes while the bot can't trade, so it doesn't run ahead of the price.
             if (data.ref.active()) data.targetPrice = Math.exp(data.ref.y());
             return;

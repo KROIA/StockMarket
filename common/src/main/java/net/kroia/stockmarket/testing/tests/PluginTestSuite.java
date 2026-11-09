@@ -114,6 +114,8 @@ public class PluginTestSuite extends TestSuite {
         addTest("netFlow_randomTrades_exact", this::test_netFlow_randomTrades_exact);
         // T-207 (ungated): the bot does not trade through an empty gap right after a big order
         addTest("targetPriceBot_emptyGap_noSnapBack", this::test_targetPriceBot_emptyGap_noSnapBack);
+        // T-208 (ungated): the gap guard blocks at most 60 s after a player fill
+        addTest("targetPriceBot_gapGuard_timesOut", this::test_targetPriceBot_gapGuard_timesOut);
         // T-208 bot reference (setpoint) model
         addTest("targetPriceBot_reference_invariants", this::test_targetPriceBot_referenceInvariants);
         addTest("targetPriceBot_reference_codec_nbt_legacy", this::test_targetPriceBot_referenceCodecNbt);
@@ -2440,6 +2442,40 @@ public class PluginTestSuite extends TestSuite {
             return pass("Spike holds on the thin book; on the dense one the guard blocks only the swept side" + out);
         } catch (Exception e) {
             return fail("Exception: " + e + out);
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /**
+     * T-208: the gap guard blocks only for {@link TargetPriceBot#GAP_GUARD_MAX_BLOCK_SECONDS} after a player
+     * fill. On the thin diamond book one max buy sweeps a gap the refill doesn't close for minutes: the bot
+     * must not trade while the window is open, and must trade again (with the gap still empty) within 5 s
+     * after it closes without a new fill.
+     */
+    private TestResult test_targetPriceBot_gapGuard_timesOut() {
+        harnessRefill = true; // book refills as in production
+        try (T207Env env = t207World()) {
+            for (int t = 0; t < 200; t++) env.tick();
+            env.marketOrder(env.maxOrder);
+            env.tick();
+            double peak = env.price();
+            TargetPriceBot.StepInfo before = env.bot.test_getLastStep(itemID);
+            IPluginOrderBook book = env.cache.getPluginOrderBook();
+            int window = (int) Math.round(TargetPriceBot.GAP_GUARD_MAX_BLOCK_SECONDS * 20);
+            for (int t = 1; t <= window + 100; t++) {
+                env.tick();
+                double p = env.price();
+                if (env.bot.test_getLastStep(itemID) == before) continue;
+                if (t < window - 10)
+                    return fail(String.format(Locale.ROOT, "Bot traded %d ticks after the fill, inside the guard window (peak %.2f, now %.2f)", t, peak, p));
+                if (!TargetPriceBot.crossesEmptyGap(book, p, p * (1 - TargetPriceBot.GAP_WINDOW_FRACTION)))
+                    return fail("Harness: the gap refilled before the guard window ended, the timeout is not exercised");
+                return pass(String.format(Locale.ROOT, "peak %.2f, gap still empty, bot traded again %d ticks after the fill", peak, t));
+            }
+            return fail(String.format(Locale.ROOT, "Bot did not trade within 5 s after the guard window (peak %.2f, now %.2f)", peak, env.price()));
+        } catch (Exception e) {
+            return fail("Exception: " + e);
         } finally {
             harnessRefill = false;
         }
