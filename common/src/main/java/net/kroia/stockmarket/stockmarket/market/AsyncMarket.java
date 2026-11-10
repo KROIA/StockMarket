@@ -266,7 +266,8 @@ public class AsyncMarket implements IAsyncMarket{
                     ParamGroup_long_long params = (ParamGroup_long_long)inputData.extra;
                     yield OutputData.of(input.function, market.getRawVolume(params.longValue1, params.longValue2));
                 }
-                case FunctionType.GetRealVolume_1 ->                          OutputData.of(input.function, market.getRealVolume((Long)inputData.extra));
+                // T-238: the price is a Double (DOUBLE codec); a Long cast threw ClassCastException
+                case FunctionType.GetRealVolume_1 ->                          OutputData.of(input.function, market.getRealVolume((Double)inputData.extra));
                 case FunctionType.GetRealVolume_2 ->                          {
                     ParamGroup_double_double params = (ParamGroup_double_double)inputData.extra;
                     yield OutputData.of(input.function, market.getRealVolume(params.value1, params.value2));
