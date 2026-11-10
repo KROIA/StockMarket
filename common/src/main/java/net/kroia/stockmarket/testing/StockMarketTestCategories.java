@@ -157,6 +157,10 @@ public class StockMarketTestCategories {
     public static final TestCategory PLUGIN_TEST = new TestCategory(
             "stockmarket", "sm_plugin", "Plugin system tests", MASTER_ONLY, true);
 
+    /** T-225: PluginTestSuite's long market simulation gates, one topic each (off in normal autotest runs). */
+    public static final TestCategory MARKET_GATES = new TestCategory(
+            "stockmarket", "sm_market_gates", "Long market simulation gates: T-207 probes, T-208 Stage B, T-213 anchor gates", MASTER_ONLY, true);
+
     public static final TestCategory INTEGRATION = new TestCategory(
             "stockmarket", "sm_integration", "Integration tests", MASTER_ONLY, true);
 

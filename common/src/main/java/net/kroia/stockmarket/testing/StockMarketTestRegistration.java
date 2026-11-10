@@ -131,6 +131,12 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new NewsHistoryRequestTestSuite());
         TestRegistry.register(new NewsPictureRequestTestSuite());
         TestRegistry.register(new DiscordIntegrationTestSuite()); // T-217 Discord feed via the sink seam, never a real webhook
+        // The long market simulation gates, one topic each; autotest-out/test-selection.json keeps them off
+        TestRegistry.register(new PluginTestSuite.T207GateTestSuite());
+        TestRegistry.register(new PluginTestSuite.T208GateTestSuite());
+        TestRegistry.register(new PluginTestSuite.T213GateG1TestSuite());
+        TestRegistry.register(new PluginTestSuite.T213GateG2TestSuite());
+        TestRegistry.register(new PluginTestSuite.T213GateG3G4TestSuite());
         // Admin flag sync against a real LuckPerms (skip without it), then "LuckPerms removed" phase 1/2.
         // Last: the removed-suite's phase 1 leaves the sync setting on (autotest runs only).
         TestRegistry.register(new AdminFlagSyncLuckPermsTests());

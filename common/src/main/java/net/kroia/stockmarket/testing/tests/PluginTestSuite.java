@@ -56,13 +56,73 @@ public class PluginTestSuite extends TestSuite {
     private IServerMarket serverMarket;
     private ServerPluginManager pluginManager;
 
+    /**
+     * T-225: the long market simulation gates. Each is its own test topic (a nested subclass below, category
+     * {@code sm_market_gates}) so the autotest tool can switch it on; autotest-out/test-selection.json keeps them
+     * off for normal runs. They share this suite's harness, setup and teardown and register only their own rows,
+     * which run whenever the topic is selected ({@code -Dstockmarket.t208.filter} / {@code .t213.filter} still
+     * narrow them).
+     */
+    private enum Gate {
+        /** T-207 regression probes, plus the T-206 two-player rows (short part) with book refill. */
+        T207,
+        /** T-208 Stage B: every market x scenario at the defaults, the determinism row and the trend report. */
+        T208,
+        /** T-213 G1 (push down, then buy back) with the anchor on and off. */
+        T213_G1,
+        /** T-213 G2 (push up, then sell back): the longest block, about 30 min. */
+        T213_G2,
+        /** T-213 G3 (timber supplier) and G4 (idle days). */
+        T213_G3G4
+    }
+
+    /** The gate topic of this instance, null for the regular plugin suite. */
+    private final Gate gate;
+
+    public PluginTestSuite() {
+        this(null);
+    }
+
+    private PluginTestSuite(Gate gate) {
+        this.gate = gate;
+    }
+
+    /** Topic: T-207 regression probes (see {@link Gate#T207}). */
+    public static final class T207GateTestSuite extends PluginTestSuite {
+        public T207GateTestSuite() { super(Gate.T207); }
+    }
+
+    /** Topic: T-208 Stage B gate, about 8 min (see {@link Gate#T208}). */
+    public static final class T208GateTestSuite extends PluginTestSuite {
+        public T208GateTestSuite() { super(Gate.T208); }
+    }
+
+    /** Topic: T-213 G1 gate rows (see {@link Gate#T213_G1}). */
+    public static final class T213GateG1TestSuite extends PluginTestSuite {
+        public T213GateG1TestSuite() { super(Gate.T213_G1); }
+    }
+
+    /** Topic: T-213 G2 gate rows, about 30 min (see {@link Gate#T213_G2}). */
+    public static final class T213GateG2TestSuite extends PluginTestSuite {
+        public T213GateG2TestSuite() { super(Gate.T213_G2); }
+    }
+
+    /** Topic: T-213 G3 and G4 gate rows (see {@link Gate#T213_G3G4}). */
+    public static final class T213GateG3G4TestSuite extends PluginTestSuite {
+        public T213GateG3G4TestSuite() { super(Gate.T213_G3G4); }
+    }
+
     @Override
     public TestCategory getCategory() {
-        return StockMarketTestCategories.PLUGIN_TEST;
+        return gate == null ? StockMarketTestCategories.PLUGIN_TEST : StockMarketTestCategories.MARKET_GATES;
     }
 
     @Override
     public void registerTests() {
+        if (gate != null) {
+            registerGate();
+            return;
+        }
         // State Guards
         addTest("createCache_duringUpdate_rejected", this::test_createCache_duringUpdate_rejected);
         addTest("removeCache_duringUpdate_rejected", this::test_removeCache_duringUpdate_rejected);
@@ -93,7 +153,7 @@ public class PluginTestSuite extends TestSuite {
 
         addTest("t197_patientTrace", this::test_t197_patientTrace);
         // T-206 gate (report only; run with -Dstockmarket.t197sweep=trace or =true): today's defaults (hl 10, move 0.005)
-        float hl = 10, move = 0.005f;
+        float hl = T206_HL, move = T206_MOVE;
         String tag = "today";
         // dirt preset: price 0.1, abundance 200 x preset scale 10 = 2000
         addTest("t206g_dirt_" + tag + "_short", () -> test_t206Sweep2("dirt_" + tag, hl, move, 2000, 0.1, false));
@@ -102,7 +162,7 @@ public class PluginTestSuite extends TestSuite {
         addTest("t206g_twoPumpers_" + tag + "_long", () -> test_t206TwoPlayers(tag, hl, move, false, new int[]{30, 60}));
         addTest("t206g_pumpPlusOrganic_" + tag + "_short", () -> test_t206TwoPlayers(tag, hl, move, true, new int[]{5, 10, 15, 20}));
         addTest("t206g_pumpPlusOrganic_" + tag + "_long", () -> test_t206TwoPlayers(tag, hl, move, true, new int[]{30, 60}));
-        // T-208 price model harness (run only with -Dstockmarket.t208=tune|gate|charts)
+        // T-208 price model harness (run only with -Dstockmarket.t208=tune|charts); Stage B: T208GateTestSuite
         registerT208Tests();
         // T-208 (ungated): exploits lose money at the defaults, organic demand still moves the price
         addTest("t208_noProfit_diamond", () -> test_t208NoProfit("diamond_default", T208_NO_PROFIT_DIAMOND));
@@ -112,13 +172,13 @@ public class PluginTestSuite extends TestSuite {
         addTest("netFlow_golden_equivalence", this::test_netFlowGolden);
         addTest("equilibriumChannel_rollsOver", this::test_equilibriumChannel);
         addTest("netFlow_migration_splitsVolatility", this::test_netFlowMigration);
-        // T-213 anchor gates (run only with -Dstockmarket.t213=gate|tune|full)
+        // T-213 anchor tuning (run only with -Dstockmarket.t213=tune|full); the gates: T213Gate*TestSuite
         registerT213Tests();
         // Trend accumulation
         addTest("volumeDistribution_trendFactor_math", this::test_volumeDistribution_trendFactorMath);
         addTest("volumeDistribution_trend_codec_legacy", this::test_volumeDistribution_trendCodec);
         addTest("volumeDistribution_trend_reachesBook", this::test_volumeDistribution_trendReachesBook);
-        addTest("trend_onOff_report", this::test_trendOnOffReport);
+        // trend_onOff_report (report only): T208GateTestSuite
         // T-214: depth per relative price, sized to the max order
         addTest("depthScale_diamond_matchesOld", this::test_depthScale_diamondMatchesOld);
         addTest("depthScale_scaleInvariance", this::test_depthScale_scaleInvariance);
@@ -138,10 +198,7 @@ public class PluginTestSuite extends TestSuite {
         addTest("roundLevel_codec_legacy", this::test_roundLevel_codec);
         addTest("roundLevel_nbt_legacy", this::test_roundLevel_nbt);
         addTest("roundLevel_bandDump_buyBack_noProfit", () -> test_t208NoProfit("dirt", new String[]{"dump5", "dump30"}));
-        // T-207 regression probes (run only with -Dstockmarket.t207=true)
-        addTest("t207_netFlow_matchesFills", this::test_t207_netFlow);
-        addTest("t207_spike_holds", this::test_t207_spike);
-        addTest("t207_limitExit_report", this::test_t207_limitExit);
+        // T-207 regression probes: T207GateTestSuite
         // T-207 (ungated): the stored net flow is an exact counter of player fills
         addTest("netFlow_randomTrades_exact", this::test_netFlow_randomTrades_exact);
         // T-207 (ungated): the bot does not trade through an empty gap right after a big order
@@ -159,6 +216,47 @@ public class PluginTestSuite extends TestSuite {
         addTest("targetPriceBot_userWorldSpike_reverts", this::test_targetPriceBot_userWorldSpike);
         addTest("targetPriceBot_tracking_report", this::test_targetPriceBot_tracking);
         addTest("targetPriceBot_dirt_priceStep", this::test_targetPriceBot_dirtPriceStep);
+    }
+
+    /** T-206 rows' bot settings: net flow half-life (minutes) and TargetPriceBot max target move per second. */
+    private static final float T206_HL = 10, T206_MOVE = 0.005f;
+
+    /** T-225: registers the rows of this instance's {@link #gate} topic. */
+    private void registerGate() {
+        switch (gate) {
+            case T207 -> {
+                addTest("t207_netFlow_matchesFills", this::test_t207_netFlow);
+                addTest("t207_spike_holds", this::test_t207_spike);
+                addTest("t207_limitExit_report", this::test_t207_limitExit);
+                // the T-206 two-player rows (short part) in their T-207 form: book refill, without and with the gap guard
+                addTest("t206g_twoPumpers_today_short",
+                        () -> test_t206TwoPlayers("today", T206_HL, T206_MOVE, false, new int[]{5, 10, 15, 20}));
+                addTest("t206g_pumpPlusOrganic_today_short",
+                        () -> test_t206TwoPlayers("today", T206_HL, T206_MOVE, true, new int[]{5, 10, 15, 20}));
+            }
+            case T208 -> {
+                for (String market : T208_MARKETS)
+                    for (String scenario : T208_GATE_SET) {
+                        String name = "t208_gate_" + market + "_" + scenario;
+                        addTest(name, () -> test_t208Gate(name, market, scenario));
+                    }
+                addTest("t208_gate_determinism_dirt_pump0", this::test_t208Determinism);
+                addTest("trend_onOff_report", this::test_trendOnOffReport);
+            }
+            case T213_G1, T213_G2 -> {
+                int dir = gate == Gate.T213_G1 ? 1 : -1;
+                for (int fi = 0; fi < T213_F.length; fi++)
+                    for (String back : T213_BACK) {
+                        String name = "t213_gate_" + (dir > 0 ? "G1" : "G2") + "_" + T213_F_NAME[fi] + "_" + back;
+                        double f = T213_F[fi];
+                        addTest(name, () -> test_t213Push(name, dir, f, back));
+                    }
+            }
+            case T213_G3G4 -> {
+                addTest("t213_gate_G3_supplier", () -> test_t213Supplier("t213_gate_G3_supplier"));
+                addTest("t213_gate_G4_idle", this::test_t213Idle);
+            }
+        }
     }
 
     @Override
@@ -1038,7 +1136,7 @@ public class PluginTestSuite extends TestSuite {
      * @param longPart  false = holds 5-20 + dump + organic, true = holds 30 / 60
      */
     private TestResult test_t206Sweep2(String name, float hl, float move, float abundance, double price, boolean longPart) {
-        // T-207: today's default diamond rows (short part) also run with -Dstockmarket.t207=true
+        // T-207: today's default diamond rows (short part) also run in T207GateTestSuite
         boolean t207Row = t207Requested() && name.equals("hl10_move0005") && !longPart;
         if (!t197Requested(true) && !t207Row) return skip("T-206 sweep not requested");
         try {
@@ -1564,7 +1662,7 @@ public class PluginTestSuite extends TestSuite {
      * from t 0, never sold). Logs "[T-206g] case | hold | combined $ (%) | p1 $ (%) | p2 $ (%) | max | path".
      */
     private TestResult test_t206TwoPlayers(String tag, float hl, float move, boolean organic, int[] holds) {
-        // T-207: today's rows (short part) also run with -Dstockmarket.t207=true
+        // T-207: today's rows (short part) also run in T207GateTestSuite
         boolean t207Row = t207Requested() && tag.equals("today") && holds[0] == 5;
         if (!t197Requested(true) && !t207Row) return skip("T-206 gate not requested");
         try {
@@ -1727,11 +1825,12 @@ public class PluginTestSuite extends TestSuite {
     /**
      * @param stage gate, tune or full
      * @param test  the test name, matched against the optional {@code -Dstockmarket.t213.filter} regex
-     * @return true if {@code -Dstockmarket.t213} lists the stage and the filter (if any) finds the name
+     * @return true if the stage is gate (its rows exist only in the T213Gate*TestSuite topics, so they run whenever
+     *         registered) or {@code -Dstockmarket.t213} lists it, and the filter (if any) finds the name
      */
     private static boolean t213Requested(String stage, String test) {
         String v = System.getProperty("stockmarket.t213", "");
-        if (!java.util.Arrays.asList(v.split(",")).contains(stage)) return false;
+        if (!stage.equals("gate") && !java.util.Arrays.asList(v.split(",")).contains(stage)) return false;
         String filter = System.getProperty("stockmarket.t213.filter", "");
         return filter.isEmpty() || java.util.regex.Pattern.compile(filter).matcher(test).find();
     }
@@ -1889,16 +1988,8 @@ public class PluginTestSuite extends TestSuite {
         };
     }
 
+    /** Registers the T-213 tune grid and the full rows; the gate rows are in {@link #registerGate()}. */
     private void registerT213Tests() {
-        for (int dir : new int[]{1, -1})
-            for (int fi = 0; fi < T213_F.length; fi++)
-                for (String back : T213_BACK) {
-                    String name = "t213_gate_" + (dir > 0 ? "G1" : "G2") + "_" + T213_F_NAME[fi] + "_" + back;
-                    double f = T213_F[fi];
-                    addTest(name, () -> test_t213Push(name, dir, f, back));
-                }
-        addTest("t213_gate_G3_supplier", () -> test_t213Supplier("t213_gate_G3_supplier"));
-        addTest("t213_gate_G4_idle", this::test_t213Idle);
         for (float days : new float[]{1, 2, 4})
             for (float rate : new float[]{0.05f, 0.1f, 0.2f})
                 for (float[] b : new float[][]{{0.25f, 4f}, {0.5f, 2f}}) {
@@ -2126,13 +2217,13 @@ public class PluginTestSuite extends TestSuite {
         return assertEquals("publisher gone for a tick -> default price", d, m.getEquilibriumPrice());
     }
 
-    // ── T-208 price model harness (gated: -Dstockmarket.t208=tune|gate|charts) ──────────────────
+    // ── T-208 price model harness (gated: -Dstockmarket.t208=tune|charts, Stage B: T208GateTestSuite) ──
     //
     // Report only. Stage B confirmed the defaults; the pump, dump-and-rebuy, limit exit and two-pumper
     // no-profit assertions and the organic price check run ungated (t208_noProfit_*, t208_organic_movesPrice).
     //
     // System properties:
-    //   stockmarket.t208        comma separated stages: tune (Stage A), gate (Stage B), charts
+    //   stockmarket.t208        comma separated stages: tune (Stage A), charts (Stage B, gate, is its own topic)
     //   stockmarket.t208.filter optional regex, only T-208 tests whose name it finds run
     //   stockmarket.t208.out    output folder (default "t208" in the game directory)
 
@@ -2171,11 +2262,12 @@ public class PluginTestSuite extends TestSuite {
      *
      * @param stage tune, gate or charts
      * @param test  the test name (matched against the optional filter)
-     * @return true if the stage is requested and the filter (if any) finds the name
+     * @return true if the stage is gate (its rows exist only in the T208GateTestSuite topic, so they run whenever
+     *         registered) or requested, and the filter (if any) finds the name
      */
     private static boolean t208Requested(String stage, String test) {
         String v = System.getProperty("stockmarket.t208", "");
-        if (!java.util.Arrays.asList(v.split(",")).contains(stage)) return false;
+        if (!stage.equals("gate") && !java.util.Arrays.asList(v.split(",")).contains(stage)) return false;
         String filter = System.getProperty("stockmarket.t208.filter", "");
         return filter.isEmpty() || java.util.regex.Pattern.compile(filter).matcher(test).find();
     }
@@ -2390,7 +2482,7 @@ public class PluginTestSuite extends TestSuite {
                 + String.valueOf(amp).replace(".", "");
     }
 
-    /** Registers the gated T-208 tests: Stage A grid, Stage B market x scenario, charts. */
+    /** Registers the gated T-208 tests: Stage A grid, charts; Stage B is in {@link #registerGate()}. */
     private void registerT208Tests() {
         for (float theta : T208_THETAS)
             for (float tau : T208_TAUS)
@@ -2398,12 +2490,6 @@ public class PluginTestSuite extends TestSuite {
                     String name = t208TuneName(theta, tau, amp);
                     addTest(name, () -> test_t208Tune(name, theta, tau, amp));
                 }
-        for (String market : T208_MARKETS)
-            for (String scenario : T208_GATE_SET) {
-                String name = "t208_gate_" + market + "_" + scenario;
-                addTest(name, () -> test_t208Gate(name, market, scenario));
-            }
-        addTest("t208_gate_determinism_dirt_pump0", this::test_t208Determinism);
         for (String chart : new String[]{"spike", "pump", "dump", "limit", "organic", "dirt", "profitVsHold"}) {
             String name = "t208_charts_" + chart;
             addTest(name, () -> test_t208Chart(name, chart));
@@ -2602,7 +2688,7 @@ public class PluginTestSuite extends TestSuite {
                 scenario, profit, pct(profit, spent), r.maxPrice(), r.endPrice(), r.ticks(), r.ticksPerSecond(), r.notes(), r.path());
     }
 
-    // ── T-207 regression probes (gated: -Dstockmarket.t207=true) ─────────────────────────────
+    // ── T-207 regression probes (T207GateTestSuite) ─────────────────────────────────────────────
 
     /**
      * T-207: when true, the replay harnesses ({@link #replay}, {@link #replayPlayers}, {@link T207Env}) also run
@@ -3221,9 +3307,9 @@ public class PluginTestSuite extends TestSuite {
         }
     }
 
-    /** T-207 gate. */
-    private static boolean t207Requested() {
-        return Boolean.getBoolean("stockmarket.t207");
+    /** T-207 gate: true in the T207GateTestSuite topic. */
+    private boolean t207Requested() {
+        return gate == Gate.T207;
     }
 
     /**

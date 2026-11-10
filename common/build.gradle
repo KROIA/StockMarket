@@ -72,5 +72,5 @@ test {
     // gradlew :common:test -Dmodutilities.tests.include=stockmarket/sm_news
     ['modutilities.tests.exclude','modutilities.tests.include','modutilities.tests.offline'].each { p -> if (System.getProperty(p) != null) systemProperty p, System.getProperty(p) }
     // StockMarket dev switches of the market simulation harness (PluginTestSuite), the same way
-    ['stockmarket.t207','stockmarket.t208','stockmarket.t208.filter','stockmarket.t208.out','stockmarket.t213','stockmarket.t213.filter','stockmarket.t197sweep'].each { p -> if (System.getProperty(p) != null) systemProperty p, System.getProperty(p) }
+    ['stockmarket.t208','stockmarket.t208.filter','stockmarket.t208.out','stockmarket.t213','stockmarket.t213.filter','stockmarket.t197sweep'].each { p -> if (System.getProperty(p) != null) systemProperty p, System.getProperty(p) }
 }
