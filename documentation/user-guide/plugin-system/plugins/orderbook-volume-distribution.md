@@ -11,7 +11,7 @@ The plugin computes a **target volume** for every price level around the current
 **Interaction with other plugins:**
 
 - The [TargetPriceBot](target-price-bot.md) moves the price by trading against this volume. It sizes its orders from the depth, so more depth does not slow the bot down -- but it does slow down **players**: they need more items to move the price.
-- Net player flow for the [VolatilityPlugin](volatility-plugin.md) is counted per item, independent of the depth.
+- Net player flow for the [NetFlowPlugin](net-flow-plugin.md) is counted per item, independent of the depth. Its Book Depth Cap reads the default depth of this plugin.
 - The item's **Abundance** sets the depth (see below): the book is sized so that a reference order of `max(64, 64 x Abundance)` items moves the price by about the same percentage on every market. The market's **Max order size** setting does not change the depth.
 - Only works on markets whose virtual order book is enabled.
 

@@ -105,7 +105,7 @@ The envelope is the simple authoring form. Events can instead define **multi-ste
 
 News does not fight the existing price simulation -- it builds on it:
 
-1. The **VolatilityPlugin** computes the base target price (random walk around the flow-driven equilibrium) as usual.
+1. The **NetFlowPlugin** and **VolatilityPlugin** compute the base target price (random walk around the flow-driven equilibrium) as usual.
 2. The **NewsPlugin** multiplies that target price by the combined factor of all active events on the market.
 3. The **TargetPriceBot** sees the shifted target and places real orders to push the actual market price toward it.
 

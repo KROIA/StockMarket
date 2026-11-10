@@ -15,7 +15,7 @@ This guide covers two common ways to set up the stock market on a server, with c
 
 ### What it is
 
-The out-of-the-box setup. The **virtual orderbook** is enabled and populated by the built-in plugins — `DefaultOrderbookVolumeDistributionPlugin`, `TargetPriceBot`, and `VolatilityPlugin`. Players always find liquidity at reasonable prices, and prices move naturally with player activity plus simulated market-maker behavior.
+The out-of-the-box setup. The **virtual orderbook** is enabled and populated by the built-in plugins — `DefaultOrderbookVolumeDistributionPlugin`, `TargetPriceBot`, `NetFlowPlugin` and `VolatilityPlugin`. Players always find liquidity at reasonable prices, and prices move naturally with player activity plus simulated market-maker behavior.
 
 ### Setup
 
@@ -79,7 +79,7 @@ Note: the **Clear** and **Reset Virtual Orderbook** buttons in the market settin
 
 * **No synthetic liquidity.** The orderbook is empty until a player places a limit order on it.
 * **Prices only move on real trades.** Long periods without player activity leave the price frozen.
-* **Orderbook plugins skip disabled markets.** `DefaultOrderbookVolumeDistributionPlugin`, `TargetPriceBot`, and `VolatilityPlugin` automatically ignore markets that have the virtual orderbook disabled, even if the plugin is still subscribed.
+* **Orderbook plugins skip disabled markets.** `DefaultOrderbookVolumeDistributionPlugin`, `TargetPriceBot`, `NetFlowPlugin` and `VolatilityPlugin` automatically ignore markets that have the virtual orderbook disabled, even if the plugin is still subscribed.
 * **Market orders may partially fill or cancel.** If not enough resting player orders exist on the opposite side, a market order fills what it can and cancels the rest. Reserved funds and items for the unfilled portion are automatically returned to the player.
 
 ### Problems and caveats admins should know about

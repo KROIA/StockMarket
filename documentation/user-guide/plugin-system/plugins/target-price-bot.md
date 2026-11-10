@@ -74,7 +74,7 @@ P Gain ~= 6 / price
 
 **What a high or low value feels like for players:**
 
-- **High P Gain** (price glued to the target): when a player sells a large stack, the price drops, and within a second the bot buys it back up to the target. Player trades leave almost no visible trace on the chart; only the flow-driven equilibrium of the VolatilityPlugin moves the price long-term.
+- **High P Gain** (price glued to the target): when a player sells a large stack, the price drops, and within a second the bot buys it back up to the target. Player trades leave almost no visible trace on the chart; only the flow-driven equilibrium of the [NetFlowPlugin](net-flow-plugin.md) moves the price long-term.
 - **Low P Gain**: player trades push the price away and it drifts back over seconds to minutes. Players see the effect of their trades, and the market feels more player-driven.
 
 ### I Gain

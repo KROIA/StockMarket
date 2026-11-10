@@ -22,7 +22,7 @@ new target price    = target price x combined factor
 
 - It multiplies the target produced by the [VolatilityPlugin](volatility-plugin.md). The [TargetPriceBot](target-price-bot.md) then trades the real price toward the shifted target -- so how fast a news event shows up on the chart depends on the bot's gains.
 - Because the multiplication happens in a separate stage after every plugin's update, its **position in the plugin list does not matter**.
-- **Permanent events** multiply the market's **default price** when they end. The VolatilityPlugin's equilibrium, floor and ceiling are all relative to the default price, so they move with it.
+- **Permanent events** multiply the market's **default price** when they end. The [NetFlowPlugin](net-flow-plugin.md)'s equilibrium, floor, ceiling and anchor are all relative to the default price, so they move with it.
 
 ## The Impact Over Time
 
@@ -40,7 +40,7 @@ Most events use one of three preset shapes (values can be overridden per event, 
 
 Example: a diamond market with a target price of 160 and a shock event with `peakFactor 0.5`, `weightFactor 1` and Sensitivity 1. At the peak the target becomes 160 x 1.5 = **240**; 5 minutes after the hold ends (one time constant) the factor is 1 + 0.5 x 0.37 = 1.18, so the target is about **189**. If the market also has a crash event at -0.4 running, the factors multiply: 1.5 x 0.6 = 0.9.
 
-A permanent event with +0.2 on the same market changes the default price from 160 to **192** when its hold phase ends. With the default Min/Max Price Multipliers of the VolatilityPlugin the equilibrium range moves from 8-3,200 to 9.6-3,840.
+A permanent event with +0.2 on the same market changes the default price from 160 to **192** when its hold phase ends. With the default Min/Max Price Multipliers of the NetFlowPlugin (anchor at the default price) the equilibrium range moves from 8-480 to 9.6-576.
 
 ## Settings Overview
 

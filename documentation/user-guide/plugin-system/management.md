@@ -142,7 +142,7 @@ Plugins have two types of settings interfaces: inline settings and custom screen
 
 ### Inline Settings
 
-Used by **VolatilityPlugin** and **DefaultOrderbookVolumeDistributionPlugin**.
+Used by **NetFlowPlugin**, **VolatilityPlugin** and **DefaultOrderbookVolumeDistributionPlugin**.
 
 1. The settings fields appear directly inside the plugin entry in the list.
 2. Change the values in the text fields.
@@ -150,7 +150,9 @@ Used by **VolatilityPlugin** and **DefaultOrderbookVolumeDistributionPlugin**.
 
 **Apply** sends the values for the selected market only; **Apply to all** sends them to every market subscribed to the plugin (after a confirmation dialog). Hover over a field to see its tooltip.
 
-**VolatilityPlugin fields:** Volatility Scale, Player Flow Influence, Flow Sensitivity, Min Price Multiplier, Max Price Multiplier -- see [VolatilityPlugin](plugins/volatility-plugin.md).
+**NetFlowPlugin fields:** Player Flow Influence, Flow Sensitivity, Min/Max Price Multiplier, Permanent Impact, Capacity Volatility Scale, Book Depth Cap, Flow Saturation and the Long-term Anchor settings, plus a read-only line with the current anchor -- see [NetFlowPlugin](plugins/net-flow-plugin.md).
+
+**VolatilityPlugin fields:** Volatility Scale -- see [VolatilityPlugin](plugins/volatility-plugin.md).
 
 **DefaultOrderbookVolumeDistributionPlugin fields:** Volume Scale, Speed, Accumulation Rate, Decumulation Rate, plus a **Reset Volume** button -- see [Order Book Volume Distribution](plugins/orderbook-volume-distribution.md).
 

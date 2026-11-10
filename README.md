@@ -408,28 +408,36 @@ The table below summarizes which access each data class needs:
 ## Plugins
 Since v2.0, the old monolithic StockMarketBot has been replaced by a modular **plugin system**. Each plugin handles one aspect of market simulation and can be independently configured, enabled, or subscribed to specific markets through the [Plugin Management](#plugin-system) screen.
 
-The mod ships with four built-in plugins:
+The mod ships with five built-in plugins:
+
+### NetFlowPlugin
+Computes each market's flow-driven [price equilibrium](#price-equilibrium): sustained net selling by players lowers a market's price range, sustained net buying raises it — so the server economy balances itself (heavily farmed items get cheap, sought-after items get expensive). The equilibrium shifts exponentially with the net item flow, so the price can approach but never reach 0, and it is clamped between the Min/Max Price Multipliers. Items with a higher Abundance absorb more trading before their price moves. The optional long-term anchor keeps a small part of lasting trends after the flow has faded. To re-anchor a market at its default price, reset its **Net Flow** in the market settings.
+
+**Settings (main):**
+| Parameter | Description |
+|-----------|-------------|
+| Player Flow Influence | Enables the flow-driven equilibrium. When off, the price wanders around the static default price. Enabled by default. |
+| Flow Sensitivity | How many items (per unit of the market's Abundance) players must net-sell to lower the equilibrium price to ~37%. Higher values make the market more inert. Default: 2000. |
+| Min Price Multiplier | Lower clamp for the equilibrium as a fraction of the anchor. Default: 0.05. |
+| Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the anchor. Default: 3. |
+| Long-term Anchor | Lets lasting trends slowly move the price the flow is measured from. Off by default. Anchor time 2 days, at most 0.1 per day, within 0.25x-4x the default price. |
+
+Full reference with all settings, formulas and tuning advice: [NetFlowPlugin](documentation/user-guide/plugin-system/plugins/net-flow-plugin.md).
 
 ### VolatilityPlugin
-Simulates realistic price movements using a [random walk](#random-walk) algorithm. Each market gets independent price fluctuations around its default price, creating the organic-looking charts you see in-game.
-
-The random walk is anchored on a flow-driven [price equilibrium](#price-equilibrium) instead of the static default price: sustained net selling by players permanently lowers a market's price range, sustained net buying permanently raises it — so the server economy balances itself (heavily farmed items get cheap, sought-after items get expensive). The equilibrium shifts exponentially with the net item flow, so the price can approach but never reach 0, and it is clamped between the Min/Max Price Multipliers. Items with a higher Abundance absorb more trading before their price moves. To re-anchor a market at its default price, reset its **Net Flow** in the market settings.
+Simulates realistic price movements using a [random walk](#random-walk) algorithm. Each market gets independent price fluctuations around the [price equilibrium](#price-equilibrium) published by the NetFlowPlugin (or the default price without it), creating the organic-looking charts you see in-game.
 
 **Settings:**
 | Parameter | Description |
 |-----------|-------------|
 | Volatility Scale | Multiplier for how far the price deviates from the equilibrium price. Higher values produce larger swings. |
-| Player Flow Influence | Enables the flow-driven equilibrium. When off, the price wanders around the static default price. Enabled by default. |
-| Flow Sensitivity | How many items (per unit of the market's Abundance) players must net-sell to lower the equilibrium price to ~37% of its default. Higher values make the market more inert. Default: 500. |
-| Min Price Multiplier | Lower clamp for the equilibrium as a fraction of the default price. Default: 0.05 (never below 5% of the default price). |
-| Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the default price. Default: 20 (never above 20x the default price). |
 
-Full reference with worked examples and tuning advice: [VolatilityPlugin](documentation/user-guide/plugin-system/plugins/volatility-plugin.md).
+Full reference with tuning advice: [VolatilityPlugin](documentation/user-guide/plugin-system/plugins/volatility-plugin.md).
 
 ### TargetPriceBot
 The market-making bot that drives prices toward a target value. It places [market orders](#market-order) to push the price in the desired direction. A [PID controller](https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller) determines the size and direction of each order to smoothly converge on the target price without overshooting.
 
-The target price is influenced by the **VolatilityPlugin** (random walk noise) and by player trading activity (supply and demand).
+The target price is influenced by the **NetFlowPlugin** (player supply and demand) and the **VolatilityPlugin** (random walk noise).
 
 **Settings:**
 | Parameter | Description |
@@ -463,10 +471,11 @@ Randomly publishes news events defined in JSON files (`config/StockMarket/news/`
 See the [News Event System overview](documentation/user-guide/news-system/overview.md), the [JSON configuration reference](documentation/user-guide/news-system/configuration.md), and the step-by-step [event authoring tutorial](documentation/user-guide/news-system/authoring-tutorial.md). Plugin settings (sensitivity, scheduler): [NewsPlugin](documentation/user-guide/plugin-system/plugins/news-plugin.md).
 
 ### How the plugins work together
-The three plugins combine to create a functioning market:
-1. The **VolatilityPlugin** generates a wandering target price using random walk noise, centered on the flow-adjusted [price equilibrium](#price-equilibrium).
-2. The **TargetPriceBot** places market orders to push the actual price toward the target, using a PID controller for smooth convergence.
-3. The **DefaultOrderbookVolumeDistributionPlugin** keeps the order book filled with liquidity so that both bot orders and player orders can be executed.
+The plugins combine to create a functioning market:
+1. The **NetFlowPlugin** computes the flow-adjusted [price equilibrium](#price-equilibrium).
+2. The **VolatilityPlugin** generates a wandering target price using random walk noise, centered on that equilibrium.
+3. The **TargetPriceBot** places market orders to push the actual price toward the target, using a PID controller for smooth convergence.
+4. The **DefaultOrderbookVolumeDistributionPlugin** keeps the order book filled with liquidity so that both bot orders and player orders can be executed.
 
 While a news event is active, the **NewsPlugin** multiplies the target price from step 1 before the bot acts on it — turning headlines into real price movement.
 
@@ -599,7 +608,7 @@ This value is a great source to create random market prive movements.
 
 ### Price Equilibrium
 The base price a market's random walk oscillates around.
-With player flow influence enabled, it shifts permanently with the cumulative net amount of items players traded on that market: net selling lowers it, net buying raises it.
+With player flow influence enabled (NetFlowPlugin), it shifts with the faded net amount of items players traded on that market: net selling lowers it, net buying raises it. With the long-term anchor on, part of a lasting trend stays after the flow has faded.
 
 
 ---
