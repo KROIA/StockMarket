@@ -19,9 +19,10 @@ import java.util.Map;
 
 /**
  * T-213: inline settings GUI for the {@link NetFlowPlugin}: one row per setting (toggles as check boxes,
- * numbers as label + text box) plus Apply / Apply to all / Defaults.
+ * numbers as label + text box), a read-only line with the active market's current anchor (streamed), plus
+ * Apply / Apply to all / Defaults.
  */
-public class NetFlowPluginGuiElement extends PluginGuiElement<NetFlowPlugin.Settings, Void> {
+public class NetFlowPluginGuiElement extends PluginGuiElement<NetFlowPlugin.Settings, NetFlowPlugin.RuntimeStreamData> {
 
     private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".net_flow_plugin.";
 
@@ -38,6 +39,15 @@ public class NetFlowPluginGuiElement extends PluginGuiElement<NetFlowPlugin.Sett
     private final TextBox capacityVolatilityScale;
     private final CheckBox thetaCapEnabled;
     private final CheckBox saturationEnabled;
+    private final CheckBox anchorEnabled;
+    private final TextBox anchorTimeDays;
+    private final TextBox anchorMaxMovePerDay;
+    private final TextBox anchorMinMult;
+    private final TextBox anchorMaxMult;
+    /** Read-only: the active market's current anchor as a multiple of the default price. */
+    private final Label anchorValue;
+    /** Last streamed anchors (null until the first packet). */
+    private @Nullable NetFlowPlugin.RuntimeStreamData runtimeData;
     private final Button applyButton;
     private final Button applyAllButton;
     /** Fills the form with the plugin defaults (null = hidden). */
@@ -55,6 +65,16 @@ public class NetFlowPluginGuiElement extends PluginGuiElement<NetFlowPlugin.Sett
         capacityVolatilityScale = numberRow("capacity_volatility_scale", 10, 6);
         thetaCapEnabled = checkRow("theta_cap_enabled");
         saturationEnabled = checkRow("saturation_enabled");
+        anchorEnabled = checkRow("anchor_enabled");
+        anchorTimeDays = numberRow("anchor_time_days", 6, 3);
+        anchorMaxMovePerDay = numberRow("anchor_max_move_per_day", 6, 4);
+        anchorMinMult = numberRow("anchor_min_mult", 6, 4);
+        anchorMaxMult = numberRow("anchor_max_mult", 6, 4);
+        anchorValue = new Label("");
+        setSettingTooltip(text("anchor_value.tooltip"), anchorValue);
+        addChild(anchorValue);
+        rows.add(new GuiElement[]{anchorValue});
+        updateAnchorLabel();
 
         applyButton = new Button(text("apply").getString(), this::onApply);
         applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
@@ -100,11 +120,32 @@ public class NetFlowPluginGuiElement extends PluginGuiElement<NetFlowPlugin.Sett
         if (customSettingsMap != null) allSettings = new HashMap<>(customSettingsMap);
         ItemID active = getActiveMarket();
         if (active != null && allSettings.containsKey(active)) populateFrom(allSettings.get(active));
+        startDataStream();
+    }
+
+    @Override
+    protected StreamCodec<ByteBuf, NetFlowPlugin.RuntimeStreamData> runtimeDataCodec() {
+        return NetFlowPlugin.RuntimeStreamData.CODEC;
+    }
+
+    @Override
+    protected void onRuntimeDataReceived(NetFlowPlugin.RuntimeStreamData data) {
+        runtimeData = data;
+        updateAnchorLabel();
+    }
+
+    /** Shows the active market's streamed anchor ("-" while unknown). */
+    private void updateAnchorLabel() {
+        ItemID active = getActiveMarket();
+        double mult = runtimeData != null && active != null ? runtimeData.anchorOf(active.getShort()) : Double.NaN;
+        anchorValue.setText(Component.translatable(PREFIX + "anchor_value",
+                Double.isNaN(mult) ? "-" : String.format(java.util.Locale.ROOT, "%.4f", mult)).getString());
     }
 
     @Override
     protected void onActiveMarketChanged(@Nullable ItemID marketID) {
         if (marketID != null && allSettings.containsKey(marketID)) populateFrom(allSettings.get(marketID));
+        updateAnchorLabel();
     }
 
     @Override
@@ -132,6 +173,11 @@ public class NetFlowPluginGuiElement extends PluginGuiElement<NetFlowPlugin.Sett
         capacityVolatilityScale.setText(s.capacityVolatilityScale(), 6);
         thetaCapEnabled.setChecked(s.thetaCapEnabled());
         saturationEnabled.setChecked(s.saturationEnabled());
+        anchorEnabled.setChecked(s.anchorEnabled());
+        anchorTimeDays.setText(s.anchorTimeDays(), 3);
+        anchorMaxMovePerDay.setText(s.anchorMaxMovePerDay(), 4);
+        anchorMinMult.setText(s.anchorMinMult(), 4);
+        anchorMaxMult.setText(s.anchorMaxMult(), 4);
     }
 
     /** Builds the settings from the current input values. */
@@ -144,7 +190,12 @@ public class NetFlowPluginGuiElement extends PluginGuiElement<NetFlowPlugin.Sett
                 (float) permanentImpact.getDouble(),
                 (float) capacityVolatilityScale.getDouble(),
                 thetaCapEnabled.isChecked(),
-                saturationEnabled.isChecked());
+                saturationEnabled.isChecked(),
+                anchorEnabled.isChecked(),
+                (float) anchorTimeDays.getDouble(),
+                (float) anchorMaxMovePerDay.getDouble(),
+                (float) anchorMinMult.getDouble(),
+                (float) anchorMaxMult.getDouble());
     }
 
     private void onApply() {

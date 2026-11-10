@@ -34,9 +34,12 @@ public class NetFlowPluginTestSuite extends TestSuite {
     private static final double DEFAULT_PRICE = 100.0;
     private static final float ABUNDANCE = 10f;
 
-    /** Settings with defaults for everything (flow influence enabled). */
+    /**
+     * Default settings with the T-213 anchor off, so single-tick expectations are exact (A = D); the anchor
+     * has its own tests.
+     */
     private static Settings defaults() {
-        return Settings.createDefault();
+        return Settings.createDefault().withAnchorEnabled(false);
     }
 
     /** Settings in the pre-T-213 VolatilityPlugin argument order (scale, flow, sensitivity, min, max), default θ. */
@@ -74,6 +77,10 @@ public class NetFlowPluginTestSuite extends TestSuite {
         addTest("toggle_saturation_off_uses_faded_flow", this::test_toggleSaturationOff);
         addTest("toggle_theta_cap_off_ignores_book", this::test_toggleThetaCapOff);
         addTest("publishes_equilibrium_and_keeps_foreign_target", this::test_channelAndOrdering);
+        addTest("anchor_step_rules", this::test_stepAnchor);
+        addTest("anchor_codec_round_trip_and_sanitize", this::test_anchorCodec);
+        addTest("anchor_moves_equilibrium_and_resets", this::test_anchorUpdate);
+        addTest("anchor_idle_is_default_price", this::test_anchorIdle);
         addTest("theta_bound_diamond", () -> test_thetaBound(160.0, 50f, new double[]{100, 3_200, 32_000, 192_000}));
         addTest("theta_bound_dirt", () -> test_thetaBound(0.1, 2000f, new double[]{128_000, 1_280_000, 12_800_000}));
         // T-212: the same bound with the default round-level clusters (S = 1) in the book
@@ -568,5 +575,92 @@ public class NetFlowPluginTestSuite extends TestSuite {
         return assertEquals("foreign target kept", 42.0, market.targetPrice);
     }
 
+
+
+    // ── T-213: anchor ────────────────────────────────────────────────────────
+
+    /** The pure anchor step: off, zero flow, linear drift, rate cap, bounds. */
+    private TestResult test_stepAnchor() {
+        Settings on = defaults().withAnchor(true, 2f, 0.1f, 0.25f, 4f);
+        double dt = 3600; // one hour
+        if (NetFlowPlugin.stepAnchor(0.3, -0.5, dt, defaults()) != 0) return fail("anchor off must return 0");
+        if (NetFlowPlugin.stepAnchor(0.3, 0, dt, on) != 0.3) return fail("zero flow must leave the anchor unchanged");
+        double small = -0.05; // 0.025 ln/day < 0.1 cap
+        double expected = 0.1 + small * dt / (2 * 86_400.0);
+        if (!relClose(NetFlowPlugin.stepAnchor(0.1, small, dt, on), expected))
+            return fail("drift must be f x dt / τ_A: " + NetFlowPlugin.stepAnchor(0.1, small, dt, on) + " vs " + expected);
+        double cap = 0.1 * dt / 86_400.0;
+        if (!relClose(NetFlowPlugin.stepAnchor(0, -2.0, dt, on), -cap) || !relClose(NetFlowPlugin.stepAnchor(0, 2.0, dt, on), cap))
+            return fail("large flows must be capped at rate x dt per day");
+        if (NetFlowPlugin.stepAnchor(Math.log(4), 1.0, dt, on) != Math.log(4f)) return fail("upper bound ln 4 must hold");
+        if (NetFlowPlugin.stepAnchor(Math.log(0.25), -1.0, dt, on) != Math.log(0.25f)) return fail("lower bound ln 0.25 must hold");
+        // a full saturated week moves at most 7 x 0.1 (the rate is the float setting 0.1f, not the double 0.1)
+        double a = 0;
+        for (int h = 0; h < 7 * 24; h++) a = NetFlowPlugin.stepAnchor(a, -3.0, dt, on);
+        return assertTrue("a saturated week moves at most 0.7 ln, got " + a, relClose(a, -7.0 * on.anchorMaxMovePerDay()));
+    }
+
+    /** 13 fields round-trip; invalid anchor values become their defaults. */
+    private TestResult test_anchorCodec() {
+        Settings original = defaults().withAnchor(true, 3.5f, 0.07f, 0.4f, 2.5f);
+        ByteBuf buf = Unpooled.buffer();
+        try {
+            Settings.CODEC.encode(buf, original);
+            TestResult r = assertEquals("anchor round-trip", original, Settings.CODEC.decode(buf));
+            if (!r.passed()) return r;
+        } finally {
+            buf.release();
+        }
+        Settings bad = defaults().withAnchor(true, 0f, -1f, 1.5f, 0.5f);
+        if (bad.anchorTimeDays() != NetFlowPlugin.DEFAULT_ANCHOR_TIME_DAYS || bad.anchorMaxMovePerDay() != NetFlowPlugin.DEFAULT_ANCHOR_MAX_MOVE_PER_DAY
+                || bad.anchorMinMult() != NetFlowPlugin.DEFAULT_ANCHOR_MIN_MULT || bad.anchorMaxMult() != NetFlowPlugin.DEFAULT_ANCHOR_MAX_MULT)
+            return fail("invalid anchor values must be sanitized: " + bad);
+        return assertEquals("rate 0 is valid (frozen anchor)", 0f, defaults().withAnchor(true, 2f, 0f, 0.25f, 4f).anchorMaxMovePerDay());
+    }
+
+    /**
+     * Update with the anchor on: the published equilibrium is {@code D x e^a x e^f}; the anchor survives NBT; an
+     * admin flow reset (raw and faded 0) clears it.
+     */
+    private TestResult test_anchorUpdate() {
+        ItemID id = new ItemID((short) 1);
+        NewsPluginTestSuite.TestMarket market = new NewsPluginTestSuite.TestMarket(id, DEFAULT_PRICE);
+        Settings on = defaults().withAnchorEnabled(true);
+        NetFlowPlugin p = plugin(id, on);
+        List<MarketInterface> markets = List.of(new MarketInterface(market, null));
+        p.setAnchorLn(id, 0.2);
+        market.netFlow = 1000;
+        p.update(markets);
+        double a = Math.log(p.getAnchorMultiplier(id));
+        if (!(a < 0.2)) return fail("net selling must lower the anchor, got " + a);
+        FlowBand band = NetFlowPlugin.flowBand(market.getNaturalAbundance(), on);
+        double expected = DEFAULT_PRICE * Math.exp(a) * Math.exp(NetFlowPlugin.flowExponent(p.getSaturatedFlow(id), band));
+        if (!relClose(market.equilibrium, expected)) return fail("E must be D e^a e^f: " + market.equilibrium + " vs " + expected);
+
+        CompoundTag tag = new CompoundTag();
+        p.save(tag);
+        NetFlowPlugin loaded = plugin(id, on);
+        loaded.load(tag);
+        TestResult r = assertEquals("anchor after load", p.getAnchorMultiplier(id), loaded.getAnchorMultiplier(id));
+        if (!r.passed()) return r;
+
+        market.netFlow = 0; // admin reset: raw and faded 0 while the last faded was not
+        p.update(markets);
+        if (p.getAnchorMultiplier(id) != 1) return fail("admin reset must clear the anchor, got " + p.getAnchorMultiplier(id));
+        return assertEquals("after reset E = D", DEFAULT_PRICE, market.equilibrium);
+    }
+
+    /** G4 (unit): zero flow for a long time with the anchor on keeps A = D and E = D exactly. */
+    private TestResult test_anchorIdle() {
+        ItemID id = new ItemID((short) 1);
+        NewsPluginTestSuite.TestMarket market = new NewsPluginTestSuite.TestMarket(id, DEFAULT_PRICE);
+        NetFlowPlugin p = plugin(id, defaults().withAnchorEnabled(true));
+        List<MarketInterface> markets = List.of(new MarketInterface(market, null));
+        for (int t = 0; t < 10_000; t++) {
+            p.update(markets);
+            if (market.equilibrium != DEFAULT_PRICE) return fail("idle tick " + t + ": E " + market.equilibrium);
+        }
+        return assertEquals("idle anchor", 1.0, p.getAnchorMultiplier(id));
+    }
 
 }

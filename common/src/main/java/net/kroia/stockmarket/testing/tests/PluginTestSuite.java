@@ -111,6 +111,8 @@ public class PluginTestSuite extends TestSuite {
         addTest("netFlow_golden_equivalence", this::test_netFlowGolden);
         addTest("equilibriumChannel_rollsOver", this::test_equilibriumChannel);
         addTest("netFlow_migration_splitsVolatility", this::test_netFlowMigration);
+        // T-213 anchor gates (run only with -Dstockmarket.t213=gate|tune|full)
+        registerT213Tests();
         // Trend accumulation
         addTest("volumeDistribution_trendFactor_math", this::test_volumeDistribution_trendFactorMath);
         addTest("volumeDistribution_trend_codec_legacy", this::test_volumeDistribution_trendCodec);
@@ -764,8 +766,7 @@ public class PluginTestSuite extends TestSuite {
                 for (int t = 0; t < cycleTicks; t++) {
                     if (trace != null && (c * cycleTicks + t) % 100 == 0) {
                         double p = MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice());
-                        double eq = NetFlowPlugin.computeEquilibriumPrice(defaultPrice,
-                                vol.getSaturatedFlow(itemID), abundance, volSettings, vol.getBookEFold(itemID));
+                        double eq = vol.equilibrium(itemID, defaultPrice, abundance);
                         trace.append(String.format(Locale.ROOT, " %d:%.0f(max %.0f)/%.0f/%.0f/%.0f/%.0f", c * cycleTicks + t, p, windowMax, eq,
                                 cache.getPluginOrderBook().getRealVirtualVolume(p, eq),
                                 market.getOrderbook().getRealVolumeRounded(Math.min(p, eq), Math.max(p, eq)),
@@ -1290,8 +1291,7 @@ public class PluginTestSuite extends TestSuite {
                 if (t % 1200 == 0) path.append(String.format(Locale.ROOT, " %d:%.4g", t / 1200, price));
                 if (series != null && sampleEvery > 0 && t % sampleEvery == 0) {
                     series.append(String.format(Locale.ROOT, "%.2f,%.6g,%.6g,%.6g,%.6g", t / 20.0, price, bot.test_getTargetPrice(itemID),
-                            NetFlowPlugin.computeEquilibriumPrice(defaultPrice, vol.getSaturatedFlow(itemID), s.abundance(), volSettings,
-                                    vol.getBookEFold(itemID)), vol.getSaturatedFlow(itemID)));
+                            vol.equilibrium(itemID, defaultPrice, s.abundance()), vol.getSaturatedFlow(itemID)));
                     for (int i = 0; i < n; i++)
                         series.append(String.format(Locale.ROOT, ",%.6g", accounts[i].getBank(itemID).getTotalBalance() / (double) sf));
                     series.append('\n');
@@ -1645,7 +1645,7 @@ public class PluginTestSuite extends TestSuite {
                             // T-213: the flow capacity uses the NetFlow capacity scale = the old volatility scale
                             NetFlowPlugin.Settings vs = new NetFlowPlugin.Settings(flowOn, NetFlowPlugin.DEFAULT_FLOW_SENSITIVITY,
                                     NetFlowPlugin.DEFAULT_MIN_PRICE_MULT, maxMult, NetFlowPlugin.DEFAULT_PERMANENT_IMPACT)
-                                    .withCapacityVolatilityScale(scale);
+                                    .withCapacityVolatilityScale(scale).withAnchorEnabled(false);
                             HarnessModel vol = new HarnessModel(itemID, vs, scale);
                             double b = NetFlowPlugin.DEFAULT_FLOW_SENSITIVITY * abundance; // ~ one capacity
                             double raw = 0, faded = 0;
@@ -1689,6 +1689,7 @@ public class PluginTestSuite extends TestSuite {
         }
         long pump = 1125899906842597L;
         harnessRefill = true;
+        harnessAnchor = false;
         try {
             ReplaySetup s = t208Market("diamond_default");
             PlayersResult r = replayPlayers(s, T208_WARMUP, 0, null, 0, null, true, t208Scenario("pump30", s.maxOrder()).plans());
@@ -1697,6 +1698,7 @@ public class PluginTestSuite extends TestSuite {
             out.append(String.format(Locale.ROOT, " pump30 ticks %d end %.6g profit %.6g", r.pricePath().length, r.endPrice(), r.profit()[0]));
         } finally {
             harnessRefill = false;
+            harnessAnchor = null;
         }
         String hashes = String.format(Locale.ROOT, "script %016x pump %016x;", script, pump);
         StockMarketMod.LOGGER.info("[T-213 golden] {}{}", hashes, out);
@@ -1704,6 +1706,271 @@ public class PluginTestSuite extends TestSuite {
             return fail(String.format(Locale.ROOT, "golden mismatch (expected script %016x pump %016x): ", GOLDEN_SCRIPT_HASH,
                     GOLDEN_PUMP_HASH) + hashes + out);
         return pass(hashes + out);
+    }
+
+    // ── T-213 anchor gates ──────────────────────────────────────────────────
+
+    /** T-213 gate time compression: half-life / 6, τ_A / 6, anchor rate x 6 (1 day = 288k ticks). */
+    private static final int T213_COMPRESSION = 6;
+    /** Ticks of one real day at 20 TPS. */
+    private static final int TICKS_PER_DAY = 1_728_000;
+
+    /**
+     * @param stage gate, tune or full
+     * @param test  the test name, matched against the optional {@code -Dstockmarket.t213.filter} regex
+     * @return true if {@code -Dstockmarket.t213} lists the stage and the filter (if any) finds the name
+     */
+    private static boolean t213Requested(String stage, String test) {
+        String v = System.getProperty("stockmarket.t213", "");
+        if (!java.util.Arrays.asList(v.split(",")).contains(stage)) return false;
+        String filter = System.getProperty("stockmarket.t213.filter", "");
+        return filter.isEmpty() || java.util.regex.Pattern.compile(filter).matcher(test).find();
+    }
+
+    /**
+     * Anchor settings of one gate run (uncompressed units).
+     *
+     * @param on   anchor enabled
+     * @param days τ_A in days
+     * @param rate max move per day (ln)
+     * @param min  lowest anchor multiple
+     * @param max  highest anchor multiple
+     */
+    private record T213Anchor(boolean on, float days, float rate, float min, float max) {
+        static final T213Anchor OFF = new T213Anchor(false, NetFlowPlugin.DEFAULT_ANCHOR_TIME_DAYS,
+                NetFlowPlugin.DEFAULT_ANCHOR_MAX_MOVE_PER_DAY, NetFlowPlugin.DEFAULT_ANCHOR_MIN_MULT, NetFlowPlugin.DEFAULT_ANCHOR_MAX_MULT);
+        static final T213Anchor DEFAULT = new T213Anchor(true, NetFlowPlugin.DEFAULT_ANCHOR_TIME_DAYS,
+                NetFlowPlugin.DEFAULT_ANCHOR_MAX_MOVE_PER_DAY, NetFlowPlugin.DEFAULT_ANCHOR_MIN_MULT, NetFlowPlugin.DEFAULT_ANCHOR_MAX_MULT);
+
+        @Override
+        public String toString() {
+            return on ? String.format(Locale.ROOT, "tau%.0f_rate%.2f_b%.2f-%.0f", days, rate, min, max) : "off";
+        }
+    }
+
+    /**
+     * Diamond gate market at today's defaults (T207Env: price 160, abundance 50, max order 3,200, bot, NetFlow with
+     * capacity scale 0 + Volatility 0) with book refill, the given anchor and time compressed by {@code c}
+     * (half-life / c, τ_A / c, rate x c). Warmed up 200 ticks. Caller closes it and resets {@link #harnessRefill}.
+     */
+    private T207Env t213Env(T213Anchor a, int c) {
+        harnessRefill = true;
+        T207Env env = t207Default();
+        env.modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(env.modSettings.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue() / c);
+        applySettings(env.vol.flow, NetFlowPlugin.Settings.CODEC,
+                env.volSettings.withAnchor(a.on(), a.days() / c, a.rate() * c, a.min(), a.max()));
+        env.money.setBalance(MarketManager.convertToRawAmountStatic(1e10));
+        for (int t = 0; t < 200; t++) env.tick();
+        return env;
+    }
+
+    /** Player money (real) of a gate env. */
+    private static double t213Money(T207Env env) {
+        return MarketManager.convertToRealAmountStatic(env.money.getTotalBalance());
+    }
+
+    /**
+     * G1 (push down, {@code dir} +1) / G2 (push up, -1): for 2 days the player trades every 10 ticks just enough to
+     * hold the faded flow at {@code f} x capacity ({@code f} &lt; 0 = 1.2 x past the band edge, saturated), then
+     * reverses the whole position: {@code backTicks} 0 = one max order per 10 ticks, else evenly over that many
+     * ticks (compressed). Profit = money change + leftover items at the default price.
+     *
+     * @return {profit, items pushed, anchor multiple after the push, anchor multiple at the end}
+     */
+    private double[] t213Push(T213Anchor a, int c, int dir, double f, int backTicks) {
+        try (T207Env env = t213Env(a, c)) {
+            double d = env.defaultPrice;
+            long startItems = 50_000_000L;
+            env.items.setBalance(startItems * env.sf);
+            double money0 = t213Money(env), held0 = env.held();
+            NetFlowPlugin.Settings st = env.vol.flow.getMarketSettings(itemID);
+            NetFlowPlugin.FlowBand band = NetFlowPlugin.flowBand(50, st, env.vol.getBookEFold(itemID));
+            double target = f < 0 ? 1.2 * (dir > 0 ? band.upper() : band.lower()) : dir * f * band.capacity();
+            IPluginMarket pm = env.cache.getPluginMarket();
+            int pushTicks = 2 * TICKS_PER_DAY / c;
+            for (int t = 0; t < pushTicks; t++) {
+                if (t % 10 == 0) {
+                    double deficit = dir * (target - pm.getFadedNetPlayerItemFlow());
+                    if (deficit >= 1) env.marketOrder(-dir * Math.min(Math.floor(deficit), env.maxOrder));
+                }
+                env.tick();
+            }
+            double anchorPush = env.vol.flow.getAnchorMultiplier(itemID);
+            double pushed = held0 - env.held(); // > 0 sold (G1), < 0 bought (G2)
+            double left = Math.abs(pushed);
+            int slices = backTicks > 0 ? Math.max(1, backTicks / 10) : 0;
+            double perSlice = slices > 0 ? left / slices : env.maxOrder;
+            for (int t = 0; left >= 1 && t < 4 * TICKS_PER_DAY / c; t++) {
+                if (t % 10 == 0) {
+                    double amount = Math.min(Math.min(left, Math.max(1, perSlice)), env.maxOrder);
+                    double before = env.held();
+                    env.marketOrder(Math.signum(pushed) * Math.floor(amount));
+                    env.tick();
+                    left -= Math.abs(env.held() - before);
+                } else env.tick();
+            }
+            for (int t = 0; t < 20; t++) env.tick();
+            double profit = t213Money(env) - money0 + (env.held() - held0) * d;
+            return new double[]{profit, pushed, anchorPush, env.vol.flow.getAnchorMultiplier(itemID)};
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /**
+     * G3 timber supplier: one max-order market sell every 2 h for 5 days, then 2 idle days (compressed by c).
+     *
+     * @return {day-1 average price, day-5 average price, average price of the last idle hour, anchor at the end}
+     */
+    private double[] t213Supplier(T213Anchor a, int c) {
+        try (T207Env env = t213Env(a, c)) {
+            env.items.setBalance(10_000_000L * env.sf);
+            int day = TICKS_PER_DAY / c, every = 2 * 72_000 / c, hour = 72_000 / c;
+            double[] daySum = new double[7];
+            int[] dayN = new int[7];
+            double lastHour = 0;
+            int lastHourN = 0;
+            for (int t = 0; t < 7 * day; t++) {
+                if (t < 5 * day && t % every == 0) env.marketOrder(-env.maxOrder);
+                env.tick();
+                if (t % 20 == 0) {
+                    double p = env.price();
+                    daySum[t / day] += p;
+                    dayN[t / day]++;
+                    if (t >= 7 * day - hour) { lastHour += p; lastHourN++; }
+                }
+            }
+            return new double[]{daySum[0] / dayN[0], daySum[4] / dayN[4], lastHour / lastHourN, env.vol.flow.getAnchorMultiplier(itemID)};
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /** G4: 3 idle days; returns {price-path hash, anchor multiple}. */
+    private double[] t213Idle(T213Anchor a, int c) {
+        try (T207Env env = t213Env(a, c)) {
+            long h = 1125899906842597L;
+            for (int t = 0; t < 3 * TICKS_PER_DAY / c; t++) {
+                env.tick();
+                h = goldenMix(h, env.price());
+            }
+            return new double[]{Double.longBitsToDouble(h), env.vol.flow.getAnchorMultiplier(itemID)};
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /** f levels of G1/G2 (-1 = saturated) and their names. */
+    private static final double[] T213_F = {0.05, 0.2, -1};
+    private static final String[] T213_F_NAME = {"f005", "f02", "sat"};
+    /** Buy-back modes: at once, sliced over 1 h, over 1 day (real time, compressed in the run). */
+    private static final String[] T213_BACK = {"once", "1h", "1d"};
+
+    private static int t213BackTicks(String mode, int c) {
+        return switch (mode) {
+            case "1h" -> 72_000 / c;
+            case "1d" -> TICKS_PER_DAY / c;
+            default -> 0;
+        };
+    }
+
+    private void registerT213Tests() {
+        for (int dir : new int[]{1, -1})
+            for (int fi = 0; fi < T213_F.length; fi++)
+                for (String back : T213_BACK) {
+                    String name = "t213_gate_" + (dir > 0 ? "G1" : "G2") + "_" + T213_F_NAME[fi] + "_" + back;
+                    double f = T213_F[fi];
+                    addTest(name, () -> test_t213Push(name, dir, f, back));
+                }
+        addTest("t213_gate_G3_supplier", () -> test_t213Supplier("t213_gate_G3_supplier"));
+        addTest("t213_gate_G4_idle", this::test_t213Idle);
+        for (float days : new float[]{1, 2, 4})
+            for (float rate : new float[]{0.05f, 0.1f, 0.2f})
+                for (float[] b : new float[][]{{0.25f, 4f}, {0.5f, 2f}}) {
+                    T213Anchor a = new T213Anchor(true, days, rate, b[0], b[1]);
+                    String name = "t213_tune_" + a;
+                    addTest(name, () -> test_t213Tune(name, a));
+                }
+        addTest("t213_full_G1_f02_once", this::test_t213FullG1);
+        addTest("t213_full_G3_supplier", this::test_t213FullG3);
+    }
+
+    /** G1/G2 row: anchor default (must not profit) and anchor off (reference). */
+    private TestResult test_t213Push(String name, int dir, double f, String back) {
+        if (!t213Requested("gate", name)) return skip("T-213 gate not requested");
+        int c = T213_COMPRESSION;
+        double[] on = t213Push(T213Anchor.DEFAULT, c, dir, f, t213BackTicks(back, c));
+        double[] off = t213Push(T213Anchor.OFF, c, dir, f, t213BackTicks(back, c));
+        String row = String.format(Locale.ROOT, "%s: profit anchor %.6g / off %.6g, pushed %.0f items, anchor after push %.4f, end %.4f",
+                name, on[0], off[0], on[1], on[2], on[3]);
+        StockMarketMod.LOGGER.info("[T-213 gate] {}", row);
+        return on[0] <= 0 ? pass(row) : fail("EXPLOIT " + row);
+    }
+
+    /** G3 row: day 5 &lt;= 0.9 x day 1 and the anchor keeps &gt;= 50% of the (log) drop after 2 idle days. */
+    private TestResult test_t213Supplier(String name) {
+        if (!t213Requested("gate", name)) return skip("T-213 gate not requested");
+        return t213SupplierRow(name, T213Anchor.DEFAULT, T213_COMPRESSION, true);
+    }
+
+    private TestResult t213SupplierRow(String name, T213Anchor a, int c, boolean withOff) {
+        double[] on = t213Supplier(a, c);
+        double d = 160;
+        boolean decline = on[1] <= 0.9 * on[0];
+        boolean kept = Math.log(on[2] / d) <= 0.5 * Math.log(on[1] / d);
+        String row = String.format(Locale.ROOT, "%s: day1 %.2f day5 %.2f (%.3f) idleEnd %.2f anchor %.4f kept %.2f", name, on[0], on[1],
+                on[1] / on[0], on[2], on[3], Math.log(on[2] / d) / Math.log(on[1] / d));
+        if (withOff) {
+            double[] off = t213Supplier(T213Anchor.OFF, c);
+            row += String.format(Locale.ROOT, "; off: day1 %.2f day5 %.2f idleEnd %.2f", off[0], off[1], off[2]);
+        }
+        StockMarketMod.LOGGER.info("[T-213 gate] {}", row);
+        return decline && kept ? pass(row) : fail(row);
+    }
+
+    /** G4: 3 idle days with the anchor on are bit-identical to anchor off, anchor stays 1. */
+    private TestResult test_t213Idle() {
+        if (!t213Requested("gate", "t213_gate_G4_idle")) return skip("T-213 gate not requested");
+        double[] on = t213Idle(T213Anchor.DEFAULT, T213_COMPRESSION);
+        double[] off = t213Idle(T213Anchor.OFF, T213_COMPRESSION);
+        long hOn = Double.doubleToRawLongBits(on[0]), hOff = Double.doubleToRawLongBits(off[0]);
+        String row = String.format(Locale.ROOT, "G4 idle: hash on %016x off %016x anchor %.6f", hOn, hOff, on[1]);
+        StockMarketMod.LOGGER.info("[T-213 gate] {}", row);
+        return hOn == hOff && on[1] == 1.0 ? pass(row) : fail(row);
+    }
+
+    /** Tune grid cell: worst G1/G2 profit (f 0.2 and saturated, at once and over 1 day) plus G3. Report only. */
+    private TestResult test_t213Tune(String name, T213Anchor a) {
+        if (!t213Requested("tune", name)) return skip("T-213 tune not requested");
+        int c = T213_COMPRESSION;
+        StringBuilder row = new StringBuilder(name).append(':');
+        double worst = Double.NEGATIVE_INFINITY;
+        for (int dir : new int[]{1, -1})
+            for (double f : new double[]{0.2, -1})
+                for (String back : new String[]{"once", "1d"}) {
+                    double[] r = t213Push(a, c, dir, f, t213BackTicks(back, c));
+                    worst = Math.max(worst, r[0]);
+                    row.append(String.format(Locale.ROOT, " %s/%s/%s %.4g;", dir > 0 ? "G1" : "G2", f < 0 ? "sat" : "f02", back, r[0]));
+                }
+        double[] g3 = t213Supplier(a, c);
+        row.append(String.format(Locale.ROOT, " worst %.4g; G3 day1 %.2f day5 %.2f idleEnd %.2f", worst, g3[0], g3[1], g3[2]));
+        StockMarketMod.LOGGER.info("[T-213 tune] {}", row);
+        return pass(row.toString());
+    }
+
+    /** Uncompressed G1 (f 0.2, buy back at once). */
+    private TestResult test_t213FullG1() {
+        if (!t213Requested("full", "t213_full_G1_f02_once")) return skip("T-213 full not requested");
+        double[] on = t213Push(T213Anchor.DEFAULT, 1, 1, 0.2, 0);
+        String row = String.format(Locale.ROOT, "full G1 f02 once: profit %.6g pushed %.0f anchor after push %.4f end %.4f", on[0], on[1], on[2], on[3]);
+        StockMarketMod.LOGGER.info("[T-213 full] {}", row);
+        return on[0] <= 0 ? pass(row) : fail("EXPLOIT " + row);
+    }
+
+    /** Uncompressed G3. */
+    private TestResult test_t213FullG3() {
+        if (!t213Requested("full", "t213_full_G3_supplier")) return skip("T-213 full not requested");
+        return t213SupplierRow("full G3", T213Anchor.DEFAULT, 1, false);
     }
 
     /** T-213: one plugin entry of a manager save (generic keys, subscribed to {@link #itemID}). */
@@ -2327,6 +2594,11 @@ public class PluginTestSuite extends TestSuite {
      * so the existing replay tests keep their numbers; the T-207 rows switch it on.
      */
     private static boolean harnessRefill = false;
+    /**
+     * T-213: anchor override of every {@link HarnessModel}: null = the NetFlowPlugin default (G5: the existing
+     * replays run with it), false = off (the golden equivalence), true = on.
+     */
+    private static Boolean harnessAnchor = null;
 
     /** A volume distribution plugin subscribed to the scratch market (book refill for the harnesses). */
     private DefaultOrderbookVolumeDistributionPlugin newHarnessRefill() {
@@ -2947,7 +3219,8 @@ public class PluginTestSuite extends TestSuite {
         HarnessModel(ItemID itemID, NetFlowPlugin.Settings flowSettings, float volatilityScale) {
             flow.setLoggerEnabled(false);
             flow.onMarketSubscribed(itemID);
-            applySettings(flow, NetFlowPlugin.Settings.CODEC, flowSettings);
+            applySettings(flow, NetFlowPlugin.Settings.CODEC,
+                    harnessAnchor != null ? flowSettings.withAnchorEnabled(harnessAnchor) : flowSettings);
             volatility.setLoggerEnabled(false);
             volatility.onMarketSubscribed(itemID);
             applySettings(volatility, VolatilityPlugin.Settings.CODEC, new VolatilityPlugin.Settings(volatilityScale));
@@ -2962,6 +3235,15 @@ public class PluginTestSuite extends TestSuite {
         /** @return the NetFlowPlugin's saturated flow (items) */
         double getSaturatedFlow(ItemID itemID) {
             return flow.getSaturatedFlow(itemID);
+        }
+
+        /**
+         * @return the equilibrium the NetFlowPlugin computes from its current state (anchor, saturated flow, book
+         *         depth) for default price {@code d}; the same value it publishes on a VO market's update
+         */
+        double equilibrium(ItemID itemID, double d, float abundance) {
+            return NetFlowPlugin.computeEquilibriumPrice(d * flow.getAnchorMultiplier(itemID), flow.getSaturatedFlow(itemID),
+                    abundance, flow.getMarketSettings(itemID), flow.getBookEFold(itemID));
         }
 
         /** @return the NetFlowPlugin's cached default book depth */
@@ -3722,7 +4004,7 @@ public class PluginTestSuite extends TestSuite {
                 maxPrice = Math.max(maxPrice, env.price());
                 if (t % 6000 == 0)
                     path.append(String.format(Locale.ROOT, " %dm:%.2f/eq %.2f", t / 1200, env.price(),
-                            NetFlowPlugin.computeEquilibriumPrice(160, env.vol.getSaturatedFlow(itemID), 50, env.volSettings, env.vol.getBookEFold(itemID))));
+                            env.vol.equilibrium(itemID, 160, 50)));
                 boolean all = true;
                 for (Order o : asks) all &= o.isFilled();
                 if (all) break;

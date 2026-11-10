@@ -32,11 +32,15 @@ import java.util.function.DoubleUnaryOperator;
  *       most θ x the volume's one-shot walk through the default book; off = sensitivity capacity only;</li>
  *   <li><b>saturation</b> (T-174/T-207): a plugin-private copy of the faded flow, clamped to the band where the
  *       equilibrium reaches its limits, so a buy-back after a huge one-sided trade moves the price at once;
- *       off = the faded flow is used directly (the min/max clamp stays).</li>
+ *       off = the faded flow is used directly (the min/max clamp stays);</li>
+ *   <li><b>anchor</b> (T-213): a slow long-term memory {@code A = D x e^a} the flow moves away from. Each tick
+ *       {@code a} drifts toward the current flow exponent {@code f}: {@code da = clamp(f x dt / τ_A, ±rate x dt)},
+ *       {@code a} clamped to [ln anchorMinMult, ln anchorMaxMult]; zero flow leaves {@code a} unchanged; an admin
+ *       flow reset sets it to 0. Off = {@code A = D}.</li>
  * </ul>
  * The market's own flow counters are only read, never written.
  */
-public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
+public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, NetFlowPlugin.RuntimeStreamData> {
 
     // ── Default settings values ─────────────────────────────────────────
 
@@ -77,6 +81,26 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
     /** T-213: flow saturation at the band is on by default. */
     public static final boolean DEFAULT_SATURATION_ENABLED = true;
 
+    /**
+     * T-213: the long-term anchor is off by default until the T-213 exploit gates G1-G5 (no round trip
+     * profits, the anchor only keeps part of a sustained one-sided flow) decide otherwise.
+     */
+    public static final boolean DEFAULT_ANCHOR_ENABLED = false;
+    /**
+     * T-213: anchor time constant τ_A in days. With the flow's 8.66 h fade time an impulse leaves about
+     * τ_fade / τ_A (~18%) in the anchor. Values below 1 day let a fast dump-and-rebuy profit (τ_A must stay
+     * above 2 x τ_fade).
+     */
+    public static final float DEFAULT_ANCHOR_TIME_DAYS = 2f;
+    /** T-213: largest anchor move per day in ln units (0.1 = about 10% per day), caps saturated flows. */
+    public static final float DEFAULT_ANCHOR_MAX_MOVE_PER_DAY = 0.1f;
+    /** T-213: lowest anchor as a multiple of the default price. */
+    public static final float DEFAULT_ANCHOR_MIN_MULT = 0.25f;
+    /** T-213: highest anchor as a multiple of the default price. */
+    public static final float DEFAULT_ANCHOR_MAX_MULT = 4f;
+    /** Seconds per day (anchor rates are per day). */
+    static final double SECONDS_PER_DAY = 86_400.0;
+
     /** T-208: ticks between two {@link #bookEFoldDepth} recomputations per market (1 min at 20 TPS). */
     static final int BOOK_EFOLD_REFRESH_TICKS = 1200;
     /** T-208: ticks until the next try while no default book volume is found (calculators may register late). */
@@ -102,13 +126,31 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
      * @param capacityVolatilityScale capacity divisor {@code 1 + scale} (pre-T-213 the VolatilityPlugin's scale)
      * @param thetaCapEnabled         false = the capacity ignores the default book (no θ cap)
      * @param saturationEnabled       false = no plugin-private saturated flow, the faded flow is used directly
+     * @param anchorEnabled           T-213: true = the flow moves away from the long-term anchor instead of D
+     * @param anchorTimeDays          anchor time constant τ_A in days (&gt; 0, else the default); &lt; 1 day is exploitable
+     * @param anchorMaxMovePerDay     largest anchor move per day in ln units (&gt;= 0, else the default)
+     * @param anchorMinMult           lowest anchor as a multiple of D, in (0, 1) (else the default)
+     * @param anchorMaxMult           highest anchor as a multiple of D, &gt; 1 (else the default)
      */
     public record Settings(boolean flowEnabled, float flowSensitivity, float minPriceMult, float maxPriceMult,
                            float permanentImpact, float capacityVolatilityScale, boolean thetaCapEnabled,
-                           boolean saturationEnabled) {
+                           boolean saturationEnabled, boolean anchorEnabled, float anchorTimeDays,
+                           float anchorMaxMovePerDay, float anchorMinMult, float anchorMaxMult) {
         /** Sanitizes θ: anything outside (0, 1] (including NaN) becomes {@link #DEFAULT_PERMANENT_IMPACT}. */
         public Settings {
             if (!(permanentImpact > 0f && permanentImpact <= 1f)) permanentImpact = DEFAULT_PERMANENT_IMPACT;
+            if (!(anchorTimeDays > 0f) || Float.isInfinite(anchorTimeDays)) anchorTimeDays = DEFAULT_ANCHOR_TIME_DAYS;
+            if (!(anchorMaxMovePerDay >= 0f) || Float.isInfinite(anchorMaxMovePerDay)) anchorMaxMovePerDay = DEFAULT_ANCHOR_MAX_MOVE_PER_DAY;
+            if (!(anchorMinMult > 0f && anchorMinMult < 1f)) anchorMinMult = DEFAULT_ANCHOR_MIN_MULT;
+            if (!(anchorMaxMult > 1f) || Float.isInfinite(anchorMaxMult)) anchorMaxMult = DEFAULT_ANCHOR_MAX_MULT;
+        }
+
+        /** Settings with the default anchor. */
+        public Settings(boolean flowEnabled, float flowSensitivity, float minPriceMult, float maxPriceMult, float permanentImpact,
+                        float capacityVolatilityScale, boolean thetaCapEnabled, boolean saturationEnabled) {
+            this(flowEnabled, flowSensitivity, minPriceMult, maxPriceMult, permanentImpact, capacityVolatilityScale,
+                    thetaCapEnabled, saturationEnabled, DEFAULT_ANCHOR_ENABLED, DEFAULT_ANCHOR_TIME_DAYS,
+                    DEFAULT_ANCHOR_MAX_MOVE_PER_DAY, DEFAULT_ANCHOR_MIN_MULT, DEFAULT_ANCHOR_MAX_MULT);
         }
 
         /** Settings with the default capacity volatility scale and both toggles on. */
@@ -120,24 +162,36 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
         /** @return a copy with the given permanent impact θ (sanitized to (0, 1]) */
         public Settings withPermanentImpact(float theta) {
             return new Settings(flowEnabled, flowSensitivity, minPriceMult, maxPriceMult, theta, capacityVolatilityScale,
-                    thetaCapEnabled, saturationEnabled);
+                    thetaCapEnabled, saturationEnabled, anchorEnabled, anchorTimeDays, anchorMaxMovePerDay, anchorMinMult, anchorMaxMult);
         }
 
         /** @return a copy with another capacity volatility scale */
         public Settings withCapacityVolatilityScale(float scale) {
             return new Settings(flowEnabled, flowSensitivity, minPriceMult, maxPriceMult, permanentImpact, scale,
-                    thetaCapEnabled, saturationEnabled);
+                    thetaCapEnabled, saturationEnabled, anchorEnabled, anchorTimeDays, anchorMaxMovePerDay, anchorMinMult, anchorMaxMult);
         }
 
         /** @return a copy with the three sub-algorithm toggles replaced */
         public Settings withToggles(boolean flow, boolean thetaCap, boolean saturation) {
             return new Settings(flow, flowSensitivity, minPriceMult, maxPriceMult, permanentImpact, capacityVolatilityScale,
-                    thetaCap, saturation);
+                    thetaCap, saturation, anchorEnabled, anchorTimeDays, anchorMaxMovePerDay, anchorMinMult, anchorMaxMult);
+        }
+
+        /** @return a copy with the anchor settings replaced (invalid values become the defaults) */
+        public Settings withAnchor(boolean enabled, float timeDays, float maxMovePerDay, float minMult, float maxMult) {
+            return new Settings(flowEnabled, flowSensitivity, minPriceMult, maxPriceMult, permanentImpact, capacityVolatilityScale,
+                    thetaCapEnabled, saturationEnabled, enabled, timeDays, maxMovePerDay, minMult, maxMult);
+        }
+
+        /** @return a copy with the anchor switched on or off (other anchor settings kept) */
+        public Settings withAnchorEnabled(boolean enabled) {
+            return withAnchor(enabled, anchorTimeDays, anchorMaxMovePerDay, anchorMinMult, anchorMaxMult);
         }
 
         /**
          * Wire layout: flowEnabled, flowSensitivity, minPriceMult, maxPriceMult, permanentImpact,
-         * capacityVolatilityScale, thetaCapEnabled, saturationEnabled. Fields missing at the end of a
+         * capacityVolatilityScale, thetaCapEnabled, saturationEnabled, anchorEnabled, anchorTimeDays,
+         * anchorMaxMovePerDay, anchorMinMult, anchorMaxMult. Fields missing at the end of a
          * (shorter, older) payload get their defaults; unknown trailing bytes (newer payload) are skipped.
          * Every decode path wraps exactly one payload per buffer.
          */
@@ -153,8 +207,13 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
                 float capVs = buf.readableBytes() >= Float.BYTES ? buf.readFloat() : d.capacityVolatilityScale();
                 boolean thetaCap = buf.isReadable() ? buf.readBoolean() : d.thetaCapEnabled();
                 boolean sat = buf.isReadable() ? buf.readBoolean() : d.saturationEnabled();
+                boolean anchor = buf.isReadable() ? buf.readBoolean() : d.anchorEnabled();
+                float aDays = buf.readableBytes() >= Float.BYTES ? buf.readFloat() : d.anchorTimeDays();
+                float aRate = buf.readableBytes() >= Float.BYTES ? buf.readFloat() : d.anchorMaxMovePerDay();
+                float aMin = buf.readableBytes() >= Float.BYTES ? buf.readFloat() : d.anchorMinMult();
+                float aMax = buf.readableBytes() >= Float.BYTES ? buf.readFloat() : d.anchorMaxMult();
                 buf.skipBytes(buf.readableBytes());
-                return new Settings(flow, sens, min, max, theta, capVs, thetaCap, sat);
+                return new Settings(flow, sens, min, max, theta, capVs, thetaCap, sat, anchor, aDays, aRate, aMin, aMax);
             }
 
             @Override
@@ -167,6 +226,11 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
                 buf.writeFloat(s.capacityVolatilityScale());
                 buf.writeBoolean(s.thetaCapEnabled());
                 buf.writeBoolean(s.saturationEnabled());
+                buf.writeBoolean(s.anchorEnabled());
+                buf.writeFloat(s.anchorTimeDays());
+                buf.writeFloat(s.anchorMaxMovePerDay());
+                buf.writeFloat(s.anchorMinMult());
+                buf.writeFloat(s.anchorMaxMult());
             }
         };
 
@@ -174,6 +238,43 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
         public static Settings createDefault() {
             return new Settings(DEFAULT_FLOW_ENABLED, DEFAULT_FLOW_SENSITIVITY, DEFAULT_MIN_PRICE_MULT, DEFAULT_MAX_PRICE_MULT,
                     DEFAULT_PERMANENT_IMPACT);
+        }
+    }
+
+    /**
+     * T-213: streamed to the settings GUI: the current anchor of every subscribed market.
+     *
+     * @param itemIds     the markets' item ids ({@link ItemID#getShort()})
+     * @param anchorMults the anchors as multiples of the default price ({@code e^a}), same order
+     */
+    public record RuntimeStreamData(short[] itemIds, double[] anchorMults) {
+        public static final StreamCodec<ByteBuf, RuntimeStreamData> CODEC = new StreamCodec<>() {
+            @Override
+            public RuntimeStreamData decode(ByteBuf buf) {
+                int n = buf.readInt();
+                short[] ids = new short[n];
+                double[] mults = new double[n];
+                for (int i = 0; i < n; i++) {
+                    ids[i] = buf.readShort();
+                    mults[i] = buf.readDouble();
+                }
+                return new RuntimeStreamData(ids, mults);
+            }
+
+            @Override
+            public void encode(ByteBuf buf, RuntimeStreamData d) {
+                buf.writeInt(d.itemIds().length);
+                for (int i = 0; i < d.itemIds().length; i++) {
+                    buf.writeShort(d.itemIds()[i]);
+                    buf.writeDouble(d.anchorMults()[i]);
+                }
+            }
+        };
+
+        /** @return the anchor multiple of the market with item id {@code id}, NaN if not listed */
+        public double anchorOf(short id) {
+            for (int i = 0; i < itemIds.length; i++) if (itemIds[i] == id) return anchorMults[i];
+            return Double.NaN;
         }
     }
 
@@ -222,7 +323,8 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
                 marketTag.contains("maxPriceMult") ? NbtCompat.getFloat(marketTag, "maxPriceMult") : s.maxPriceMult(),
                 marketTag.contains("permanentImpact") ? NbtCompat.getFloat(marketTag, "permanentImpact") : DEFAULT_PERMANENT_IMPACT,
                 marketTag.contains("volatilityScale") ? NbtCompat.getFloat(marketTag, "volatilityScale") : s.capacityVolatilityScale(),
-                s.thetaCapEnabled(), s.saturationEnabled());
+                s.thetaCapEnabled(), s.saturationEnabled(), s.anchorEnabled(), s.anchorTimeDays(), s.anchorMaxMovePerDay(),
+                s.anchorMinMult(), s.anchorMaxMult());
     }
 
     /** Per-market state. */
@@ -237,6 +339,8 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
         double lastFaded = 0;
         /** T-207: false until satFlow/lastFaded are seeded from the market (new market or old save). */
         boolean satSeeded = false;
+        /** T-213: the anchor in ln units relative to the default price ({@code A = D x e^anchorLn}); saved. */
+        double anchorLn = 0;
         /** Equilibrium published on the last update (NaN = none yet). Not saved. */
         double equilibrium = Double.NaN;
         /** T-208: cached {@link #bookEFoldDepth} of the default book (0 = unknown). Not saved, recomputed. */
@@ -278,14 +382,18 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
             // T-208: capacity = max(sensitivity capacity, bookEFold / θ) while the θ cap is on.
             double bookEFold = s.thetaCapEnabled() ? refreshBookEFold(market, data) : 0;
             FlowBand band = flowBand(market.market.getNaturalAbundance(), s, bookEFold);
-            data.satFlow = saturatedFlow(data, market.market.getFadedNetPlayerItemFlow(),
-                    market.market.getNetPlayerItemFlow(), s.saturationEnabled() ? band : null, ServerMarket.netFlowHalfLifeSeconds());
+            double faded = market.market.getFadedNetPlayerItemFlow();
+            double raw = market.market.getNetPlayerItemFlow();
+            boolean reset = data.satSeeded && isFlowReset(data, faded, raw);
+            data.satFlow = saturatedFlow(data, faded, raw, s.saturationEnabled() ? band : null, ServerMarket.netFlowHalfLifeSeconds());
+            // T-213: the anchor learns from the same (saturated, θ-capped) flow exponent; an admin reset clears it
+            data.anchorLn = reset ? 0 : stepAnchor(data.anchorLn, flowExponent(data.satFlow, band), ServerMarket.TICK_SECONDS, s);
 
             // The target price only matters for markets with a virtual order book (the bot skips the others).
             if (!market.market.isVirtualOrderbookEnabled()) continue;
 
-            double equilibrium = computeEquilibriumPrice(market.market.getDefaultRealPrice(), data.satFlow,
-                    market.market.getNaturalAbundance(), s, bookEFold);
+            double anchor = market.market.getDefaultRealPrice() * Math.exp(data.anchorLn); // exp(0) = 1: A = D exactly
+            double equilibrium = computeEquilibriumPrice(anchor, data.satFlow, market.market.getNaturalAbundance(), s, bookEFold);
             data.equilibrium = equilibrium;
             market.market.setEquilibriumPrice(equilibrium);
             // Normal order (NetFlow first): this sets the bare equilibrium, the VolatilityPlugin then adds its
@@ -293,6 +401,30 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
             if (!market.market.isTargetPriceSetThisTick())
                 market.market.setTargetPrice(equilibrium);
         }
+    }
+
+    /**
+     * T-213: one tick of the long-term anchor. The anchor drifts toward the current flow exponent with time
+     * constant τ_A, at most {@code anchorMaxMovePerDay} per day, and stays within [anchorMinMult, anchorMaxMult]:
+     * <pre>
+     * da = clamp(f x dt / (τ_A x 86400), ±rate x dt / 86400)
+     * a  = clamp(a + da, ln anchorMinMult, ln anchorMaxMult)
+     * </pre>
+     * Zero flow leaves the anchor unchanged (no reversion toward D). Pure function.
+     *
+     * @param anchorLn     the anchor before the step (ln of A / D)
+     * @param flowExponent the current flow exponent {@link #flowExponent} (ln of E / A)
+     * @param dtSeconds    the step length in seconds
+     * @param settings     the market's settings (null or anchor off = 0)
+     * @return the anchor after the step
+     */
+    public static double stepAnchor(double anchorLn, double flowExponent, double dtSeconds, Settings settings) {
+        if (settings == null || !settings.anchorEnabled()) return 0;
+        if (flowExponent == 0 || Double.isNaN(flowExponent)) return anchorLn;
+        double maxStep = settings.anchorMaxMovePerDay() * dtSeconds / SECONDS_PER_DAY;
+        double da = flowExponent * dtSeconds / (settings.anchorTimeDays() * SECONDS_PER_DAY);
+        da = Math.min(Math.max(da, -maxStep), maxStep);
+        return Math.min(Math.max(anchorLn + da, Math.log(settings.anchorMinMult())), Math.log(settings.anchorMaxMult()));
     }
 
     /**
@@ -581,6 +713,26 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
         return data != null ? data.equilibrium : Double.NaN;
     }
 
+    /**
+     * @param marketID the market
+     * @return T-213: the anchor as a multiple of the default price ({@code e^anchorLn}), 1 for unknown markets
+     */
+    public double getAnchorMultiplier(ItemID marketID) {
+        MarketData data = marketData.get(marketID);
+        return data != null ? Math.exp(data.anchorLn) : 1;
+    }
+
+    /**
+     * T-213 (tests / migration): sets the anchor of one market.
+     *
+     * @param marketID the market (must be subscribed)
+     * @param anchorLn ln of anchor / default price
+     */
+    public void setAnchorLn(ItemID marketID, double anchorLn) {
+        MarketData data = marketData.get(marketID);
+        if (data != null) data.anchorLn = anchorLn;
+    }
+
     @Override
     public void finalize(List<MarketInterface> markets) {
     }
@@ -623,11 +775,14 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
         ListTag marketsTag = new ListTag();
         for (Map.Entry<ItemID, MarketData> entry : marketData.entrySet()) {
             MarketData data = entry.getValue();
-            if (!data.satSeeded) continue; // unseeded = seed from the market on the next tick
+            if (!data.satSeeded && data.anchorLn == 0) continue; // nothing to keep (unseeded = seed on the next tick)
             CompoundTag marketTag = new CompoundTag();
             entry.getKey().save(marketTag);
-            marketTag.putDouble("satFlow", data.satFlow);
-            marketTag.putDouble("lastFaded", data.lastFaded);
+            if (data.satSeeded) {
+                marketTag.putDouble("satFlow", data.satFlow);
+                marketTag.putDouble("lastFaded", data.lastFaded);
+            }
+            marketTag.putDouble("anchorLn", data.anchorLn);
             marketsTag.add(marketTag);
         }
         tag.put("marketData", marketsTag);
@@ -645,8 +800,27 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
             if (marketID == null || !marketID.isValid()) continue;
             if (marketTag.contains("satFlow") && marketTag.contains("lastFaded"))
                 restoreFlowState(marketID, NbtCompat.getDouble(marketTag, "satFlow"), NbtCompat.getDouble(marketTag, "lastFaded"));
+            if (marketTag.contains("anchorLn")) setAnchorLn(marketID, NbtCompat.getDouble(marketTag, "anchorLn"));
         }
         return true;
+    }
+
+    @Override
+    protected StreamCodec<ByteBuf, RuntimeStreamData> runtimeDataCodec() {
+        return RuntimeStreamData.CODEC;
+    }
+
+    @Override
+    protected RuntimeStreamData provideRuntimeData() {
+        if (marketData.isEmpty()) return null;
+        short[] ids = new short[marketData.size()];
+        double[] mults = new double[ids.length];
+        int i = 0;
+        for (Map.Entry<ItemID, MarketData> e : marketData.entrySet()) {
+            ids[i] = e.getKey().getShort();
+            mults[i++] = Math.exp(e.getValue().anchorLn);
+        }
+        return new RuntimeStreamData(ids, mults);
     }
 
     @Override
