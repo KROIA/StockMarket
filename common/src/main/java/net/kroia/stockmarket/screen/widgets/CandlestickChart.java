@@ -66,9 +66,11 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     // ── Fields ──
 
-    // Saved viewport state per market item, so switching between markets preserves the user's view
+    // Saved viewport state per market item, so switching between markets preserves the user's view.
+    // T-221: the timeframe is kept as its delta (ms), not as a button index: the index meant a
+    // different timeframe in the other candle timebase (real 1h = index 3 = game 1W).
     private record ViewportState(double viewX, double viewY, double viewWidth, double viewHeight,
-                                 double zoomLevel, int candleTimeIdx) {}
+                                 double zoomLevel, long candleDeltaMs) {}
 
     private static final Map<String, ViewportState> savedViewports = new HashMap<>();
 
@@ -296,7 +298,7 @@ public class CandlestickChart extends StockMarketGuiElement {
      * @param index the index into {@link ClientMarket#getAvailableCandleTimeDeltas()}
      */
     public void selectCandleTimeDeltaByIndex(int index) {
-        // T-218: a saved index may come from the other timebase (6 real vs 4 game deltas).
+        // T-218: keep the index inside the active delta set (6 real vs 4 game deltas).
         index = Math.max(0, Math.min(index, ClientMarket.getAvailableCandleTimeDeltas().length - 1));
         // Same-delta reclick guard: when the user clicks the button for the
         // already-active delta AND its data is already loaded, do NOTHING —
@@ -934,7 +936,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         tag.putDouble("viewW", chartviewRect.width);
         tag.putDouble("viewH", chartviewRect.height);
         tag.putDouble("zoom", zoomLevel);
-        tag.putInt("candleTimeIdx", currentCandleTimeIdx);
+        tag.putLong("candleDeltaMs", ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx]);
         return tag;
     }
 
@@ -953,7 +955,13 @@ public class CandlestickChart extends StockMarketGuiElement {
         chartviewRect.height = NbtCompat.getDouble(tag, "viewH");
         zoomLevel = Math.max(NbtCompat.getDouble(tag, "zoom"), MIN_ZOOM_CANDLES);
         skipAutoCenterOnce = true;
-        selectCandleTimeDeltaByIndex(NbtCompat.getInt(tag, "candleTimeIdx"));
+        // T-221: timeframe saved as its delta. Older tags (display blocks) hold an index into the
+        // real-time deltas, the only set before T-218; a delta outside the active set falls back
+        // to the first one.
+        long savedDelta = tag.contains("candleDeltaMs") ? NbtCompat.getLong(tag, "candleDeltaMs")
+                : ClientMarket.AVAILABLE_CANDLE_TIME_DELTAS[Math.max(0, Math.min(NbtCompat.getInt(tag, "candleTimeIdx"),
+                        ClientMarket.AVAILABLE_CANDLE_TIME_DELTAS.length - 1))];
+        selectCandleTimeDeltaByIndex(ClientMarket.candleTimeDeltaIndex(savedDelta));
         // The deserialised viewport is an authoritative placement — mark this
         // delta as fitted so future reselects don't clobber it with a fresh
         // auto-fit.
@@ -976,7 +984,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         tag.putDouble("viewW", state.viewWidth);
         tag.putDouble("viewH", state.viewHeight);
         tag.putDouble("zoom", state.zoomLevel);
-        tag.putInt("candleTimeIdx", state.candleTimeIdx);
+        tag.putLong("candleDeltaMs", state.candleDeltaMs);
         return tag;
     }
 
@@ -998,7 +1006,7 @@ public class CandlestickChart extends StockMarketGuiElement {
             savedViewports.put(this.priceDataProvider.getViewportKey(), new ViewportState(
                     chartviewRect.x, chartviewRect.y,
                     chartviewRect.width, chartviewRect.height,
-                    zoomLevel, currentCandleTimeIdx));
+                    zoomLevel, currentDelta));
         }
     }
 
@@ -1017,7 +1025,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         chartviewRect.width = Math.max(state.viewWidth, MIN_ZOOM_CANDLES);
         chartviewRect.height = state.viewHeight;
         zoomLevel = Math.max(state.zoomLevel, MIN_ZOOM_CANDLES);
-        currentCandleTimeIdx = state.candleTimeIdx;
+        currentCandleTimeIdx = ClientMarket.candleTimeDeltaIndex(state.candleDeltaMs);
 
         // Load the correct candle data and update button colors without auto-centering
         skipAutoCenterOnce = true;

@@ -388,6 +388,22 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         return gameTime ? AVAILABLE_GAME_CANDLE_TIME_DELTAS : AVAILABLE_CANDLE_TIME_DELTAS;
     }
 
+    /**
+     * T-221: index of a saved chart timeframe in the active delta set. Real and game deltas never
+     * collide, so a timeframe saved under the other timebase falls back to the first delta.
+     *
+     * @param deltaMs the saved candle delta in ms
+     * @return its index in {@link #getAvailableCandleTimeDeltas()}, or 0 if it is not in the active set
+     */
+    public static int candleTimeDeltaIndex(long deltaMs)
+    {
+        long[] deltas = getAvailableCandleTimeDeltas();
+        for (int i = 0; i < deltas.length; i++)
+            if (deltas[i] == deltaMs)
+                return i;
+        return 0;
+    }
+
     /** @return {@code true} if the master stores one candle per in-game hour (T-218) */
     public static boolean isCandleUseGameTime()
     {

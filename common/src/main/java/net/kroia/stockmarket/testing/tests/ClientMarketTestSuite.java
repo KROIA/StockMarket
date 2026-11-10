@@ -25,6 +25,7 @@ public class ClientMarketTestSuite extends TestSuite {
         addTest("price_history_data_map_all_deltas", this::test_priceHistoryDataMap_allDeltasPresent);
         addTest("game_time_deltas", this::test_gameTimeDeltas);
         addTest("game_candle_frozen_daylight_closes_after_hours", this::test_gameCandleFrozenDaylightClosesAfterHours);
+        addTest("candle_delta_index_restore", this::test_candleDeltaIndexRestore);
         addTest("subscribe_idempotent", this::test_subscribeToMarketPriceUpdate_idempotent);
         addTest("unsubscribe_no_subscription", this::test_unsubscribeFromMarketPriceUpdate_noSubscription);
     }
@@ -189,6 +190,30 @@ public class ClientMarketTestSuite extends TestSuite {
             r = assertEquals("new candle keeps the master's day time", 6_000L, live.gameTime);
             if (!r.passed()) return r;
             return pass("frozen daylight: 4h live candle closes after 4 fallback rotations");
+        } finally {
+            ClientMarket.setCandleUseGameTime(original);
+        }
+    }
+
+    /**
+     * T-221: a chart timeframe is restored by its delta value; a delta of the other timebase (a real
+     * 1h saved before switching to in-game candles) falls back to the first delta of the active set.
+     */
+    private TestResult test_candleDeltaIndexRestore() {
+        boolean original = ClientMarket.isCandleUseGameTime();
+        try {
+            ClientMarket.setCandleUseGameTime(false);
+            TestResult r = assertEquals("real 1h -> index 3", 3, ClientMarket.candleTimeDeltaIndex(ClientMarket.CANDLE_TIME_1_HOUR));
+            if (!r.passed()) return r;
+            r = assertEquals("game 1W in real mode -> first delta", 0, ClientMarket.candleTimeDeltaIndex(ClientMarket.CANDLE_TIME_GAME_1_WEEK));
+            if (!r.passed()) return r;
+
+            ClientMarket.setCandleUseGameTime(true);
+            r = assertEquals("game 4h -> index 1", 1, ClientMarket.candleTimeDeltaIndex(ClientMarket.CANDLE_TIME_GAME_4_HOUR));
+            if (!r.passed()) return r;
+            r = assertEquals("real 1h in game mode -> first delta (not 1W)", 0, ClientMarket.candleTimeDeltaIndex(ClientMarket.CANDLE_TIME_1_HOUR));
+            if (!r.passed()) return r;
+            return pass("timeframes restore by value and fall back to the first active delta");
         } finally {
             ClientMarket.setCandleUseGameTime(original);
         }
