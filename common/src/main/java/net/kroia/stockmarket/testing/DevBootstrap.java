@@ -53,6 +53,7 @@ public final class DevBootstrap {
             PluginTestSuite.setBackend(instances);
             MarketMergeConsolidationTestSuite.setBackend(instances);
             NewsHistoryRequestTestSuite.setBackend(instances);
+            DiscordIntegrationTestSuite.setBackend(instances);
             AdminFlagSyncLuckPermsTests.setBackend(instances);
             StockMarketLuckPermsRemovedTests.setBackend(instances);
         }

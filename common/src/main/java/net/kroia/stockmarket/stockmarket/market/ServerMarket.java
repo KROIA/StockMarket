@@ -18,6 +18,7 @@ import net.kroia.stockmarket.util.ProfitAlerts;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
 import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
@@ -954,9 +955,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         if (order.isBotOrder()) return; // skip bot orders (no player executor)
         if (order.getFilledVolume() == 0) return; // skip orders with no fills (e.g. cancelled before any execution)
         if (order.getType() == Order.Type.INTER_MARKET) return; // saved by InterMarketExecutor with groupID
-        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
 
         OrderRecordStruct record = order.getHistoricalRecord();
+        StockMarketDiscord.postOrder(record); // T-217: one market-buy/-sell per finished player order (master, if enabled)
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
         BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(record);
     }
 

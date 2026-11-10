@@ -8,6 +8,7 @@ This guide covers two common ways to set up the stock market on a server, with c
 * [Use Case 2: Player-Driven Market (virtual orderbook disabled)](#use-case-2-player-driven-market-virtual-orderbook-disabled)
 * [Recommendation](#recommendation)
 * [Permissions (LuckPerms)](#permissions-luckperms)
+* [Discord feed](#discord-feed)
 
 ---
 
@@ -142,3 +143,23 @@ The Mod Setting `SYNC_ADMIN_FLAG_WITH_PERMISSION` (Mod Settings → Integrations
 - Turning the setting on needs a restart of the master: LuckPerms changes only reach admin mode after it. `/stockmarket op`/`deop` and the one-time migration apply right away. Turning it off takes effect immediately.
 - Worlds from older versions keep their value: the setting moved from the Utilities group to Integrations and is carried over on the first load.
 - Without LuckPerms the setting does nothing: admin mode only changes through `/stockmarket op` and `deop`, and the node `stockmarket.admin` falls back to operator level 2.
+
+## Discord feed
+
+StockMarket can post player trades and trading alerts to Discord channels through webhooks (provided by ModUtilities). The feed is off by default, and only the master server posts.
+
+1. Turn on **Mod Settings → Integrations → Discord feed (trades and alerts)** (`Integrations.DISCORD_ENABLED`, default off). It takes effect immediately, no restart needed.
+2. Add your webhooks to `config/modutilities/discord/webhooks.json` on the master: `{"webhooks": {"trades": "<webhook URL>"}}`. Only Discord webhook URLs are accepted.
+3. Enable and route the types in `config/modutilities/discord/stockmarket.json`. The file is created at the first master start, with every type disabled. Example: `"market-buy": {"enabled": true, "webhooks": ["trades"], "minAmount": 0}`.
+4. Run `/modutilities discord reload`. `/modutilities discord status` shows the routing.
+
+| Type | Posted when | Fields |
+|---|---|---|
+| `market-buy` | A player's buy order is finished: fully filled, or canceled after some fills. Inter-market orders post one message per leg. | Player, UUID, Account, Item, Item ID, Amount, Avg. price, Inter-market group (inter-market legs only), Time |
+| `market-sell` | The same for sell orders. | Same as `market-buy` |
+| `market-alert` | A trading alert is raised, e.g. the profit alert. | Alert text, Time |
+
+* Bot orders and orders without any fill are never posted.
+* `minAmount` filters trades by the traded item quantity (`Amount`).
+* The embed language follows `language` in `stockmarket.json` (`en_us`, `de_de`, `de_ch`, `zh_cn`). A type can override `title`, `color` and `fields`.
+* Webhook URLs contain a secret token. They are never logged or shown in game; keep `webhooks.json` private.

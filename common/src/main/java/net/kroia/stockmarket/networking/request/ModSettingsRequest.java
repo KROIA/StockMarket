@@ -339,6 +339,8 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //     master-side check of forwarded slave changes read it live (AsyncMarketManager
         //     SyncAdminFlagFromPermission). Slaves always listen and forward when trusted. Turning it
         //     on here may trigger the one-time LuckPerms migration (below).
+        //   - DISCORD_ENABLED: read live on every post (StockMarketDiscord); only the master posts
+        //     (slaves never register the feed), so a slave's value is never read.
         String villagerAfter = store.toJsonString(settings.VILLAGER_TRADING);
         if (!villagerAfter.equals(villagerBefore) && BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER != null) {
             BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();

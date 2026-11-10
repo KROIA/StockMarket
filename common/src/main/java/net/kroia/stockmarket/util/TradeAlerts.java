@@ -3,6 +3,7 @@ package net.kroia.stockmarket.util;
 import net.kroia.modutilities.PermissionCompat;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -23,15 +24,17 @@ public final class TradeAlerts {
     private TradeAlerts() {}
 
     /**
-     * Records an alert in the server log and notifies the online admins.
+     * Records an alert in the server log, notifies the online admins and posts it to the Discord feed
+     * ({@code market-alert}, T-217; only on the master while {@code Integrations.DISCORD_ENABLED} is on).
      *
-     * @param logText plain text for the server log (language independent)
+     * @param logText plain text for the server log and the Discord post (language independent)
      * @param message chat message for admins, usually {@code Component.translatable(key, args)}
      *                so it is resolved in each admin's client language; prefixed with
      *                "[StockMarket] " and colored red
      */
     public static void raise(String logText, Component message) {
         StockMarketMod.LOGGER.warn("[StockMarket Alert] {}", logText);
+        StockMarketDiscord.alert(logText);
         MinecraftServer server = UtilitiesPlatform.getServer();
         if (server == null) return;
         Component chat = Component.literal("[StockMarket] ").append(message).withStyle(ChatFormatting.RED);

@@ -1,0 +1,40 @@
+{
+  "market-buy": {
+    "title": "市场买入",
+    "color": 5793266,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "物品 ID", "value": "{item_id}", "inline": true},
+      {"name": "数量", "value": "{amount}", "inline": true},
+      {"name": "平均价格", "value": "{price}", "inline": true},
+      {"name": "跨市场组", "value": "{interMarketGroup}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "market-sell": {
+    "title": "市场卖出",
+    "color": 5793266,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "账户", "value": "{account}", "inline": true},
+      {"name": "物品", "value": "{item}", "inline": true},
+      {"name": "物品 ID", "value": "{item_id}", "inline": true},
+      {"name": "数量", "value": "{amount}", "inline": true},
+      {"name": "平均价格", "value": "{price}", "inline": true},
+      {"name": "跨市场组", "value": "{interMarketGroup}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "market-alert": {
+    "title": "市场警报",
+    "color": 15548997,
+    "fields": [
+      {"name": "警报", "value": "{message}", "inline": false},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  }
+}

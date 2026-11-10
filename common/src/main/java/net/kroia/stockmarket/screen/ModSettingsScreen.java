@@ -298,6 +298,8 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
     private void buildIntegrationSections(StockMarketModSettings.Integrations group) {
         addSection(group, group.PLACEHOLDERS_ENABLED);
         addSection(group, group.SYNC_ADMIN_FLAG_WITH_PERMISSION);
+        // Text only: the webhook routing lives in config/modutilities/discord/stockmarket.json (secrets), not here.
+        addSection(group, group.DISCORD_ENABLED);
     }
 
     /**

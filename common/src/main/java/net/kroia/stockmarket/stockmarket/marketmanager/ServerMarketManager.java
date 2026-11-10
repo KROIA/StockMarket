@@ -17,6 +17,7 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
 import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.OrderLedger;
@@ -432,6 +433,15 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
      */
     public boolean removeUser(UUID playerUUID) {
         return userMap.remove(playerUUID) != null;
+    }
+
+    /**
+     * @param playerUUID the user to look up
+     * @return the name stored for this StockMarket user (also for offline players), or null if unknown
+     */
+    public @Nullable String getUserName(UUID playerUUID) {
+        User user = userMap.get(playerUUID);
+        return user == null ? null : user.getName();
     }
 
     /** @return true if a StockMarket user exists for this UUID */
@@ -1049,9 +1059,12 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     private void saveInterMarketOrderRecord(InterMarketOrder order)
     {
         if (order.isBotOrder()) return;
-        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
 
         InterMarketOrder.HistoricalRecordPair records = order.getHistoricalRecord();
+        // T-217: one Discord post per leg with fills (master, if enabled); skips null and unfilled legs itself.
+        StockMarketDiscord.postOrder(records.buyRecord());
+        StockMarketDiscord.postOrder(records.sellRecord());
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
 
         // Save buy-leg record if it has fills
         OrderRecordStruct buyRecord = records.buyRecord();

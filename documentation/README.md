@@ -5,7 +5,7 @@ Index of all documentation pages. For an introduction to the mod, its blocks, co
 ## User Guide
 For players, server admins and content creators.
 
-- [Admin Setup Use Cases](user-guide/admin-setup.md) — standard bot-driven market vs. player-driven market
+- [Admin Setup Use Cases](user-guide/admin-setup.md) — standard bot-driven market vs. player-driven market, LuckPerms permissions, Discord feed
 - [Trading Hours](user-guide/trading-hours.md) — daily open/close windows, `/stockmarket open|close`, closed markets vs. maintenance mode
 - [Candle Timebase](user-guide/candle-timebase.md) — price candles on real time or in-game hours, chart timeframes and `Day N` labels
 - [Placeholders](user-guide/placeholders.md) — text placeholders (prices, 24h change, volume, player orders and portfolio) for scoreboards, tab lists and chat

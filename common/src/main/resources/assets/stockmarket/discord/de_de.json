@@ -1,0 +1,40 @@
+{
+  "market-buy": {
+    "title": "StockMarket-Kauf",
+    "color": 5793266,
+    "fields": [
+      {"name": "Spieler", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Konto", "value": "{account}", "inline": true},
+      {"name": "Gegenstand", "value": "{item}", "inline": true},
+      {"name": "Item-ID", "value": "{item_id}", "inline": true},
+      {"name": "Menge", "value": "{amount}", "inline": true},
+      {"name": "Ø Preis", "value": "{price}", "inline": true},
+      {"name": "Marktübergreifende Gruppe", "value": "{interMarketGroup}", "inline": false},
+      {"name": "Zeit", "value": "{time}", "inline": false}
+    ]
+  },
+  "market-sell": {
+    "title": "StockMarket-Verkauf",
+    "color": 5793266,
+    "fields": [
+      {"name": "Spieler", "value": "{player}", "inline": true},
+      {"name": "UUID", "value": "{player_uuid}", "inline": true},
+      {"name": "Konto", "value": "{account}", "inline": true},
+      {"name": "Gegenstand", "value": "{item}", "inline": true},
+      {"name": "Item-ID", "value": "{item_id}", "inline": true},
+      {"name": "Menge", "value": "{amount}", "inline": true},
+      {"name": "Ø Preis", "value": "{price}", "inline": true},
+      {"name": "Marktübergreifende Gruppe", "value": "{interMarketGroup}", "inline": false},
+      {"name": "Zeit", "value": "{time}", "inline": false}
+    ]
+  },
+  "market-alert": {
+    "title": "StockMarket-Warnung",
+    "color": 15548997,
+    "fields": [
+      {"name": "Warnung", "value": "{message}", "inline": false},
+      {"name": "Zeit", "value": "{time}", "inline": false}
+    ]
+  }
+}

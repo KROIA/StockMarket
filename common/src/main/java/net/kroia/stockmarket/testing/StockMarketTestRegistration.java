@@ -47,6 +47,7 @@ import net.kroia.stockmarket.testing.tests.ServerMarketTestSuite;
 import net.kroia.stockmarket.testing.tests.PlayerPreferencesTestSuite;
 import net.kroia.stockmarket.testing.tests.AdminFlagSyncTestSuite;
 import net.kroia.stockmarket.testing.tests.AdminFlagSyncLuckPermsTests;
+import net.kroia.stockmarket.testing.tests.DiscordIntegrationTestSuite;
 import net.kroia.stockmarket.testing.tests.StockMarketLuckPermsRemovedTests;
 import net.kroia.stockmarket.testing.tests.UserTestSuite;
 import net.kroia.stockmarket.testing.tests.VillagerMoneyPaymentTestSuite;
@@ -136,6 +137,7 @@ public class StockMarketTestRegistration {
         add(new VillagerTradeRewriteTestSuite());
         add(new NewsHistoryRequestTestSuite());
         add(new NewsPictureRequestTestSuite());
+        add(new DiscordIntegrationTestSuite()); // T-217 Discord feed via the sink seam, never a real webhook
         // Admin flag sync against a real LuckPerms (skip without it), then "LuckPerms removed" phase 1/2.
         // Last: the removed-suite's phase 1 leaves the sync setting on (autotest runs only).
         add(new AdminFlagSyncLuckPermsTests());

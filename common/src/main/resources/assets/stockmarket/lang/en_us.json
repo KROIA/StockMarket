@@ -246,6 +246,8 @@
   "gui.stockmarket.mod_settings_screen.setting.Integrations.PLACEHOLDERS_ENABLED.description": "Provides the stockmarket placeholders for TAB /\nPlaceholder API (via ModUtilities). On the master\nthis also feeds the placeholders of the slaves.",
   "gui.stockmarket.mod_settings_screen.setting.Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION": "Sync admin flag with LuckPerms",
   "gui.stockmarket.mod_settings_screen.setting.Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION.description": "Two-way sync between the StockMarket admin flag and the\nLuckPerms node stockmarket.admin. /stockmarket op|deop also\nwrite the node; LuckPerms changes update the flag.\nDoes nothing without LuckPerms.",
+  "gui.stockmarket.mod_settings_screen.setting.Integrations.DISCORD_ENABLED": "Discord feed (trades and alerts)",
+  "gui.stockmarket.mod_settings_screen.setting.Integrations.DISCORD_ENABLED.description": "Posts player trades (market-buy, market-sell) and admin\nalerts (market-alert) to Discord webhooks. Master only.\nRoute the types to webhooks in\nconfig/modutilities/discord/stockmarket.json, then run\n/modutilities discord reload. Every type starts disabled.",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE": "Orderbook array size",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE.tooltip": "Size of the virtual orderbook price array of a market.\nOnly NEWLY created markets use the changed value;\nexisting markets keep their size until a server restart.\nRange: 100 - 1000000.",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CURRENCY": "Trading currency",

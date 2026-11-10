@@ -348,6 +348,13 @@ public class StockMarketModSettings extends ModSettings {
          */
         public final Setting<Boolean> SYNC_ADMIN_FLAG_WITH_PERMISSION = registerSetting("SYNC_ADMIN_FLAG_WITH_PERMISSION", false, Boolean.class);
 
+        /**
+         * Discord webhook feed of trades and alerts ({@code StockMarketDiscord}): market-buy, market-sell and
+         * market-alert, routed in {@code config/modutilities/discord/stockmarket.json}. Read live on every post,
+         * master only. Default off.
+         */
+        public final Setting<Boolean> DISCORD_ENABLED = registerSetting("DISCORD_ENABLED", false, Boolean.class);
+
         public Integrations() { super("Integrations"); }
     }
 
