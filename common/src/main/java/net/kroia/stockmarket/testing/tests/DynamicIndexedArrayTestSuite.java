@@ -17,6 +17,11 @@ public class DynamicIndexedArrayTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("get_within_range", this::test_get_withinRange);
         addTest("set_outside_range", this::test_set_outsideRange);

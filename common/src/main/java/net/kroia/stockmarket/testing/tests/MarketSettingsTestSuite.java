@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.testing.tests;
 
 import io.netty.buffer.Unpooled;
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -9,6 +8,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
@@ -17,6 +17,11 @@ public class MarketSettingsTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.MARKET_SETTINGS;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -89,7 +94,7 @@ public class MarketSettingsTestSuite extends TestSuite {
 
     /** T-179: the hand-rolled TradingStatus codec carries maxOrderVolume + tradeCooldownMs. */
     private TestResult test_tradingStatus_codecRoundTrip() {
-        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        RegistryAccess access = TestFixture.registryAccess();
         if (access == null)
             return pass("codec round-trip skipped (no registry access in this context)");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
@@ -127,7 +132,7 @@ public class MarketSettingsTestSuite extends TestSuite {
 
     /** maxOrderVolume (appended last) survives the stream codec. */
     private TestResult test_maxOrderVolume_codecRoundTrip() {
-        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        RegistryAccess access = TestFixture.registryAccess();
         if (access == null)
             return pass("codec round-trip skipped (no registry access in this context)");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
@@ -319,7 +324,7 @@ public class MarketSettingsTestSuite extends TestSuite {
 
     /** Real codec round trip of the appended window fields (needs a registry context). */
     private TestResult test_tradingHours_codecRoundTrip() {
-        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        RegistryAccess access = TestFixture.registryAccess();
         if (access == null)
             return pass("codec round-trip skipped (no registry access in this context)");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);

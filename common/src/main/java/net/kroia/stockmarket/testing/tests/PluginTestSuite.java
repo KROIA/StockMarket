@@ -13,6 +13,7 @@ import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
 import net.kroia.stockmarket.pluginsystem.plugins.TargetPriceBot;
+import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
@@ -177,10 +178,14 @@ public class PluginTestSuite extends TestSuite {
         if (backend.PLUGIN_MANAGER != null && backend.PLUGIN_MANAGER.getSync() != null) {
             pluginManager = (ServerPluginManager) backend.PLUGIN_MANAGER.getSync();
         }
+        // The harness fills millions of scratch orders: keep them out of BankSystem's trade ledger, whose write
+        // backlog would otherwise drain at server shutdown.
+        OrderLedger.Writer.testSink = e -> {};
     }
 
     @Override
     public void teardown() {
+        OrderLedger.Writer.testSink = null;
         serverMarket = null;
         fixture.cleanup();
     }
@@ -3186,8 +3191,12 @@ public class PluginTestSuite extends TestSuite {
                 ? pass("round trip 0.5, legacy save -> default " + s) : fail("Legacy save loaded scale " + s);
     }
 
-    /** Trend accumulation report (always passes): diamond pump5 / dump5 / organic60 with trend on (defaults) vs off (max factor 1). */
+    /**
+     * Trend accumulation report (always passes): diamond pump5 / dump5 / organic60 with trend on (defaults) vs off (max
+     * factor 1). Report only, about 8 s, so it runs with the T-208 gate.
+     */
     private TestResult test_trendOnOffReport() {
+        if (!t208Requested("gate", "trend_onOff_report")) return skip("T-208 gate not requested");
         harnessRefill = true;
         try {
             ReplaySetup s = t208Market("diamond_default");

@@ -30,6 +30,11 @@ public class ClientNewsCacheTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("add_orders_newest_first", this::test_add_ordersNewestFirst);
         addTest("add_prunes_oldest_beyond_cap", this::test_add_prunesOldestBeyondCap);

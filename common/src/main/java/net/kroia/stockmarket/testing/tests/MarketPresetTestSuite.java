@@ -24,6 +24,11 @@ public class MarketPresetTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("preset_record_fields", this::test_presetRecordFields);
         addTest("category_find_existing", this::test_categoryFindExisting);

@@ -33,6 +33,11 @@ public class NewsHistoryTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Append + cap
         addTest("append_keeps_chronological_order", this::test_append_keepsChronologicalOrder);

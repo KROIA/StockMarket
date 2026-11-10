@@ -70,6 +70,11 @@ public class NewsPluginTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Eligibility & scheduling
         addTest("eligibility_requires_resolved_markets", this::test_eligibility_requiresResolvedMarkets);

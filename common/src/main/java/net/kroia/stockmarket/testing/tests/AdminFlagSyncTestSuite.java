@@ -26,6 +26,11 @@ public class AdminFlagSyncTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("push_to_luckperms_all_combinations", this::pushToLuckPerms);
         addTest("listener_action_all_combinations", this::listenerAction);

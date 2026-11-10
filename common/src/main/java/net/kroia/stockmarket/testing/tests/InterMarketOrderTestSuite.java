@@ -25,6 +25,11 @@ public class InterMarketOrderTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("historical_record_division_by_zero", this::test_getHistoricalRecord_divisionByZero);
         addTest("is_filled_delegates_to_buy_order", this::test_isFilled_delegatesToBuyOrder);

@@ -24,6 +24,11 @@ public class PlaceholderNamingTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("minecraft_namespace_stripped", this::test_minecraftStripped);
         addTest("modded_namespace_kept", this::test_moddedNamespace);

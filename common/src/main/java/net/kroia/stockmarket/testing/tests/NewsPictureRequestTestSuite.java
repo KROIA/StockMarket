@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.testing.tests;
 
 import io.netty.buffer.Unpooled;
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -14,6 +13,7 @@ import net.kroia.stockmarket.news.DefaultNewsPictures;
 import net.kroia.stockmarket.news.NewsPictureLibrary;
 import net.kroia.stockmarket.news.NewsPictureStore;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
@@ -54,6 +54,11 @@ public class NewsPictureRequestTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.NEWS_PICTURE_REQUEST;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -746,7 +751,7 @@ public class NewsPictureRequestTestSuite extends TestSuite {
      * (the claimed count is never used for the allocation).
      */
     private TestResult test_inputCodec_capsClaimedCount() {
-        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        RegistryAccess access = TestFixture.registryAccess();
         if (access == null) {
             return pass("input codec cap test skipped (no registry access in this context)");
         }
@@ -770,7 +775,7 @@ public class NewsPictureRequestTestSuite extends TestSuite {
 
     /** Input and output codecs round-trip a normal batch bit-exactly. */
     private TestResult test_wireCodecRoundTrip() {
-        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        RegistryAccess access = TestFixture.registryAccess();
         if (access == null) {
             return pass("wire codec round-trip skipped (no registry access in this context)");
         }
@@ -828,7 +833,7 @@ public class NewsPictureRequestTestSuite extends TestSuite {
      * the decoder throw instead of allocating a huge array from a hostile buffer.
      */
     private TestResult test_outputCodec_rejectsOversizedPng() {
-        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        RegistryAccess access = TestFixture.registryAccess();
         if (access == null) {
             return pass("oversized-png decode test skipped (no registry access in this context)");
         }

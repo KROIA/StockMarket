@@ -20,6 +20,11 @@ public class ClientMarketTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("static_time_offset_shared", this::test_staticTimeOffset_sharedAcrossInstances);
         addTest("price_history_data_map_all_deltas", this::test_priceHistoryDataMap_allDeltasPresent);

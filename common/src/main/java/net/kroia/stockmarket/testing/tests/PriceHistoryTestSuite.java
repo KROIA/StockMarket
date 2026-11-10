@@ -24,6 +24,11 @@ public class PriceHistoryTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Candle Operations
         addTest("candle_merge_single", this::test_candle_merge_singleCandle);

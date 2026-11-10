@@ -53,6 +53,11 @@ public class NetFlowPluginTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("flow_zero_identity", this::test_flowZero_identity);
         addTest("disabled_identity", this::test_disabled_identity);

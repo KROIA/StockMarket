@@ -6,7 +6,6 @@ import com.google.gson.JsonObject;
 import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.JsonUtilities;
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -24,6 +23,7 @@ import net.kroia.stockmarket.news.NewsTranslations;
 import net.kroia.stockmarket.news.NewsUiFormatting;
 import net.kroia.stockmarket.news.ValidationReport;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -56,6 +56,11 @@ public class NewsSystemTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.NEWS;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -967,7 +972,7 @@ public class NewsSystemTestSuite extends TestSuite {
 
     /** STREAM_CODEC encode + decode must reproduce an equal record. */
     private TestResult test_record_streamCodecRoundTrip() {
-        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        RegistryAccess access = TestFixture.registryAccess();
         if (access == null) {
             return pass("STREAM_CODEC round-trip skipped (no registry access in this context)");
         }

@@ -42,5 +42,35 @@ dependencies {
     // in nested classes loaded only when LuckPerms is present.
     compileOnly "net.luckperms:api:${rootProject.luckperms_api_version}"
 
+    // Offline unit tests (T-223): ModUtilities' testing.OfflineTests runs the TestSuites as JUnit DynamicTests.
+    testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
+}
 
+// `gradlew :common:test` runs the test suites that need no game (TestSuite.needsGame() == false), see
+// src/test/java/.../StockMarketOfflineTests. Release mode (enable_dev_features=false) keeps testing/** out of main, so
+// the test source set compiles it itself; the include pattern also covers src/test/java, whose classes therefore live
+// in the testing package.
+if (!(rootProject.findProperty('enable_dev_features') ?: 'false').toBoolean()) {
+    sourceSets.test.java {
+        srcDir 'src/main/java'
+        include 'net/kroia/stockmarket/testing/**'
+    }
+}
+configurations.testCompileOnly.extendsFrom configurations.compileOnly // ModUtilities/BankSystem/LuckPerms/JEI APIs
+// ModUtilities and BankSystem are modCompileOnly (the game provides them); offline the tests need them at runtime.
+// Loom creates the remapped configuration only after evaluation.
+afterEvaluate { configurations.testRuntimeClasspath.extendsFrom configurations.modCompileClasspathMainMapped }
+
+test {
+    useJUnitPlatform()
+    // The only JUnit class. In release mode all of testing/** is in the test classes; scanning it would load classes
+    // of optional APIs that are not on the runtime classpath (LuckPerms).
+    include 'net/kroia/stockmarket/testing/StockMarketOfflineTests*'
+    workingDir = temporaryDir // Minecraft's log4j config writes logs/latest.log into the working directory
+    // test-topic selection (ModUtilities tools/autotest/README.md), only the properties that are set:
+    // gradlew :common:test -Dmodutilities.tests.include=stockmarket/sm_news
+    ['modutilities.tests.exclude','modutilities.tests.include','modutilities.tests.offline'].each { p -> if (System.getProperty(p) != null) systemProperty p, System.getProperty(p) }
+    // StockMarket dev switches of the market simulation harness (PluginTestSuite), the same way
+    ['stockmarket.t207','stockmarket.t208','stockmarket.t208.filter','stockmarket.t208.out','stockmarket.t213','stockmarket.t213.filter','stockmarket.t197sweep'].each { p -> if (System.getProperty(p) != null) systemProperty p, System.getProperty(p) }
 }

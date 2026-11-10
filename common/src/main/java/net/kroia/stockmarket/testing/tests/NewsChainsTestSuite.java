@@ -59,6 +59,11 @@ public class NewsChainsTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Requirement-based eligibility (scope A)
         addTest("requirement_filter_blocks_unmet", this::test_requirementFilter_blocksUnmet);

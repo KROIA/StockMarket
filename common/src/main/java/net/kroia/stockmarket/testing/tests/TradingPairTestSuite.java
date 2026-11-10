@@ -26,6 +26,11 @@ public class TradingPairTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("canonical_alphabetical_order", this::test_canonical_alphabetical_order);
         addTest("canonical_already_ordered", this::test_canonical_already_ordered);

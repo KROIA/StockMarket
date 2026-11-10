@@ -22,6 +22,11 @@ public class VirtualOrderbookTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("set_volume_above_market_price_negative", this::test_setVolume_aboveMarketPrice_negative);
         addTest("set_volume_below_market_price_positive", this::test_setVolume_belowMarketPrice_positive);

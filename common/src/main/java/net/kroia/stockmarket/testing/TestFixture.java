@@ -5,12 +5,15 @@ import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.ISyncServerPluginManager;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -108,6 +111,19 @@ public class TestFixture {
      */
     public TestFixture(String label) {
         this.label = label;
+    }
+
+    /**
+     * Registry access for codec round trips in tests: the running game's, or offline (no server, as in
+     * {@code gradlew :common:test}) the vanilla built-in registries, which need {@code Bootstrap.bootStrap()} first.
+     * Enough for item stacks and plain codecs; data-driven registries (enchantments, ...) exist only in game.
+     *
+     * @return the registry access, null only in game when neither side has one
+     */
+    public static RegistryAccess registryAccess() {
+        if (UtilitiesPlatform.isPlatformSet() && UtilitiesPlatform.getServer() != null)
+            return UtilitiesPlatform.getRegistryAccess();
+        return RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
     }
 
     /**

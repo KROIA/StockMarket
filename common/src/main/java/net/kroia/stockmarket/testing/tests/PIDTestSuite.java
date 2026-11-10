@@ -19,6 +19,11 @@ public class PIDTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("proportional_only", this::test_proportionalOnly);
         addTest("integral_accumulation", this::test_integralAccumulation);

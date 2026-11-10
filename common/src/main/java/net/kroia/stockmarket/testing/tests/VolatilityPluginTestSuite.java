@@ -29,6 +29,11 @@ public class VolatilityPluginTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("codec_round_trip_and_legacy", this::test_codec);
         addTest("nbt_round_trip", this::test_nbt);

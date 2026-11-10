@@ -21,6 +21,11 @@ public class OrderTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("average_execution_price_zero_division", this::test_getAverageExecutionPrice_zeroDivision);
         addTest("average_execution_price_normal_buy", this::test_getAverageExecutionPrice_normalBuy);
