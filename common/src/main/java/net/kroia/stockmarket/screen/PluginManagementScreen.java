@@ -215,6 +215,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         for (PluginEntryWidget entry : entryWidgets) {
             entry.cleanupPluginGuiElement();
         }
+        // T-220: store the viewport of the market shown last, so reopening the
+        // screen restores it (switching markets already stores the previous one).
+        candlestickChart.setMarket(null);
         if (currentChartMarket != null) {
             currentChartMarket.unsubscribeFromMarketPriceUpdate();
             currentChartMarket = null;

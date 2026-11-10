@@ -966,8 +966,17 @@ public class CandlestickChart extends StockMarketGuiElement {
     /**
      * Saves the current viewport state (position, zoom, candle time index)
      * into the static map, keyed by the current provider's viewport key.
+     * <p>
+     * T-220: skipped while the first fit for this market is still pending
+     * ({@link #firstDraw} or a pending auto-fit for the current delta, i.e. its
+     * candles have not arrived yet). Until then the rect still holds the PREVIOUS
+     * market's view; saving it would restore a foreign price range (an empty chart
+     * that must be re-centred) on the next visit instead of auto-centring.
      */
     private void saveViewportState() {
+        long currentDelta = ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx];
+        if (firstDraw || pendingAutoFitDeltas.contains(currentDelta))
+            return;
         if (this.priceDataProvider != null) {
             savedViewports.put(this.priceDataProvider.getViewportKey(), new ViewportState(
                     chartviewRect.x, chartviewRect.y,
