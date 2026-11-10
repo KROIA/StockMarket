@@ -11,6 +11,7 @@ This guide covers two common ways to set up the stock market on a server, with c
 * [Discord feed](#discord-feed)
 * [Profit alert](#profit-alert)
 * [Backups](#backups)
+* [Order origin record](#order-origin-record)
 
 ---
 
@@ -224,3 +225,20 @@ StockMarket keeps price candles, order history and other trade data in an SQLite
 * The commands need the permission `stockmarket.admin.command.backup` (operator level 2 without a permission mod) and only work on the master server. They work from the console, so a backup script can use them (for example through RCON).
 * A pause ends by itself after **120 seconds**, with a warning in the log, so a forgotten `resume` cannot stop the market data for good. Copy the database within that time.
 * Trading goes on during the pause. Saving to the database, and loading chart and order history (which also goes through the database queue), wait until it ends.
+* The [order origin record](#order-origin-record) `stockmarket_diagnostics.db` is not paused by these commands, and a restore does not need it.
+
+## Order origin record
+
+On a multi-server network it helps to know on which server an order was placed, for example when you investigate suspicious trades. The master writes this to its own file, next to `stockdata.db`: `world/data/StockMarket/Database/stockmarket_diagnostics.db` (SQLite, open it with any SQLite browser).
+
+The table `OrderOrigin` has one row per player order the master accepted:
+
+| Column | Content |
+|---|---|
+| `ref` | The order's reference, the same as in the BankSystem transaction ledger: `sm:order:<id>` for a regular order, `sm:im:<uuid>` for an inter-market order (both legs share the row) |
+| `origin_server_uid` | The permanent ID of the server the order was placed on, from ModUtilities (`world/data/ModUtilities/server_identity.json` on that server); empty if it is not known |
+| `origin_name` | The slave's `slaveID`, or empty for an order placed on the master itself |
+
+* Bot orders are not recorded. The account, item, amounts and time of an order are not repeated here; look them up in the order history or the BankSystem transaction ledger under the same reference.
+* Only the master writes the file; it is created with the first player order.
+* Gameplay never reads it. You can delete it while the server is stopped; it is created again with the next player order.

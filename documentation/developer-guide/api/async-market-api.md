@@ -74,8 +74,9 @@ Before 2.2.0 an async request that got no answer left its future pending forever
 2.2.0 the futures of `IAsyncMarket`, `IAsyncMarketManager`, `IAsyncPresetManager`,
 `IClientMarketManager.requestMarkets()` / `requestPendingOrders()`,
 `IClientPluginManager.requestPluginList()` / `requestReorderPlugin()` and
-`ClientMarket.createOrder()` (and its `createLimit*` / `createMarketOrder` shortcuts)
-**complete exceptionally** when the request fails.
+`ClientMarket.createOrder()` (and its `createLimit*` / `createMarket*` shortcuts)
+**complete exceptionally** when the request fails. The Javadoc of these interfaces states the
+same contract.
 
 ### 3.1 The two failure types
 
@@ -170,7 +171,7 @@ that follow §3.
 | `getTradingCurrencyIDAsync()` | `ItemID` | The currency item markets trade against (`ServerMarket.CURRENCY`) |
 | `getAvailableMarketIDsAsync()` | `List<ItemID>` | All existing markets |
 | `marketExistsAsync(ItemID)` | `Boolean` | |
-| `createMarketAsync(ItemID)` | `@Nullable IAsyncMarket` | Creates the market from its preset; `null` if it could not be created |
+| `createMarketAsync(ItemID)` | `@Nullable IAsyncMarket` | Creates the market from its preset; the existing market if there already is one; `null` if refused (for example a blacklisted item) |
 | `deleteMarketAsync(ItemID)` | `Boolean` | Open player orders on the market are cancelled |
 | `getMarketAsync(ItemID)` | `@Nullable IAsyncMarket` | `null` if the market does not exist |
 | `setStockmarketAdminModeAsync(UUID, boolean)` | `Boolean` | Admin flag of a player (see the [LuckPerms sync](../../user-guide/admin-setup.md#syncing-stockmarket-admin-mode-with-luckperms)) |
@@ -191,7 +192,7 @@ The master's manager implements `IServerMarketManager`, which is
 | Method | Notes |
 |---|---|
 | `getTradingCurrencyID()`, `getAvailableMarketIDs()`, `marketExists(ItemID)` | |
-| `createMarket(ItemID)` | From the matching preset; `null` if it exists or is refused |
+| `createMarket(ItemID)` | From the matching preset; the existing market if there already is one; `null` for a blacklisted item |
 | `createMarketWithConfig(ItemID, MarketConfig)` | Bypasses presets; what `IStockMarketIntegration.openMarket` uses |
 | `deleteMarket(ItemID)` | `false` if no market existed |
 | `getMarket(ItemID)` | `@Nullable IServerMarket` |
@@ -230,8 +231,10 @@ Prices and volumes are **raw** backend values unless the method name says `Real`
 | `resetVirtualOrderbookAsync()`, `clearVirtualOrderbookAsync()` | `Boolean` | Admin-gated; `false` when denied |
 
 Writes are refused when they come from an untrusted slave; admin-gated writes are refused for
-players without StockMarket admin mode. A refusal completes the future with `false`; it is
-not an exception.
+players without StockMarket admin mode. A refusal completes the future with `false`, or with
+`null` when the call is refused before it reaches the market (untrusted slave, a function
+clients may not call, unknown market); treat `null` like `false`. A refusal is not an
+exception.
 
 **`putOrderAsync` from a slave (2.2.0).** The master uses only the order's market, player,
 bank account, type, volume and price, and places it like a player order from the trading

@@ -193,8 +193,9 @@ public interface IPluginMarket {
 
     /**
      * Overwrites the net player item flow counter. Applied immediately (not cache-buffered).
-     * Used by the VolatilityPlugin to saturate the counter at the flow where its
-     * equilibrium price already sits at the configured floor/ceiling.
+     * No built-in plugin calls this: the NetFlowPlugin only reads the flow and saturates its own
+     * private copy at the floor/ceiling of its equilibrium price. The counter is the exact item count
+     * of player fills; do not clamp it here.
      * @param netPlayerItemFlow the new net flow in real (scaled) units, same sign
      *                          convention as {@link #getNetPlayerItemFlow()}
      * <p>
@@ -217,7 +218,8 @@ public interface IPluginMarket {
 
     /**
      * Overwrites the faded net player item flow. Applied immediately (not cache-buffered).
-     * Used by the VolatilityPlugin to saturate it at its price band.
+     * No built-in plugin calls this: the NetFlowPlugin saturates its own private copy at its price
+     * band instead of writing the stored value; do not use it to clamp the flow.
      * The default implementation is a no-op.
      * @param fadedNetPlayerItemFlow the new faded flow in real (scaled) units
      */

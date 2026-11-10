@@ -55,6 +55,7 @@ automatically on first start. Restart the servers after editing the file.
 |---|---|---|
 | Markets, order book, matching engine | ✔ | forwards orders and reads to the master |
 | Price, order and trade history database (`world/data/StockMarket/Database/`) | ✔ | — |
+| [Order origin record](admin-setup.md#order-origin-record) (`stockmarket_diagnostics.db`): which server each player order came from | ✔ | — (the master records the slave's `slaveID`) |
 | Market plugins, news events, bots | ✔ | — |
 | Mod Settings (`world/data/StockMarket/settings.json`) | ✔ | not loaded; the master pushes derived data (villager prices) |
 | Market presets | ✔ | — |

@@ -44,7 +44,18 @@ public interface IMarketManager {
     IAsyncMarketManager getAsync();
 
 
+    /**
+     * @apiNote
+     * Do not call this from client side!
+     * @return true on a slave server: it has no market data of its own and sends every call to the master
+     */
     boolean isSlave();
 
+    /**
+     * @apiNote
+     * Do not call this from client side!
+     * @return true on the master, and on a single server without the multi-server setup; always the opposite of
+     *         {@link #isSlave()}
+     */
     boolean isMaster();
 }

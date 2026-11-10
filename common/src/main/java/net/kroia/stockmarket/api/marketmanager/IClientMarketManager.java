@@ -18,7 +18,38 @@ public interface IClientMarketManager {
     void onPlayerJoin(@Nullable LocalPlayer localPlayer);
     void onPlayerLeave(@Nullable LocalPlayer localPlayer);
     @Nullable ClientMarket getMarket(ItemID itemID);
+
+    /**
+     * Requests the list of markets from the server, loads new ones into the local cache and drops cached markets the
+     * server no longer has.
+     * <p>
+     * The future fails when the request fails (2.2.0): with ModUtilities'
+     * {@link net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException} when no answer came
+     * in time or the connection was lost, or with an {@link IllegalStateException} when the request could not be sent;
+     * the cache is then left as it is. Callbacks may get the cause wrapped in a
+     * {@link java.util.concurrent.CompletionException}. A failure is never "no markets". See
+     * {@code documentation/developer-guide/api/async-market-api.md}, section 3.
+     *
+     * @return future with the items of all markets on the server
+     */
     CompletableFuture<List<ItemID>> requestMarkets();
+
+    /**
+     * Requests the open (resting limit) orders matching the filters from the server. The server returns only orders the player may
+     * see (accounts they are a member of, all orders for an admin).
+     * <p>
+     * The future fails with ModUtilities'
+     * {@link net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException} (2.2.0) when no
+     * answer came in time or the connection was lost, often wrapped in a
+     * {@link java.util.concurrent.CompletionException}; show the list as unavailable and let the player reload it.
+     *
+     * @param itemIDFilter         only orders of this market, or null for all markets
+     * @param bankAccountNr        only orders of this bank account; 0 or less for all accounts
+     * @param executorPlayerFilter only orders placed by this player, or null for all players
+     * @param timeBegin            only orders placed at or after this time (ms)
+     * @param timeEnd              only orders placed at or before this time (ms)
+     * @return future with the matching orders
+     */
     CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(@Nullable ItemID itemIDFilter,
                                                                            int bankAccountNr,
                                                                            @Nullable UUID executorPlayerFilter,
