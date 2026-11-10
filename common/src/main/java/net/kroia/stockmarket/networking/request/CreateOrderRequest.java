@@ -125,7 +125,25 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         // that bypassed the button gate). The gate helper logs a WARN.
         if (!NetworkGate.isMutatingCallAllowed(slaveID, "CreateOrderRequest"))
             return CompletableFuture.completedFuture(new OutputData(Status.NO_PLAYER_SENDER, null));
+        return placeOrder(input, playerSender);
+    }
 
+    /**
+     * Validates, reserves the funds for and places one player order on the master. Every path that
+     * creates a player order from outside the master runs through here: this request and the
+     * AsyncMarket {@code PutOrder_1} call (Issue #95).
+     * <p>
+     * Checks, in order: market exists, volume != 0, price >= 0, market open, max order size and
+     * trade cooldown (T-166), account exists, player is a member with WITHDRAW + DEPOSIT (or the
+     * personal owner), no INTER_MARKET type, enough balance. Then it locks the money (buy) or items
+     * (sell) and calls {@code putOrder}; if the market refuses the order, the lock is released again.
+     * The caller must have checked the sender and the slave gate already.
+     *
+     * @param input        the order to place (real volume and price, signed volume: + buy, - sell)
+     * @param playerSender the player the order is placed for; must not be null
+     * @return the status, with the placed order as echo on {@link Status#CREATED}; completes at once
+     */
+    public CompletableFuture<OutputData> placeOrder(CreateOrderRequest.InputData input, UUID playerSender) {
         CompletableFuture<OutputData> future = new CompletableFuture<>();
         OutputData response = new OutputData(Status.CREATED, null);
          IServerMarket serverMarket = getServerMarketManager().getMarket(input.itemID);

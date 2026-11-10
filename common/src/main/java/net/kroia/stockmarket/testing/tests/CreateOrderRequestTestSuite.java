@@ -11,6 +11,7 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
+import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
@@ -67,6 +68,10 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         addTest("buyMarket_locksAtMarketPrice", this::test_buyMarket_locksAtMarketPrice);
         addTest("sell_locksItemVolume", this::test_sell_locksItemVolume);
         addTest("putOrderFails_unlocksMoneyBuy", this::test_putOrderFails_unlocksMoneyBuy);
+
+        // Issue #95: AsyncMarket PutOrder_1 runs the same check and lock as this request
+        addTest("asyncPutOrder_locksLikeCreateOrder", this::test_asyncPutOrder_locksLikeCreateOrder);
+        addTest("asyncPutOrder_uncheckedOrdersRejected", this::test_asyncPutOrder_uncheckedOrdersRejected);
 
         // Fix 3 — market orders that cannot match must cancel the remainder + refund.
         addTest("marketSell_noLiquidity_unlocksItems", this::test_marketSell_noLiquidity_unlocksItems);
@@ -749,6 +754,87 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }
+    }
+
+    // ── Issue #95: AsyncMarket PutOrder_1 ────────────────────────────────────
+
+    /**
+     * Sends {@code order} through the master handler of AsyncMarket {@code PutOrder_1}, as a server-side
+     * call with no player attached (what a slave's {@code putOrderAsync} arrives as).
+     *
+     * @param order the order to place
+     * @return the handler's answer: true if the order was placed
+     */
+    private boolean asyncPutOrder(Order order) {
+        AsyncMarket.OutputData out = AsyncMarket.Request.instance.handleOnMasterServer(
+                AsyncMarket.InputData.of(AsyncMarket.FunctionType.PutOrder_1, itemID, order), "", null).join();
+        return Boolean.TRUE.equals(out.decodeResult());
+    }
+
+    /** @return {@code real} in raw bank units */
+    private long raw(double real) {
+        return backend.BANK_SYSTEM_API.getServerBankManager().getSync().convertToRawAmount(real);
+    }
+
+    /** A PutOrder_1 buy and sell lock exactly what the same CreateOrderRequest locks. */
+    private TestResult test_asyncPutOrder_locksLikeCreateOrder() {
+        return withLimits(0, 0, () -> { // no cooldown: each player places two orders
+            UUID asyncPlayer = UUID.randomUUID();
+            UUID requestPlayer = UUID.randomUUID();
+            IServerBankAccount asyncAcc = freshAccount("AsyncPut", 100000, 1000, asyncPlayer);
+            IServerBankAccount requestAcc = freshAccount("AsyncPutRef", 100000, 1000, requestPlayer);
+            long now = System.currentTimeMillis();
+
+            TestResult r = assertTrue("async buy placed", asyncPutOrder(new Order(itemID, Order.Type.LIMIT,
+                    raw(5.0), raw(10.0), now, asyncPlayer, asyncAcc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertTrue("async sell placed", asyncPutOrder(new Order(itemID, Order.Type.LIMIT,
+                    raw(-3.0), raw(500.0), now, asyncPlayer, asyncAcc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertEquals("reference buy", CreateOrderRequest.Status.CREATED, executeRequest(new CreateOrderRequest.InputData(
+                    itemID, requestAcc.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0), requestPlayer).status);
+            if (!r.passed()) return r;
+            r = assertEquals("reference sell", CreateOrderRequest.Status.CREATED, executeRequest(new CreateOrderRequest.InputData(
+                    itemID, requestAcc.getAccountNumber(), Order.Type.LIMIT, -3.0, 500.0), requestPlayer).status);
+            if (!r.passed()) return r;
+
+            r = assertTrue("money is locked", asyncAcc.getBank(moneyID).getBalance() < 100000);
+            if (!r.passed()) return r;
+            r = assertEquals("same money lock", requestAcc.getBank(moneyID).getBalance(), asyncAcc.getBank(moneyID).getBalance());
+            if (!r.passed()) return r;
+            r = assertEquals("same item lock", requestAcc.getBank(itemID).getBalance(), asyncAcc.getBank(itemID).getBalance());
+            if (!r.passed()) return r;
+            return pass("PutOrder_1 locks like CreateOrderRequest");
+        });
+    }
+
+    /** Non-member, too little money, bot order and wrong market are refused by PutOrder_1 and lock nothing. */
+    private TestResult test_asyncPutOrder_uncheckedOrdersRejected() {
+        return withLimits(0, 0, () -> {
+            UUID member = UUID.randomUUID();
+            UUID stranger = UUID.randomUUID();
+            registerAndAddUser(stranger, "AsyncPutStranger");
+            IServerBankAccount acc = freshAccount("AsyncPutReject", 100, 0, member);
+            long now = System.currentTimeMillis();
+
+            TestResult r = assertFalse("non-member refused", asyncPutOrder(new Order(itemID, Order.Type.LIMIT,
+                    raw(1.0), raw(0.5), now, stranger, acc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertFalse("not enough money refused", asyncPutOrder(new Order(itemID, Order.Type.LIMIT,
+                    raw(5.0), raw(10.0), now, member, acc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertFalse("sell without items refused", asyncPutOrder(new Order(itemID, Order.Type.LIMIT,
+                    raw(-1.0), raw(10.0), now, member, acc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertFalse("bot order refused", asyncPutOrder(new Order(itemID, Order.Type.LIMIT, raw(1.0), raw(0.5), now)));
+            if (!r.passed()) return r;
+            r = assertFalse("order for another market refused", asyncPutOrder(new Order(moneyID, Order.Type.LIMIT,
+                    raw(1.0), raw(0.5), now, member, acc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertEquals("no money locked", acc.getBank(moneyID).getTotalBalance(), acc.getBank(moneyID).getBalance());
+            if (!r.passed()) return r;
+            return pass("Unchecked PutOrder_1 orders are refused");
+        });
     }
 
     // ── T-166: max order size + trade cooldown ───────────────────────────────
