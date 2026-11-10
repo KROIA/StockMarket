@@ -866,7 +866,10 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
     // ── T-215: OrderOrigin rows in stockmarket_diagnostics.db ────────────────
 
-    /** OrderOrigin has exactly ref, origin_server_uid, origin_name; master rows get the own uid, slave rows the slave's. */
+    /**
+     * The file holds only Meta and OrderOrigin (no BankSystem tables); OrderOrigin has exactly ref, origin_server_uid,
+     * origin_name; master rows get the own uid, slave rows the slave's.
+     */
     private TestResult test_orderOrigin_columnsAndFirstRowWins() {
         Path dir = null;
         try {
@@ -875,7 +878,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             UUID self = UUID.randomUUID();
             UUID slave = UUID.randomUUID();
             IServerIdentity identity = identity(self, "known-slave", slave);
-            DiagnosticsDatabase db = new DiagnosticsDatabase(file);
+            DiagnosticsDatabase db = OrderOriginLog.create(file);
             OrderOriginLog.record(db, "sm:order:1", "", identity);
             OrderOriginLog.record(db, "sm:order:2", "known-slave", identity);
             OrderOriginLog.record(db, "sm:order:3", "unknown-slave", identity);
@@ -890,13 +893,20 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             }
             TestResult r = assertEquals("columns", List.of("ref", "origin_server_uid", "origin_name"), columns);
             if (!r.passed()) return r;
+            List<String> tables = new ArrayList<>(); // no TransferJournal / NoteFlow from BankSystem's schema
+            try (Connection c = DiagnosticsDatabase.connect(file); Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")) {
+                while (rs.next()) tables.add(rs.getString(1));
+            }
+            r = assertEquals("tables", List.of("Meta", "OrderOrigin"), tables);
+            if (!r.passed()) return r;
             r = assertEquals("master row", self + "|", originRow(file, "sm:order:1"));
             if (!r.passed()) return r;
             r = assertEquals("slave row", slave + "|known-slave", originRow(file, "sm:order:2"));
             if (!r.passed()) return r;
             r = assertEquals("unknown slave row", "null|unknown-slave", originRow(file, "sm:order:3"));
             if (!r.passed()) return r;
-            return pass("OrderOrigin: 3 columns, uid per origin, first row of a ref wins");
+            return pass("Meta + OrderOrigin only, 3 columns, uid per origin, first row of a ref wins");
         } catch (Exception e) {
             return fail("Exception: " + e);
         } finally {

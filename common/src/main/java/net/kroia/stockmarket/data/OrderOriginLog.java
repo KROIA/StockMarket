@@ -8,16 +8,18 @@ import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 
 /**
  * T-215 (audit tool SM-D1): records which server each player order came from, in the OrderOrigin table of
  * {@code <world>/data/StockMarket/Database/stockmarket_diagnostics.db}.
  * <p>
- * The file is written by BankSystem's {@link DiagnosticsDatabase}: its own connection and daemon thread (never the
- * server thread or the StockMarket db-worker), created on the first write, a corrupt file is moved aside and
- * recreated, a full queue drops writes. Gameplay never reads it, so deleting it never changes game state. That
- * writer also adds its own Meta table (schema_version, created_ms) and BankSystem's empty tables to the file.
+ * The file is written by BankSystem's {@link DiagnosticsDatabase} with this mod's own schema: its own connection and
+ * daemon thread {@value #THREAD_NAME} (never the server thread or the StockMarket db-worker), created on the first
+ * write, a corrupt file is moved aside and recreated, a full queue drops writes. Gameplay never reads it, so deleting
+ * it never changes game state. The file holds only Meta (created_ms, schema_version {@value #SCHEMA_VERSION}) and
+ * OrderOrigin, none of BankSystem's tables; no other Meta keys are written.
  * <p>
  * Master only: orders are created there. The table holds only what is stored nowhere else. Account, item and time
  * of an order are in OrderHistory, the BankSystem TransactionLog and the saved order book under the same ref, so a
@@ -31,13 +33,15 @@ import java.util.UUID;
  */
 public final class OrderOriginLog {
     public static final String FILE_NAME = "stockmarket_diagnostics.db";
-    static final String CREATE_TABLE = "CREATE TABLE IF NOT EXISTS OrderOrigin "
-            + "(ref TEXT PRIMARY KEY, origin_server_uid TEXT, origin_name TEXT NOT NULL)";
+    public static final String THREAD_NAME = "stockmarket-diag-db";
+    /** Meta schema_version of the file; bump it when a table or column is added to {@link #SCHEMA}. */
+    public static final String SCHEMA_VERSION = "1";
+    /** The file's tables after Meta, run in order on every open, so each statement must be idempotent. */
+    static final List<String> SCHEMA = List.of("CREATE TABLE IF NOT EXISTS OrderOrigin "
+            + "(ref TEXT PRIMARY KEY, origin_server_uid TEXT, origin_name TEXT NOT NULL)");
     private static final String INSERT = "INSERT OR IGNORE INTO OrderOrigin (ref, origin_server_uid, origin_name) VALUES (?, ?, ?)";
 
     private static volatile @Nullable DiagnosticsDatabase live;
-    /** The database the table was last queued for; the CREATE runs once per file instance, before its first row. */
-    private static volatile @Nullable DiagnosticsDatabase tableQueuedFor;
 
     private OrderOriginLog() {}
 
@@ -49,10 +53,21 @@ public final class OrderOriginLog {
     public static void open(Path databaseFolder) {
         close();
         try {
-            live = new DiagnosticsDatabase(databaseFolder.resolve(FILE_NAME));
-        } catch (LinkageError e) { // a BankSystem without the diagnostics writer
+            live = create(databaseFolder.resolve(FILE_NAME));
+        } catch (LinkageError e) { // a BankSystem without the diagnostics writer or its schema constructor
             StockMarketMod.LOGGER.warn("[OrderOriginLog] BankSystem has no DiagnosticsDatabase; order origins are not recorded", e);
         }
+    }
+
+    /**
+     * Creates a writer for an order-origin file: Meta plus {@link #SCHEMA}, thread {@value #THREAD_NAME}. Nothing is
+     * opened until the first write. Also used by the tests for a file in a temp folder.
+     *
+     * @param file the SQLite file to write
+     * @return the writer; the caller closes it
+     */
+    public static DiagnosticsDatabase create(Path file) {
+        return new DiagnosticsDatabase(file, THREAD_NAME, SCHEMA_VERSION, SCHEMA);
     }
 
     /** Drains the queued rows (up to 2 s) and closes the file (server stop). */
@@ -91,7 +106,7 @@ public final class OrderOriginLog {
     /**
      * Queues one OrderOrigin row; a second row with the same ref is ignored.
      *
-     * @param db       the target file, or null to do nothing
+     * @param db       the target file, made by {@link #create(Path)} (it holds the table), or null to do nothing
      * @param ref      the order's ledger ref
      * @param slaveID  the slave the order came from, "" or null for the master itself
      * @param identity this server's identity, or null if not known yet (the uid is then null)
@@ -102,10 +117,6 @@ public final class OrderOriginLog {
         try {
             String name = slaveID == null ? "" : slaveID;
             UUID uid = identity == null ? null : name.isEmpty() ? identity.serverUid() : identity.slaveUid(name);
-            if (tableQueuedFor != db) {
-                tableQueuedFor = db;
-                db.execute(CREATE_TABLE);
-            }
             db.execute(INSERT, ref, uid == null ? null : uid.toString(), name);
         } catch (RuntimeException e) { // diagnostics must never break order placement
             StockMarketMod.LOGGER.warn("[OrderOriginLog] could not record {}: {}", ref, e.toString());
