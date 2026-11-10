@@ -153,7 +153,8 @@ def check_corrupt():
 
 # ----------------------------------------------------------------------------- diagnostics + multi-save join
 MASTER_UID, SLAVE_UID = '00000000-0000-4000-8000-0000000000aa', '00000000-0000-4000-8000-0000000000bb'
-CREATED, BANK_SAVE, SLAVE_SAVE, MASTER_SAVE = T + 100, T + 40000, T + 50000, T + 100000   # oldest save = SLAVE_SAVE
+CREATED, BANK_SAVE, SLAVE_SAVE, MASTER_SAVE = T + 2500, T + 40000, T + 50000, T + 100000   # oldest save = SLAVE_SAVE
+# CREATED is after the slave's first journal row (T + 2001): the writer thread opens the file after the first rows are queued
 GROUP = '12345678-1234-4234-8234-123456789abc'      # inter-market group of the extra fill
 
 
@@ -161,7 +162,7 @@ def tid(n):
     return '00000000-0000-4000-8000-%012d' % n
 
 
-# transfer -> expected class. Slave rows: (step, direction, path, items_json, ts); master rows: (type_code, amount, ts)
+# transfer -> expected class (None = skipped). Slave rows: (step, direction, path, items_json, ts); master rows: (type_code, amount, ts)
 TRANSFERS = {
     1: ('ok', [('REQUESTED', 'TO_MASTER', 'ASYNC_BANK', '{"6":1000}', T + 44000), ('CONFIRMED', None, None, None, T + 44001)],
         [(1, 1000, T + 45000)]),                                   # also newer than bank_last_save_ms -> rolled back note
@@ -181,7 +182,15 @@ TRANSFERS = {
     12: ('lost', [('REQUESTED', 'TO_MASTER', 'ASYNC_BANK', '{"6":80}', T + 12000), ('TIMED_OUT', None, None, None, T + 12001)], []),
     13: ('lost', [('FAILED', 'FROM_MASTER', 'DROP', '{"6":70}', T + 13001)], [(2, 70, T + 13000)]),   # FAILED, never refunded
     14: ('known gap', [('DELIVERED', 'FROM_MASTER', 'DROP', '{"6":900}', T + 14000)], []),   # user-deletion payout, ref=null
+    15: (None, [('REQUESTED', 'TO_MASTER', 'ASYNC_BANK', '{"6":500}', T + 15000), ('CONFIRMED', None, None, None, T + 15001)], []),  # NO_LOG
+    16: ('lost', [], [(2, 40, T + 2200)]),                        # after the slave's first row, before its created_ms: no gap
+    17: ('ok', [('FAILED', 'FROM_MASTER', 'DROP', '{"6":90}', T + 17000)], []),   # leg passed on to the next slave
+    18: ('ok', [('DELIVERED', 'FROM_MASTER', 'DROP', '{"6":250}', T + 18001)], [(25, 250, T + 18000)]),   # ACCOUNT_DELETE_PAYOUT = outflow
+    19: ('ok', [('REQUESTED', 'TO_MASTER', 'ASYNC_BANK', '{"6":120}', T + 19000)], []),   # non-success reply: nothing applied
+    20: ('duplicate', [('REQUESTED', 'TO_MASTER', 'ASYNC_BANK', '{"6":130}', T + 20000)], [(1, 130, T + 20001)]),  # applied, slave saw no success
+    21: ('known gap', [('DELIVERED', 'FROM_MASTER', 'DROP', '{"6":30000}', T + 21001)], [(25, 300, T + 21000)]),  # pre-#136 100x payout
 }
+NO_LOG = {15}                                                      # REQUESTED with ledger_type NULL
 
 
 def diag_db(path, sql, meta, rows=()):
@@ -237,8 +246,9 @@ def build_universe(root):
                ' VALUES (?,1,?,?,0,100,1000,?,?,?)', (DIA, *uuid_longs(U1), T + 70000, g1, g2))
     sm.commit(); sm.close()
     # slave: journal only (no banksystem.db), old NoteFlow without villager columns
-    rows = [('INSERT INTO TransferJournal (transfer_id,ts,direction,path,step,account_number,player_uuid,items_json) VALUES (?,?,?,?,?,?,?,?)',
-             (tid(n), t, d, p, step, 1 if d else None, U1 if d else None, items))
+    rows = [('INSERT INTO TransferJournal (transfer_id,ts,direction,path,step,account_number,player_uuid,items_json,ledger_type) VALUES (?,?,?,?,?,?,?,?,?)',
+             (tid(n), t, d, p, step, 1 if step == 'REQUESTED' else None, U1 if d else None, items,   # DROP rows: no account / ledger_type
+              None if n in NO_LOG or step != 'REQUESTED' else 13 if p == 'CONVERTER_DEPOSIT' else 1 if d == 'TO_MASTER' else 2))
             for n, (_, jr, _) in TRANSFERS.items() for step, d, p, items, t in jr]
     diag_db(os.path.join(sd, 'BankSystem', 'Database', 'banksystem_diagnostics.db'), [JOURNAL_SQL, NOTEFLOW_OLD],
             {'schema_version': 1, 'created_ms': CREATED}, rows)
@@ -275,10 +285,11 @@ def check_diagnostics():
             rows, warns = core.join([m, s])
             got = {r['transfer_id']: r for r in rows}
             for n, (cls, _, _) in TRANSFERS.items():
-                assert got[tid(n)]['class'] == cls, (n, cls, got[tid(n)])
-            assert len(rows) == len(TRANSFERS) and not warns, (len(rows), warns)
+                assert (got[tid(n)]['class'] if tid(n) in got else None) == cls, (n, cls, got.get(tid(n)))
+            assert len(rows) == sum(1 for c, _, _ in TRANSFERS.values() if c) and not warns, (len(rows), warns)
+            assert 'passed on' in got[tid(17)]['note'] and 'not applied' in got[tid(19)]['note']
             assert 'rolled back' in got[tid(1)]['note'] and got[tid(1)]['slave'] == 'slave_a' and got[tid(1)]['player'] == 'Trader'
-            assert 'created' in got[tid(11)]['note'] and 'oldest' in got[tid(10)]['note']
+            assert 'started' in got[tid(11)]['note'] and 'oldest' in got[tid(10)]['note']
             assert got[tid(3)]['into_bank_master'] == got[tid(3)]['into_bank_slave'] == 7.0
             # without the slave save: slave-side gaps, no false 'lost'; without the master: master-side gaps
             alone = {r['transfer_id']: r['class'] for r in core.join([m])[0]}
@@ -305,9 +316,9 @@ def check_no_diagnostics():
             assert set(st.values()) == {'no diagnostics data (file missing)'}, st
             ss = w.schema_summary()
             assert ss['Last save (level.dat LastPlayed)'] == 'no last-save info' and w.rolled_back() is None
-            assert 'unknown' in ss['Ledger rows after the last bank save']
+            assert ss['Ledger rows after the last bank save'] == 'no bank-save info'
             assert all(d['origin'] == '' for d in core.fill_dicts(w, w.fills()))
-            assert core.join([w]) == ([], ['master: no last-save info (no level.dat LastPlayed)'])
+            assert core.join([w]) == ([], ['master: no last-save info (no level.dat LastPlayed)', 'master: no bank-save info (no bank_last_save_ms)'])
         # diagnostics file present but without the tables (Meta only)
         diag_db(os.path.join(root, 'BankSystem', 'Database', 'banksystem_diagnostics.db'), [], {'created_ms': T})
         with core.World(root) as w:
@@ -323,7 +334,7 @@ def main():
     check(False); print('legacy 2.1.2 format: ok')
     check_corrupt(); print('corrupt db salvage: ok')
     check_no_diagnostics(); print('no diagnostics data (missing DB / tables): ok')
-    check_diagnostics(); print('diagnostics readers + multi-save join (%d transfer classes): ok' % len({c for c, _, _ in TRANSFERS.values()}))
+    check_diagnostics(); print('diagnostics readers + multi-save join (%d transfer classes): ok' % len({c for c, _, _ in TRANSFERS.values() if c}))
     print('SELFTEST PASSED')
     return 0
 

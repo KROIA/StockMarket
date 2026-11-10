@@ -64,26 +64,52 @@ file counts as the master if it has `banksystem.db`, otherwise as a slave. The t
 | Master | `TransactionLog` rows whose `ref` is the transfer_id (a UUID), and `SuspicionFlag` rows with `flag_type` 6 (TRANSFER_PARKED) and that `ref`. |
 
 Each transfer compares value in raw units, counted as value going into the master bank:
-- master = the signed sum of its ledger rows;
-- slave = REQUESTED − RETURNED for `TO_MASTER`, or −DELIVERED for `FROM_MASTER`.
+- master = the signed sum of all its ledger rows. Amounts are stored unsigned, so the sign comes from the type code.
+- slave, `TO_MASTER` = REQUESTED − RETURNED. It is 0 when REQUESTED has no follow-up row: a non-success reply writes
+  no step, so nothing was applied.
+- slave, `FROM_MASTER` = −DELIVERED. For ASYNC_BANK, DELIVERED means the master reported the debit as SUCCESS. It
+  does not prove the items reached the slave world: download and terminal hand the items out before sending and take
+  them back on failure without a journal row, and CRAFT_CONSUME hands nothing out. For a DROP, DELIVERED is what was
+  dropped in the slave world and FAILED is what was not.
 
-A follow-up row with no `items_json` means the full requested amount. FAILED moves nothing.
+A follow-up row with no `items_json` means the full requested amount. Only the converter writes partial follow-ups:
+CONFIRMED is the applied part and RETURNED the refunded part. FAILED moves nothing. For a DROP, the master's
+Σ WITHDRAW − Σ WITHDRAW_REFUND equals the DELIVERED total, and the FAILED total equals the WITHDRAW_REFUND total.
+
+Only totals per transfer are compared, never per-item units: ASYNC_BANK `items_json` is {bank-slot ItemID: raw}
+(bound external coins at the provider ratio, keyed by the base-coin slot), CONVERTER_DEPOSIT is {money ItemID: cents},
+and a DROP is worth × count for notes and count × 100 for other items. REQUESTED is written after the send, so a
+master row can be older than the slave's REQUESTED. That is not an error.
+
+Journal transfers whose REQUESTED row has `ledger_type` NULL are skipped when the master has no row for them. They
+come from AsyncBank NO_LOG calls (StockMarket settlement), and the master writes no ledger row for those by design.
+DROP rows never have a `ledger_type` and are never skipped.
 
 | Class | Meaning |
 |---|---|
-| `ok` | Both sides agree. This includes partial converter deposits, and rejections whose items were returned. |
+| `ok` | Both sides agree. This includes partial converter deposits, rejections whose items were returned, a REQUESTED with no follow-up row (`not applied`), and a DROP with only FAILED rows and no master row (the leg was passed on to the next slave). |
 | `parked` | Open admin case (TRANSFER_PARKED flag). Shows `acknowledged` once the admin has ticked it. |
 | `duplicate` | Both sides have rows, but more value arrived than left. Examples: applied and RETURNED; REFUNDED after DELIVERED. |
 | `lost` | Value left one side and never arrived. Examples: a debit with no slave row; REQUESTED + TIMED_OUT with no master row; FAILED without a refund. |
 | `created from nothing` | The slave received value, but the master has no row for it. |
-| `known gap` | A DROP with no master row. User-deletion payouts (BankSystem #127) write the master ledger with `ref = null`, so the master row is not linked. Not a finding. |
-| `data gap` | Replaces lost / created from nothing when the side without rows cannot show the transfer. The master or slave save is not loaded; a slave has no diagnostics DB, or its `Meta.created_ms` is after the transfer; or the master ledger has no `ref` column. |
+| `known gap` | A DROP with DELIVERED rows but no master row: user-deletion payouts (BankSystem #127) write the master ledger with `ref = null`, so the master row is not linked. Also a linked deletion payout (ACCOUNT_DELETE_PAYOUT/LOSS) whose DELIVERED total does not match: before BankSystem #136 the payout dropped raw balances as item counts (100× the value). Not a finding. |
+| `data gap` | Replaces lost / created from nothing when the side without rows cannot show the transfer. The master or slave save is not loaded; a slave has no diagnostics DB, or its file started after the transfer (the earlier of `Meta.created_ms` and its first row's `ts`, since the first rows can predate `created_ms`); or the master ledger has no `ref` column. |
 | `after snapshot` | Replaces lost / created from nothing when the transfer is newer than the oldest loaded save (`level.dat` `Data.LastPlayed`). That copy may simply predate it. |
 
 The `note` column adds `master ledger rows may have been rolled back` when a matched ledger row is newer than
-`Meta.bank_last_save_ms`. A crash before the next bank save undoes the balance change but keeps the row. A world
-without `level.dat` has no last-save info. That world is reported, and it does not count toward "after snapshot". The candles view shows 1-min candles (close = next open), with the player's buys as
-blue up-triangles and sells as magenta down-triangles. Log price scale is on by default.
+`Meta.bank_last_save_ms`. A crash before the next bank save undoes the balance change but keeps the row. It is only a
+"may": the key can be missing or stale. The async queue can drop it on overflow or when the shutdown drain passes 2 s,
+a timer save with clean data does not update it, and the timer runs only while players are online. Slaves never
+write it. Without the key the join warns `no bank-save info`. A world without `level.dat` has no last-save info. That
+world is reported, and it does not count toward "after snapshot".
+
+Limitation: a master row joins when its `ref` is a canonical UUID. BankSystem writes transfer ids that way and
+StockMarket refs are prefixed (`sm:`), but the public `ITransactionLedger.log(ref)` accepts any string, so an add-on
+that writes a bare UUID ref is joined as a transfer. TRANSFER and UNKNOWN_LEGACY rows of rejected transfers are signed
+and have `ref = null`, so they never join.
+
+The candles view shows 1-min candles (close = next open), with the player's buys as blue up-triangles and sells as
+magenta down-triangles. Log price scale is on by default.
 
 ## Safety
 
@@ -155,8 +181,8 @@ CI: `.github/workflows/audit-tool.yml` (windows-latest).
 - **Diagnostics DBs** are optional and write-only for the mods. Older worlds have none, and the tool then shows
   "no diagnostics data" for the missing file or table.
   - `BankSystem/Database/banksystem_diagnostics.db`:
-    - `Meta`: `schema_version`; `created_ms` (first write to the file); `bank_last_save_ms` (last successful
-      `Bank_data` save).
+    - `Meta`: `schema_version`; `created_ms` (set when the writer thread first opens the file, so the first rows can
+      be older); `bank_last_save_ms` (last successful `Bank_data` save; may be missing or stale, never on slaves).
     - `TransferJournal`: slaves only.
     - `NoteFlow`: notes created (+) or destroyed (−) outside the bank. The villager columns `villager_uuid`,
       `dimension`, `x`, `y`, `z` are read when present.
@@ -164,7 +190,7 @@ CI: `.github/workflows/audit-tool.yml` (windows-latest).
     - `Meta`.
     - `OrderOrigin(ref, origin_server_uid, origin_name)`. `ref` is `sm:order:<order_id>`, or `sm:im:<group uuid>` for
       inter-market orders. `origin_name` is the slave name, and `''` means the order was placed on the master.
-    - BankSystem's writer may also add empty `TransferJournal`/`NoteFlow` tables to this file. They are ignored.
+    - Files from dev builds before 1d617b6c also hold empty `TransferJournal`/`NoteFlow` tables. They are ignored.
   - The report's Data table shows each file's row counts, the server identity and the last save. It also shows how
     many ledger rows are newer than `bank_last_save_ms` ("may have been rolled back").
 - **Trades** have an `origin` column: the slave name, `master`, or empty. It is empty for bot orders, orders placed

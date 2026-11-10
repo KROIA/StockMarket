@@ -47,8 +47,10 @@ LEDGER_TYPES = {
     22: ('SHARE_STAMP', None),        # TODO(confirm sign)
     23: ('SHARE_REDEEM', None),       # TODO(confirm sign)
     24: ('SHARE_TRADE', None),        # TODO(confirm sign)
-    25: ('ACCOUNT_DELETE_PAYOUT', +1),  # TODO(confirm sign)
+    25: ('ACCOUNT_DELETE_PAYOUT', -1),  # balance handed out as items on user deletion (outflow)
     26: ('ACCOUNT_FREEZE', 0),        # TODO(confirm): freeze moves nothing?
+    27: ('ADMIN_DISALLOW_ITEM', -1),  # every holder's balance of a disallowed item is cleared
+    28: ('ACCOUNT_DELETE_LOSS', -1),  # deleted user's balance that could not be handed out, destroyed
 }
 # Legacy `kind` text (worlds without type_code) -> (code, factor applied to the unsigned amount).
 LEGACY_KINDS = {'DEPOSIT': (1, 1), 'WITHDRAW': (2, 1), 'TRANSFER_OUT': (3, -1), 'TRANSFER_IN': (3, 1),
@@ -60,9 +62,10 @@ LEDGER_OPTIONAL = ('type_code', 'ref', 'money_amount', 'price', 'currency_item',
                    'source_kind', 'note', 'balance_after', 'actor_name', 'other_account')
 
 # Diagnostics DBs (write-only for the mods, optional: older worlds have none). Meta keys: schema_version, created_ms
-# (first write to the file); the BankSystem file also bank_last_save_ms (last successful Bank_data save).
-# The StockMarket file is written by BankSystem's DiagnosticsDatabase, so it may also hold empty TransferJournal /
-# NoteFlow tables; those are ignored, only its Meta and OrderOrigin are read.
+# (set when the writer thread first opens the file, so the first rows can be older, see World.diag_start); the
+# BankSystem file also bank_last_save_ms (last successful Bank_data save; may be missing or stale, never on slaves).
+# Only StockMarket files from dev builds before 1d617b6c also hold empty TransferJournal / NoteFlow tables; those
+# are ignored, only its Meta and OrderOrigin are read.
 DIAG_BS = 'BankSystem/Database/banksystem_diagnostics.db'
 DIAG_SM = 'StockMarket/Database/stockmarket_diagnostics.db'
 JOURNAL_COLS = ('id', 'transfer_id', 'ts', 'direction', 'path', 'step', 'account_number', 'player_uuid', 'items_json',
@@ -450,9 +453,18 @@ class World:
 
     def rolled_back(self):
         """Ledger rows newer than Meta.bank_last_save_ms: a crash before the next bank save may have undone their
-        balance change. None = unknown (no BankSystem diagnostics Meta)."""
+        balance change. Only "may have been": the key can be stale (a dropped async write, a timer save with clean
+        data). None = no bank-save info (key missing; slaves never write it)."""
         t = self.meta_ms(self.bsd, 'bank_last_save_ms')
         return None if t is None else [r for r in self.ledger() if (r.get('ts') or 0) > t]
+
+    def diag_start(self):
+        """When the BankSystem diagnostics file started recording: the earlier of Meta.created_ms and its first row ts.
+        created_ms is set by the writer thread when it opens the file, after the first rows took their ts on the
+        caller thread, and a file recreated after corruption gets a created_ms newer than its queued rows.
+        None = unknown."""
+        t = [r.get('ts') for r in self.journal + self.noteflow] + [self.meta_ms(self.bsd, 'created_ms')]
+        return min((x for x in t if x), default=None)
 
     def diag_status(self):
         """Per diagnostics DB: row count per table, or 'no diagnostics data' for a missing file or table."""
@@ -480,7 +492,7 @@ class World:
             'Server identity': ('%s %s' % (self.role(), self.identity.get('slave_id') or '')).strip() if self.identity
                                else 'no server_identity.json (older world)',
             'Last save (level.dat LastPlayed)': ts(self.last_played) if self.last_played else 'no last-save info',
-            'Ledger rows after the last bank save': 'unknown (no bank_last_save_ms)' if rb is None
+            'Ledger rows after the last bank save': 'no bank-save info' if rb is None
                                                     else '%d (may have been rolled back)' % len(rb),
         }
 
@@ -732,29 +744,38 @@ def _into_bank(r, direction):
     return -abs(a) if direction == 'FROM_MASTER' else abs(a) if direction == 'TO_MASTER' else a
 
 
-UNLINKED_DROP = 'DROP payout, master row not linked (BankSystem #127 ref=null)'
+UNLINKED_DROP = 'DROP payout, master row not linked (BankSystem #127 ref=null, until #136)'
+DELETE_CODES = (25, 28)    # ACCOUNT_DELETE_PAYOUT, ACCOUNT_DELETE_LOSS
 
 
-def _unlinked_drop(J, L):
-    """Known gap, not a finding: user-deletion payouts (BankSystem #127, ServerBankManager.dropOnSlaves) drop to slaves
-    under a transfer_id the master never writes as ledger ref (ACCOUNT_DELETE_PAYOUT/LOSS rows have ref = null), so
-    any DROP without a master row is shown as this gap. Remove once BankSystem writes ref = transfer_id there."""
-    return not L and any(r.get('path') == 'DROP' for r in J)
+def _unlinked_drop(J, L, mv, sv):
+    """Known gap, not a finding, until BankSystem #136 lands. User-deletion payouts (ServerBankManager.dropOnSlaves)
+    drop to slaves under a transfer_id the master never writes as ledger ref (#127: ACCOUNT_DELETE_PAYOUT/LOSS rows
+    have ref = null), so a DROP with DELIVERED rows and no master row is this gap. Before #136 the payout also dropped
+    raw balances as item COUNTS (100x the value), so a linked deletion payout whose DELIVERED total does not match is
+    the same gap. A FAILED-only DROP is not: that leg was passed on to the next slave. Remove with old-data support."""
+    if not any(r.get('path') == 'DROP' and r.get('step') == 'DELIVERED' for r in J): return False
+    return not L or (mv != sv and any(r['code'] in DELETE_CODES for r in L))
 
 
 def join(worlds):
     """Join master + slave saves by transfer_id (plan v0.3 "What the tool will check", BankSystem delta v0.4).
 
-    Slave side: TransferJournal rows (slaves only). Master side: TransactionLog rows with ref = transfer_id and
-    TRANSFER_PARKED SuspicionFlag rows with ref = transfer_id. Matched by id only, never by time.
+    Slave side: TransferJournal rows (slaves only). Master side: TransactionLog rows with ref = transfer_id (all
+    summed) and TRANSFER_PARKED SuspicionFlag rows with ref = transfer_id. Matched by id only, never by time; only
+    totals per transfer are compared (journal units differ per path, see README).
     Per transfer the value is compared in raw units, signed as "into the master bank":
       master = sum of its ref rows (LedgerType sign);
-      slave  = TO_MASTER: REQUESTED - RETURNED (items left the slave world); FROM_MASTER: -DELIVERED.
-    Classes: ok (equal), parked (open admin case), duplicate (both sides, more value than moved), lost (value
-    left one side and did not arrive), created from nothing (slave got value, master has no row), known gap (a DROP
-    without master row, see _unlinked_drop).
+      slave  = TO_MASTER: REQUESTED - RETURNED, 0 when REQUESTED has no follow-up row (a non-success reply writes
+               none: nothing applied); FROM_MASTER: -DELIVERED (ASYNC_BANK: the master reported the debit as
+               SUCCESS; DROP: the items were dropped in the slave world).
+    Transfers whose REQUESTED row has ledger_type NULL (AsyncBank NO_LOG calls, e.g. StockMarket settlement) are
+    skipped when the master has no row for them: by design it writes none.
+    Classes: ok (equal; also a DROP with only FAILED rows: passed on to the next slave), parked (open admin case),
+    duplicate (both sides, more value than moved), lost (value left one side and did not arrive), created from
+    nothing (slave got value, master has no row), known gap (see _unlinked_drop).
     'data gap' replaces lost / created from nothing when the side without rows cannot show the transfer (save not
-    loaded, no diagnostics DB, DB created after the transfer, master ledger without ref); 'after snapshot' when the
+    loaded, no diagnostics DB, DB started after the transfer, master ledger without ref); 'after snapshot' when the
     transfer is newer than the oldest loaded save (level.dat LastPlayed). Returns (rows, warnings)."""
     warns, seen = [], {}
     for w in worlds:
@@ -786,10 +807,14 @@ def join(worlds):
                                       % ('acknowledged' if 'acknowledged' in fc else '0'), (TRANSFER_PARKED,)):
                 if ref: parked[ref] = (t or 0, ack)
     bank_save = m.meta_ms(m.bsd, 'bank_last_save_ms') if m else None
-    jr, owner = collections.defaultdict(list), {}
+    if m and bank_save is None: warns.append('%s: no bank-save info (no bank_last_save_ms)' % m.label())
+    jr, owner = collections.defaultdict(list), collections.defaultdict(list)   # a DROP can pass through several slaves
     for s in slaves:
         for r in s.journal:
-            jr[r['transfer_id']].append(r); owner[r['transfer_id']] = s
+            jr[r['transfer_id']].append(r)
+            if s not in owner[r['transfer_id']]: owner[r['transfer_id']].append(s)
+    nolog = {t for t, J in jr.items() if any(r.get('step') == 'REQUESTED' and 'ledger_type' in r and r['ledger_type'] is None
+                                             and r.get('path') != 'DROP' for r in J)}
 
     def gap(t, slave_missing):
         """Why the side without rows cannot show a transfer at time t, or None."""
@@ -801,19 +826,21 @@ def join(worlds):
         missing = sorted(set(ks if isinstance(ks, dict) else ()) - {s.identity.get('slave_id') for s in slaves})
         if missing: return 'slave save not loaded: ' + ', '.join(missing)
         for s in slaves:   # master rows do not name the slave, so every loaded slave must be able to show it
-            c = s.meta_ms(s.bsd, 'created_ms')
             if s.bsd is None: return 'slave %s has no diagnostics data' % s.label()
-            if c is None or c > t: return 'slave %s diagnostics DB created %s, after the transfer' % (s.label(), ts(c) if c else '(unknown)')
+            c = s.diag_start()
+            if c is None or c > t: return 'slave %s diagnostics DB started %s, after the transfer' % (s.label(), ts(c) if c else '(unknown)')
         return None
 
     out = []
     for tid in set(jr) | set(led) | set(parked):
         J, L = jr.get(tid, []), led.get(tid, [])
+        if tid in nolog and not L and tid not in parked: continue
         d = next((r['direction'] for r in J if r.get('direction')), None)
         req = next((r for r in J if r.get('step') == 'REQUESTED'), None)
         requested = _raw_sum(req.get('items_json')) if req else None
         part = lambda r: (_raw_sum(r.get('items_json')) if r.get('items_json') else requested) or 0   # null = all
-        sv = ((requested or 0) - sum(part(r) for r in J if r.get('step') == 'RETURNED') if d == 'TO_MASTER'
+        followed = any(r.get('step') != 'REQUESTED' for r in J)
+        sv = (((requested or 0) - sum(part(r) for r in J if r.get('step') == 'RETURNED') if followed else 0) if d == 'TO_MASTER'
               else -sum(part(r) for r in J if r.get('step') == 'DELIVERED') if d == 'FROM_MASTER' else 0)
         mv = sum(_into_bank(r, d) for r in L)
         t = min([r.get('ts') or 0 for r in J + L] or [parked.get(tid, (0,))[0]])
@@ -821,8 +848,12 @@ def join(worlds):
         if tid in parked:
             cls = 'parked'
             if parked[tid][1]: notes.append('acknowledged')
-        elif _unlinked_drop(J, L): cls = 'known gap'; notes.append(UNLINKED_DROP)
-        elif mv == sv: cls = 'ok'
+        elif _unlinked_drop(J, L, mv, sv): cls = 'known gap'; notes.append(UNLINKED_DROP)
+        elif mv == sv:
+            cls = 'ok'
+            if J and not L and all(r.get('path') == 'DROP' and r.get('step') == 'FAILED' for r in J):
+                notes.append('DROP leg passed on to the next slave (player not here)')
+            elif req and not followed: notes.append('not applied (REQUESTED without a follow-up row)')
         elif not J: cls = 'lost'
         elif not L: cls = 'created from nothing' if mv > sv else 'lost'
         else: cls = 'duplicate' if mv > sv else 'lost'
@@ -832,12 +863,12 @@ def join(worlds):
             elif oldest is not None and t > oldest: cls = 'after snapshot'; notes.append('newer than the oldest loaded save %s' % ts(oldest))
         if bank_save is not None and any((r.get('ts') or 0) > bank_save for r in L):
             notes.append('master ledger rows may have been rolled back (after the bank save %s)' % ts(bank_save))
-        nm = m or owner.get(tid)
+        nm = m or owner[tid][0]
         acct = next((r.get('account_number') for r in J + L if r.get('account_number') is not None), '')
         pu = next((r.get('player_uuid') for r in J if r.get('player_uuid')), None) or next((r.get('actor_uuid') for r in L if r.get('actor_uuid')), None)
         out.append({'transfer_id': tid, 'class': cls, 'time': ts(t), 'time_ms': t,
                     'path': next((r['path'] for r in J if r.get('path')), ''), 'direction': d or '',
-                    'slave': owner[tid].label() if tid in owner else '', 'account': acct, 'player': nm.pname(pu) if pu else '',
+                    'slave': ' '.join(s.label() for s in owner.get(tid, ())), 'account': acct, 'player': nm.pname(pu) if pu else '',
                     'slave_steps': ' '.join(r.get('step') or '?' for r in J),
                     'master_rows': ' '.join('%s %s' % (LEDGER_TYPES.get(r['code'], ('code%s' % r['code'],))[0], qty(r.get('amount') or 0)) for r in L),
                     'into_bank_master': mv / SCALE, 'into_bank_slave': sv / SCALE, 'note': '; '.join(notes)})
