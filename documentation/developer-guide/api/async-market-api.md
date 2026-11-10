@@ -181,7 +181,9 @@ that follow §3.
 | `onPlayerJoinAsync(UUID, String)` | `void` | Fire and forget; called by StockMarket on join |
 
 Writes forwarded from an **untrusted** slave are refused (the future completes with
-`false`/`null`); public reads keep working. See
+`false`/`null`); public reads keep working. Called from a client, `createMarketAsync` and
+`deleteMarketAsync` need StockMarket admin mode, and the preferences methods only accept the
+player's own UUID. See
 [Access Control & Trust Model](../../../README.md#access-control--trust-model).
 
 ### `ISyncServerMarketManager` / `IServerMarketManager`

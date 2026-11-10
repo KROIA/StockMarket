@@ -230,8 +230,12 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 case FunctionType.GetTradingCurrencyID ->      OutputData.of(input.function, manager.getTradingCurrencyID());
                 case FunctionType.GetAvailableMarketIDs ->     OutputData.of(input.function, manager.getAvailableMarketIDs());
                 case FunctionType.MarketExists ->              OutputData.of(input.function, manager.marketExists(input.decodeParams()));
-                case FunctionType.CreateMarket ->              OutputData.of(input.function, manager.createMarket(input.decodeParams()) != null);
-                case FunctionType.DeleteMarket ->              OutputData.of(input.function, manager.deleteMarket(input.decodeParams()));
+                case FunctionType.CreateMarket ->              isAdminOrServer(manager, playerSender)
+                        ? OutputData.of(input.function, manager.createMarket(input.decodeParams()) != null)
+                        : refused(input);
+                case FunctionType.DeleteMarket ->              isAdminOrServer(manager, playerSender)
+                        ? OutputData.of(input.function, manager.deleteMarket(input.decodeParams()))
+                        : refused(input);
                 case FunctionType.GetMarket ->                 OutputData.of(input.function, manager.getMarket(input.decodeParams()) != null);
                 case FunctionType.OnPlayerJoin ->              {
                     ParamGroup_UUID_String data = (ParamGroup_UUID_String)input.decodeParams();
@@ -244,10 +248,17 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                     yield OutputData.of(input.function);
                 }
                 case FunctionType.IsStockmarketAdmin ->        OutputData.of(input.function, manager.isStockmarketAdmin(input.decodeParams()));
-                case FunctionType.GetPlayerPreferences ->     OutputData.of(input.function, manager.getPlayerPreferences(input.decodeParams()));
+                case FunctionType.GetPlayerPreferences -> {
+                    UUID uuid = input.decodeParams();
+                    yield isSelfOrServer(playerSender, uuid)
+                            ? OutputData.of(input.function, manager.getPlayerPreferences(uuid))
+                            : refused(input);
+                }
                 case FunctionType.UpdatePlayerPreferences -> {
                     ParamGroup_UUID_Preferences data = (ParamGroup_UUID_Preferences)input.decodeParams();
-                    yield OutputData.of(input.function, manager.updatePlayerPreferences(data.uuid, data.preferences));
+                    yield isSelfOrServer(playerSender, data.uuid)
+                            ? OutputData.of(input.function, manager.updatePlayerPreferences(data.uuid, data.preferences))
+                            : refused(input);
                 }
                 case FunctionType.SyncAdminFlagFromPermission -> {
                     // Server-internal (null sender) write from a TRUSTED slave (untrusted ones are already refused by
@@ -261,6 +272,50 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 }
             });
         }
+
+        /**
+         * T-238: may the sender create or delete a market? {@link #isRequestAllowed} only checks the function list,
+         * so the player rule is checked here.
+         *
+         * @param manager      the master's market manager, holds the admin flags
+         * @param playerSender the player who sent the call (directly or through a trusted slave); null for a
+         *                     server-internal call (the master itself or a slave), which may
+         * @return true for a server-internal call or a player with StockMarket admin mode
+         */
+        private static boolean isAdminOrServer(IServerMarketManager manager, @Nullable UUID playerSender)
+        {
+            return playerSender == null || manager.isStockmarketAdmin(playerSender);
+        }
+
+        /**
+         * T-238: may the sender read or write the preferences of {@code subject}? A player only their own.
+         *
+         * @param playerSender the player who sent the call; null for a server-internal call, which may access any
+         * @param subject      the player whose preferences are read or written
+         * @return true for a server-internal call or if {@code subject} is the sender
+         */
+        private static boolean isSelfOrServer(@Nullable UUID playerSender, UUID subject)
+        {
+            return playerSender == null || playerSender.equals(subject);
+        }
+
+        /**
+         * T-238: the answer to a player call refused by {@link #isAdminOrServer} or {@link #isSelfOrServer}: an
+         * empty result, like the refusals of {@link #isRequestAllowed}. Logs the function, not the player.
+         *
+         * @param input the refused call
+         * @return the empty answer
+         */
+        private OutputData refused(InputData input)
+        {
+            warn("Refused " + input.function + " from a client: it needs StockMarket admin mode or the player's own UUID");
+            return OutputData.of(input.function);
+        }
+
+        /**
+         * Functions a player may send. CreateMarket and DeleteMarket also need StockMarket admin mode, the
+         * preferences functions the sender's own UUID; both are checked in {@link #handleOnMasterServer} (T-238).
+         */
         @Override
         protected boolean isAllowedToCallByClient(InputData input)
         {

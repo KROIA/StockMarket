@@ -9,6 +9,10 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
@@ -51,6 +55,11 @@ public class MarketIntegrationTestSuite extends TestSuite {
         addTest("limit_order_sell_filled_by_virtual", this::limitOrderTest_3);
         addTest("limit_order_sell_partial_by_virtual", this::limitOrderTest_4);
         addTest("mixed_limit_and_market_order", this::mixedOrderTest_1);
+        addTest("create_market_non_admin_refused", this::test_createMarket_nonAdminRefused);
+        addTest("delete_market_non_admin_refused", this::test_deleteMarket_nonAdminRefused);
+        addTest("get_preferences_other_player_refused", this::test_getPreferences_otherPlayerRefused);
+        addTest("update_preferences_other_player_refused", this::test_updatePreferences_otherPlayerRefused);
+        addTest("slave_forwarded_legit_calls_allowed", this::test_slaveForwarded_legitCallsAllowed);
     }
 
     @Override
@@ -476,6 +485,95 @@ public class MarketIntegrationTestSuite extends TestSuite {
             return fail("Market order should still be filled after extra updates");
 
         return pass("Mixed limit sell and market buy orders match correctly");
+    }
+
+    // ---- T-238: player rules of the market manager request (a modified client sends these directly) ----
+
+    /**
+     * A market manager whose calls run on this master's request handler as if {@code playerSender} sent them from
+     * a client (null = server-internal call), through the real encode, handler and decode path.
+     */
+    private static AsyncMarketManager managerAs(UUID playerSender) {
+        return managerAs("", playerSender);
+    }
+
+    /** Like {@link #managerAs(UUID)}, but as if slave {@code slaveID} forwarded the client request. */
+    private static AsyncMarketManager managerAs(String slaveID, UUID playerSender) {
+        return AsyncMarketManager.createForTesting(input ->
+                AsyncMarketManager.Request.instance.handleOnMasterServer(input, slaveID, playerSender));
+    }
+
+    /**
+     * Legit callers keep working through a trusted slave, which forwards a client request with the player's UUID:
+     * an admin creates and deletes a market, a player reads and writes their own preferences.
+     */
+    private TestResult test_slaveForwarded_legitCallsAllowed() {
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        ISyncServerBankManager bank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
+        String slaveID = "t238_test_slave";
+        boolean wasTrusted = bank.isSlaveServerTrusted(slaveID);
+        UUID admin = UUID.randomUUID();
+        UUID player = UUID.randomUUID();
+        bank.trustSlaveServer(slaveID);
+        manager.onPlayerJoin(admin, "T238Admin");
+        manager.setStockmarketAdminMode(admin, true);
+        manager.onPlayerJoin(player, "T238Player");
+        try {
+            ItemID id = fixture.createMarket("t238_delete").getItemID(); // fixture deletes it if the test does not
+            TestResult r = assertNotNull("admin create answered", managerAs(slaveID, admin).createMarketAsync(id).join());
+            if (!r.passed()) return r;
+            r = assertEquals("admin delete answered", Boolean.TRUE, managerAs(slaveID, admin).deleteMarketAsync(id).join());
+            if (!r.passed()) return r;
+            r = assertFalse("market deleted", manager.marketExists(id));
+            if (!r.passed()) return r;
+            r = assertNotNull("own preferences read", managerAs(slaveID, player).getPlayerPreferencesAsync(player).join());
+            if (!r.passed()) return r;
+            return assertEquals("own preferences written", Boolean.TRUE,
+                    managerAs(slaveID, player).updatePlayerPreferencesAsync(player, new PlayerPreferences()).join());
+        } finally {
+            manager.removeUser(admin);
+            manager.removeUser(player);
+            if (!wasTrusted)
+                bank.untrustSlaveServer(slaveID);
+        }
+    }
+
+    /** A player without admin mode cannot create a market; a server-internal call still can. */
+    private TestResult test_createMarket_nonAdminRefused() {
+        ItemID id = serverMarket.getItemID(); // exists, so an allowed create changes nothing
+        TestResult r = assertNull("non-admin player is refused", managerAs(UUID.randomUUID()).createMarketAsync(id).join());
+        if (!r.passed()) return r;
+        return assertNotNull("server-internal create still answers", managerAs(null).createMarketAsync(id).join());
+    }
+
+    /** A player without admin mode cannot delete a market; a server-internal call still can. */
+    private TestResult test_deleteMarket_nonAdminRefused() {
+        ItemID id = serverMarket.getItemID();
+        TestResult r = assertNull("non-admin player is refused", managerAs(UUID.randomUUID()).deleteMarketAsync(id).join());
+        if (!r.passed()) return r;
+        r = assertTrue("market still exists", BACKEND_INSTANCES.MARKET_MANAGER.getSync().marketExists(id));
+        if (!r.passed()) return r;
+        // A missing market, so the allowed delete changes nothing.
+        return assertEquals("server-internal delete still answers", Boolean.FALSE,
+                managerAs(null).deleteMarketAsync(ItemID.INVALID_ID).join());
+    }
+
+    /** A player can read only their own preferences. */
+    private TestResult test_getPreferences_otherPlayerRefused() {
+        UUID player = UUID.randomUUID();
+        TestResult r = assertNull("other player's preferences refused", managerAs(player).getPlayerPreferencesAsync(UUID.randomUUID()).join());
+        if (!r.passed()) return r;
+        return assertNotNull("own preferences answered", managerAs(player).getPlayerPreferencesAsync(player).join());
+    }
+
+    /** A player can write only their own preferences (unknown users, so an allowed write changes nothing). */
+    private TestResult test_updatePreferences_otherPlayerRefused() {
+        UUID player = UUID.randomUUID();
+        TestResult r = assertNull("other player's preferences refused",
+                managerAs(player).updatePlayerPreferencesAsync(UUID.randomUUID(), new PlayerPreferences()).join());
+        if (!r.passed()) return r;
+        return assertEquals("own preferences answered", Boolean.FALSE,
+                managerAs(player).updatePlayerPreferencesAsync(player, new PlayerPreferences()).join());
     }
 
     private float emptyVolumeDistribution(double price) {

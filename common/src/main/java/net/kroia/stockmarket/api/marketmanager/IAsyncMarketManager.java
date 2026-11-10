@@ -54,7 +54,8 @@ public interface IAsyncMarketManager {
 
     /**
      * Creates a market for the item from its matching preset (fallback values without one), allows the item in
-     * BankSystem and subscribes the market to the plugins that auto-subscribe. Refused from an untrusted slave.
+     * BankSystem and subscribes the market to the plugins that auto-subscribe. Refused from an untrusted slave and
+     * for a client player without StockMarket admin mode.
      * @param marketID the market's item
      * @return future with the market, also if it already existed; {@code null} if it was refused (for example a
      *         blacklisted item)
@@ -64,7 +65,7 @@ public interface IAsyncMarketManager {
     /**
      * Deletes a market: puts it under maintenance (cancels and refunds player and inter-market orders), clears its
      * order book, unsubscribes it from all plugins and tells every client to drop it. Refused from an untrusted
-     * slave.
+     * slave and for a client player without StockMarket admin mode.
      * @param marketID the market's item
      * @return future resolving to {@code true} if a market was deleted, {@code false} if none existed
      */
@@ -94,14 +95,14 @@ public interface IAsyncMarketManager {
     CompletableFuture<Boolean> isStockmarketAdminAsync(UUID playerUUID);
 
     /**
-     * Asynchronously gets the player's trading preferences.
+     * Asynchronously gets the player's trading preferences. A client may only read its own player's.
      * @param playerUUID the player to get preferences for
      * @return future containing the preferences
      */
     CompletableFuture<PlayerPreferences> getPlayerPreferencesAsync(UUID playerUUID);
 
     /**
-     * Asynchronously updates the player's trading preferences.
+     * Asynchronously updates the player's trading preferences. A client may only update its own player's.
      * @param playerUUID the player to update
      * @param preferences the new preferences
      * @return future containing true if successful
