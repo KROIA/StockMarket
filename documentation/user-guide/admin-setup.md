@@ -113,6 +113,7 @@ StockMarket admin commands and functions check these permission nodes, so a perm
 | `stockmarket.admin.command.market` | `/stockmarket open <market>`, `/stockmarket close <market>` and `/stockmarket <market> remove` |
 | `stockmarket.admin.command.exportrecipes` | `/stockmarket exportrecipes` (dev builds only) |
 | `stockmarket.admin.command.devtest` | `/stockmarket devTestScreen` (dev builds only) |
+| `modutilities.command.discord` | `/stockmarket discord status` and `/stockmarket discord reload` (a ModUtilities node, also used by `/modutilities discord` and `/banksystem discord`; without a permission mod it requires operator level 3) |
 | `stockmarket.admin.notify` | Receiving chat notifications when another admin changes settings |
 | `stockmarket.admin` | Source of the StockMarket admin flag while `SYNC_ADMIN_FLAG_WITH_PERMISSION` is on (see below) |
 
@@ -151,7 +152,7 @@ StockMarket can post player trades and trading alerts to Discord channels throug
 1. Turn on **Mod Settings → Integrations → Discord feed (trades and alerts)** (`Integrations.DISCORD_ENABLED`, default off). It takes effect immediately, no restart needed.
 2. Add your webhooks to `config/modutilities/discord/webhooks.json` on the master: `{"webhooks": {"trades": "<webhook URL>"}}`. Only Discord webhook URLs are accepted.
 3. Enable and route the types in `config/modutilities/discord/stockmarket.json`. The file is created at the first master start, with every type disabled. Example: `"market-buy": {"enabled": true, "webhooks": ["trades"], "minAmount": 0}`.
-4. Run `/modutilities discord reload`. `/modutilities discord status` shows the routing.
+4. Run `/stockmarket discord reload`. `/stockmarket discord status` shows the routing. Both commands cover the Discord setup of every mod, so `/modutilities discord` and `/banksystem discord` show the same overview. On a slave server, status only says that the master sends the posts.
 
 | Type | Posted when | Fields |
 |---|---|---|
@@ -186,7 +187,7 @@ To protect players' privacy, the default trade messages leave out the bank accou
 }
 ```
 
-Do the same for the other trade types, then run `/modutilities discord reload`. A field whose value is empty is left out. All numbers are plain numbers with a `.` as the decimal point, e.g. `2.5`.
+Do the same for the other trade types, then run `/stockmarket discord reload`. A field whose value is empty is left out. All numbers are plain numbers with a `.` as the decimal point, e.g. `2.5`.
 
 Available values:
 

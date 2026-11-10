@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.minecraft.command;
 
 import net.kroia.modutilities.PermissionCompat;
+import net.kroia.modutilities.discord.DiscordWebhooks;
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
@@ -582,6 +583,9 @@ public class StockMarketCommands {
                                 })
                         )
                 )
+                // T-229: /stockmarket discord reload|status from ModUtilities (permission node and level 3 built in).
+                // Status shows every mod's Discord routing; on a slave it says the master sends the posts.
+                .then(DiscordWebhooks.command())
         );
     }
 
