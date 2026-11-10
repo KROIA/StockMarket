@@ -401,7 +401,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         long startTime = endTime - candleDeltaMs * (long) initialCandles;
 
         MarketPriceHistoryRequest.InputData input =
-                new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, startTime, endTime, 0);
+                new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, startTime, endTime, 0, false);
         BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(input).thenAccept((historyData) ->
         {
             info("Initial price window received for: " + itemID + " delta=" + candleDeltaMs);
@@ -505,7 +505,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         MarketPriceHistoryRequest.InputData input =
                 // maxCandles = one page: the bootstrap (open-ended minTs) only needs the
                 // newest page; asking for the server cap (0) made it ship up to 4096 candles.
-                new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, minTs, maxTs, pageCandles);
+                new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, minTs, maxTs, pageCandles, false);
 
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         inFlightOlder.put(candleDeltaMs, future);

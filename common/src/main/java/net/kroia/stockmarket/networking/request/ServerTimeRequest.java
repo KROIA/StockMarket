@@ -25,8 +25,11 @@ public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTim
      * @param realMinuteOfDay master's local real time as minute of the day (0..1439)
      * @param gameMinuteOfDay master overworld in-game time as minute of the day (0..1439)
      * @param useRealTime     {@code true} if trading hours currently follow real time, {@code false} for in-game time
+     * @param candleUseGameTime T-218: the master's candle timebase ({@code CANDLE_USE_GAME_TIME} as cached at
+     *                        startup); clients pick their chart deltas from it on join
      */
-    public record OutputData(long serverTime, long clientTimeEcho, int realMinuteOfDay, int gameMinuteOfDay, boolean useRealTime)
+    public record OutputData(long serverTime, long clientTimeEcho, int realMinuteOfDay, int gameMinuteOfDay, boolean useRealTime,
+                             boolean candleUseGameTime)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_LONG, OutputData::serverTime,
@@ -34,6 +37,7 @@ public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTim
                 ByteBufCodecs.VAR_INT, OutputData::realMinuteOfDay,
                 ByteBufCodecs.VAR_INT, OutputData::gameMinuteOfDay,
                 ByteBufCodecs.BOOL, OutputData::useRealTime,
+                ByteBufCodecs.BOOL, OutputData::candleUseGameTime,
                 OutputData::new
         );
     }
@@ -45,7 +49,7 @@ public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTim
 
     @Override
     protected OutputData getDefaultResponse() {
-        return new OutputData(0, 0, 0, 0, false);
+        return new OutputData(0, 0, 0, 0, false, false);
     }
 
     @Override
@@ -55,7 +59,9 @@ public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTim
         return CompletableFuture.completedFuture(new OutputData(System.currentTimeMillis(), input,
                 ServerMarketManager.realMinuteOfDay(),
                 ServerMarketManager.gameMinuteOfDay(UtilitiesPlatform.getServer()),
-                useRealTime));
+                useRealTime,
+                // T-218: the cached (restart-required) value, matching how the master rotates candles.
+                getServerMarketManager() instanceof ServerMarketManager smm && smm.isCandleUseGameTime()));
     }
 
     @Override

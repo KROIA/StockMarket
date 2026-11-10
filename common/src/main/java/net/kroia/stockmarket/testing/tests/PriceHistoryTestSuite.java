@@ -52,6 +52,10 @@ public class PriceHistoryTestSuite extends TestSuite {
         addTest("from_sql_data_empty_list", this::test_fromSqlData_emptyList);
         // Game-time candles (T-218)
         addTest("gameCandle_rotation", this::test_gameCandle_rotation);
+        addTest("gameAggregate_alignsToMidnight", this::test_gameAggregate_alignsToMidnight);
+        addTest("gameAggregate_timeSetBackwards", this::test_gameAggregate_timeSetBackwards);
+        addTest("gameAggregate_frozenDaylightCap", this::test_gameAggregate_frozenDaylightCap);
+        addTest("gameAggregate_legacyRows", this::test_gameAggregate_legacyRows);
     }
 
     // --- Candle Operations ---
@@ -391,5 +395,92 @@ public class PriceHistoryTestSuite extends TestSuite {
                 ServerMarketManager.shouldRotateGameCandle(-1L, -1L, 1000L));
         if (!r.passed()) return r;
         return pass("game candle rotation rules hold");
+    }
+
+    /** Raw game-time candle: wall time, in-game day time, price; high/low = price +-1, volume 1. */
+    private static Candle gameRow(long wallMs, long gameTime, long price) {
+        return new Candle(wallMs, price, price + 1, price - 1, 1f, gameTime);
+    }
+
+    /**
+     * 4h buckets start at 00:00 (day time 0 = 06:00): 06:00+07:00 | 08:00..11:00 | 12:00.
+     */
+    private TestResult test_gameAggregate_alignsToMidnight() {
+        List<Candle> raw = new ArrayList<>();
+        for (int h = 0; h <= 6; h++)
+            raw.add(gameRow(1000L * h, 1000L * h, 100 + h));
+        List<Candle> out = PriceHistoryData.aggregateGameHours(raw, 4);
+        TestResult r = assertEquals("3 candles", 3, out.size());
+        if (!r.passed()) return r;
+        Candle mid = out.get(1);
+        r = assertEquals("2nd candle starts at 08:00 (game 2000)", 2000L, mid.gameTime);
+        if (!r.passed()) return r;
+        r = assertEquals("2nd candle keeps the wall time of its first row", 2000L, mid.openTimestamp);
+        if (!r.passed()) return r;
+        r = assertEquals("2nd candle open = first row open", 102L, mid.open);
+        if (!r.passed()) return r;
+        r = assertEquals("2nd candle high = max high", 106L, mid.high);
+        if (!r.passed()) return r;
+        r = assertEquals("2nd candle low = min low", 101L, mid.low);
+        if (!r.passed()) return r;
+        r = assertEquals("2nd candle volume = 4 rows", 4f, mid.tradedVolume);
+        if (!r.passed()) return r;
+        return assertEquals("last candle starts at 12:00 (game 6000)", 6000L, out.get(2).gameTime);
+    }
+
+    /**
+     * /time set backwards inside a day bucket must split the candle (keys differ).
+     */
+    private TestResult test_gameAggregate_timeSetBackwards() {
+        List<Candle> raw = new ArrayList<>();
+        raw.add(gameRow(1000L, 30000L, 100));
+        raw.add(gameRow(2000L, 31000L, 101));
+        raw.add(gameRow(3000L, 1000L, 102)); // /time set back to day 0
+        raw.add(gameRow(4000L, 2000L, 103));
+        List<Candle> out = PriceHistoryData.aggregateGameHours(raw, 24);
+        TestResult r = assertEquals("2 day candles", 2, out.size());
+        if (!r.passed()) return r;
+        r = assertEquals("1st candle = day 1 rows", 30000L, out.get(0).gameTime);
+        if (!r.passed()) return r;
+        return assertEquals("2nd candle = day 0 rows after the jump", 1000L, out.get(1).gameTime);
+    }
+
+    /**
+     * Frozen daylight cycle: identical game times, capped at {@code hours} raw rows per candle.
+     */
+    private TestResult test_gameAggregate_frozenDaylightCap() {
+        List<Candle> raw = new ArrayList<>();
+        for (int i = 0; i < 9; i++)
+            raw.add(gameRow(1000L * i, 6000L, 100));
+        List<Candle> out = PriceHistoryData.aggregateGameHours(raw, 4);
+        TestResult r = assertEquals("9 rows / 4h -> 3 candles", 3, out.size());
+        if (!r.passed()) return r;
+        r = assertEquals("full candle = 4 rows", 4f, out.get(0).tradedVolume);
+        if (!r.passed()) return r;
+        return assertEquals("rest = 1 row", 1f, out.get(2).tradedVolume);
+    }
+
+    /**
+     * Legacy rows (game time -1) use nominal wall buckets of hours * 50 s and never merge with
+     * game-stamped rows.
+     */
+    private TestResult test_gameAggregate_legacyRows() {
+        List<Candle> raw = new ArrayList<>();
+        raw.add(new Candle(0L, 100, 101, 99, 1f));           // legacy, wall key 0 (4h = 200 000 ms)
+        raw.add(new Candle(50_000L, 100, 101, 99, 1f));      // legacy, key 0
+        raw.add(new Candle(100_000L, 100, 101, 99, 1f));     // legacy, key 0
+        raw.add(new Candle(250_000L, 100, 101, 99, 1f));     // legacy, key 1
+        raw.add(gameRow(300_000L, 2000L, 100));                       // game, key 2
+        raw.add(gameRow(350_000L, 3000L, 100));                       // game, key 2
+        List<Candle> out = PriceHistoryData.aggregateGameHours(raw, 4);
+        TestResult r = assertEquals("3 candles", 3, out.size());
+        if (!r.passed()) return r;
+        r = assertEquals("legacy candle keeps game time -1", MarketPriceStruct.NO_GAME_TIME, out.get(0).gameTime);
+        if (!r.passed()) return r;
+        r = assertEquals("3 legacy rows merged", 3f, out.get(0).tradedVolume);
+        if (!r.passed()) return r;
+        r = assertEquals("game rows start a new candle", 2000L, out.get(2).gameTime);
+        if (!r.passed()) return r;
+        return assertEquals("2 game rows merged", 2f, out.get(2).tradedVolume);
     }
 }

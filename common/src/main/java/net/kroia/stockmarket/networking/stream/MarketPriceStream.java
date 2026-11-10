@@ -4,6 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
@@ -18,6 +19,8 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
 {
     /**
      * One live update of a market: price, current candle volume and the trading status.
+     * T-218: plus the start of the master's live candle, which drives the client's candle
+     * rotation in game-time mode.
      */
     public static class ResponseData
     {
@@ -26,6 +29,8 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
                 ByteBufCodecs.VAR_LONG, p -> p.marketPrice,
                 ByteBufCodecs.FLOAT, p -> p.tradedVolume,
                 TradingStatus.STREAM_CODEC, p -> p.tradingStatus,
+                ByteBufCodecs.VAR_LONG, p -> p.candleStartMs,
+                ByteBufCodecs.VAR_LONG, p -> p.candleGameTime,
                 ResponseData::new
         );
 
@@ -34,13 +39,20 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
         public float tradedVolume;
         /** Trading state + master clock at the time of this update (T-158). */
         public TradingStatus tradingStatus;
+        /** T-218: wall-clock start (ms) of the master's live raw candle; changes when the candle rotates. */
+        public long candleStartMs;
+        /** T-218: in-game start (overworld day time) of that candle, or -1 if unknown. */
+        public long candleGameTime;
 
-        public ResponseData(long timestamp, long marketPrice, float tradedVolume, TradingStatus tradingStatus)
+        public ResponseData(long timestamp, long marketPrice, float tradedVolume, TradingStatus tradingStatus,
+                            long candleStartMs, long candleGameTime)
         {
             this.timestamp = timestamp;
             this.marketPrice = marketPrice;
             this.tradedVolume = tradedVolume;
             this.tradingStatus = tradingStatus;
+            this.candleStartMs = candleStartMs;
+            this.candleGameTime = candleGameTime;
         }
     }
 
@@ -103,7 +115,7 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
     private long updateInterval = 100;
     private long lastTimeMs = System.currentTimeMillis();
     private ItemID itemID;
-    private final ResponseData lastPrice = new ResponseData(-1,-1, 0f, null);
+    private final ResponseData lastPrice = new ResponseData(-1,-1, 0f, null, -1, -1);
 
     @Override
     public GenericStream<ItemID, ResponseData> copy() {
@@ -151,14 +163,18 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
             long currentTime = serverMarket.getCurrentTime();
             float currentVolume = serverMarket.getCurrentCandleTradedVolume();
             TradingStatus currentStatus = buildTradingStatus(manager, serverMarket);
+            MarketPriceStruct candle = serverMarket.getCurrentMarketPriceStruct();
             if(currentPrice != lastPrice.marketPrice ||
                currentTime != lastPrice.timestamp ||
                currentVolume != lastPrice.tradedVolume ||
+               candle.time() != lastPrice.candleStartMs ||
                !currentStatus.equals(lastPrice.tradingStatus)) {
                 lastPrice.marketPrice = currentPrice;
                 lastPrice.timestamp = currentTime;
                 lastPrice.tradedVolume = currentVolume;
                 lastPrice.tradingStatus = currentStatus;
+                lastPrice.candleStartMs = candle.time();
+                lastPrice.candleGameTime = candle.gameTime();
                 sendPacket();
             }
         }

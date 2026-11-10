@@ -59,8 +59,13 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
      *                        about {@code maxCandles} non-empty buckets ending at
      *                        {@code maxTimestamp} are queried (count-anchored, so
      *                        {@code minTimestamp = -1} means "the page before maxTimestamp").
+     * @param gameTime        T-218: {@code true} = aggregate in-game hours instead of wall-clock
+     *                        buckets. {@code candleDeltaMs} is then a multiple of
+     *                        {@link PriceHistoryData#GAME_HOUR_MS} (hours = delta / GAME_HOUR_MS),
+     *                        rows are bucketed by their in-game time, {@code maxTimestamp} is
+     *                        strictly exclusive and the live candle is merged into the newest bucket.
      */
-    public record InputData(ItemID item, long candleDeltaMs, long minTimestamp, long maxTimestamp, int maxCandles)
+    public record InputData(ItemID item, long candleDeltaMs, long minTimestamp, long maxTimestamp, int maxCandles, boolean gameTime)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 ItemID.STREAM_CODEC, p -> p.item,
@@ -68,6 +73,7 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
                 ByteBufCodecs.VAR_LONG, p -> p.minTimestamp,
                 ByteBufCodecs.VAR_LONG, p -> p.maxTimestamp,
                 ByteBufCodecs.VAR_INT, p -> p.maxCandles,
+                ByteBufCodecs.BOOL, p -> p.gameTime,
                 InputData::new
         );
     }
@@ -108,6 +114,9 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
         // A client may ask for fewer candles than the server cap, never for more.
         final int effectiveCap = (input.maxCandles > 0) ? Math.min(input.maxCandles, defaultCap) : defaultCap;
         final EqualityFilter marketFilter = new EqualityFilter(input.item.getShort());
+        // T-218: in-game candles; one raw row per in-game hour, hours per requested candle.
+        final boolean gameMode = input.gameTime && input.candleDeltaMs > 0;
+        final int gameHours = (int) Math.max(1L, input.candleDeltaMs / PriceHistoryData.GAME_HOUR_MS);
 
         // Never scan more raw rows than the response can hold. Raw rows are written once
         // per CANDLE_TIME, so effectiveCap candles of candleDeltaMs need about
@@ -127,14 +136,18 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
             } catch (Exception ignored) {
                 // Settings not available (early startup / test) -> assume the 1-minute default.
             }
+            if (gameMode)
+                rawIntervalMs = PriceHistoryData.GAME_HOUR_MS; // one row per in-game hour
             long rows = (long) effectiveCap * Math.max(1L, input.candleDeltaMs / rawIntervalMs);
             windowStartFut = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getNthNewestTimestamp(
                     marketFilter, input.maxTimestamp, (int) Math.min(Integer.MAX_VALUE, rows - 1));
         }
         CompletableFuture<List<MarketPriceStruct>> fut = windowStartFut.thenCompose(windowStartRow -> {
             // MIN_VALUE: fewer rows than needed exist -> read everything (reaches the start).
+            // Game mode: wall-clock flooring is meaningless; a partial oldest bucket is dropped below.
             if (windowStartRow != Long.MIN_VALUE)
-                queriedMin[0] = Math.max(effectiveMin, PriceHistoryData.floorTime(windowStartRow, input.candleDeltaMs));
+                queriedMin[0] = Math.max(effectiveMin, gameMode ? windowStartRow
+                        : PriceHistoryData.floorTime(windowStartRow, input.candleDeltaMs));
             return BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getHistory(
                     Optional.of(new DateFilter(queriedMin[0], input.maxTimestamp)),
                     Optional.of(marketFilter), -1);
@@ -149,6 +162,25 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
             List<MarketPriceStruct> list = (List<MarketPriceStruct>) pair[0];
             long oldestOnDisk = (Long) pair[1];
             final long perfTDb = System.nanoTime();
+            // T-218 game mode: DateFilter is inclusive, but maxTimestamp is the previous page's oldest
+            // candle -> drop that row so it is not counted twice. Then append the live raw candle so
+            // it merges into the newest in-game bucket.
+            long firstRowTime = Long.MAX_VALUE;
+            if (gameMode) {
+                List<MarketPriceStruct> rows = new ArrayList<>();
+                for (MarketPriceStruct row : list)
+                    if (row.time() < input.maxTimestamp)
+                        rows.add(row);
+                if (!rows.isEmpty())
+                    firstRowTime = rows.getFirst().time();
+                IServerMarket liveMarket = getServerMarketManager().getMarket(input.item);
+                if (liveMarket != null) {
+                    MarketPriceStruct live = liveMarket.getCurrentMarketPriceStruct();
+                    if (input.maxTimestamp >= live.time())
+                        rows.add(live);
+                }
+                list = rows;
+            }
 
             PriceHistoryData data = PriceHistoryData.fromSqlData(list, getCurrentMarketPrice(input.item), getItemFractionScaleFactor());
             if(data == null)
@@ -166,7 +198,14 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
             // existing loadFrom / Candle.merge logic so behavior matches the client-side
             // resampler exactly (empty-gap-filling stays off here: pagination consumers
             // want holes preserved, not synthesized).
-            if (input.candleDeltaMs > 0) {
+            if (gameMode) {
+                List<PriceHistoryData.Candle> aggregated = PriceHistoryData.aggregateGameHours(data.getCandles(), gameHours);
+                // The row window may start inside a bucket: drop that partial oldest candle when older
+                // rows exist; the next older page (maxTimestamp = our oldest candle) returns it whole.
+                if (gameHours > 1 && aggregated.size() > 1 && oldestOnDisk < firstRowTime)
+                    aggregated.removeFirst();
+                data = new PriceHistoryData(input.item, getItemFractionScaleFactor(), aggregated, data.getCurrentMarketPrice());
+            } else if (input.candleDeltaMs > 0) {
                 // Cap the aggregation's "now" reference at input.maxTimestamp so that
                 // historical / count-back queries don't get an extra live candle
                 // extending past the requested upper bound. When maxTimestamp is
@@ -198,7 +237,7 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
                 truncated = true;
             }
 
-            IServerMarket market = getServerMarketManager().getMarket(input.item);
+            IServerMarket market = gameMode ? null : getServerMarketManager().getMarket(input.item); // game mode: live candle already merged
             if (market != null) {
                 MarketPriceStruct currentCandleData = market.getCurrentMarketPriceStruct();
                 if(input.maxTimestamp >= currentCandleData.time()) {
