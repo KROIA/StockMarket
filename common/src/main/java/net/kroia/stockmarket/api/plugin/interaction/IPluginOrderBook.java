@@ -191,21 +191,25 @@ public interface IPluginOrderBook {
     /**
      * Gets the volume at the given price
      * The value is based on the IVolumeDistributionCalculator objects
+     * <p>
+     * #96: the calculators are evaluated centred on the market's fair price
+     * ({@link IPluginMarket#getEquilibriumPrice()}: the flow equilibrium, else the default price), not on the
+     * current price, so the default depth does not follow a dumped or pumped price. The bid/ask split stays at
+     * the current market price.
      *
      * @param pickPrice the real value price at which the volume gets measured
-     * @return positive volume for buy orders, negative volume for sell orders.
-     *         The real volume at the given price
+     * @return positive volume for buy orders (below the current price), negative volume for sell orders
+     *         (at or above it). The real volume at the given price
      */
     float getDefaultRealVolume(double pickPrice);
 
     /**
-     * Like {@link #getDefaultRealVolume(double)}, but evaluates the volume distribution calculators as if
-     * the market price were {@code centerPrice} instead of the current price. Used to read the
-     * <i>default</i> book around the market's default price, whatever the price is now (T-208 permanent
-     * impact capacity).
+     * Like {@link #getDefaultRealVolume(double)}, but evaluates the volume distribution calculators centred on
+     * {@code centerPrice} and splits bid/ask there, instead of the fair price and the current price. Used to
+     * read the <i>default</i> book around the market's default price, whatever the price is now (T-208
+     * permanent impact capacity).
      * <p>
-     * Default: falls back to {@link #getDefaultRealVolume(double)} (centred on the current price), for
-     * implementations that cannot re-centre.
+     * Default: falls back to {@link #getDefaultRealVolume(double)}, for implementations that cannot re-centre.
      *
      * @param centerPrice the real market price the distribution is centred on
      * @param pickPrice   the real price at which the volume is measured
@@ -223,7 +227,7 @@ public interface IPluginOrderBook {
      * Batch variant of {@link #getDefaultRawVolume(double)}.
      * Computes the default raw volume for {@code count} consecutive backend price levels,
      * starting at {@code backendStartPrice}.
-     * Loop-invariant values (current market price, item fraction scale factor) are fetched
+     * Loop-invariant values (current market price, fair price, item fraction scale factor) are fetched
      * only once for the whole range, which makes this considerably cheaper than calling
      * {@link #getDefaultRawVolume(double)} once per price level.
      *

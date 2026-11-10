@@ -36,6 +36,8 @@ public class PluginOrderBook implements IPluginOrderBook
     {
         this.serverMarket = serverMarket;
         this.orderbook = serverMarket.getOrderbook();
+        // #96: set before the provider is registered, the provider reads the fair price through the cache
+        this.cache = cache;
         // Register the default-volume provider used to fill the VirtualOrderbook with virtual liquidity
         // on re-center (large price moves) and reset.
         // Contract of test_setDefaultVolumeProviderFunction: REAL price in -> REAL volume out.
@@ -45,7 +47,6 @@ public class PluginOrderBook implements IPluginOrderBook
         // Therefore no raw/real conversion must be done here.
         serverMarket.test_setDefaultVolumeProviderFunction(this::getDefaultRealVolume);
         //serverMarket.test_resetVirtualOrderBookVolume();
-        this.cache = cache;
     }
 
     @Override
@@ -176,19 +177,21 @@ public class PluginOrderBook implements IPluginOrderBook
 
     /**
      * Shared distribution evaluation used by the single-price and batch default-volume methods.
-     * Sums the absolute volumes of all registered distribution calculators and applies the
-     * buy/sell sign convention (positive below the market price, negative at or above it).
+     * Sums the absolute volumes of all registered distribution calculators, evaluated around
+     * {@code centerPrice}, and applies the buy/sell sign convention at the market price (positive
+     * below it, negative at or above it).
      *
-     * @param currentMarketPrice the current real market price (loop-invariant, fetched by the caller)
+     * @param centerPrice the real price the calculators centre their distribution on
+     * @param currentMarketPrice the real price the bid/ask split is made at (loop-invariant, fetched by the caller)
      * @param pickPrice the real value price at which the volume gets measured
      * @return the signed real volume at the given price
      */
-    private float computeDefaultRealVolume(float currentMarketPrice, double pickPrice)
+    private float computeDefaultRealVolume(double centerPrice, float currentMarketPrice, double pickPrice)
     {
         float volume = 0;
         for(IVolumeDistributionCalculator distributionCalculator : volumeDistributionCalculators)
         {
-            volume += Math.abs(distributionCalculator.getVolume(currentMarketPrice, pickPrice));
+            volume += Math.abs(distributionCalculator.getVolume(centerPrice, pickPrice));
         }
         if(currentMarketPrice > pickPrice)
             return volume;
@@ -196,20 +199,39 @@ public class PluginOrderBook implements IPluginOrderBook
     }
 
     /**
-     * @param pickPrice the real value price at which the volume gets measured
-     * @return the real volume at the given price
+     * #96: the price the default depth is centred on: the market's fair price, i.e. the flow equilibrium E
+     * ({@link net.kroia.stockmarket.api.plugin.interaction.IPluginMarket#getEquilibriumPrice()}), which is the
+     * default price D while no plugin publishes an equilibrium (NetFlowPlugin removed or disabled).
+     * <p>
+     * Centring on the last traded price instead let a dump drag the whole default book (and, through the
+     * calculator's D / P normalisation, thousands of times its depth) down to the crashed price, where the
+     * dumped items could be bought back for almost nothing: a money printer.
+     *
+     * @param currentMarketPrice the current real market price, used only if the fair price is not positive
+     * @return the real centre price, &gt; 0 unless the market price is not either
+     */
+    private double depthCenter(float currentMarketPrice)
+    {
+        double fair = cache.getPluginMarket().getEquilibriumPrice();
+        return fair > 0 ? fair : currentMarketPrice;
+    }
+
+    /**
+     * {@inheritDoc}
+     * #96: the distribution is centred on the market's fair price ({@link #depthCenter}), the bid/ask split
+     * is at the current market price.
      */
     @Override
     public float getDefaultRealVolume(double pickPrice)
     {
         float currentMarketPrice = (float)MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
-        return computeDefaultRealVolume(currentMarketPrice, pickPrice);
+        return computeDefaultRealVolume(depthCenter(currentMarketPrice), currentMarketPrice, pickPrice);
     }
-    /** {@inheritDoc} Evaluates the registered calculators with {@code centerPrice} as the market price. */
+    /** {@inheritDoc} Evaluates the registered calculators centred on {@code centerPrice} and splits bid/ask there. */
     @Override
     public float getDefaultRealVolumeAround(double centerPrice, double pickPrice)
     {
-        return computeDefaultRealVolume((float) centerPrice, pickPrice);
+        return computeDefaultRealVolume((float) centerPrice, (float) centerPrice, pickPrice);
     }
 
     @Override
@@ -220,9 +242,9 @@ public class PluginOrderBook implements IPluginOrderBook
 
     /**
      * Batch variant of {@link #getDefaultRawVolume(double)} for a contiguous backend price range.
-     * The current market price and the item fraction scale factor are fetched once for the
-     * whole range instead of once per price level, avoiding the per-call overhead of the
-     * single-price method in hot loops.
+     * The current market price, the depth centre ({@link #depthCenter}) and the item fraction scale
+     * factor are fetched once for the whole range instead of once per price level, avoiding the
+     * per-call overhead of the single-price method in hot loops.
      *
      * @param backendStartPrice the first backend (internal unscaled) price level to sample
      * @param count the number of consecutive backend price levels to sample
@@ -237,13 +259,14 @@ public class PluginOrderBook implements IPluginOrderBook
 
         // Hoist all loop-invariant lookups out of the per-price-level loop.
         float currentMarketPrice = (float)MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
+        double center = depthCenter(currentMarketPrice);
         int scaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
 
         float[] volumes = new float[count];
         for(int i = 0; i < count; i++)
         {
             double pickPrice = MarketManager.convertToRealAmountStatic(backendStartPrice + i);
-            volumes[i] = computeDefaultRealVolume(currentMarketPrice, pickPrice) * scaleFactor;
+            volumes[i] = computeDefaultRealVolume(center, currentMarketPrice, pickPrice) * scaleFactor;
         }
         return volumes;
     }

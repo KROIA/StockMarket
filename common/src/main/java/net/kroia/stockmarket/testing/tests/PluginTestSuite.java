@@ -147,6 +147,8 @@ public class PluginTestSuite extends TestSuite {
         addTest("targetPriceBot_emptyGap_noSnapBack", this::test_targetPriceBot_emptyGap_noSnapBack);
         // T-208 (ungated): the gap guard blocks at most 60 s after a player fill
         addTest("targetPriceBot_gapGuard_timesOut", this::test_targetPriceBot_gapGuard_timesOut);
+        // #96 (ungated): the default depth is centred on the fair price, the bot's reference stays inside the flow band
+        addTest("defaultDepth_centredOnFairPrice", this::test_defaultDepth_centredOnFairPrice);
         addTest("volumeDistribution_volumeAt_extremePrices", this::test_volumeDistribution_volumeAt_extremePrices);
         // T-208 bot reference (setpoint) model
         addTest("targetPriceBot_reference_invariants", this::test_targetPriceBot_referenceInvariants);
@@ -1592,11 +1594,12 @@ public class PluginTestSuite extends TestSuite {
     //
     // Captured on the pre-T-213 code (cfd6ad3c, flow inside VolatilityPlugin). The refactor (NetFlowPlugin +
     // VolatilityPlugin, anchor off) must reproduce them bit for bit.
+    // #96: re-captured after the default depth moved to the fair price (deliberate behaviour change).
 
     /** Golden hash of the scripted flow series over all {@link #GOLDEN_SCALES} x flow x calculator x maxMult configs. */
-    private static final long GOLDEN_SCRIPT_HASH = 0xb90fb5bdd92b01f0L;
+    private static final long GOLDEN_SCRIPT_HASH = 0x7ca4b1a5d1bba416L;
     /** Golden hash of the t208 diamond_default pump30 price path (volatility scale 0, book refill on). */
-    private static final long GOLDEN_PUMP_HASH = 0x5f0aef399ff89cc3L;
+    private static final long GOLDEN_PUMP_HASH = 0xcdb3103aa5ffe147L;
     /** Volatility scales of the golden configs (they enter the flow capacity as 1 + scale). */
     private static final float[] GOLDEN_SCALES = {0f, 0.3f, 1.5f};
 
@@ -1775,7 +1778,8 @@ public class PluginTestSuite extends TestSuite {
      * reverses the whole position: {@code backTicks} 0 = one max order per 10 ticks, else evenly over that many
      * ticks (compressed). Profit = money change + leftover items at the default price.
      *
-     * @return {profit, items pushed, anchor multiple after the push, anchor multiple at the end}
+     * @return {profit, items pushed, anchor multiple after the push, anchor multiple at the end, lowest price, highest
+     *         price, end price} (prices real, sampled every tick)
      */
     private double[] t213Push(T213Anchor a, int c, int dir, double f, int backTicks) {
         try (T207Env env = t213Env(a, c)) {
@@ -1788,12 +1792,15 @@ public class PluginTestSuite extends TestSuite {
             double target = f < 0 ? 1.2 * (dir > 0 ? band.upper() : band.lower()) : dir * f * band.capacity();
             IPluginMarket pm = env.cache.getPluginMarket();
             int pushTicks = 2 * TICKS_PER_DAY / c;
+            double minP = env.price(), maxP = minP;
             for (int t = 0; t < pushTicks; t++) {
                 if (t % 10 == 0) {
                     double deficit = dir * (target - pm.getFadedNetPlayerItemFlow());
                     if (deficit >= 1) env.marketOrder(-dir * Math.min(Math.floor(deficit), env.maxOrder));
                 }
                 env.tick();
+                minP = Math.min(minP, env.price());
+                maxP = Math.max(maxP, env.price());
             }
             double anchorPush = env.vol.flow.getAnchorMultiplier(itemID);
             double pushed = held0 - env.held(); // > 0 sold (G1), < 0 bought (G2)
@@ -1808,10 +1815,12 @@ public class PluginTestSuite extends TestSuite {
                     env.tick();
                     left -= Math.abs(env.held() - before);
                 } else env.tick();
+                minP = Math.min(minP, env.price());
+                maxP = Math.max(maxP, env.price());
             }
             for (int t = 0; t < 20; t++) env.tick();
             double profit = t213Money(env) - money0 + (env.held() - held0) * d;
-            return new double[]{profit, pushed, anchorPush, env.vol.flow.getAnchorMultiplier(itemID)};
+            return new double[]{profit, pushed, anchorPush, env.vol.flow.getAnchorMultiplier(itemID), minP, maxP, env.price()};
         } finally {
             harnessRefill = false;
         }
@@ -1901,8 +1910,9 @@ public class PluginTestSuite extends TestSuite {
         int c = T213_COMPRESSION;
         double[] on = t213Push(T213Anchor.DEFAULT, c, dir, f, t213BackTicks(back, c));
         double[] off = t213Push(T213Anchor.OFF, c, dir, f, t213BackTicks(back, c));
-        String row = String.format(Locale.ROOT, "%s: profit anchor %.6g / off %.6g, pushed %.0f items, anchor after push %.4f, end %.4f",
-                name, on[0], off[0], on[1], on[2], on[3]);
+        String row = String.format(Locale.ROOT, "%s: profit anchor %.6g / off %.6g, pushed %.0f items, anchor after push %.4f, end %.4f"
+                        + ", price min/max/end anchor %.4g/%.4g/%.4g off %.4g/%.4g/%.4g",
+                name, on[0], off[0], on[1], on[2], on[3], on[4], on[5], on[6], off[4], off[5], off[6]);
         StockMarketMod.LOGGER.info("[T-213 gate] {}", row);
         return on[0] <= 0 ? pass(row) : fail("EXPLOIT " + row);
     }
@@ -3068,9 +3078,13 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /**
-     * T-212 (user decision): on a 160 market the far ask clusters stay visible: the volume per tick at 1,000 is
-     * about 20% (15-25%) of the mean near-price depth (within +-1%), at 2,000 a few % (3-15%); without clusters
-     * both are below 1%.
+     * T-212 (user decision): on a 160 market the far ask clusters stay visible: the cluster adds about 20% (15-25%)
+     * of the mean near-price depth (within +-1%) per tick at 1,000 and a few % (3-15%) at 2,000, on top of the
+     * plain book.
+     * <p>
+     * #96 (user decision): measured over the plain book (clusters on minus off). The supply floor, the mirror of the
+     * demand boost above the fair price, holds about a third of the near-price depth there by design (it keeps the
+     * ask side from running dry), so the former "below 1% without clusters" check is gone; the floor is reported.
      */
     private TestResult test_roundLevel_farClustersVisible() {
         var on = rlCalc(160, 50f);
@@ -3079,14 +3093,13 @@ public class PluginTestSuite extends TestSuite {
         int n = 400;
         for (int i = 0; i < n; i++) near += on.getVolume(160, 160 * (0.99 + 0.02 * (i + 0.5) / n));
         near /= n;
-        double r1000 = on.getVolume(160, 1000) / near, r2000 = on.getVolume(160, 2000) / near;
-        double r500 = on.getVolume(160, 500) / near, rBid = on.getVolume(160, 100) / near;
         double off1000 = off.getVolume(160, 1000) / near, off2000 = off.getVolume(160, 2000) / near;
-        String msg = String.format(Locale.ROOT, "near %.4g/tick; 1000 %.1f%%, 2000 %.1f%%, 500 %.1f%%, bid 100 %.1f%%; off: 1000 %.2f%%, 2000 %.2f%%",
+        double r1000 = on.getVolume(160, 1000) / near - off1000, r2000 = on.getVolume(160, 2000) / near - off2000;
+        double r500 = on.getVolume(160, 500) / near, rBid = on.getVolume(160, 100) / near;
+        String msg = String.format(Locale.ROOT, "near %.4g/tick; cluster 1000 +%.1f%%, 2000 +%.1f%%; 500 %.1f%%, bid 100 %.1f%%; floor (off): 1000 %.2f%%, 2000 %.2f%%",
                 near, 100 * r1000, 100 * r2000, 100 * r500, 100 * rBid, 100 * off1000, 100 * off2000);
-        if (r1000 < 0.15 || r1000 > 0.25) return fail("1000 outside 15-25%: " + msg);
-        if (r2000 < 0.03 || r2000 > 0.15) return fail("2000 outside 3-15%: " + msg);
-        if (off1000 > 0.01 || off2000 > 0.01) return fail("Without clusters the far asks must be faint: " + msg);
+        if (r1000 < 0.15 || r1000 > 0.25) return fail("cluster at 1000 outside 15-25%: " + msg);
+        if (r2000 < 0.03 || r2000 > 0.15) return fail("cluster at 2000 outside 3-15%: " + msg);
         return pass(msg);
     }
 
@@ -3884,6 +3897,36 @@ public class PluginTestSuite extends TestSuite {
             return fail("Exception: " + e);
         }
         return pass("0 outside the samples and for NaN/inf, interpolates inside");
+    }
+
+    /**
+     * #96: the default depth is evaluated around the fair price E (the default price D while none is published),
+     * not around the market price, and the bid/ask sign follows the market price. After a crash to 0.01 the level
+     * at the price holds the E-centred depth instead of the market-centred book deepened by D / P = 16,000.
+     */
+    private TestResult test_defaultDepth_centredOnFairPrice() {
+        try (T207Env env = t207Default()) {
+            IPluginOrderBook ob = env.cache.getPluginOrderBook();
+            DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc =
+                    harnessCalc(160, DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(160, 50, 1f));
+            env.market.test_setCurrentMarketPrice(MarketManager.convertToRawAmountStatic(0.01));
+            // nothing published: centred on D = 160; 0.5 is above the price, so an ask (negative)
+            TestResult r = assertEquals("ask at 0.5 around D", -Math.abs(calc.getVolume(160, 0.5)), ob.getDefaultRealVolume(0.5));
+            if (!r.passed()) return r;
+            env.cache.getPluginMarket().setEquilibriumPrice(100);
+            float atPrice = ob.getDefaultRealVolume(0.01);
+            r = assertEquals("level at the price around E", -Math.abs(calc.getVolume(100, 0.01)), atPrice);
+            if (!r.passed()) return r;
+            double marketCentred = Math.abs(calc.getVolume(0.01, 0.01));
+            r = assertTrue(String.format(Locale.ROOT, "market-centred level %.0f must be far deeper than %.2f", marketCentred, atPrice),
+                    marketCentred > 1000 * Math.abs(atPrice));
+            if (!r.passed()) return r;
+            // below the market price: a bid (positive), still around E
+            env.market.test_setCurrentMarketPrice(MarketManager.convertToRawAmountStatic(150));
+            r = assertEquals("bid at 120 around E", Math.abs(calc.getVolume(100, 120)), ob.getDefaultRealVolume(120));
+            if (!r.passed()) return r;
+            return pass(String.format(Locale.ROOT, "level at 0.01: %.2f around E 100, %.0f around the price", atPrice, marketCentred));
+        }
     }
 
     /**

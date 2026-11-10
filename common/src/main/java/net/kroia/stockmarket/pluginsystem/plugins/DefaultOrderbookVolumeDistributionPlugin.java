@@ -326,7 +326,9 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         @Override
         public float getVolume(double marketPrice, double volumePickPrice) {
             if (marketPrice <= 0) return 0;
-            // T-214: depth per relative price stays constant as the price moves (more ticks per % below D)
+            // T-214: depth per relative price stays constant as the centre moves (more ticks per % below D).
+            // #96: marketPrice is the order book's depth centre, the fair price E, so a dumped price no longer
+            // multiplies the depth by D / P (16,000x at 0.01 on diamond).
             double priceNorm = defaultPrice > 0 ? defaultPrice / marketPrice : 1;
             // T-212: the cluster term is added before the depth scale and the normalisation
             double shape = smoothShape(marketPrice, volumePickPrice) + roundLevelShape(marketPrice, volumePickPrice);
@@ -334,10 +336,13 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         }
 
         /**
-         * The smooth depth shape (core, value cluster, background, demand boost) before the depth scale and the
+         * The smooth depth shape (core, value cluster, background, demand and supply boost) before the depth scale and the
          * {@code D / P} normalisation.
+         * <p>
+         * #96: the order book evaluates it centred on the fair price E (see
+         * {@link IPluginOrderBook#getDefaultRealVolume(double)}), so P below is E there, not the last traded price.
          *
-         * @param marketPrice     market price P (&gt; 0)
+         * @param marketPrice     centre price P (&gt; 0)
          * @param volumePickPrice pick price p
          * @return the shape (&gt;= 0)
          */
@@ -368,14 +373,22 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             // Background liquidity: thin but persistent orders at all price levels
             double background = 0.08 * Math.exp(-absDistance / 0.6);
 
-            // Buy-side demand boost: increasing buying interest at lower prices
-            double demandBoost = 0;
+            // Buy-side demand boost: increasing buying interest at lower prices (#96: and its sell-side mirror)
+            double sideBoost = 0;
             if (volumePickPrice < marketPrice) {
                 double dropFraction = (marketPrice - volumePickPrice) / marketPrice;
-                demandBoost = 0.5 * Math.sqrt(dropFraction);
+                sideBoost = 0.5 * Math.sqrt(dropFraction);
+            }
+            // #96: supply boost, the demand boost mirrored in log price (p = P x k reads like p = P / k). With the
+            // book centred on the fair price instead of following the last price, the core above P is finite: a
+            // large buyer swept it and every further buy jumped the price to the ask ceiling. Holders are keen to
+            // sell far above the fair price, so the ask side never runs dry.
+            else if (volumePickPrice > marketPrice) {
+                double riseFraction = (volumePickPrice - marketPrice) / volumePickPrice;
+                sideBoost = 0.5 * Math.sqrt(riseFraction);
             }
 
-            return coreShape + valueCluster + background + demandBoost;
+            return coreShape + valueCluster + background + sideBoost;
         }
 
         /** @return the depth scale (items per raw tick at the default price) */
@@ -496,6 +509,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         public float[] cachedTargets = null;            // raw target volume per editable price level
         public long cachedRangeStart = Long.MIN_VALUE;  // first backend price of the cached range
         public float cachedMarketPrice = Float.NaN;     // market price used for the computation (drives the buy/sell sign flip)
+        public double cachedCenter = Double.NaN;        // #96: fair price the distribution was centred on
         public float cachedVolumeScale = Float.NaN;     // effective calculator volume scale used (changes via settings/load)
         public double cachedDefaultPrice = Double.NaN;  // calculator default/fair price used
 
@@ -557,6 +571,13 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
     // per update cycle (round-robin). All other markets keep converging toward their
     // cached targets until it is their turn again.
     private static final int MAX_TARGET_REFRESHES_PER_UPDATE = 20;
+
+    /**
+     * #96: the targets are recomputed for a new fair price (depth centre) only once it moved more than this
+     * fraction since the last computation. The equilibrium drifts a little every tick while the net flow fades;
+     * without the tolerance every market would rebuild its targets every tick for a 0.01% shape change.
+     */
+    private static final double CENTER_REFRESH_MOVE = 0.001;
 
     // Rotating start index of the round-robin refresh window.
     private int targetRefreshRotation = 0;
@@ -673,10 +694,12 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
                 && data.cachedTargets.length == rangeSize
                 && data.cachedRangeStart == rangeStart;
         // The cache is fully valid only if none of the distribution inputs changed:
-        // market price (also drives the buy/sell sign flip), effective volume scale
-        // (settings change / load) and default price.
+        // market price (drives the buy/sell sign flip), the fair price the distribution is
+        // centred on (#96), effective volume scale (settings change / load) and default price.
+        double center = market.market.getEquilibriumPrice();
         boolean cacheValid = rangeMatches
                 && data.cachedMarketPrice == data.currentMarketPrice
+                && Math.abs(center - data.cachedCenter) <= CENTER_REFRESH_MOVE * data.cachedCenter
                 && data.cachedVolumeScale == data.calculator.volumeScale
                 && data.cachedDefaultPrice == data.calculator.defaultPrice;
 
@@ -693,6 +716,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             data.cachedTargets = orderBook.getDefaultRawVolume(rangeStart, rangeSize);
             data.cachedRangeStart = rangeStart;
             data.cachedMarketPrice = data.currentMarketPrice;
+            data.cachedCenter = center;
             data.cachedVolumeScale = data.calculator.volumeScale;
             data.cachedDefaultPrice = data.calculator.defaultPrice;
         }

@@ -440,10 +440,35 @@ public final class DepthMemory
         /** Per slot side ({@link DepthMemory#key}): { L = sum |array| of leaving ticks, leaving ticks,
          *  E = sum of entering tick values, g = gap ticks taken from this side, 1 if gap target }. */
         private final HashMap<Integer, double[]> slots = new HashMap<>();
+        // #96: leave/enter are called once per tick of a window move, in price order, so consecutive ticks
+        // almost always hit the same slot side. Caching the last slot range and entry skips a Math.log and a
+        // boxed HashMap lookup per tick; the bot's sizing walk re-centres a copy of the window many times and
+        // spent most of its time here.
+        private long lastLo = 1, lastHi = 0;   // price range of lastSlot (empty = none yet)
+        private int lastSlot, lastKey = -1;
+        private double[] last;
 
         private double[] of(int k, boolean above)
         {
-            return slots.computeIfAbsent(key(k, above), x -> new double[5]);
+            int key = key(k, above);
+            if (key != lastKey)
+            {
+                last = slots.computeIfAbsent(key, x -> new double[5]);
+                lastKey = key;
+            }
+            return last;
+        }
+
+        /** {@link DepthMemory#slotOf}, cached for runs of ticks in the same slot. */
+        private int slot(long price)
+        {
+            if (price < lastLo || price > lastHi)
+            {
+                lastSlot = slotOf(price);
+                lastLo = slotStart(lastSlot);
+                lastHi = slotEnd(lastSlot);
+            }
+            return lastSlot;
         }
 
         /**
@@ -454,7 +479,7 @@ public final class DepthMemory
          */
         public void leave(long price, boolean above, double absArr)
         {
-            double[] d = of(slotOf(price), above);
+            double[] d = of(slot(price), above);
             d[0] += absArr;
             d[1] += 1;
         }
@@ -467,7 +492,7 @@ public final class DepthMemory
          */
         public void enter(long price, boolean above, double value)
         {
-            of(slotOf(price), above)[2] += value;
+            of(slot(price), above)[2] += value;
         }
 
         /**

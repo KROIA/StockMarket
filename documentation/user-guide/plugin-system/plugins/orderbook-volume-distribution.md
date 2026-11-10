@@ -4,7 +4,9 @@
 
 This plugin fills the order book with **virtual liquidity**: buy orders below the current price and sell orders above it. This is the volume players (and the [TargetPriceBot](target-price-bot.md)) trade against. Its depth decides how far the price moves when someone buys or sells a given amount.
 
-The plugin computes a **target volume** for every price level around the current price and lets the real virtual volume drift toward that target over time. When players eat into the book, the consumed volume grows back gradually; when the price moves, the book reshapes around the new price.
+The plugin computes a **target volume** for every price level around the market's **fair price** and lets the real virtual volume drift toward that target over time. When players eat into the book, the consumed volume grows back gradually; when the fair price moves, the book reshapes around it.
+
+The fair price is the equilibrium price of the [NetFlowPlugin](net-flow-plugin.md) (it follows net player buying and selling); without that plugin it is the market's default price. The book is centred on the fair price, not on the last traded price. Levels below the current price hold buy orders, levels above it sell orders. So a fast dump or pump that moves the price away from the fair price does not drag the book along: the volume between the price and the fair price stays in place, on the other side of the price, and buying back after a dump meets the same depth the dump sold into.
 
 **When to use it:** on every market that should be tradable without other players on the opposite side. Without it, a market order only fills against player limit orders and the order book looks empty.
 
@@ -29,9 +31,9 @@ All settings are **per market**. Select a market icon in the plugin entry of the
 | Speed | `0.05` | number >= 0 | Master speed of the drift toward the target; multiplies both rates |
 | Accumulation Rate | `0.1` | number >= 0 | How fast missing volume is refilled |
 | Decumulation Rate | `0.01` | number >= 0 | How fast excess volume is removed |
-| Round Level Scale | `1` | number >= 0 | Extra volume at round prices (100, 200, 250, 300, 500, 1000, ...) as a multiple of the depth near the current price; 0 = off |
+| Round Level Scale | `1` | number >= 0 | Extra volume at round prices (100, 200, 250, 300, 500, 1000, ...) as a multiple of the depth near the fair price; 0 = off |
 | Round Level Width | `0.03` | 0.005 - 0.5 | Width of a round-price cluster in log price (0.03 = about +-3 % around the level) |
-| Round Level Range | `1.1` | 0.05 - 5 | How far from the current price round-price clusters stay visible (log-price distance at which a cluster drops to 37 %) |
+| Round Level Range | `1.1` | 0.05 - 5 | How far from the fair price round-price clusters stay visible (log-price distance at which a cluster drops to 37 %) |
 
 The text fields accept only non-negative numbers.
 
@@ -40,37 +42,38 @@ The text fields accept only non-negative numbers.
 For each price level the target volume is:
 
 ```
-target volume = shape(price level) x depth scale x default price / current price
+target volume = shape(price level, centred on the fair price) x depth scale x default price / fair price
 depth scale   = Volume Scale x max(250 x reference order x price step / default price, 0.1)
 reference order = max(64, 64 x Abundance)
 ```
 
-The depth is defined per **percent of price**, not per price step. With Volume Scale `1` the sell volume within 1 % above the default price holds about 3.5 reference orders, so a buy of one reference order moves the price about 0.36 % on every market, whatever the item costs. The factor `default price / current price` keeps this when the price moves away from the default: at half the default price there are twice as many price steps per percent, each with twice the volume.
+The depth is defined per **percent of price**, not per price step. With Volume Scale `1` the sell volume within 1 % above the default price holds about 3.5 reference orders, so a buy of one reference order moves the price about 0.36 % on every market, whatever the item costs. The factor `default price / fair price` keeps this when the fair price moves away from the default: at half the default price there are twice as many price steps per percent, each with twice the volume. A dumped price alone does not raise the factor, because the fair price only follows net player flow.
 
 - The **reference order** is the default max order size of the Abundance, `max(64, 64 x Abundance)` (for example 3,200 for Abundance 50). It equals the market's max order size as long as that is left at its default; a custom max order size (or 0 = unlimited) does not change the book.
 - **Expensive items** get at least 0.1 items per price step (times Volume Scale), so a netherite block market never has a book so thin that single items jump the price. On such markets one reference order moves the price less than 0.36 %.
 - **Cheap items** (price below about 1) have few price steps per percent, for example dirt at 0.1 moves in 10 % steps. Their book is deep per step: one reference order only uses a small part of the first step.
 - Changing a market's **default price** rebuilds its book at the new depth right away (like **Reset Volume**). A changed **Abundance** changes the depth too; the book then drifts to it at the configured speed.
 
-The shape is the sum of four parts, all measured relative to the current market price:
+The shape is the sum of five parts, all measured relative to the fair price:
 
 | Part | Where | What it does |
 |---|---|---|
-| Core | both sides | Almost nothing right at the price (a spread of at least 0.5 %), rising quickly to a peak about 5-10 % away, then fading out over roughly 15-50 % |
+| Core | both sides | Almost nothing right at the fair price (a spread of at least 0.5 %), rising quickly to a peak about 5-10 % away, then fading out over roughly 15-50 % |
 | Value cluster | around the **default price** | Extra volume within about +-15 % of the market's default price -- traders defend the "fair" price |
 | Background | both sides | Thin liquidity at every price, fading slowly |
-| Demand boost | buy side only | Buy interest grows the further the price is below the current price, so there is always some support underneath |
+| Demand boost | below the fair price | Buy interest grows the further a level is below the fair price, so there is always some support underneath |
+| Supply boost | above the fair price | The mirror of the demand boost: sell interest grows the further a level is above the fair price (a level at twice the fair price gets what a level at half of it gets), so a pump always meets supply |
 
 <p align="center">
-  <img src="../../../images/plugins/volume_distribution_shape.svg" width="600" alt="Target order book around a market price of 100: buy volume left of 100 and sell volume right of 100, both near zero at the price, peaking around 90 and 105 to 110. Sell volume fades out above about 150, buy volume stays at a low, almost flat level down to zero. The dashed curves for Volume Scale 2 have the same shape at twice the height.">
+  <img src="../../../images/plugins/volume_distribution_shape.svg" width="600" alt="Target order book around a market price of 100: buy volume left of 100 and sell volume right of 100, both near zero at the price, peaking around 90 and 105 to 110. Beyond the peaks both sides level off at a low, almost flat level: buy volume down to zero, sell volume up to the right edge. The dashed curves for Volume Scale 2 have the same shape at twice the height.">
 </p>
 
-Notice the asymmetry: sell volume above the price fades out beyond about +50 %, while buy volume below the price never disappears. Selling therefore meets more resistance than buying: the further the price falls, the more buy support it runs into, while strong buying can push the price up quickly once it has cleared the nearby sell volume.
+Neither side runs dry: once the peaks near the fair price are behind it, the price meets the flat demand or supply level, and that level holds the same volume per price step at half the fair price as at twice the fair price. Because a percent of price spans more price steps the higher the price, a pump far above the fair price meets more sell volume per percent than a dump far below it meets buy volume.
 
-When the market price has moved away from the default price, the value cluster adds a visible bump of extra liquidity near the default price. In this example the price was pushed down to 70; buyers who want to push it back above 100 must first get through the extra sell volume around 100:
+When the fair price has moved away from the default price, the value cluster adds a visible bump of extra liquidity near the default price. In this example net selling moved the fair price (and the price) down to 70; buyers who want to push it back above 100 must first get through the extra sell volume around 100:
 
 <p align="center">
-  <img src="../../../images/plugins/volume_distribution_off_fair.svg" width="600" alt="Order book with market price 70 and default price 100. Buy volume left of 70, sell volume right of 70 with a shoulder of extra volume around the default price of 100.">
+  <img src="../../../images/plugins/volume_distribution_off_fair.svg" width="600" alt="Order book with fair price and market price 70 and default price 100. Buy volume left of 70, sell volume right of 70 with a shoulder of extra volume around the default price of 100.">
 </p>
 
 When the price moves, price levels that change side (for example from buy to sell) are emptied immediately and refilled with the opposite order type at the configured speed. After a fast price move, the levels the move swept through are empty and refill gradually (time constant `1 / (Accumulation Rate x Speed)`, about 200 s at default settings), so the next trade in the opposite direction can briefly spike the price.
@@ -80,10 +83,10 @@ When the price moves, price levels that change side (for example from buy to sel
 Real traders like round numbers, so the book adds extra volume around round prices: every price of the form `1, 2, 2.5, 3 or 5 x 10^n` (..., 10, 20, 25, 30, 50, 100, 200, ...). The added volume at a level is
 
 ```
-Round Level Scale x (mean depth within +-1 % of the current price) x weight x exp(-distance / Round Level Range)
+Round Level Scale x (mean depth within +-1 % of the fair price) x weight x exp(-distance / Round Level Range)
 ```
 
-spread over a bell curve of width Round Level Width around the level. `distance` is `|ln(level / current price)|`; the weight is 1 for `1 x 10^n`, 0.8 for `5`, 0.6 for `2` and 0.5 for `2.5` and `3`. The clusters are added on top of the normal shape, so they also show far from the price: on a market at 160, the sell cluster at 1,000 holds about 19 % of the depth near the price and 2,000 about 6 %. Levels too weak to matter (below 3 % of full weight) are skipped, which leaves about 10-20 levels on any market.
+spread over a bell curve of width Round Level Width around the level. `distance` is `|ln(level / fair price)|`; the weight is 1 for `1 x 10^n`, 0.8 for `5`, 0.6 for `2` and 0.5 for `2.5` and `3`. The clusters are added on top of the normal shape, so they also show far from the price: on a market at 160, the sell cluster at 1,000 holds about 19 % of the depth near the price and 2,000 about 6 %. Levels too weak to matter (below 3 % of full weight) are skipped, which leaves about 10-20 levels on any market.
 
 A market whose price sits on a round level (dirt at 0.1) gets about twice the depth on that price step, so the same net player flow moves its equilibrium price somewhat less.
 
