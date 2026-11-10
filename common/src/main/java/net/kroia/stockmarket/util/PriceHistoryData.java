@@ -464,15 +464,16 @@ public class PriceHistoryData
      * in-game time aligned to 00:00 ({@code floorDiv(gameTime + 6000, hours * 1000)}); legacy candles
      * without game time fall back to nominal wall-clock buckets of {@code hours * GAME_HOUR_MS}.
      *
-     * @param candle raw candle
-     * @param hours  in-game hours per aggregated candle (>= 1)
+     * @param openTimestamp wall-clock start of the raw candle (ms)
+     * @param gameTime      in-game start of the raw candle, or {@link MarketPriceStruct#NO_GAME_TIME}
+     * @param hours         in-game hours per aggregated candle (>= 1)
      * @return bucket key; only equality between neighbouring candles is meaningful
      */
-    public static long gameBucketKey(Candle candle, int hours)
+    public static long gameBucketKey(long openTimestamp, long gameTime, int hours)
     {
-        return candle.gameTime >= 0
-                ? Math.floorDiv(candle.gameTime + MIDNIGHT_OFFSET, hours * TICKS_PER_HOUR)
-                : Math.floorDiv(candle.openTimestamp, hours * GAME_HOUR_MS);
+        return gameTime >= 0
+                ? Math.floorDiv(gameTime + MIDNIGHT_OFFSET, hours * TICKS_PER_HOUR)
+                : Math.floorDiv(openTimestamp, hours * GAME_HOUR_MS);
     }
 
     /**
@@ -497,7 +498,8 @@ public class PriceHistoryData
                 Candle first = raw.get(begin), c = raw.get(i);
                 boolean sameBucket = i - begin < hours
                         && (first.gameTime < 0) == (c.gameTime < 0)
-                        && gameBucketKey(first, hours) == gameBucketKey(c, hours);
+                        && gameBucketKey(first.openTimestamp, first.gameTime, hours)
+                           == gameBucketKey(c.openTimestamp, c.gameTime, hours);
                 if (sameBucket)
                     continue;
             }

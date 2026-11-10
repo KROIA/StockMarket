@@ -491,6 +491,7 @@
   "gui.stockmarket.market_settings_widget.reset_net_flow": "Zurücksetzen",
   "gui.stockmarket.market_settings_widget.apply": "Anwenden",
   "stockmarket.candlestick.loadingOlder": "Lade ältere Daten...",
+  "stockmarket.candlestick.game_day": "Tag %s",
   "gui.stockmarket.plugin_gui.apply_all": "Auf alle anwenden",
   "gui.stockmarket.plugin_gui.apply_all.tooltip": "Diese Werte auf jeden Markt anwenden,\nder dieses Plugin abonniert hat (mit Bestätigung).",
   "gui.stockmarket.plugin_gui.defaults": "Standard",

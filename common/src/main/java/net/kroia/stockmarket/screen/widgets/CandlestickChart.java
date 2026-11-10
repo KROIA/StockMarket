@@ -107,6 +107,8 @@ public class CandlestickChart extends StockMarketGuiElement {
     // Lang key for the "loading older data" indicator shown at the left edge
     // of the chart while a paginated fetch of older candles is in flight.
     private static final String KEY_LOADING_OLDER = "stockmarket.candlestick.loadingOlder";
+    /** T-218: "Day %s" label of game-time candles. */
+    private static final String KEY_GAME_DAY = "stockmarket.candlestick.game_day";
 
     // True while a paginated "older data" fetch is in flight for the current
     // candle-delta. Toggled true when we fire the request and reset via
@@ -161,7 +163,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         float buttonFontSizeScale = 1.0f;
 
         for (int i = 0; i < candleTimes.length; i++) {
-            String timeStr = timeToShortString(candleTimes[i]);
+            String timeStr = ClientMarket.isCandleUseGameTime() ? gameDeltaLabel(candleTimes[i]) : timeToShortString(candleTimes[i]);
             int finalI = i;
             Button button = new Button(timeStr, () -> {
                 selectCandleTimeDeltaByIndex(finalI);
@@ -294,6 +296,8 @@ public class CandlestickChart extends StockMarketGuiElement {
      * @param index the index into {@link ClientMarket#getAvailableCandleTimeDeltas()}
      */
     public void selectCandleTimeDeltaByIndex(int index) {
+        // T-218: a saved index may come from the other timebase (6 real vs 4 game deltas).
+        index = Math.max(0, Math.min(index, ClientMarket.getAvailableCandleTimeDeltas().length - 1));
         // Same-delta reclick guard: when the user clicks the button for the
         // already-active delta AND its data is already loaded, do NOTHING —
         // no data refetch, no autoCenterView, no button-color repaint (colors
@@ -656,6 +660,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         int offset = Math.max(1, (lastVisibleCandleIndex - firstVisibleCandleIndex) / targetLineCount);
 
         Date lastTime = new Date(0);
+        long lastGameDay = Long.MIN_VALUE;
         maxTimeDateLabelWidth = 0;
         int canvasY = volumeRect.y + volumeRect.height;
         int i = firstVisibleCandleIndex;
@@ -668,9 +673,21 @@ public class CandlestickChart extends StockMarketGuiElement {
             PriceHistoryData.Candle candle = candles.get(i);
             int canvasX = toCanvasSpaceX(candleCount - i - 1);
 
-            Date currentTime = new Date(candle.openTimestamp);
-            String[] timeDateStr = timestampToTimeDate(currentTime, lastTime);
-            lastTime = currentTime;
+            String[] timeDateStr;
+            if (ClientMarket.isCandleUseGameTime() && candle.gameTime >= 0) {
+                // T-218: in-game labels, "Day N" whenever the day changes, then "hh:00".
+                // Legacy candles without game time keep their wall-clock labels.
+                long day = PriceHistoryData.gameDay(candle.gameTime);
+                String hour = PriceHistoryData.gameHourLabel(candle.gameTime);
+                timeDateStr = day != lastGameDay
+                        ? new String[]{Component.translatable(KEY_GAME_DAY, day).getString(), hour}
+                        : new String[]{hour};
+                lastGameDay = day;
+            } else {
+                Date currentTime = new Date(candle.openTimestamp);
+                timeDateStr = timestampToTimeDate(currentTime, lastTime);
+                lastTime = currentTime;
+            }
 
             int textHeight = getTextHeight();
             int lineOffset = Math.max(canvasY, canvasY + 1);
@@ -1247,6 +1264,19 @@ public class CandlestickChart extends StockMarketGuiElement {
             formatted = sb.toString();
         }
         return formatted + suffix;
+    }
+
+    /**
+     * T-218: button label of a game-time candle delta (whole in-game hours): 1h, 4h, 1D, 1W.
+     *
+     * @param deltaMs nominal delta, a multiple of {@link PriceHistoryData#GAME_HOUR_MS}
+     * @return the label
+     */
+    private static String gameDeltaLabel(long deltaMs) {
+        long hours = deltaMs / PriceHistoryData.GAME_HOUR_MS;
+        if (hours % 168 == 0) return hours / 168 + "W";
+        if (hours % 24 == 0) return hours / 24 + "D";
+        return hours + "h";
     }
 
     private String timeToShortString(long timeMs) {

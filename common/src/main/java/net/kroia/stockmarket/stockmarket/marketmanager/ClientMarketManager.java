@@ -67,6 +67,7 @@ public class ClientMarketManager implements IClientMarketManager
             long turnaroundTime = currentTime - serverTime.clientTimeEcho();
             long currentServerTime = serverTime.serverTime() + turnaroundTime / 2;
             ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
+            ClientMarket.setCandleUseGameTime(serverTime.candleUseGameTime()); // T-218: before any ClientMarket exists
             requestMarkets();
         });
 

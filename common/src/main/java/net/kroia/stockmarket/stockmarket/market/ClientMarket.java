@@ -52,7 +52,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
      * {@link #requestOlderWindow(long, long)}. Composed here (not inherited)
      * so the cache lifetime matches the ClientMarket exactly.
      */
-    private final PriceHistoryCache historyCache = new PriceHistoryCache(AVAILABLE_CANDLE_TIME_DELTAS);
+    private final PriceHistoryCache historyCache = new PriceHistoryCache(getAvailableCandleTimeDeltas());
 
     /**
      * In-flight pagination futures keyed by candleDeltaMs. If a caller asks
@@ -106,6 +106,12 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
          * {@code currentMarketPrice == 0}, locking the chart onto a zero spike.
          */
         private boolean initialHistoryLoaded = false;
+        /**
+         * T-218: game-time candles (the master's CANDLE_USE_GAME_TIME, known on join before any
+         * market exists). The master aggregates the in-game buckets and the price stream drives
+         * the live candle rotation ({@link #onServerCandle}); the wall-clock timer is unused.
+         */
+        private final boolean gameTime = candleUseGameTime;
 
         public PriceHistoryContainer(ItemID itemID, int itemScaleFactor, long deltaT)
         {
@@ -134,7 +140,10 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         }
         public void loadFrom(PriceHistoryData other, long currentServerTime, boolean createEmptyCandleForTimeGaps)
         {
-            history.loadFrom(other, timer.getDuration(), currentServerTime, other.getCurrentMarketPrice(), createEmptyCandleForTimeGaps);
+            if (gameTime)
+                history.loadFrom(other); // T-218: already aggregated by the master; game candles are never gap-filled
+            else
+                history.loadFrom(other, timer.getDuration(), currentServerTime, other.getCurrentMarketPrice(), createEmptyCandleForTimeGaps);
             // After the container's history has been (re)built, the tip candle
             // — if any — is the live one; register it with the cache so the
             // stream-driven mutations to it stay properly attributed.
@@ -216,7 +225,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
             // first tick after subscription can append a zero-price candle
             // (currentMarketPrice hasn't been streamed yet) and the chart
             // widget's one-shot auto-fit locks onto that zero spike.
-            if (!initialHistoryLoaded)
+            if (!initialHistoryLoaded || gameTime) // T-218: game-time candles rotate in onServerCandle
                 return;
             if(timer.check())
             {
@@ -238,6 +247,34 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         public long getDeltaT()
         {
             return timer.getDuration();
+        }
+
+        /**
+         * T-218 game-time mode: called for every price-stream update with the start of the
+         * master's live raw candle. Opens a new live candle (promoting the old one into the
+         * cache) once that raw candle is newer than ours and belongs to another in-game bucket
+         * of this container's delta; a 1h container rotates with every raw candle.
+         *
+         * @param candleStartMs  wall-clock start of the master's live raw candle
+         * @param candleGameTime its in-game start (overworld day time), or -1 if unknown
+         */
+        public void onServerCandle(long candleStartMs, long candleGameTime)
+        {
+            PriceHistoryData.Candle current = history.getCurrentCandle();
+            if (!initialHistoryLoaded || current == null || current.openTimestamp >= candleStartMs)
+                return;
+            int hours = (int) Math.max(1L, candleDeltaMs / PriceHistoryData.GAME_HOUR_MS);
+            // ponytail: no raw-row cap here, so with a frozen daylight cycle a multi-hour live
+            // candle keeps growing until the chart reloads (the master caps it on reload).
+            if (hours > 1 && (current.gameTime < 0) == (candleGameTime < 0)
+                    && PriceHistoryData.gameBucketKey(current.openTimestamp, current.gameTime, hours)
+                       == PriceHistoryData.gameBucketKey(candleStartMs, candleGameTime, hours))
+                return;
+            if (attachedCache != null)
+                attachedCache.promoteLiveCandle(candleDeltaMs);
+            history.startNewCandle(candleStartMs, candleGameTime);
+            if (attachedCache != null)
+                attachedCache.setLiveCandle(candleDeltaMs, history.getCurrentCandle());
         }
     }
     /*public static class OrderbookVolumeContainer
@@ -261,6 +298,25 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
                     CANDLE_TIME_1_DAY
             };
 
+    /** T-218: game-time candle deltas, nominal in-game hours (see {@link PriceHistoryData#GAME_HOUR_MS}). */
+    public static final long CANDLE_TIME_GAME_1_HOUR = PriceHistoryData.GAME_HOUR_MS;
+    public static final long CANDLE_TIME_GAME_4_HOUR = CANDLE_TIME_GAME_1_HOUR * 4;
+    public static final long CANDLE_TIME_GAME_1_DAY = CANDLE_TIME_GAME_1_HOUR * 24;
+    public static final long CANDLE_TIME_GAME_1_WEEK = CANDLE_TIME_GAME_1_DAY * 7;
+    public static final long[] AVAILABLE_GAME_CANDLE_TIME_DELTAS =
+            {
+                    CANDLE_TIME_GAME_1_HOUR,
+                    CANDLE_TIME_GAME_4_HOUR,
+                    CANDLE_TIME_GAME_1_DAY,
+                    CANDLE_TIME_GAME_1_WEEK
+            };
+
+    /**
+     * T-218: the master's candle timebase, set from ServerTimeRequest on every join before the
+     * markets are requested. Client instances are rebuilt per join, so a static is enough.
+     */
+    private static boolean candleUseGameTime = false;
+
     private @Nullable UUID marketPriceUpdateStreamID = null;
     private int streamSubscriberCount = 0;
 
@@ -275,7 +331,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         this.itemID = itemID;
         this.asyncMarket = AsyncMarket.createClientMarket(itemID);
 
-        for (long delta : AVAILABLE_CANDLE_TIME_DELTAS) {
+        for (long delta : getAvailableCandleTimeDeltas()) {
             priceHistoryDataMap.put(delta, new PriceHistoryContainer(itemID, itemScaleFactor, delta, historyCache));
         }
     }
@@ -303,9 +359,37 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         return itemID;
     }
 
+    /** @return the chart candle deltas of the master's candle timebase (T-218) */
     public static long[] getAvailableCandleTimeDeltas()
     {
-        return AVAILABLE_CANDLE_TIME_DELTAS;
+        return candleTimeDeltasFor(candleUseGameTime);
+    }
+
+    /**
+     * T-218: the chart candle deltas of a timebase.
+     *
+     * @param gameTime {@code true} for in-game 1h/4h/1D/1W, {@code false} for real 1m..1d
+     * @return the shared delta array (do not modify)
+     */
+    public static long[] candleTimeDeltasFor(boolean gameTime)
+    {
+        return gameTime ? AVAILABLE_GAME_CANDLE_TIME_DELTAS : AVAILABLE_CANDLE_TIME_DELTAS;
+    }
+
+    /** @return {@code true} if the master stores one candle per in-game hour (T-218) */
+    public static boolean isCandleUseGameTime()
+    {
+        return candleUseGameTime;
+    }
+
+    /**
+     * T-218: sets the candle timebase reported by the master. Must run before markets are created.
+     *
+     * @param gameTime the master's CANDLE_USE_GAME_TIME
+     */
+    public static void setCandleUseGameTime(boolean gameTime)
+    {
+        candleUseGameTime = gameTime;
     }
     /** {@inheritDoc} */
     @Override
@@ -376,7 +460,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
      */
     public void requestInitialWindowForAllDeltas()
     {
-        for (long delta : AVAILABLE_CANDLE_TIME_DELTAS)
+        for (long delta : getAvailableCandleTimeDeltas())
         {
             requestInitialWindow(delta);
         }
@@ -401,7 +485,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         long startTime = endTime - candleDeltaMs * (long) initialCandles;
 
         MarketPriceHistoryRequest.InputData input =
-                new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, startTime, endTime, 0, false);
+                new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, startTime, endTime, 0, candleUseGameTime);
         BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(input).thenAccept((historyData) ->
         {
             info("Initial price window received for: " + itemID + " delta=" + candleDeltaMs);
@@ -505,7 +589,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         MarketPriceHistoryRequest.InputData input =
                 // maxCandles = one page: the bootstrap (open-ended minTs) only needs the
                 // newest page; asking for the server cap (0) made it ship up to 4096 candles.
-                new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, minTs, maxTs, pageCandles, false);
+                new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, minTs, maxTs, pageCandles, candleUseGameTime);
 
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         inFlightOlder.put(candleDeltaMs, future);
@@ -625,6 +709,9 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         {
             currentMarketPrice = price.marketPrice;
             tradingStatus = price.tradingStatus;
+            if (candleUseGameTime) // T-218: rotate first, so the new candle opens at the previous price
+                for (PriceHistoryContainer container : priceHistoryDataMap.values())
+                    container.onServerCandle(price.candleStartMs, price.candleGameTime);
             for(PriceHistoryContainer priceHistoryContainer : priceHistoryDataMap.values())
                 priceHistoryContainer.history.setCurrentMarketPrice(currentMarketPrice, price.tradedVolume);
         },()->

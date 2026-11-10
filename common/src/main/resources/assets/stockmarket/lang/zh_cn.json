@@ -402,6 +402,7 @@
   "gui.stockmarket.plugin_performance_bar.tooltip_budget": "单刻预算：%s",
   "gui.stockmarket.plugin_performance_bar.tooltip_markets": "市场数量：%s",
   "stockmarket.candlestick.loadingOlder": "正在加载更早的数据...",
+  "stockmarket.candlestick.game_day": "第 %s 天",
   "gui.stockmarket.plugin_gui.apply_all": "应用到全部",
   "gui.stockmarket.plugin_gui.apply_all.tooltip": "将这些数值应用到订阅此插件的所有市场\n（需要确认）。",
   "gui.stockmarket.plugin_gui.defaults": "默认值",

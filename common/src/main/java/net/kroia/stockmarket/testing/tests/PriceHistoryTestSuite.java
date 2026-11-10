@@ -56,6 +56,7 @@ public class PriceHistoryTestSuite extends TestSuite {
         addTest("gameAggregate_timeSetBackwards", this::test_gameAggregate_timeSetBackwards);
         addTest("gameAggregate_frozenDaylightCap", this::test_gameAggregate_frozenDaylightCap);
         addTest("gameAggregate_legacyRows", this::test_gameAggregate_legacyRows);
+        addTest("gameLabels_dayAndHour", this::test_gameLabels_dayAndHour);
     }
 
     // --- Candle Operations ---
@@ -482,5 +483,26 @@ public class PriceHistoryTestSuite extends TestSuite {
         r = assertEquals("game rows start a new candle", 2000L, out.get(2).gameTime);
         if (!r.passed()) return r;
         return assertEquals("2 game rows merged", 2f, out.get(2).tradedVolume);
+    }
+
+    /**
+     * Chart labels: day 0-based, rolling at 00:00 (day time 18000); tick 0 = 06:00.
+     */
+    private TestResult test_gameLabels_dayAndHour() {
+        TestResult r = assertEquals("tick 0 is day 0", 0L, PriceHistoryData.gameDay(0L));
+        if (!r.passed()) return r;
+        r = assertEquals("23:59 is still day 0", 0L, PriceHistoryData.gameDay(17_999L));
+        if (!r.passed()) return r;
+        r = assertEquals("00:00 starts day 1", 1L, PriceHistoryData.gameDay(18_000L));
+        if (!r.passed()) return r;
+        r = assertEquals("day 2", 2L, PriceHistoryData.gameDay(42_000L));
+        if (!r.passed()) return r;
+        r = assertEquals("tick 0 = 06:00", "06:00", PriceHistoryData.gameHourLabel(0L));
+        if (!r.passed()) return r;
+        r = assertEquals("tick 18000 = 00:00", "00:00", PriceHistoryData.gameHourLabel(18_000L));
+        if (!r.passed()) return r;
+        r = assertEquals("tick 23999 = 05:00", "05:00", PriceHistoryData.gameHourLabel(23_999L));
+        if (!r.passed()) return r;
+        return assertEquals("tick 30500 = 12:00", "12:00", PriceHistoryData.gameHourLabel(30_500L));
     }
 }

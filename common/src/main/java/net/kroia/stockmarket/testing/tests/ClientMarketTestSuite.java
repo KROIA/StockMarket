@@ -17,6 +17,7 @@ public class ClientMarketTestSuite extends TestSuite {
     public void registerTests() {
         addTest("static_time_offset_shared", this::test_staticTimeOffset_sharedAcrossInstances);
         addTest("price_history_data_map_all_deltas", this::test_priceHistoryDataMap_allDeltasPresent);
+        addTest("game_time_deltas", this::test_gameTimeDeltas);
         addTest("subscribe_idempotent", this::test_subscribeToMarketPriceUpdate_idempotent);
         addTest("unsubscribe_no_subscription", this::test_unsubscribeFromMarketPriceUpdate_noSubscription);
     }
@@ -55,7 +56,7 @@ public class ClientMarketTestSuite extends TestSuite {
      * All 6 candle time deltas should have entries in AVAILABLE_CANDLE_TIME_DELTAS.
      */
     private TestResult test_priceHistoryDataMap_allDeltasPresent() {
-        long[] deltas = ClientMarket.getAvailableCandleTimeDeltas();
+        long[] deltas = ClientMarket.candleTimeDeltasFor(false); // T-218: real-time set, independent of the server mode
         TestResult r = assertNotNull("Available candle time deltas should not be null", deltas);
         if (!r.passed()) return r;
         r = assertEquals("Should have 6 candle time deltas", 6, deltas.length);
@@ -122,5 +123,26 @@ public class ClientMarketTestSuite extends TestSuite {
                 ClientMarket.CANDLE_TIME_1_DAY == ClientMarket.CANDLE_TIME_1_HOUR * 24);
         if (!r.passed()) return r;
         return pass("Unsubscribe contract verified: returns false when no subscription exists");
+    }
+
+    /**
+     * T-218: game-time deltas are 1h/4h/1D/1W of nominal 50 s in-game hours and never collide
+     * with a real-time delta (both share the delta-keyed caches).
+     */
+    private TestResult test_gameTimeDeltas() {
+        long[] game = ClientMarket.candleTimeDeltasFor(true);
+        TestResult r = assertEquals("4 game deltas", 4, game.length);
+        if (!r.passed()) return r;
+        long[] expected = {50_000L, 200_000L, 1_200_000L, 8_400_000L};
+        for (int i = 0; i < expected.length; i++) {
+            r = assertEquals("game delta " + i, expected[i], game[i]);
+            if (!r.passed()) return r;
+        }
+        for (long g : game)
+            for (long real : ClientMarket.candleTimeDeltasFor(false)) {
+                r = assertTrue("game delta " + g + " differs from real delta " + real, g != real);
+                if (!r.passed()) return r;
+            }
+        return pass("game-time deltas are 1h/4h/1D/1W and distinct from the real ones");
     }
 }

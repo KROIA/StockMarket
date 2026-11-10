@@ -491,6 +491,7 @@
   "gui.stockmarket.market_settings_widget.reset_net_flow": "Zruggsetze",
   "gui.stockmarket.market_settings_widget.apply": "Aawende",
   "stockmarket.candlestick.loadingOlder": "Lade ältere Date...",
+  "stockmarket.candlestick.game_day": "Tag %s",
   "gui.stockmarket.plugin_gui.apply_all": "Uf alli awände",
   "gui.stockmarket.plugin_gui.apply_all.tooltip": "Die Wert uf jede Markt awände,\nwo das Plugin abonniert het (mit Bestätigung).",
   "gui.stockmarket.plugin_gui.defaults": "Standard",
