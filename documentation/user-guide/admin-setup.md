@@ -155,7 +155,7 @@ StockMarket can post player trades and trading alerts to Discord channels throug
 
 | Type | Posted when | Fields |
 |---|---|---|
-| `market-buy` | A player's buy order is finished: fully filled, or canceled after some fills. Inter-market orders post one message per leg. | Player, UUID, Account, Item, Item ID, Amount, Avg. price, Inter-market group (inter-market legs only), Time |
+| `market-buy` | A player's buy order is finished: fully filled, or canceled after some fills. Inter-market orders post one message per leg. | Player, Item, Item ID, Amount, Avg. price, Inter-market group (inter-market legs only), Time |
 | `market-sell` | The same for sell orders. | Same as `market-buy` |
 | `market-alert` | A trading alert is raised, e.g. the profit alert. | Alert text, Time |
 
@@ -163,3 +163,25 @@ StockMarket can post player trades and trading alerts to Discord channels throug
 * `minAmount` filters trades by the traded item quantity (`Amount`).
 * The embed language follows `language` in `stockmarket.json` (`en_us`, `de_de`, `de_ch`, `zh_cn`). A type can override `title`, `color` and `fields`.
 * Webhook URLs contain a secret token. They are never logged or shown in game; keep `webhooks.json` private.
+* Alert texts name the player and the player's UUID. Route `market-alert` to a channel that only admins can read.
+
+### Showing account numbers and UUIDs
+
+To protect players' privacy, the default trade messages leave out the bank account number and the player UUID. They are still provided as values. To show them, give the type its own `fields` list in `stockmarket.json`. The list replaces the default fields completely, so it must contain every field you want to keep:
+
+```json
+"market-buy": {
+  "enabled": true, "webhooks": ["trades"], "minAmount": 0,
+  "fields": [
+    {"name": "Player", "value": "{player}", "inline": true},
+    {"name": "UUID", "value": "{player_uuid}", "inline": true},
+    {"name": "Account", "value": "{account}", "inline": true},
+    {"name": "Item", "value": "{item}", "inline": true},
+    {"name": "Amount", "value": "{amount}", "inline": true},
+    {"name": "Avg. price", "value": "{price}", "inline": true},
+    {"name": "Time", "value": "{time}", "inline": false}
+  ]
+}
+```
+
+Do the same for `market-sell`, then run `/modutilities discord reload`. Available values: `{player}`, `{player_uuid}`, `{account}` (`#<number>`), `{item}`, `{item_id}`, `{amount}`, `{price}`, `{interMarketGroup}`, `{time}`. A field whose value is empty is left out. Your `fields` list is kept when StockMarket updates its default templates.

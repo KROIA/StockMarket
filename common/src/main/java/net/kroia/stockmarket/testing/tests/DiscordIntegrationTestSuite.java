@@ -1,11 +1,13 @@
 package net.kroia.stockmarket.testing.tests;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.architectury.platform.Platform;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.discord.DiscordWebhooks;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -16,13 +18,16 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.filter.UUIDFilter;
 import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
 import net.kroia.stockmarket.stockmarket.market.OrderLedger;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.util.TradeAlerts;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,19 +36,27 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
- * T-217 — Discord feed ({@link StockMarketDiscord}) through its {@code sink} seam; never sends a real webhook.
+ * T-217 — Discord feed ({@link StockMarketDiscord}) through its {@code sink} seam; never sends a real webhook,
+ * except {@code live_webhook_posts} (see below).
  * <p>
- * Covers the generated config file, a player buy and sell through the real order-finished path (resting order
- * with fills, canceled via {@code ServerMarket.cancelOrder} -> {@code saveOrderRecord}), unfilled and bot orders,
- * the live switch, and alerts through {@link TradeAlerts#raise}.
+ * Covers the generated config file, the default templates (no account or UUID fields), a player buy and sell
+ * through the real order-finished path (resting order with fills, canceled via {@code ServerMarket.cancelOrder}
+ * -> {@code saveOrderRecord}), both legs of an inter-market order (canceled via
+ * {@code ServerMarketManager.cancelInterMarketOrder} -> {@code saveInterMarketOrderRecord}), unfilled and bot
+ * orders, the live switch, and alerts through {@link TradeAlerts#raise}.
  * <p>
- * <b>Server type:</b> master only (the backend is only set on the master; a slave never registers the feed).
- * Scratch market, account and user; the order history rows of the scratch user are deleted afterwards and the
- * BankSystem trade-ledger rows go to a no-op sink.
+ * <b>Server type:</b> master only (the backend is only set on the master; a slave never registers the feed), except
+ * the template check, which runs everywhere. Scratch markets, account and user; the order history rows of the
+ * scratch user are deleted afterwards and the BankSystem trade-ledger rows go to a no-op sink.
+ * <p>
+ * {@code live_webhook_posts} runs only when env var {@value #LIVE_ENV} names an existing text file holding a webhook
+ * URL (read at runtime, so the URL never lands in the repo, a launch command or a log); otherwise it skips. It posts
+ * one embed per type through the real {@link DiscordWebhooks} pipeline, to check the look in a Discord channel.
  */
 public class DiscordIntegrationTestSuite extends TestSuite {
 
@@ -56,9 +69,15 @@ public class DiscordIntegrationTestSuite extends TestSuite {
 
     private static final String PLAYER_NAME = "DiscordTestTrader";
     private static final String MARKER = "discord-integration-test-marker";
+    /** Env var naming the file that holds the live-test webhook URL (the URL itself is never in the environment). */
+    private static final String LIVE_ENV = "MC_DISCORD_TEST_WEBHOOK_FILE";
+    /** Marker of the live test's alert; its trades are recognized by the scratch player's UUID. */
+    private static final String LIVE = "StockMarket live webhook test";
 
     private final TestFixture fixture = new TestFixture("Discord");
     private IServerMarket market;
+    /** Second scratch market: the buy leg of the inter-market tests (the sell leg is {@link #market}). */
+    private IServerMarket other;
     private ItemID itemID;
     private int accountNr;
     private UUID player;
@@ -71,11 +90,15 @@ public class DiscordIntegrationTestSuite extends TestSuite {
     @Override
     public void registerTests() {
         addTest("config_file_lists_types", () -> master(this::configFile));
+        addTest("default_templates_hide_account_and_uuid", this::defaultTemplates);
         addTest("player_buy_posts_values", () -> master(this::playerBuy));
         addTest("player_sell_posts_sell", () -> master(this::playerSell));
         addTest("unfilled_and_bot_post_nothing", () -> master(this::unfilledAndBot));
+        addTest("inter_market_posts_one_per_leg", () -> master(this::interMarketLegs));
+        addTest("inter_market_unfilled_and_bot_post_nothing", () -> master(this::interMarketUnfilledAndBot));
         addTest("switch_off_posts_nothing", () -> master(this::switchOff));
         addTest("alert_posts_message", () -> master(this::alert));
+        addTest("live_webhook_posts", () -> master(this::live));
     }
 
     @Override
@@ -84,6 +107,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
             return;
         fixture.setBackend(backend);
         market = fixture.createMarket("main");
+        other = fixture.createMarket("other");
         itemID = market.getItemID();
         IServerBankAccount account = fixture.createBankAccount("trader");
         accountNr = account.getAccountNumber();
@@ -96,6 +120,9 @@ public class DiscordIntegrationTestSuite extends TestSuite {
     @Override
     public void teardown() {
         try {
+            // A failed inter-market test may leave its order queued: cancel it with the feed off and the sink captured.
+            if (other != null && player != null && backend != null)
+                capture(false, () -> manager().cancelInterMarketOrdersForMarket(other.getItemID()));
             if (market != null) {
                 market.test_clearOrderbook();
                 market.test_clearIncomingOrderBuffers();
@@ -108,6 +135,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
             }
         } finally {
             market = null;
+            other = null;
             player = null;
             fixture.cleanup();
         }
@@ -129,7 +157,38 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         }
     }
 
-    /** A canceled player buy with fills posts one market-buy with the player's values. */
+    /**
+     * The shipped market-buy / market-sell templates of every language show no account number and no UUID (an
+     * admin adds them via {@code fields} in stockmarket.json), but keep every other field.
+     */
+    private TestResult defaultTemplates() {
+        List<String> required = List.of("{player}", "{item}", "{item_id}", "{amount}", "{price}", "{interMarketGroup}", "{time}");
+        for (String lang : List.of("en_us", "de_de", "de_ch", "zh_cn")) {
+            // classpath, not Mod.findResource: in a Loom dev run the common module's resources are not part of the
+            // mod container's root paths (they are in the release jar)
+            try (var in = DiscordIntegrationTestSuite.class.getResourceAsStream("/assets/stockmarket/discord/" + lang + ".json")) {
+                if (in == null)
+                    return fail("missing template file " + lang + ".json");
+                JsonObject root = JsonParser.parseString(new String(in.readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject();
+                for (String type : List.of("market-buy", "market-sell")) {
+                    String values = root.getAsJsonObject(type).getAsJsonArray("fields").toString();
+                    if (values.contains("{account}") || values.contains("{player_uuid}"))
+                        return fail(lang + " " + type + " shows account or UUID: " + values);
+                    for (String r : required)
+                        if (!values.contains(r))
+                            return fail(lang + " " + type + " lacks " + r);
+                }
+            } catch (Exception e) {
+                return fail("cannot read " + lang + ".json: " + e);
+            }
+        }
+        return pass("4 languages: market-buy/-sell without {account} and {player_uuid}, all other fields kept");
+    }
+
+    /**
+     * A canceled player buy with fills posts one market-buy with the player's values. {@code account} and
+     * {@code player_uuid} are still provided (for admin templates) although the default embed omits them.
+     */
     private TestResult playerBuy() {
         var posts = capture(true, () -> filledAndCanceled(500, 200, -1800)); // 2 items for 18 -> avg 9
         if (posts.size() != 1 || !"market-buy".equals(posts.get(0).getKey()))
@@ -141,7 +200,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
                 || !"2".equals(v.get("amount")) || !"9".equals(v.get("price"))
                 || v.get("time") == null || !v.get("time").matches("<t:\\d+:f>") || v.containsKey("interMarketGroup"))
             return fail("values " + v);
-        return pass("1 market-buy: player, uuid, account, item, amount 2, price 9, time");
+        return pass("1 market-buy: player, uuid and account values, item, amount 2, price 9, time");
     }
 
     /** A canceled player sell with fills posts one market-sell with the absolute amount. */
@@ -166,6 +225,64 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         return posts.isEmpty() ? pass("unfilled cancel and bot record post nothing") : fail("posts " + posts);
     }
 
+    /**
+     * A canceled player inter-market order with fills on both legs posts one market-buy (want leg) and one
+     * market-sell (have leg), both carrying the order's inter-market group.
+     */
+    private TestResult interMarketLegs() {
+        InterMarketOrder imo = new InterMarketOrder(other.getItemID(), itemID, Order.Type.MARKET,
+                500, 0, 100, 0, System.nanoTime(), player, accountNr);
+        imo.getBuyOrder().edit(200, -1800); // bought 2 for 18 -> avg 9
+        imo.getSellOrder().edit(-100, 1500); // sold the whole 1 for 15: nothing left to unlock on cancel
+        var posts = capture(true, () -> {
+            if (!manager().putInterMarketOrder(imo))
+                throw new IllegalStateException("inter-market order not enqueued");
+            if (!manager().cancelInterMarketOrder(imo.getInterMarketGroupID(), player))
+                throw new IllegalStateException("inter-market cancel did not find the order");
+        });
+        String group = imo.getInterMarketGroupID().toString();
+        if (posts.size() != 2)
+            return fail("expected 2 posts, got " + posts);
+        Map<String, String> buy = null, sell = null;
+        for (var p : posts) {
+            if ("market-buy".equals(p.getKey())) buy = p.getValue();
+            if ("market-sell".equals(p.getKey())) sell = p.getValue();
+        }
+        if (buy == null || sell == null)
+            return fail("expected one market-buy and one market-sell, got " + posts);
+        if (!group.equals(buy.get("interMarketGroup")) || !group.equals(sell.get("interMarketGroup")))
+            return fail("interMarketGroup missing or wrong: buy " + buy + ", sell " + sell);
+        if (!other.getItemID().getName().equals(buy.get("item_id")) || !"2".equals(buy.get("amount")) || !"9".equals(buy.get("price")))
+            return fail("buy leg values " + buy);
+        if (!itemID.getName().equals(sell.get("item_id")) || !"1".equals(sell.get("amount")) || !"15".equals(sell.get("price")))
+            return fail("sell leg values " + sell);
+        return pass("2 posts (buy 2 @ 9, sell 1 @ 15), both with interMarketGroup " + group);
+    }
+
+    /** A canceled player inter-market order without fills, and a bot inter-market order with fills, post nothing. */
+    private TestResult interMarketUnfilledAndBot() {
+        InterMarketOrder unfilled = new InterMarketOrder(other.getItemID(), itemID, Order.Type.MARKET,
+                500, 0, 100, 0, System.nanoTime(), player, accountNr);
+        InterMarketOrder bot = new InterMarketOrder(other.getItemID(), itemID, Order.Type.MARKET,
+                500, 0, 100, 0, System.nanoTime());
+        bot.getBuyOrder().edit(200, -1800);
+        bot.getSellOrder().edit(-100, 1500);
+        IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(accountNr);
+        var posts = capture(true, () -> {
+            account.getBank(itemID).lockAmount(100); // what the order request locks; the cancel unlocks it again
+            if (!manager().putInterMarketOrder(unfilled) || !manager().putInterMarketOrder(bot))
+                throw new IllegalStateException("inter-market order not enqueued");
+            if (!manager().cancelInterMarketOrder(unfilled.getInterMarketGroupID(), player))
+                throw new IllegalStateException("inter-market cancel did not find the order");
+            manager().cancelInterMarketOrdersForMarket(other.getItemID()); // the bot order
+        });
+        if (!posts.isEmpty())
+            return fail("posts " + posts);
+        long locked = account.getBank(itemID).getLockedBalance();
+        return locked == 0 ? pass("unfilled player order and bot order post nothing")
+                : fail("cancel left " + locked + " locked");
+    }
+
     /** With DISCORD_ENABLED off, a filled player order posts nothing. */
     private TestResult switchOff() {
         var posts = capture(false, () -> filledAndCanceled(500, 200, -1800));
@@ -182,6 +299,116 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         if (!text.equals(v.get("message")) || v.get("time") == null || !v.get("time").matches("<t:\\d+:f>"))
             return fail("values " + v);
         return pass("1 market-alert with message and time");
+    }
+
+    /**
+     * Posts one embed per type (market-buy, market-sell, market-alert) to the webhook in the file named by
+     * {@value #LIVE_ENV}, through the real {@link DiscordWebhooks} config and sender. Swaps webhooks.json and
+     * stockmarket.json for the test and restores both byte for byte (finally). The URL is a secret: it never goes
+     * into a result, log or exception text. Skips when the env var is unset or the file does not exist.
+     */
+    private TestResult live() {
+        String file = System.getenv(LIVE_ENV);
+        if (file == null || file.isBlank())
+            return skip("env " + LIVE_ENV + " not set");
+        Path secret = Path.of(file.strip());
+        if (!Files.isRegularFile(secret))
+            return skip("env " + LIVE_ENV + ": file not found");
+        String url;
+        try {
+            url = Files.readString(secret, StandardCharsets.UTF_8).strip();
+        } catch (IOException | RuntimeException e) { // no e text: keep file content out of the result
+            return fail("env " + LIVE_ENV + ": cannot read the file (" + e.getClass().getSimpleName() + ")");
+        }
+        if (url.isEmpty())
+            return fail("env " + LIVE_ENV + ": the file is blank");
+        Path dir = Platform.getConfigFolder().resolve("modutilities").resolve("discord");
+        Path hooksFile = dir.resolve("webhooks.json"), routesFile = dir.resolve(StockMarketMod.MOD_ID + ".json");
+        byte[] oldHooks, oldRoutes;
+        try {
+            oldHooks = Files.exists(hooksFile) ? Files.readAllBytes(hooksFile) : null;
+            oldRoutes = Files.exists(routesFile) ? Files.readAllBytes(routesFile) : null;
+        } catch (IOException e) {
+            return fail("cannot back up the Discord config: " + e);
+        }
+        Setting<Boolean> setting = backend.SERVER_SETTINGS.INTEGRATIONS.DISCORD_ENABLED;
+        boolean before = setting.get();
+        BiConsumer<String, Map<String, String>> previous = StockMarketDiscord.sink;
+        TestResult result;
+        boolean restored;
+        try {
+            result = livePosts(url, dir, hooksFile, routesFile, setting);
+        } catch (IOException e) {
+            result = fail("cannot write the Discord config: " + e);
+        } finally {
+            setting.set(before);
+            StockMarketDiscord.sink = previous;
+            OrderLedger.Writer.testSink = null;
+            restored = put(hooksFile, oldHooks) & put(routesFile, oldRoutes); // both, even if the first fails
+            DiscordWebhooks.reload();
+        }
+        return restored ? result : fail("could not restore webhooks.json / stockmarket.json in " + dir + "; fix by hand");
+    }
+
+    /** Body of {@link #live()}: writes the test config, posts the 3 types, waits for the sender. Caller restores. */
+    private TestResult livePosts(String url, Path dir, Path hooksFile, Path routesFile, Setting<Boolean> setting) throws IOException {
+        JsonObject hooks = new JsonObject();
+        hooks.addProperty("live-test", url);
+        JsonObject hooksRoot = new JsonObject();
+        hooksRoot.add("webhooks", hooks);
+        JsonObject types = new JsonObject();
+        for (String t : StockMarketDiscord.TYPES) {
+            JsonObject route = new JsonObject();
+            JsonArray names = new JsonArray();
+            names.add("live-test");
+            route.addProperty("enabled", true);
+            route.add("webhooks", names);
+            route.addProperty("minAmount", 0);
+            types.add(t, route);
+        }
+        JsonObject routesRoot = new JsonObject();
+        routesRoot.add("types", types);
+        Files.createDirectories(dir);
+        Files.writeString(hooksFile, hooksRoot.toString(), StandardCharsets.UTF_8);
+        Files.writeString(routesFile, routesRoot.toString(), StandardCharsets.UTF_8);
+        DiscordWebhooks.reload();
+        if (!DiscordWebhooks.isActive())
+            return fail("DiscordWebhooks inactive after reload (webhook URL rejected?)");
+
+        // only this test's posts reach Discord: trades of the scratch player, the alert with the LIVE marker
+        Map<String, Integer> forwarded = new ConcurrentHashMap<>();
+        StockMarketDiscord.sink = (type, v) -> {
+            String message = v.get("message");
+            if (!player.toString().equals(v.get("player_uuid")) && (message == null || !message.contains(LIVE)))
+                return;
+            forwarded.merge(type, 1, Integer::sum);
+            DiscordWebhooks.post(StockMarketMod.MOD_ID, type, v);
+        };
+        OrderLedger.Writer.testSink = e -> {}; // keep the scratch fills out of BankSystem's trade ledger
+        setting.set(true);
+        filledAndCanceled(500, 200, -1800);  // market-buy: 2 for 18 -> avg 9
+        filledAndCanceled(-500, -200, 4000); // market-sell: 2 for 40 -> avg 20
+        String alert = LIVE + ": test alert, please ignore";
+        TradeAlerts.raise(alert, Component.literal(alert));
+        for (String t : StockMarketDiscord.TYPES)
+            if (forwarded.getOrDefault(t, 0) != 1)
+                return fail("forwarded per type " + forwarded);
+        // ponytail: no public drain hook on DiscordWebhooks; fixed wait for the sender (batching, rate limits).
+        // Queued items keep their URL, so a slower send still goes out after the caller's restore.
+        pump(10_000);
+        int posted = forwarded.values().stream().mapToInt(Integer::intValue).sum();
+        return pass("live webhook: posted " + posted);
+    }
+
+    /** Writes {@code content} to {@code file}, or deletes it if null (it did not exist). @return false on an I/O error */
+    private static boolean put(Path file, @Nullable byte[] content) {
+        try {
+            if (content == null) Files.deleteIfExists(file);
+            else Files.write(file, content);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     // ------------------------------------------------------------------ helpers

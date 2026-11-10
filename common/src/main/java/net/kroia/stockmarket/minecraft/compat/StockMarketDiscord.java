@@ -31,6 +31,10 @@ import java.util.function.BiConsumer;
  *       {@code amount} is the item quantity, so the type's {@code minAmount} filters by quantity.</li>
  *   <li>{@code market-alert}: every {@link net.kroia.stockmarket.util.TradeAlerts} alert, with its log text.</li>
  * </ul>
+ * Trade values: {@code player}, {@code player_uuid}, {@code account}, {@code item}, {@code item_id}, {@code amount},
+ * {@code price}, {@code time}, {@code interMarketGroup} (inter-market legs only). The shipped templates leave
+ * {@code player_uuid} and {@code account} out (privacy); an admin adds them on purpose through the type's
+ * {@code fields} override in {@code stockmarket.json}.
  * Callers run on the server thread (matching engine, cancel path, alerts).
  */
 public final class StockMarketDiscord {

@@ -4,8 +4,6 @@
     "color": 5793266,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "物品 ID", "value": "{item_id}", "inline": true},
       {"name": "数量", "value": "{amount}", "inline": true},
@@ -19,8 +17,6 @@
     "color": 5793266,
     "fields": [
       {"name": "玩家", "value": "{player}", "inline": true},
-      {"name": "UUID", "value": "{player_uuid}", "inline": true},
-      {"name": "账户", "value": "{account}", "inline": true},
       {"name": "物品", "value": "{item}", "inline": true},
       {"name": "物品 ID", "value": "{item_id}", "inline": true},
       {"name": "数量", "value": "{amount}", "inline": true},
