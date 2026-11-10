@@ -10,12 +10,14 @@ import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.networking.request.ServerTimeRequest;
+import net.kroia.stockmarket.screen.uiElements.ApplyButton;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -106,7 +108,13 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     private final Label fadedNetFlowValueLabel;
     private final Button resetVirtualOrderbookButton;
     private final Button clearVirtualOrderbookButton;
-    private final Button applyButton;
+    /** T-219: turns orange while the form differs from {@link #savedFormState}. */
+    private final ApplyButton applyButton;
+    /**
+     * T-219: {@link #formState()} as last loaded from / applied to the server; null until the
+     * first load, so nothing counts as unsaved before that.
+     */
+    private List<Object> savedFormState = null;
 
     private final Label tradingHoursLabel;
     private final TextBox tradingOpenTextBox;
@@ -207,7 +215,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         clearVirtualOrderbookButton.setHoverTooltipSupplier(CLEAR_VIRTUAL_ORDERBOOK_TOOLTIP::getString);
         clearVirtualOrderbookButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
-        applyButton = new Button(APPLY_TEXT.getString(), this::saveSettings);
+        applyButton = new ApplyButton(APPLY_TEXT.getString(), this::saveSettings);
 
         // Trading hours row: [label] [open] - [close], followed by the apply-all button.
         tradingHoursLabel = new Label(TRADING_HOURS_TEXT.getString());
@@ -289,6 +297,9 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
      */
     @Override
     protected void render() {
+        // T-219: orange Apply while the form has unsaved changes (checked every frame, before the timer return).
+        applyButton.setUnsaved(savedFormState != null && !savedFormState.equals(formState()));
+
         // Outline grouping the trading-hours controls (incl. "Apply to all", which only
         // copies the trading hours). Drawn before the timer early-return so it shows every frame.
         if (tradingHoursFrameHeight > 0)
@@ -492,6 +503,9 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
                 // Keep the local copy in sync so a later Apply does not revert the window.
                 settings.tradingOpenMinute = openMinute;
                 settings.tradingCloseMinute = closeMinute;
+                // T-219: this market got the window too, so it no longer counts as unsaved.
+                if (savedFormState != null && succeeded.get() == total)
+                    savedFormState.set(savedFormState.size() - 1, Arrays.toString(new int[]{openMinute, closeMinute}));
                 tradingHoursStatusLabel.setTextColor(succeeded.get() == total ? SUCCESS_TEXT_COLOR : ERROR_TEXT_COLOR);
                 tradingHoursStatusLabel.setText(Component.translatable(APPLY_ALL_HOURS_DONE_KEY,
                         MarketSettings.formatMinute(openMinute), MarketSettings.formatMinute(closeMinute),
@@ -545,7 +559,24 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         if (abundance > 0)
             settings.naturalAbundance = abundance;
         settings.maxOrderVolume = parseMaxOrder(maxOrderTextBox.getText(), settings.maxOrderVolume);
-        market.setSettings(settings);
+        List<Object> sentState = formState();
+        market.setSettings(settings).thenAccept(success -> {
+            if (Boolean.TRUE.equals(success))
+                savedFormState = sentState; // T-219: Apply button back to normal
+        });
+    }
+
+    /**
+     * T-219: everything Apply would send, as shown in the form: both checkboxes, the raw texts of
+     * the price / abundance / max-order boxes and the normalized trading window (always LAST, see
+     * {@link #applyTradingHoursToAllMarkets}). Compared against {@link #savedFormState}.
+     *
+     * @return a mutable fixed-size list of the current form values
+     */
+    private List<Object> formState() {
+        return Arrays.asList(maintenanceCheckBox.isChecked(), virtualOrderbookEnabledCheckBox.isChecked(),
+                defaultPriceTextBox.getText(), abundanceTextBox.getText(), maxOrderTextBox.getText(),
+                Arrays.toString(readTradingHours()));
     }
 
     public void setSettings(MarketSettings marketSettings)
@@ -576,6 +607,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         maxOrderTextBox.setText(Long.toString(settings.maxOrderVolume));
         setNetFlowTexts();
         setTradingHoursText(settings.tradingOpenMinute, settings.tradingCloseMinute);
+        savedFormState = formState(); // T-219: the server state is the new baseline
         loading = false;
     }
 

@@ -23,6 +23,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.networking.request.ModSettingsRequest;
 import net.kroia.stockmarket.pluginsystem.plugins.screen.NewsDialogScreen;
+import net.kroia.stockmarket.screen.uiElements.ApplyButton;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
@@ -33,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -156,6 +158,13 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
      */
     private long savedMaxOrderVolumeFactor = -1;
     private final List<FieldBinding> bindings = new ArrayList<>();
+    /** T-219: all setting rows, in the same order as {@link #savedEditorValues}. */
+    private final List<SettingRow> rows = new ArrayList<>();
+    /**
+     * T-219: editor values ({@link SettingRow#editorValue()}) as last loaded from / confirmed by
+     * the master. Empty until the first GET response, so nothing counts as unsaved before that.
+     */
+    private final List<Object> savedEditorValues = new ArrayList<>();
 
     private final Label titleLabel;
     private final CloseButton closeButton;
@@ -163,7 +172,8 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
     private final Label statusLabel;
     private final Button defaultsButton;
     private final Button reloadButton;
-    private final Button applyButton;
+    /** T-219: turns orange while any field differs from {@link #savedEditorValues}. */
+    private final ApplyButton applyButton;
 
     /**
      * Creates the screen and immediately fetches the current settings from the master.
@@ -197,7 +207,7 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         defaultsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.BOTTOM_RIGHT);
 
         reloadButton = new Button(Texts.RELOAD.getString(), this::loadFromServer);
-        applyButton = new Button(Texts.APPLY.getString(), this::onApply);
+        applyButton = new ApplyButton(Texts.APPLY.getString(), this::onApply);
 
         buildRows();
 
@@ -249,7 +259,9 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
             listView.addChild(heading);
 
             for (Setting<?> setting : group.getAllSettings()) {
-                listView.addChild(new SettingRow(group, setting));
+                SettingRow row = new SettingRow(group, setting);
+                rows.add(row);
+                listView.addChild(row);
             }
         }
     }
@@ -269,6 +281,20 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         private Label restartMarker = null;
         /** T-179: "Apply to all markets" button, only on the MAX_ORDER_VOLUME_FACTOR row. */
         private Button applyAllButton = null;
+
+        /**
+         * T-219: the value currently shown in this row's editor, used to detect unsaved changes.
+         * Text boxes report their raw text, so retyping "0.8" as "0.80" counts as a change.
+         *
+         * @return the checkbox state, the text box text, the selected item stack, or null for a
+         *         read-only (unsupported type) row
+         */
+        Object editorValue() {
+            if (checkBox != null) return checkBox.isChecked();
+            if (textBox != null) return textBox.getText();
+            if (itemView != null) return itemView.getItemStack();
+            return null;
+        }
 
         SettingRow(SettingsGroup group, Setting<?> setting) {
             setEnableBackground(false);
@@ -534,6 +560,10 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
                 Long factor = workingCopy.MARKET.MAX_ORDER_VOLUME_FACTOR.get();
                 savedMaxOrderVolumeFactor = factor != null ? factor : -1;
                 refreshFields();
+                // T-219: the fields now show the master's confirmed state — that is the new baseline.
+                savedEditorValues.clear();
+                for (SettingRow row : rows)
+                    savedEditorValues.add(row.editorValue());
             } catch (Exception e) {
                 error("Failed to parse mod settings response", e);
                 setStatus(Texts.STATUS_FAILED.getString(), STATUS_COLOR_ERROR);
@@ -588,6 +618,34 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
     private void refreshFields() {
         for (FieldBinding binding : bindings)
             binding.loadFromSetting();
+    }
+
+    /** T-219: polls the fields every tick (catches typing, Defaults and the item picker alike). */
+    @Override
+    public void tick() {
+        super.tick();
+        applyButton.setUnsaved(hasUnsavedChanges());
+    }
+
+    /**
+     * T-219: whether any editor differs from the last loaded/applied value. Reverting every
+     * field by hand makes this false again.
+     *
+     * @return true if Apply would send something that is not saved on the master yet
+     */
+    private boolean hasUnsavedChanges() {
+        if (savedEditorValues.size() != rows.size())
+            return false; // not loaded yet
+        for (int i = 0; i < rows.size(); i++) {
+            Object current = rows.get(i).editorValue();
+            Object saved = savedEditorValues.get(i);
+            boolean same = current instanceof ItemStack a && saved instanceof ItemStack b
+                    ? ItemStack.isSameItemSameComponents(a, b) // ItemStack has no equals()
+                    : Objects.equals(current, saved);
+            if (!same)
+                return true;
+        }
+        return false;
     }
 
     private void setStatus(String text, int color) {
