@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.testing;
 
 import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.testing.tests.ActiveOrdersRequestTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientMarketTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientNewsCacheTestSuite;
@@ -55,73 +56,100 @@ import net.kroia.stockmarket.testing.tests.VirtualOrderbookTestSuite;
 import net.kroia.stockmarket.testing.tests.VolatilityPluginTestSuite;
 import net.kroia.stockmarket.testing.tests.NetFlowPluginTestSuite;
 
+import java.util.regex.Pattern;
+
+/**
+ * Registers the StockMarket test suites with the ModUtilities {@link TestRegistry}.
+ * <p>
+ * Suite filter: the JVM property {@code -Dstockmarket.tests=<regex>} registers only the suites whose class simple
+ * name the regex {@link java.util.regex.Matcher#find() finds} (e.g. {@code PluginTestSuite|NetFlowPluginTestSuite}).
+ * Unset or blank = every suite (default).
+ */
 public class StockMarketTestRegistration {
 
+    /** JVM property holding the optional suite filter regex. */
+    public static final String SUITE_FILTER_PROPERTY = "stockmarket.tests";
+
     private static boolean registered = false;
+    /** The suite filter of the current {@link #register()} call, null = every suite. */
+    private static Pattern suiteFilter;
 
     public static void register() {
         if (registered) return;
         registered = true;
+        String filter = System.getProperty(SUITE_FILTER_PROPERTY, "");
+        suiteFilter = filter.isBlank() ? null : Pattern.compile(filter);
 
         // Existing test suites
-        TestRegistry.register(new OrderTestSuite());
-        TestRegistry.register(new DynamicIndexedArrayTestSuite());
-        TestRegistry.register(new PIDTestSuite());
-        TestRegistry.register(new RandomWalkTestSuite());
-        TestRegistry.register(new MarketIntegrationTestSuite());
+        add(new OrderTestSuite());
+        add(new DynamicIndexedArrayTestSuite());
+        add(new PIDTestSuite());
+        add(new RandomWalkTestSuite());
+        add(new MarketIntegrationTestSuite());
 
         // New common test suites
-        TestRegistry.register(new InterMarketOrderTestSuite());
-        TestRegistry.register(new TradingPairTestSuite());
-        TestRegistry.register(new VirtualOrderbookTestSuite());
-        TestRegistry.register(new DataFilterTestSuite());
-        TestRegistry.register(new PriceHistoryTestSuite());
-        TestRegistry.register(new PriceHistoryCacheTestSuite());
-        TestRegistry.register(new UserTestSuite());
-        TestRegistry.register(new AdminFlagSyncTestSuite()); // admin flag / LuckPerms sync decisions
-        TestRegistry.register(new PlayerPreferencesTestSuite());
-        TestRegistry.register(new MarketSettingsTestSuite());
-        TestRegistry.register(new MarketPresetTestSuite());
-        TestRegistry.register(new ClientMarketTestSuite());
-        TestRegistry.register(new NormalizedRandomPriceGeneratorTestSuite());
-        TestRegistry.register(new VillagerTradePricingTestSuite());
-        TestRegistry.register(new VillagerMoneyPaymentTestSuite());
-        TestRegistry.register(new NetFlowPluginTestSuite());
-        TestRegistry.register(new VolatilityPluginTestSuite());
-        TestRegistry.register(new ModSettingsTestSuite());
-        TestRegistry.register(new NewsSystemTestSuite());
-        TestRegistry.register(new NewsPluginTestSuite());
-        TestRegistry.register(new NewsAdminTestSuite());
-        TestRegistry.register(new NewsSchedulerTestSuite());
-        TestRegistry.register(new NewsHistoryTestSuite());
-        TestRegistry.register(new NewsHistoryChunksTestSuite());
-        TestRegistry.register(new ClientNewsCacheTestSuite());
-        TestRegistry.register(new NewsPictureLibraryTestSuite());
-        TestRegistry.register(new NewsPictureStoreTestSuite());
-        TestRegistry.register(new NewsPictureClientCacheTestSuite());
-        TestRegistry.register(new NewsRegistryTestSuite());
-        TestRegistry.register(new NewsRequirementTestSuite());
-        TestRegistry.register(new NewsChainsTestSuite());
-        TestRegistry.register(new PlaceholderNamingTestSuite());
+        add(new InterMarketOrderTestSuite());
+        add(new TradingPairTestSuite());
+        add(new VirtualOrderbookTestSuite());
+        add(new DataFilterTestSuite());
+        add(new PriceHistoryTestSuite());
+        add(new PriceHistoryCacheTestSuite());
+        add(new UserTestSuite());
+        add(new AdminFlagSyncTestSuite()); // admin flag / LuckPerms sync decisions
+        add(new PlayerPreferencesTestSuite());
+        add(new MarketSettingsTestSuite());
+        add(new MarketPresetTestSuite());
+        add(new ClientMarketTestSuite());
+        add(new NormalizedRandomPriceGeneratorTestSuite());
+        add(new VillagerTradePricingTestSuite());
+        add(new VillagerMoneyPaymentTestSuite());
+        add(new NetFlowPluginTestSuite());
+        add(new VolatilityPluginTestSuite());
+        add(new ModSettingsTestSuite());
+        add(new NewsSystemTestSuite());
+        add(new NewsPluginTestSuite());
+        add(new NewsAdminTestSuite());
+        add(new NewsSchedulerTestSuite());
+        add(new NewsHistoryTestSuite());
+        add(new NewsHistoryChunksTestSuite());
+        add(new ClientNewsCacheTestSuite());
+        add(new NewsPictureLibraryTestSuite());
+        add(new NewsPictureStoreTestSuite());
+        add(new NewsPictureClientCacheTestSuite());
+        add(new NewsRegistryTestSuite());
+        add(new NewsRequirementTestSuite());
+        add(new NewsChainsTestSuite());
+        add(new PlaceholderNamingTestSuite());
 
         // New master-only test suites
-        TestRegistry.register(new MatchingEngineTestSuite());
-        TestRegistry.register(new OrderbookTestSuite());
-        TestRegistry.register(new CreateOrderRequestTestSuite());
-        TestRegistry.register(new ActiveOrdersRequestTestSuite());
-        TestRegistry.register(new DatabaseTestSuite());
-        TestRegistry.register(new MarketPriceManagerTestSuite());
-        TestRegistry.register(new OrderRecordManagerTestSuite());
-        TestRegistry.register(new ServerMarketTestSuite());
-        TestRegistry.register(new PluginTestSuite());
-        TestRegistry.register(new InterMarketExecutorTestSuite());
-        TestRegistry.register(new MarketMergeConsolidationTestSuite());
-        TestRegistry.register(new VillagerTradeRewriteTestSuite());
-        TestRegistry.register(new NewsHistoryRequestTestSuite());
-        TestRegistry.register(new NewsPictureRequestTestSuite());
+        add(new MatchingEngineTestSuite());
+        add(new OrderbookTestSuite());
+        add(new CreateOrderRequestTestSuite());
+        add(new ActiveOrdersRequestTestSuite());
+        add(new DatabaseTestSuite());
+        add(new MarketPriceManagerTestSuite());
+        add(new OrderRecordManagerTestSuite());
+        add(new ServerMarketTestSuite());
+        add(new PluginTestSuite());
+        add(new InterMarketExecutorTestSuite());
+        add(new MarketMergeConsolidationTestSuite());
+        add(new VillagerTradeRewriteTestSuite());
+        add(new NewsHistoryRequestTestSuite());
+        add(new NewsPictureRequestTestSuite());
         // Admin flag sync against a real LuckPerms (skip without it), then "LuckPerms removed" phase 1/2.
         // Last: the removed-suite's phase 1 leaves the sync setting on (autotest runs only).
-        TestRegistry.register(new AdminFlagSyncLuckPermsTests());
-        TestRegistry.register(new StockMarketLuckPermsRemovedTests());
+        add(new AdminFlagSyncLuckPermsTests());
+        add(new StockMarketLuckPermsRemovedTests());
+    }
+
+    /**
+     * Registers one suite unless the {@link #SUITE_FILTER_PROPERTY} filter is set and does not find the suite's
+     * class simple name.
+     *
+     * @param suite the test suite
+     */
+    private static void add(TestSuite suite) {
+        if (suiteFilter == null || suiteFilter.matcher(suite.getClass().getSimpleName()).find())
+            TestRegistry.register(suite);
     }
 }
