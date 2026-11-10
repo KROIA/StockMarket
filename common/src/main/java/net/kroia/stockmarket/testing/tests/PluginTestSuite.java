@@ -149,6 +149,7 @@ public class PluginTestSuite extends TestSuite {
         addTest("targetPriceBot_gapGuard_timesOut", this::test_targetPriceBot_gapGuard_timesOut);
         // #96 (ungated): the default depth is centred on the fair price, the bot's reference stays inside the flow band
         addTest("defaultDepth_centredOnFairPrice", this::test_defaultDepth_centredOnFairPrice);
+        addTest("targetPriceBot_referenceAnchor_band", this::test_targetPriceBot_referenceAnchorBand);
         addTest("volumeDistribution_volumeAt_extremePrices", this::test_volumeDistribution_volumeAt_extremePrices);
         // T-208 bot reference (setpoint) model
         addTest("targetPriceBot_reference_invariants", this::test_targetPriceBot_referenceInvariants);
@@ -3927,6 +3928,19 @@ public class PluginTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return pass(String.format(Locale.ROOT, "level at 0.01: %.2f around E 100, %.0f around the price", atPrice, marketCentred));
         }
+    }
+
+    /** #96: a fill anchors the bot's reference inside [E x 5%, E x 3] (the NetFlowPlugin's default clamps) only. */
+    private TestResult test_targetPriceBot_referenceAnchorBand() {
+        TestResult r = assertEquals("inside the band", 150.0, TargetPriceBot.referenceAnchorPrice(150, 160));
+        if (!r.passed()) return r;
+        r = assertEquals("below: lower edge", 160 * (double) NetFlowPlugin.DEFAULT_MIN_PRICE_MULT, TargetPriceBot.referenceAnchorPrice(0.01, 160));
+        if (!r.passed()) return r;
+        r = assertEquals("above: upper edge", 160 * (double) NetFlowPlugin.DEFAULT_MAX_PRICE_MULT, TargetPriceBot.referenceAnchorPrice(5000, 160));
+        if (!r.passed()) return r;
+        r = assertEquals("no fair price: unclamped", 0.01, TargetPriceBot.referenceAnchorPrice(0.01, Double.NaN));
+        if (!r.passed()) return r;
+        return assertEquals("fair price 0: unclamped", 5000.0, TargetPriceBot.referenceAnchorPrice(5000, 0));
     }
 
     /**

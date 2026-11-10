@@ -236,7 +236,8 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
      * @param y      the reference, ln(price)
      * @param v      its velocity (ln price per second)
      * @param c      excess of the oscillation centre over ln(T); decays with the reversion time
-     * @param anchor ln of the last price a player pushed to (S)
+     * @param anchor ln of the last price a player pushed to (S), at most the flow band edge (#96,
+     *               {@link #referenceAnchorPrice})
      * @param active false = idle, the bot follows T through {@link #limitTargetMove} as before T-208
      */
     public record Reference(double y, double v, double c, double anchor, boolean active) {
@@ -266,7 +267,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
      *
      * @param r       the current reference
      * @param lnT     ln of the plugins' target price
-     * @param lnPrice ln of the market price after the fill
+     * @param lnPrice ln of the market price after the fill (the bot passes it clamped to the flow band, #96)
      * @param s       the bot settings (reversionTimeSeconds &lt;= 0 = model off, returns IDLE)
      * @param maxMove max reference speed (ln price per second); &lt;= 0 = no limit
      * @return the new reference
@@ -315,6 +316,25 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         if (Math.abs(c) < REFERENCE_EPSILON && Math.abs(y - lnT) < REFERENCE_EPSILON) return Reference.IDLE;
         return new Reference(y, v, c, r.anchor(), true);
     }
+    /**
+     * #96: the price a player fill may anchor the reference at: the market price clamped to the flow band around
+     * the fair price, {@code [E x minPriceMult, E x maxPriceMult]} with the NetFlowPlugin's default clamps (5% and
+     * 3x). Inside the band a fill anchors where it left the price, so a player's spike holds (T-207); outside it the
+     * reference stops at the band edge, so the bot leans the price back into the band instead of following a dump
+     * to the price floor (which pinned the bot there and let the dumper buy back for nothing) or a runaway pump.
+     * <p>
+     * ponytail: the default clamps, not the market's own NetFlowPlugin settings (plugins can't read each other's
+     * settings); publish the band through IPluginMarket next to the equilibrium if admins start tuning them.
+     *
+     * @param price       the market price after the fill (real)
+     * @param equilibrium the market's fair price E (real); not positive = no band, the price is returned
+     * @return the price clamped to the band
+     */
+    public static double referenceAnchorPrice(double price, double equilibrium) {
+        if (!(equilibrium > 0)) return price;
+        return clamp(price, equilibrium * NetFlowPlugin.DEFAULT_MIN_PRICE_MULT, equilibrium * NetFlowPlugin.DEFAULT_MAX_PRICE_MULT);
+    }
+
     /** Default bot order limit: 10x the market's player order limit. */
     public static final float DEFAULT_MAX_ORDER_VOLUME_FACTOR = 10f;
     /**
@@ -472,7 +492,9 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                 || (raw == 0 && data.refLastRaw != 0))
             data.ref = Reference.IDLE;
         else if (!Double.isNaN(data.refLastRaw) && raw != data.refLastRaw)
-            data.ref = anchorReference(data.ref, Math.log(rawTarget), Math.log(currentPrice), s, maxMove);
+            // #96: never further from the fair price than the flow band
+            data.ref = anchorReference(data.ref, Math.log(rawTarget),
+                    Math.log(referenceAnchorPrice(currentPrice, market.market.getEquilibriumPrice())), s, maxMove);
         // T-208: restart the gap guard window on every player fill
         if (!Double.isNaN(data.refLastRaw) && raw != data.refLastRaw) data.stepsSinceFill = 0;
         else if (data.stepsSinceFill < Integer.MAX_VALUE) data.stepsSinceFill++;
