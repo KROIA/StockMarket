@@ -76,12 +76,11 @@ public class ClientPluginManager implements IClientPluginManager {
 
     @Override
     public CompletableFuture<List<PluginSyncData>> requestPluginList() {
-        CompletableFuture<List<PluginSyncData>> future = new CompletableFuture<>();
-        AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_LIST_REQUEST, 0).thenAccept((response) -> {
+        // thenApply, so a failed request fails the returned future (the cached list stays as it was).
+        return AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_LIST_REQUEST, 0).thenApply((response) -> {
             pluginDataList = new ArrayList<>(response);
-            future.complete(response);
+            return response;
         });
-        return future;
     }
 
     @Override
@@ -115,12 +114,11 @@ public class ClientPluginManager implements IClientPluginManager {
     @Override
     public CompletableFuture<List<PluginSyncData>> requestReorderPlugin(UUID instanceID, int direction) {
         PluginReorderRequest.InputData input = new PluginReorderRequest.InputData(instanceID, direction);
-        CompletableFuture<List<PluginSyncData>> future = new CompletableFuture<>();
-        AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_REORDER_REQUEST, input).thenAccept((response) -> {
+        // thenApply, so a failed request fails the returned future (the cached list stays as it was).
+        return AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_REORDER_REQUEST, input).thenApply((response) -> {
             pluginDataList = new ArrayList<>(response);
-            future.complete(response);
+            return response;
         });
-        return future;
     }
 
     /* ----------------------------------------------------------------------------------------------------------------

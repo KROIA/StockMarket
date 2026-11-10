@@ -270,8 +270,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
             if (loadingCheckBox) return;
             ClientMarket currentMarket = getSelectedMarket();
             if (currentMarket == null) return;
-            currentMarket.setMaintenanceAsync(maintenance).thenAccept(success -> {
-                if (success) {
+            // whenComplete: also after a failed request (no answer; it may have been applied) the tiles
+            // re-read the real state from the server. Nothing is undone or resent.
+            currentMarket.setMaintenanceAsync(maintenance).whenComplete((success, error) -> {
+                if (error != null || Boolean.TRUE.equals(success)) {
                     Minecraft.getInstance().execute(() -> overviewTab.refreshMarketStates());
                 }
             });
@@ -284,7 +286,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
             for (ItemID marketID : markets) {
                 ClientMarket market = getMarket(marketID);
                 if (market == null) { completed[0]++; continue; }
-                market.setMaintenanceAsync(maintenance).thenAccept(success -> {
+                // whenComplete: a failed request still counts as done, so the final refresh runs
+                market.setMaintenanceAsync(maintenance).whenComplete((success, error) -> {
                     completed[0]++;
                     if (completed[0] >= total) {
                         Minecraft.getInstance().execute(() -> {

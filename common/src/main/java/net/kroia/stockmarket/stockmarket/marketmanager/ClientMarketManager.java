@@ -92,14 +92,20 @@ public class ClientMarketManager implements IClientMarketManager
         return clientMarkets.get(itemID);
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * The returned future fails when the markets request fails (no answer in time, connection lost, or not
+     * sent); the cached markets are then left as they are.
+     */
     @Override
     public CompletableFuture<List<ItemID>> requestMarkets()
     {
-        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync().thenAccept((factor)->
-        {
-            AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenAccept((response) ->
+        return BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync().thenCompose((factor)->
+            AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenApply((response) ->
             {
+                if(response == null) // not sent; must not be read as "the server has no markets" (that prunes all)
+                    throw new IllegalStateException("Markets request could not be sent");
                 info("Markets request response received with "+response.size()+" markets");
                 for(ItemID itemID : response) {
                     createClientMarket(itemID, factor);
@@ -115,10 +121,8 @@ public class ClientMarketManager implements IClientMarketManager
                     info("Removing stale ClientMarket (no longer on server): " + staleID);
                     onMarketRemoved(staleID);
                 }
-                future.complete(response);
-            });
-        });
-        return future;
+                return response;
+            }));
     }
 
     @Override
@@ -129,9 +133,8 @@ public class ClientMarketManager implements IClientMarketManager
                                                                                   long timeEnd)
     {
         ActiveOrdersRequest.InputData inp = new ActiveOrdersRequest.InputData(itemIDFilter, bankAccountNr, executorPlayerFilter, timeBegin, timeEnd);
-        CompletableFuture<ActiveOrdersRequest.OutputData> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp).thenAccept(future::complete);
-        return future;
+        // The ARRS future as is, so a failed request reaches the caller instead of leaving it pending.
+        return BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp);
     }
 
     @Override
@@ -162,7 +165,7 @@ public class ClientMarketManager implements IClientMarketManager
             warn("Server returned null for createMarketAsync: " + itemID);
             return CompletableFuture.completedFuture(false);
         }).exceptionally(ex -> {
-            error("Exception during market creation for: " + itemID, (Exception) ex);
+            error("Exception during market creation for: " + itemID, ex);
             return false;
         });
     }
@@ -186,7 +189,7 @@ public class ClientMarketManager implements IClientMarketManager
             }
             return success;
         }).exceptionally(ex -> {
-            error("Exception during market deletion for: " + marketID, (Exception) ex);
+            error("Exception during market deletion for: " + marketID, ex);
             return false;
         });
     }

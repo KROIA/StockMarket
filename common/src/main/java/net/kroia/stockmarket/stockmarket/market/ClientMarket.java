@@ -628,7 +628,9 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         {
             try
             {
-                if (throwable != null)
+                // null answer: the request could not be sent. Without this check applyHistoryResponse would
+                // throw, and the finally alone would leave this future pending forever.
+                if (throwable != null || historyData == null)
                 {
                     error("Older-window request failed for " + itemID + " delta=" + candleDeltaMs, throwable);
                     future.complete(false);
@@ -808,12 +810,17 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     }
 
 
+    /**
+     * Sends an order to the server.
+     *
+     * @return the server's answer; fails with {@code RequestOutcomeUnknownException} when no answer came in
+     *         time (the order may still have been placed, so callers must not resend it automatically), or
+     *         completes with {@code null} if the request could not be sent
+     */
     public CompletableFuture<CreateOrderRequest.OutputData> createOrder(int bankAccountNr, Order.Type type, double volume, double price)
     {
         CreateOrderRequest.InputData inputData = new CreateOrderRequest.InputData(itemID, bankAccountNr, type, volume, price);
-        CompletableFuture<CreateOrderRequest.OutputData> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.NETWORKING.CREATE_ORDER_REQUEST.sendRequestToServer(inputData).thenAccept(future::complete);
-        return future;
+        return BACKEND_INSTANCES.NETWORKING.CREATE_ORDER_REQUEST.sendRequestToServer(inputData);
     }
 
 

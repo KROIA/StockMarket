@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -7,12 +8,15 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
 import net.kroia.stockmarket.networking.request.OrderHistoryRequest;
 import net.kroia.stockmarket.networking.request.TransactionHistoryRequest;
+import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
+import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.InFlightGuard;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -39,6 +43,17 @@ public class RequestFailureTestSuite extends TestSuite {
         addTest("in_flight_guard_released_after_failure", this::test_inFlightGuardReleasedAfterFailure);
         addTest("in_flight_guard_delivers_answer", this::test_inFlightGuardDeliversAnswer);
         addTest("in_flight_guard_free_when_send_throws", this::test_inFlightGuardFreeWhenSendThrows);
+        addTest("async_market_passes_failure_on", this::test_asyncMarketPassesFailureOn);
+        addTest("async_market_decodes_answer", this::test_asyncMarketDecodesAnswer);
+        addTest("async_market_manager_passes_failure_on", this::test_asyncMarketManagerPassesFailureOn);
+    }
+
+    /** The exception a completed future failed with, unwrapped from CompletionException; null if it did not fail. */
+    private static Throwable failureOf(CompletableFuture<?> future) {
+        if (!future.isDone())
+            return null;
+        Throwable error = future.handle((value, ex) -> ex).join();
+        return (error instanceof CompletionException && error.getCause() != null) ? error.getCause() : error;
     }
 
     /** The three requests that wait on the master's DB executor get 120 s instead of the 30 s default. */
@@ -105,5 +120,49 @@ public class RequestFailureTestSuite extends TestSuite {
         } catch (IllegalStateException expected) {
             return assertFalse("guard free after a throwing send", guard.isInFlight());
         }
+    }
+
+    /**
+     * A failed ARRS request fails the AsyncMarket future (it used to stay pending forever) and is sent once:
+     * nothing retries a mutating call whose outcome is unknown.
+     */
+    private TestResult test_asyncMarketPassesFailureOn() {
+        AtomicInteger sends = new AtomicInteger();
+        AsyncMarket market = AsyncMarket.createForTesting(new ItemID((short) 1), input -> {
+            sends.incrementAndGet();
+            return CompletableFuture.failedFuture(new RequestOutcomeUnknownException("timeout"));
+        });
+        CompletableFuture<Boolean> future = market.setMaintenanceAsync(true);
+        TestResult r = assertTrue("future failed with the request's exception",
+                failureOf(future) instanceof RequestOutcomeUnknownException);
+        if (!r.passed()) return r;
+        return assertEquals("sent once, no retry", 1, sends.get());
+    }
+
+    /** The answer is decoded; an unreachable master (nothing sent) gives the fallback value. */
+    private TestResult test_asyncMarketDecodesAnswer() {
+        AsyncMarket answering = AsyncMarket.createForTesting(new ItemID((short) 1),
+                input -> CompletableFuture.completedFuture(AsyncMarket.OutputData.of(input.function, 1234L)));
+        TestResult r = assertEquals("decoded answer", 1234L, answering.getCurrentTimeAsync().join());
+        if (!r.passed()) return r;
+        AsyncMarket unreachable = AsyncMarket.createForTesting(new ItemID((short) 1), input -> null);
+        return assertEquals("fallback when unreachable", 0L, unreachable.getCurrentTimeAsync().join());
+    }
+
+    /** Same for the market manager, including getMarketAsync, which maps the answer to a market. */
+    private TestResult test_asyncMarketManagerPassesFailureOn() {
+        ItemID marketID = new ItemID((short) 1);
+        AsyncMarketManager failing = AsyncMarketManager.createForTesting(
+                input -> CompletableFuture.failedFuture(new RequestOutcomeUnknownException("timeout")));
+        TestResult r = assertTrue("deleteMarketAsync failed",
+                failureOf(failing.deleteMarketAsync(marketID)) instanceof RequestOutcomeUnknownException);
+        if (!r.passed()) return r;
+        r = assertTrue("getMarketAsync failed",
+                failureOf(failing.getMarketAsync(marketID)) instanceof RequestOutcomeUnknownException);
+        if (!r.passed()) return r;
+
+        AsyncMarketManager answering = AsyncMarketManager.createForTesting(
+                input -> CompletableFuture.completedFuture(AsyncMarketManager.OutputData.of(input.function, true)));
+        return assertNotNull("getMarketAsync maps true to a market", answering.getMarketAsync(marketID).join());
     }
 }

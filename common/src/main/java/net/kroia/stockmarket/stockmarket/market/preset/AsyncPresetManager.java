@@ -261,83 +261,58 @@ public class AsyncPresetManager implements IAsyncPresetManager {
         Request instance = Request.instance;
     }
 
-    private CompletableFuture<OutputData> sendRequest(InputData input) {
-        CompletableFuture<OutputData> future = new CompletableFuture<>();
-        CompletableFuture<OutputData> tmpFuture;
-        if (isClientSide)
-            tmpFuture = Request.instance.sendRequestToServer(input);
-        else
-            tmpFuture = Request.instance.sendRequestToMaster(input);
-
-        tmpFuture.thenAccept(outputData -> {
-            try {
-                if (AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
-                    info("Response received for request: " + input.function.toString());
-                future.complete(outputData);
-            } catch (Exception ex) {
-                error("Exception while sending request for function: " + input.function.toString(), ex);
-                future.completeExceptionally(ex);
-            }
-        });
-
-        return future;
+    /**
+     * Calls {@code input.function} on the master and decodes its return value. Sends over the ARRS, to the
+     * server on the client and to the master on a slave.
+     * <p>
+     * The returned future fails when the ARRS request fails: {@code RequestOutcomeUnknownException} (no answer
+     * in time or the connection was lost; the master may have run the function) or
+     * {@code RequestNotSentException} (never sent), or when the answer can't be decoded. Callers must not undo
+     * or repeat a mutating call because of such a failure.
+     *
+     * @param input             the function and its encoded arguments
+     * @param unreachableResult returned at once, without sending, when this slave is not connected to the master
+     * @param <T>               the function's return type
+     * @return the function's decoded return value
+     */
+    private <T> CompletableFuture<T> call(InputData input, T unreachableResult) {
+        if (!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(unreachableResult);
+        CompletableFuture<OutputData> response = isClientSide
+                ? Request.instance.sendRequestToServer(input)
+                : Request.instance.sendRequestToMaster(input);
+        if (AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+            response.thenAccept(outputData -> info("Response received for request: " + input.function.toString()));
+        CompletableFuture<T> result = new CompletableFuture<>();
+        AsyncFunctionOutputData.relay(response, result); // completes or fails result like response
+        return result;
     }
 
     // ===== IAsyncPresetManager implementation =====
 
     @Override
     public CompletableFuture<List<MarketPresetCategory>> getCategoriesAsync() {
-        if (!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(List.of());
-        CompletableFuture<List<MarketPresetCategory>> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetCategories);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetCategories), List.of());
     }
 
     @Override
     public CompletableFuture<Boolean> updatePresetsAsync(List<MarketPreset> updatedPresets) {
-        if (!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.UpdatePresets, updatedPresets);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.UpdatePresets, updatedPresets), false);
     }
 
     @Override
     public CompletableFuture<Boolean> saveCategoryAsync(MarketPresetCategory category) {
-        if (!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.SaveCategory, category);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.SaveCategory, category), false);
     }
 
     @Override
     public CompletableFuture<Boolean> deleteCategoryAsync(String categoryName) {
-        if (!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.DeleteCategory, categoryName);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.DeleteCategory, categoryName), false);
     }
 
     @Override
     public CompletableFuture<Boolean> renameCategoryAsync(String oldName, String newName) {
-        if (!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.RenameCategory, new ParamGroup_String_String(oldName, newName));
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.RenameCategory, new ParamGroup_String_String(oldName, newName)), false);
     }
 
     // ===== Logging =====

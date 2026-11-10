@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 public class AsyncMarketManager implements IAsyncMarketManager {
     private static StockMarketModBackend.ServerInstances SERVER_BACKEND_INSTANCES;
@@ -42,8 +43,31 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         AsyncMarket.setClientBackend(backend);
     }
     private final boolean isClientSide;
+    /**
+     * Sends one function call and returns the answer future, or {@code null} when the master is unreachable
+     * and nothing was sent. {@link #sendRequest} in production, a fake in {@link #createForTesting}.
+     */
+    private final Function<InputData, CompletableFuture<OutputData>> transport;
     private AsyncMarketManager(boolean clientSide) {
         this.isClientSide = clientSide;
+        this.transport = this::sendRequest;
+    }
+    private AsyncMarketManager(Function<InputData, CompletableFuture<OutputData>> transport) {
+        this.isClientSide = true;
+        this.transport = transport;
+    }
+
+    /**
+     * Test seam (T-227): a manager whose calls go to {@code transport} instead of the ARRS, so a test can
+     * fail the answer future without a network. The transport returns the answer future, or {@code null}
+     * for "master unreachable, nothing sent".
+     *
+     * @param transport replaces the ARRS send
+     * @return the manager
+     */
+    public static AsyncMarketManager createForTesting(Function<InputData, CompletableFuture<OutputData>> transport)
+    {
+        return new AsyncMarketManager(transport);
     }
 
     public static AsyncMarketManager createClientManager()
@@ -278,29 +302,47 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         Request instance = Request.instance;
     }
 
-    private CompletableFuture<OutputData> sendRequest(InputData input)
+    /**
+     * The production {@link #transport}: sends {@code input} over the ARRS, to the server on the client and
+     * to the master on a slave.
+     *
+     * @param input the function call to forward
+     * @return the ARRS future, unchanged so its failures reach the caller; {@code null} if this slave is not
+     *         connected to the master (nothing is sent)
+     */
+    private @Nullable CompletableFuture<OutputData> sendRequest(InputData input)
     {
-        CompletableFuture<OutputData> future = new CompletableFuture<>();
-        CompletableFuture<OutputData> tmpFuture;
-        if(isClientSide)
-            tmpFuture = Request.instance.sendRequestToServer(input);
-        else
-            tmpFuture = Request.instance.sendRequestToMaster(input);
-
-        tmpFuture.thenAccept(outputData ->{
-            try{
-                if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
-                    info("Response received for request: "+ input.function.toString());
-                future.complete(outputData);
-            }
-            catch(Exception ex)
-            {
-                error("Exception while sending request to server for function: "+input.function.toString(), ex);
-                future.completeExceptionally(ex);
-            }
-        });
-
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return null;
+        CompletableFuture<OutputData> future = isClientSide
+                ? Request.instance.sendRequestToServer(input)
+                : Request.instance.sendRequestToMaster(input);
+        if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+            future.thenAccept(outputData -> info("Response received for request: "+ input.function.toString()));
         return future;
+    }
+
+    /**
+     * Calls {@code input.function} on the master and decodes its return value.
+     * <p>
+     * The returned future fails when the ARRS request fails: {@code RequestOutcomeUnknownException} (no answer
+     * in time or the connection was lost; the master may have run the function) or
+     * {@code RequestNotSentException} (never sent), or when the answer can't be decoded. Callers must not undo
+     * or repeat a mutating call because of such a failure.
+     *
+     * @param input             the function and its encoded arguments
+     * @param unreachableResult returned at once, without sending, when this slave is not connected to the master
+     * @param <T>               the function's return type
+     * @return the function's decoded return value
+     */
+    private <T> CompletableFuture<T> call(InputData input, T unreachableResult)
+    {
+        CompletableFuture<OutputData> response = transport.apply(input);
+        if(response == null)
+            return CompletableFuture.completedFuture(unreachableResult);
+        CompletableFuture<T> result = new CompletableFuture<>();
+        AsyncFunctionOutputData.relay(response, result); // completes or fails result like response
+        return result;
     }
 
 
@@ -359,90 +401,42 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<ItemID> getTradingCurrencyIDAsync() {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(ItemID.INVALID_ID);
-        CompletableFuture<ItemID> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetTradingCurrencyID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetTradingCurrencyID), ItemID.INVALID_ID);
     }
 
     @Override
     public CompletableFuture<List<ItemID>> getAvailableMarketIDsAsync() {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(List.of());
-        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetAvailableMarketIDs);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetAvailableMarketIDs), List.of());
     }
 
     @Override
     public CompletableFuture<Boolean> marketExistsAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.MarketExists, marketID), false);
     }
 
     @Override
     public CompletableFuture<@Nullable IAsyncMarket> createMarketAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(null);
-        CompletableFuture<@Nullable IAsyncMarket> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.CreateMarket, marketID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> {
-            AsyncMarket market = null;
-            if(outputData.decodeResult())
-                market = createMarket(marketID);
-            future.complete(market);
-        });
-        return future;
+        // Unreachable master -> false -> null market, as before. A failed request fails the returned future.
+        return this.<Boolean>call(InputData.of(FunctionType.CreateMarket, marketID), false)
+                .thenApply(created -> Boolean.TRUE.equals(created) ? createMarket(marketID) : null);
     }
 
     @Override
     public CompletableFuture<Boolean> deleteMarketAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.DeleteMarket, marketID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.DeleteMarket, marketID), false);
     }
 
     @Override
     public CompletableFuture<@Nullable IAsyncMarket> getMarketAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(null);
-        CompletableFuture<@Nullable IAsyncMarket> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetMarket, marketID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> {
-            AsyncMarket market = null;
-            if(outputData.decodeResult())
-                market = createMarket(marketID);
-            future.complete(market);
-        });
-        return future;
+        // Unreachable master -> false -> null market, as before. A failed request fails the returned future.
+        return this.<Boolean>call(InputData.of(FunctionType.GetMarket, marketID), false)
+                .thenApply(exists -> Boolean.TRUE.equals(exists) ? createMarket(marketID) : null);
     }
 
     @Override
     public CompletableFuture<Boolean> setStockmarketAdminModeAsync(UUID playerUUID, boolean isAdmin)
     {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.SetStockmarketAdminMode, new ParamGroup_UUID_Bool(playerUUID, isAdmin));
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.SetStockmarketAdminMode, new ParamGroup_UUID_Bool(playerUUID, isAdmin)), false);
     }
     /**
      * Slave only: forwards a LuckPerms change of the admin node to the master (see {@link AdminFlagSync}).
@@ -454,52 +448,30 @@ public class AsyncMarketManager implements IAsyncMarketManager {
      */
     public CompletableFuture<Boolean> syncAdminFlagFromPermissionAsync(UUID playerUUID, boolean isAdmin)
     {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        InputData inputData = InputData.of(FunctionType.SyncAdminFlagFromPermission, new ParamGroup_UUID_Bool(playerUUID, isAdmin));
-        return sendRequest(inputData).thenApply(outputData -> Boolean.TRUE.equals(outputData.decodeResult()));
+        return this.<Boolean>call(InputData.of(FunctionType.SyncAdminFlagFromPermission, new ParamGroup_UUID_Bool(playerUUID, isAdmin)), false)
+                .thenApply(Boolean.TRUE::equals);
     }
     @Override
     public CompletableFuture<Boolean> isStockmarketAdminAsync(UUID playerUUID)
     {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.IsStockmarketAdmin, playerUUID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.IsStockmarketAdmin, playerUUID), false);
     }
 
 
     @Override
     public void onPlayerJoinAsync(UUID playerUUID, String playerName){
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return;
-        InputData inputData = InputData.of(FunctionType.OnPlayerJoin, new ParamGroup_UUID_String(playerUUID, playerName));
-        sendRequest(inputData);
+        // Fire and forget: nobody waits on the answer, so a failed request has nothing to report to.
+        call(InputData.of(FunctionType.OnPlayerJoin, new ParamGroup_UUID_String(playerUUID, playerName)), null);
     }
 
     @Override
     public CompletableFuture<PlayerPreferences> getPlayerPreferencesAsync(UUID playerUUID) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(new PlayerPreferences());
-        CompletableFuture<PlayerPreferences> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetPlayerPreferences, playerUUID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetPlayerPreferences, playerUUID), new PlayerPreferences());
     }
 
     @Override
     public CompletableFuture<Boolean> updatePlayerPreferencesAsync(UUID playerUUID, PlayerPreferences preferences) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.UpdatePlayerPreferences, new ParamGroup_UUID_Preferences(playerUUID, preferences));
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.UpdatePlayerPreferences, new ParamGroup_UUID_Preferences(playerUUID, preferences)), false);
     }
 
 
