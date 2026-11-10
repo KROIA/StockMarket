@@ -112,6 +112,10 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
          * the live candle rotation ({@link #onServerCandle}); the wall-clock timer is unused.
          */
         private final boolean gameTime = candleUseGameTime;
+        /** T-221: master raw candles (one in-game hour each) merged into the live candle so far. */
+        private int liveRawCandles = 1;
+        /** T-221: start of the last master raw candle counted; the stream repeats it ~10x per second. */
+        private long lastRawStartMs = Long.MIN_VALUE;
 
         public PriceHistoryContainer(ItemID itemID, int itemScaleFactor, long deltaT)
         {
@@ -253,7 +257,10 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
          * T-218 game-time mode: called for every price-stream update with the start of the
          * master's live raw candle. Opens a new live candle (promoting the old one into the
          * cache) once that raw candle is newer than ours and belongs to another in-game bucket
-         * of this container's delta; a 1h container rotates with every raw candle.
+         * of this container's delta, or (T-221) once the live candle already holds one raw candle
+         * per hour of the delta; a 1h container rotates with every raw candle. Same rule as the
+         * master's {@link PriceHistoryData#aggregateGameHours}, so the master's 1000-tick fallback
+         * rotation (frozen daylight cycle) also closes multi-hour candles.
          *
          * @param candleStartMs  wall-clock start of the master's live raw candle
          * @param candleGameTime its in-game start (overworld day time), or -1 if unknown
@@ -261,15 +268,20 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         public void onServerCandle(long candleStartMs, long candleGameTime)
         {
             PriceHistoryData.Candle current = history.getCurrentCandle();
-            if (!initialHistoryLoaded || current == null || current.openTimestamp >= candleStartMs)
+            if (!initialHistoryLoaded || current == null || current.openTimestamp >= candleStartMs
+                    || candleStartMs == lastRawStartMs) // this raw candle was already counted
                 return;
+            lastRawStartMs = candleStartMs;
+            liveRawCandles++;
             int hours = (int) Math.max(1L, candleDeltaMs / PriceHistoryData.GAME_HOUR_MS);
-            // ponytail: no raw-row cap here, so with a frozen daylight cycle a multi-hour live
-            // candle keeps growing until the chart reloads (the master caps it on reload).
-            if (hours > 1 && (current.gameTime < 0) == (candleGameTime < 0)
+            // ponytail: a freshly loaded live candle counts as one raw candle (two once the stream
+            // reports the raw candle it already contains). Exact for 1-2 raw rows; with k >= 3 it can
+            // run k-2 hours over the cap once, until its next rotation.
+            if (hours > 1 && liveRawCandles <= hours && (current.gameTime < 0) == (candleGameTime < 0)
                     && PriceHistoryData.gameBucketKey(current.openTimestamp, current.gameTime, hours)
                        == PriceHistoryData.gameBucketKey(candleStartMs, candleGameTime, hours))
                 return;
+            liveRawCandles = 1;
             if (attachedCache != null)
                 attachedCache.promoteLiveCandle(candleDeltaMs);
             history.startNewCandle(candleStartMs, candleGameTime);

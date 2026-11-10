@@ -1,10 +1,16 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.stockmarket.market.PriceHistoryCache;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.util.PriceHistoryData;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class ClientMarketTestSuite extends TestSuite {
 
@@ -18,6 +24,7 @@ public class ClientMarketTestSuite extends TestSuite {
         addTest("static_time_offset_shared", this::test_staticTimeOffset_sharedAcrossInstances);
         addTest("price_history_data_map_all_deltas", this::test_priceHistoryDataMap_allDeltasPresent);
         addTest("game_time_deltas", this::test_gameTimeDeltas);
+        addTest("game_candle_frozen_daylight_closes_after_hours", this::test_gameCandleFrozenDaylightClosesAfterHours);
         addTest("subscribe_idempotent", this::test_subscribeToMarketPriceUpdate_idempotent);
         addTest("unsubscribe_no_subscription", this::test_unsubscribeFromMarketPriceUpdate_noSubscription);
     }
@@ -144,5 +151,46 @@ public class ClientMarketTestSuite extends TestSuite {
                 if (!r.passed()) return r;
             }
         return pass("game-time deltas are 1h/4h/1D/1W and distinct from the real ones");
+    }
+
+    /**
+     * T-221: with the master's daylight cycle frozen every raw candle has the same day time, so the
+     * bucket key never changes. The master's 1000-tick fallback rotations must still close a 4h live
+     * candle after 4 raw candles (same cap as PriceHistoryData.aggregateGameHours); repeated stream
+     * packets of one raw candle count once.
+     */
+    private TestResult test_gameCandleFrozenDaylightClosesAfterHours() {
+        boolean original = ClientMarket.isCandleUseGameTime();
+        try {
+            ClientMarket.setCandleUseGameTime(true); // read by the container at construction
+            long delta = ClientMarket.CANDLE_TIME_GAME_4_HOUR;
+            ItemID item = new ItemID((short) 1);
+            PriceHistoryCache cache = new PriceHistoryCache(new long[]{delta});
+            ClientMarket.PriceHistoryContainer container = new ClientMarket.PriceHistoryContainer(item, 100, delta, cache);
+            List<PriceHistoryData.Candle> loaded = new ArrayList<>();
+            loaded.add(new PriceHistoryData.Candle(1_000L, 500L, 500L, 500L, 0f, 6_000L));
+            cache.mergeChunk(delta, new PriceHistoryData(item, 100, loaded, 500L), Long.MAX_VALUE);
+            container.loadFromCache(0L, 500L, false);
+
+            // Frozen daylight: raw candles every 50 s, all at day time 6000. The first one twice.
+            container.onServerCandle(51_000L, 6_000L);
+            container.onServerCandle(51_000L, 6_000L);
+            container.onServerCandle(101_000L, 6_000L);
+            container.onServerCandle(151_000L, 6_000L);
+            TestResult r = assertEquals("4 raw candles stay in one 4h candle", 1, container.history.getCandles().size());
+            if (!r.passed()) return r;
+
+            container.onServerCandle(201_000L, 6_000L);
+            r = assertEquals("the 5th raw candle opens a new 4h candle", 2, container.history.getCandles().size());
+            if (!r.passed()) return r;
+            PriceHistoryData.Candle live = container.history.getCurrentCandle();
+            r = assertEquals("new candle starts at the 5th raw candle", 201_000L, live.openTimestamp);
+            if (!r.passed()) return r;
+            r = assertEquals("new candle keeps the master's day time", 6_000L, live.gameTime);
+            if (!r.passed()) return r;
+            return pass("frozen daylight: 4h live candle closes after 4 fallback rotations");
+        } finally {
+            ClientMarket.setCandleUseGameTime(original);
+        }
     }
 }

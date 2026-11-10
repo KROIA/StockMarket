@@ -39,4 +39,4 @@ Price candles can follow real time (the default) or the in-game clock. This is a
 ## Known limitations
 
 - **Mods that change how fast the in-game clock runs:** if one in-game hour takes longer than 1000 server ticks, the 1000-tick fallback for a frozen daylight cycle closes the candle before the hour is over, so candles can be shorter than one in-game hour.
-- **Frozen daylight cycle on 4h / 1D / 1W:** the live candle in an open chart keeps growing until the chart reloads its history (at the latest when you rejoin). After a reload each 4h / 1D / 1W candle again holds at most 4 / 24 / 168 stored candles.
+- **Frozen daylight cycle on 4h / 1D / 1W:** every stored candle has the same in-game hour, so a 4h / 1D / 1W candle closes after 4 / 24 / 168 fallback rotations (1000 ticks each) instead of at an in-game hour boundary. Right after a chart opens, its running candle can run over that count once.
