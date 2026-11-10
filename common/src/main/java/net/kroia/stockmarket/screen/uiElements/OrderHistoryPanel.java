@@ -8,6 +8,7 @@ import net.kroia.stockmarket.networking.request.OrderHistoryRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
+import net.kroia.stockmarket.util.InFlightGuard;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
@@ -40,6 +41,8 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
     private boolean needsRebuild = false;
     private List<OrderRecordStruct> pendingRecords = new ArrayList<>();
     private long lastRefreshMs = 0;
+    /** One {@link OrderHistoryRequest} at a time, released even when the request fails. */
+    private final InFlightGuard refreshGuard = new InFlightGuard();
     @org.jetbrains.annotations.Nullable
     private ItemID currentMarketID;
     // Client-side "clear" — hides records older than this timestamp without deleting from SQL
@@ -69,11 +72,18 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
     /**
      * Sends an {@link OrderHistoryRequest} to the server and updates the panel
      * when the response arrives.
+     * <p>
+     * At most one request is in flight (the master reads the history on its DB executor, which can
+     * be slow). A refresh asked for while one is running is not dropped: it runs on the first frame
+     * after the running one has completed.
      */
     public void refresh() {
-        BACKEND_INSTANCES.NETWORKING.ORDER_HISTORY_REQUEST.sendRequestToServer(
-                new OrderHistoryRequest.InputData(MAX_RESULTS)
-        ).thenAccept(response -> updateRecords(response.records()));
+        boolean sent = refreshGuard.send(
+                () -> BACKEND_INSTANCES.NETWORKING.ORDER_HISTORY_REQUEST.sendRequestToServer(
+                        new OrderHistoryRequest.InputData(MAX_RESULTS)),
+                response -> updateRecords(response.records()));
+        if (!sent)
+            lastRefreshMs = 0; // poll again as soon as the running request is done
     }
 
     /**
@@ -100,7 +110,7 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
             rebuildRecordList(pendingRecords);
         }
         long now = System.currentTimeMillis();
-        if (now - lastRefreshMs > AUTO_REFRESH_INTERVAL_MS) {
+        if (!refreshGuard.isInFlight() && now - lastRefreshMs > AUTO_REFRESH_INTERVAL_MS) {
             lastRefreshMs = now;
             refresh();
         }

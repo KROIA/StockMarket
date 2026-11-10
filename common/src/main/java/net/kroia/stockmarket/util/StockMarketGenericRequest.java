@@ -24,6 +24,16 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {
+    /**
+     * {@link #getTimeoutMs()} for requests whose master handler waits on the single-threaded database
+     * executor (price, order and transaction history). Such a read can queue behind other DB work and an
+     * unbounded history query also sorts in memory, so on a big server it can take longer than the 30 s
+     * ARRS default. A timed-out answer is dropped by the requester although the master did the work, and
+     * the client usually asks again, adding more load. 120 s keeps a slow read alive without leaving a
+     * lost one hanging for long.
+     */
+    public static final long DB_READ_TIMEOUT_MS = 120_000L;
+
     protected static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;

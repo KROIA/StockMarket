@@ -42,6 +42,7 @@ import net.kroia.stockmarket.testing.tests.PriceHistoryCacheTestSuite;
 import net.kroia.stockmarket.testing.tests.PriceHistoryTestSuite;
 import net.kroia.stockmarket.testing.tests.NormalizedRandomPriceGeneratorTestSuite;
 import net.kroia.stockmarket.testing.tests.RandomWalkTestSuite;
+import net.kroia.stockmarket.testing.tests.RequestFailureTestSuite;
 import net.kroia.stockmarket.testing.tests.ServerMarketTestSuite;
 import net.kroia.stockmarket.testing.tests.PlayerPreferencesTestSuite;
 import net.kroia.stockmarket.testing.tests.AdminFlagSyncTestSuite;
@@ -114,6 +115,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new NewsRequirementTestSuite());
         TestRegistry.register(new NewsChainsTestSuite());
         TestRegistry.register(new PlaceholderNamingTestSuite());
+        TestRegistry.register(new RequestFailureTestSuite()); // T-227: ARRS timeouts / failed futures
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());

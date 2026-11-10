@@ -87,6 +87,12 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
     protected PriceHistoryData getDefaultResponse() {
         return new PriceHistoryData(0, ItemID.INVALID_ID, 100);
     }
+
+    /** Waits on the DB executor (up to three history reads), see {@link #DB_READ_TIMEOUT_MS}. */
+    @Override
+    public long getTimeoutMs() {
+        return DB_READ_TIMEOUT_MS;
+    }
     @Override
     public CompletableFuture<PriceHistoryData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender)
     {

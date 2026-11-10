@@ -52,6 +52,12 @@ public class OrderHistoryRequest extends StockMarketGenericRequest<OrderHistoryR
         return new OutputData(List.of());
     }
 
+    /** Waits on the DB executor (unbounded history read + sort), see {@link #DB_READ_TIMEOUT_MS}. */
+    @Override
+    public long getTimeoutMs() {
+        return DB_READ_TIMEOUT_MS;
+    }
+
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
         if (playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender)))
