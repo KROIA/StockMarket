@@ -115,7 +115,7 @@ public class DatabaseManager {
             executeSqlFile("/sql/MarketPrice.sql");
             executeSqlFile("/sql/OrderHistory.sql");
             connection.commit();
-            migrateSchema();
+            migrateSchema(connection);
             return true;
         }
         catch(SQLException | IOException e){
@@ -124,13 +124,30 @@ public class DatabaseManager {
         }
     }
 
-    // Adds columns introduced after the initial schema. Silently ignores if they already exist.
-    private void migrateSchema() {
+    /**
+     * Adds columns introduced after the initial schema. Idempotent: each {@code ALTER} fails
+     * silently (and is rolled back) when its column already exists, so it is safe to run on every
+     * start and on a database created from the current SQL files.
+     * <p>
+     * Public and static so tests can migrate an isolated (in-memory) legacy database.
+     *
+     * @param connection an open connection with auto-commit disabled
+     */
+    public static void migrateSchema(Connection connection) {
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("ALTER TABLE MarketPrice ADD COLUMN traded_volume REAL NOT NULL DEFAULT 0");
             connection.commit();
         } catch (SQLException ignored) {
             // Column already exists — expected for new databases
+            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
+        }
+        // T-218: in-game time (overworld day time) at candle start. Existing rows get -1 (legacy,
+        // no game time). Older mod versions name their INSERT columns explicitly, so they keep
+        // writing (game_time = -1) after a downgrade.
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("ALTER TABLE MarketPrice ADD COLUMN game_time INTEGER NOT NULL DEFAULT -1");
+            connection.commit();
+        } catch (SQLException ignored) {
             try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
         }
 

@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.stockmarket.market;
 
 import net.kroia.modutilities.NbtCompat;
+import net.kroia.modutilities.UtilitiesPlatform;
 
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.BankStatus;
@@ -12,6 +13,7 @@ import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.ProfitAlerts;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
@@ -83,6 +85,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private @Nullable Function<Double, Float> defaultVolumeProviderFunction;
 
     private long candleStartTime = System.currentTimeMillis();
+    /** T-218: master overworld day time at candle start, stored with every candle in both timebases. */
+    private long candleStartGameTime = ServerMarketManager.overworldDayTime(UtilitiesPlatform.getServer());
     private long candleOpenPrice;
     private long candleHighPrice;
     private long candleLowPrice;
@@ -575,7 +579,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public MarketPriceStruct getCurrentMarketPriceStruct()
     {
-        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime, candleTradedVolume);
+        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime, candleTradedVolume, candleStartGameTime);
     }
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAsync() {
@@ -589,8 +593,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public MarketPriceStruct getCurrentMarketPriceStructAndReset()
     {
-        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime, candleTradedVolume);
+        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime, candleTradedVolume, candleStartGameTime);
         candleStartTime =  System.currentTimeMillis();
+        candleStartGameTime = ServerMarketManager.overworldDayTime(UtilitiesPlatform.getServer());
         candleOpenPrice = this.currentMarketPrice;
         candleHighPrice = this.currentMarketPrice;
         candleLowPrice = this.currentMarketPrice;
@@ -1212,6 +1217,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         candleLowPrice = currentMarketPrice;
         candleTradedVolume = 0;
         candleStartTime = System.currentTimeMillis();
+        candleStartGameTime = ServerMarketManager.overworldDayTime(UtilitiesPlatform.getServer());
 
         return success;
     }

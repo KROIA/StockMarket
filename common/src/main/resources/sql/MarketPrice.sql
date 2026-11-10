@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS MarketPrice (
                                            low INTEGER NOT NULL,
                                            high INTEGER NOT NULL,
                                            time INTEGER NOT NULL,
-                                           traded_volume REAL NOT NULL DEFAULT 0
+                                           traded_volume REAL NOT NULL DEFAULT 0,
+                                           game_time INTEGER NOT NULL DEFAULT -1
 );
 
 CREATE INDEX IF NOT EXISTS idx_marketprice_marketid_time ON MarketPrice (marketid, time);

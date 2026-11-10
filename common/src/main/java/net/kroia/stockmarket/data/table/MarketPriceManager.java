@@ -20,8 +20,9 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
 
     private final DatabaseManager databaseManager;
 
-    public static final String INSERT = "INSERT INTO MarketPrice (marketid, open, low, high, time, traded_volume) VALUES (?, ?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT marketid, open, low, high, time, traded_volume FROM MarketPrice";
+    // T-218: game_time is the 7th column of both; mapRow() reads it by position.
+    public static final String INSERT = "INSERT INTO MarketPrice (marketid, open, low, high, time, traded_volume, game_time) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    public static final String SELECT = "SELECT marketid, open, low, high, time, traded_volume, game_time FROM MarketPrice";
     public static final String DELETE = "DELETE FROM MarketPrice";
     public static final String COUNT =  "SELECT COUNT(*) FROM MarketPrice";
     public static final String MIN_TIME = "SELECT MIN(time) FROM MarketPrice";
@@ -67,6 +68,7 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
             stmt.setLong(4, data.high());
             stmt.setLong(5, data.time());
             stmt.setFloat(6, data.tradedVolume());
+            stmt.setLong(7, data.gameTime());
             stmt.addBatch();
         }
         catch(SQLException e){
@@ -169,7 +171,10 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
             long time = rs.getLong(5);
             float volume = 0f;
             try { volume = rs.getFloat(6); } catch (SQLException ignored) {}
-            return new MarketPriceStruct(id, open, low, high, time, volume);
+            // T-218: legacy rows hold the column default -1; a SELECT without the column falls back to it too.
+            long gameTime = MarketPriceStruct.NO_GAME_TIME;
+            try { gameTime = rs.getLong(7); } catch (SQLException ignored) {}
+            return new MarketPriceStruct(id, open, low, high, time, volume, gameTime);
         }
         catch(SQLException e){
             StockMarketMod.LOGGER.warn("Failed to read MarketPrice record, is the data corrupt?");

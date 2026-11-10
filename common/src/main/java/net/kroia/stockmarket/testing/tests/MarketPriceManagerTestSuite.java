@@ -5,12 +5,18 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -71,6 +77,10 @@ public class MarketPriceManagerTestSuite extends TestSuite {
         addTest("query_withLimit", this::test_query_withLimit);
         addTest("query_zeroLimit_noLimitClause", this::test_query_zeroLimit_noLimitClause);
         addTest("preparedStatement_neverClosed", this::test_preparedStatement_neverClosed);
+        // T-218: game_time column (isolated in-memory databases, never the live one)
+        addTest("gameTime_roundTrip", this::test_gameTime_roundTrip);
+        addTest("gameTime_legacyRow_readsMinusOne", this::test_gameTime_legacyRow_readsMinusOne);
+        addTest("migrateSchema_twice_isIdempotent", this::test_migrateSchema_twice_isIdempotent);
     }
 
     @Override
@@ -286,6 +296,105 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             return pass("PreparedStatements properly managed via try-with-resources (Issue #37 documented)");
         } catch (Exception e) {
             return fail("Exception during repeated queries (possible resource leak): " + e.getMessage());
+        }
+    }
+
+    // --- T-218: game_time column ---
+
+    /**
+     * Opens an isolated in-memory SQLite database holding the MarketPrice table as it looked
+     * before T-218 (no game_time column) with one legacy row, then runs the schema migration
+     * {@code migrations} times. Auto-commit is off, as on the live connection.
+     *
+     * @param migrations how often {@link DatabaseManager#migrateSchema(Connection)} runs
+     * @return the open connection; the caller closes it
+     */
+    private static Connection legacyDatabase(int migrations) throws Exception {
+        // The sqlite driver is registered with DriverManager when the live database connects.
+        Connection conn = DriverManager.getConnection("jdbc:sqlite::memory:");
+        conn.setAutoCommit(false);
+        try (Statement st = conn.createStatement()) {
+            st.execute("CREATE TABLE MarketPrice (id INTEGER PRIMARY KEY AUTOINCREMENT, marketid INTEGER NOT NULL, "
+                    + "open INTEGER NOT NULL, low INTEGER NOT NULL, high INTEGER NOT NULL, time INTEGER NOT NULL, "
+                    + "traded_volume REAL NOT NULL DEFAULT 0)");
+            st.execute("INSERT INTO MarketPrice (marketid, open, low, high, time, traded_volume) VALUES (7, 100, 90, 110, 1000, 2.5)");
+        }
+        conn.commit();
+        for (int i = 0; i < migrations; i++)
+            DatabaseManager.migrateSchema(conn);
+        return conn;
+    }
+
+    /** Reads all rows (in insertion order) through the production SELECT + mapRow. */
+    private static List<MarketPriceStruct> readAll(Connection conn) throws Exception {
+        MarketPriceManager mapper = new MarketPriceManager(null);
+        List<MarketPriceStruct> rows = new java.util.ArrayList<>();
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(MarketPriceManager.SELECT)) {
+            while (rs.next())
+                rows.add(mapper.mapRow(rs));
+        }
+        return rows;
+    }
+
+    /**
+     * A candle written through the production INSERT/queueRecord keeps its game time,
+     * and a candle built without one stores {@link MarketPriceStruct#NO_GAME_TIME}.
+     */
+    private TestResult test_gameTime_roundTrip() {
+        try (Connection conn = legacyDatabase(1)) {
+            MarketPriceManager writer = new MarketPriceManager(null);
+            try (PreparedStatement ps = conn.prepareStatement(MarketPriceManager.INSERT)) {
+                writer.queueRecord(ps, new MarketPriceStruct((short) 7, 200L, 190L, 210L, 2000L, 1f, 123_456L));
+                writer.queueRecord(ps, new MarketPriceStruct((short) 7, 300L, 290L, 310L, 3000L, 0f));
+                ps.executeBatch();
+            }
+            conn.commit();
+            List<MarketPriceStruct> rows = readAll(conn);
+            TestResult r = assertEquals("three rows", 3, rows.size());
+            if (!r.passed()) return r;
+            r = assertEquals("game time survives the round trip", 123_456L, rows.get(1).gameTime());
+            if (!r.passed()) return r;
+            r = assertEquals("open survives the round trip", 200L, rows.get(1).open());
+            if (!r.passed()) return r;
+            return assertEquals("6-arg struct stores NO_GAME_TIME", MarketPriceStruct.NO_GAME_TIME, rows.get(2).gameTime());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        }
+    }
+
+    /** Rows written before the migration read back as legacy (game time -1), other values intact. */
+    private TestResult test_gameTime_legacyRow_readsMinusOne() {
+        try (Connection conn = legacyDatabase(1)) {
+            List<MarketPriceStruct> rows = readAll(conn);
+            TestResult r = assertEquals("one legacy row", 1, rows.size());
+            if (!r.passed()) return r;
+            r = assertEquals("legacy row reads NO_GAME_TIME", MarketPriceStruct.NO_GAME_TIME, rows.get(0).gameTime());
+            if (!r.passed()) return r;
+            r = assertEquals("legacy wall time intact", 1000L, rows.get(0).time());
+            if (!r.passed()) return r;
+            return assertEquals("legacy volume intact", 2.5f, rows.get(0).tradedVolume());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        }
+    }
+
+    /** Running the migration twice adds game_time exactly once and leaves the table usable. */
+    private TestResult test_migrateSchema_twice_isIdempotent() {
+        try (Connection conn = legacyDatabase(2)) {
+            int gameTimeColumns = 0;
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("PRAGMA table_info(MarketPrice)")) {
+                while (rs.next())
+                    if ("game_time".equals(rs.getString("name")))
+                        gameTimeColumns++;
+            }
+            TestResult r = assertEquals("game_time exists exactly once", 1, gameTimeColumns);
+            if (!r.passed()) return r;
+            List<MarketPriceStruct> rows = readAll(conn);
+            r = assertEquals("legacy row still readable", 1, rows.size());
+            if (!r.passed()) return r;
+            return assertEquals("legacy row keeps NO_GAME_TIME", MarketPriceStruct.NO_GAME_TIME, rows.get(0).gameTime());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
         }
     }
 }

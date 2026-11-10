@@ -829,6 +829,22 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         return (int) (((dayTime % 24000L + 6000L) % 24000L) * 1440L / 24000L);
     }
 
+    /**
+     * T-218: the master overworld's day time, stamped on every price candle as its in-game start.
+     * Not wrapped at 24000: tick 0 is 06:00 of day 0, so candles keep their order across days.
+     *
+     * @param server the server, may be null (e.g. in test contexts)
+     * @return the overworld day time in ticks, or {@link MarketPriceStruct#NO_GAME_TIME} when no
+     *         overworld is available
+     */
+    public static long overworldDayTime(@Nullable MinecraftServer server)
+    {
+        if (server == null || server.overworld() == null)
+            return MarketPriceStruct.NO_GAME_TIME;
+        return server.overworld().getDayTime(); // mc<=1.21.11
+        //return server.overworld().getOverworldClockTime(); // mc>=26.1
+    }
+
 
 
 
