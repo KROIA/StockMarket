@@ -271,7 +271,7 @@ public class AsyncMarket implements IAsyncMarket{
                     ParamGroup_double_double params = (ParamGroup_double_double)inputData.extra;
                     yield OutputData.of(input.function, market.getRealVolume(params.value1, params.value2));
                 }
-                case FunctionType.PutOrder_1 ->                           OutputData.of(input.function, putCheckedOrder(itemID, (Order)inputData.extra));
+                case FunctionType.PutOrder_1 ->                           OutputData.of(input.function, putCheckedOrder(itemID, (Order)inputData.extra, slaveID));
                 case FunctionType.GetLimitOrders ->                       OutputData.of(input.function, market.getLimitOrders());
                 case FunctionType.IsMaintenance ->                         OutputData.of(input.function, market.isUnderMaintenance());
                 case FunctionType.SetMaintenance ->
@@ -358,10 +358,11 @@ public class AsyncMarket implements IAsyncMarket{
          *
          * @param itemID the market the call was sent to
          * @param order  the order the slave wants placed
+         * @param slaveID the slave the call came from, recorded as the order's origin (T-215)
          * @return true if the order was placed; false for a bot order (no player), an order for another
          *         market, or any refusal of the shared order check
          */
-        private static boolean putCheckedOrder(ItemID itemID, Order order)
+        private static boolean putCheckedOrder(ItemID itemID, Order order, String slaveID)
         {
             UUID player = order.getExecutorPlayerUUID();
             if(player == null || !itemID.equals(order.getItemID()))
@@ -369,7 +370,7 @@ public class AsyncMarket implements IAsyncMarket{
             ISyncServerBankManager bankManager = AsyncMarket.SERVER_BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
             CreateOrderRequest.InputData request = new CreateOrderRequest.InputData(itemID, order.getBankAccountNr(), order.getType(),
                     bankManager.convertToRealAmount(order.getTargetVolume()), bankManager.convertToRealAmount(order.getStartPrice()));
-            return AsyncMarket.SERVER_BACKEND_INSTANCES.NETWORKING.CREATE_ORDER_REQUEST.placeOrder(request, player)
+            return AsyncMarket.SERVER_BACKEND_INSTANCES.NETWORKING.CREATE_ORDER_REQUEST.placeOrder(request, player, slaveID)
                     .join().status == CreateOrderRequest.Status.CREATED; // completes at once
         }
 

@@ -11,6 +11,7 @@ import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.data.OrderOriginLog;
 import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
@@ -313,6 +314,7 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             return future;
         }
 
+        OrderOriginLog.interMarket(imo.getInterMarketGroupID(), slaveID); // T-215: origin server of the order
         // 9. Success — only accepted orders (re)start the player's trade cooldown; a re-placed
         // (moved) order instead uses up its move credit.
         if (moveCredit != null)

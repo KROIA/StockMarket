@@ -1,23 +1,45 @@
 package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.multi_server.IServerIdentity;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
+import net.kroia.modutilities.networking.multi_server.ServerRole;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.data.OrderOriginLog;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
+import net.kroia.stockmarket.networking.request.PlaceInterMarketOrderRequest;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
+import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
+import org.jetbrains.annotations.Nullable;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 public class CreateOrderRequestTestSuite extends TestSuite {
 
@@ -72,6 +94,11 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         // Issue #95: AsyncMarket PutOrder_1 runs the same check and lock as this request
         addTest("asyncPutOrder_locksLikeCreateOrder", this::test_asyncPutOrder_locksLikeCreateOrder);
         addTest("asyncPutOrder_uncheckedOrdersRejected", this::test_asyncPutOrder_uncheckedOrdersRejected);
+
+        // T-215: the master records each player order's origin server in stockmarket_diagnostics.db
+        addTest("orderOrigin_columnsAndFirstRowWins", this::test_orderOrigin_columnsAndFirstRowWins);
+        addTest("orderOrigin_createOrderWritesRow", this::test_orderOrigin_createOrderWritesRow);
+        addTest("orderOrigin_interMarketWritesRow", this::test_orderOrigin_interMarketWritesRow);
 
         // Fix 3 — market orders that cannot match must cancel the remainder + refund.
         addTest("marketSell_noLiquidity_unlocksItems", this::test_marketSell_noLiquidity_unlocksItems);
@@ -835,6 +862,149 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return pass("Unchecked PutOrder_1 orders are refused");
         });
+    }
+
+    // ── T-215: OrderOrigin rows in stockmarket_diagnostics.db ────────────────
+
+    /** OrderOrigin has exactly ref, origin_server_uid, origin_name; master rows get the own uid, slave rows the slave's. */
+    private TestResult test_orderOrigin_columnsAndFirstRowWins() {
+        Path dir = null;
+        try {
+            dir = Files.createTempDirectory("sm-order-origin-test");
+            Path file = dir.resolve(OrderOriginLog.FILE_NAME);
+            UUID self = UUID.randomUUID();
+            UUID slave = UUID.randomUUID();
+            IServerIdentity identity = identity(self, "known-slave", slave);
+            DiagnosticsDatabase db = new DiagnosticsDatabase(file);
+            OrderOriginLog.record(db, "sm:order:1", "", identity);
+            OrderOriginLog.record(db, "sm:order:2", "known-slave", identity);
+            OrderOriginLog.record(db, "sm:order:3", "unknown-slave", identity);
+            OrderOriginLog.record(db, "sm:order:1", "known-slave", identity); // same ref again: ignored
+            db.flush().orTimeout(10, TimeUnit.SECONDS).join();
+            db.close();
+
+            List<String> columns = new ArrayList<>();
+            try (Connection c = DiagnosticsDatabase.connect(file); Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("PRAGMA table_info(OrderOrigin)")) {
+                while (rs.next()) columns.add(rs.getString("name"));
+            }
+            TestResult r = assertEquals("columns", List.of("ref", "origin_server_uid", "origin_name"), columns);
+            if (!r.passed()) return r;
+            r = assertEquals("master row", self + "|", originRow(file, "sm:order:1"));
+            if (!r.passed()) return r;
+            r = assertEquals("slave row", slave + "|known-slave", originRow(file, "sm:order:2"));
+            if (!r.passed()) return r;
+            r = assertEquals("unknown slave row", "null|unknown-slave", originRow(file, "sm:order:3"));
+            if (!r.passed()) return r;
+            return pass("OrderOrigin: 3 columns, uid per origin, first row of a ref wins");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    /** A master-local and a slave-forwarded order each get a row under the order's ledger ref. */
+    private TestResult test_orderOrigin_createOrderWritesRow() {
+        DiagnosticsDatabase live = OrderOriginLog.live();
+        if (live == null) return fail("no live OrderOriginLog on the master");
+        return withLimits(0, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("OrderOrigin", 100000, 0, player);
+            CreateOrderRequest.InputData buy = new CreateOrderRequest.InputData(itemID, acc.getAccountNumber(), Order.Type.LIMIT, 1.0, 1.0);
+            CreateOrderRequest.OutputData local = executeRequest(buy, player);
+            CreateOrderRequest.OutputData forwarded = backend.NETWORKING.CREATE_ORDER_REQUEST.placeOrder(buy, player, "audit-test-slave").join();
+            TestResult r = assertEquals("local order placed", CreateOrderRequest.Status.CREATED, local.status);
+            if (!r.passed()) return r;
+            r = assertEquals("forwarded order placed", CreateOrderRequest.Status.CREATED, forwarded.status);
+            if (!r.passed()) return r;
+            live.flush().orTimeout(10, TimeUnit.SECONDS).join();
+            IServerIdentity id = MultiServerManager.getIdentity();
+            r = assertEquals("master-local row", (id == null ? "null" : id.serverUid().toString()) + "|",
+                    originRow(live.getFile(), OrderLedger.orderRef(local.orderEcho.getOrderID())));
+            if (!r.passed()) return r;
+            r = assertEquals("slave row", "null|audit-test-slave",
+                    originRow(live.getFile(), OrderLedger.orderRef(forwarded.orderEcho.getOrderID())));
+            if (!r.passed()) return r;
+            return pass("both orders recorded with their origin");
+        });
+    }
+
+    /** An inter-market order gets one row under its group's ledger ref. */
+    private TestResult test_orderOrigin_interMarketWritesRow() {
+        DiagnosticsDatabase live = OrderOriginLog.live();
+        if (live == null) return fail("no live OrderOriginLog on the master");
+        return withLimits(0, 0, () -> {
+            IServerMarket want = fixture.createMarket("origin_want");
+            want.test_setCurrentMarketPrice(100);
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("OrderOriginIM", 0, 1000, player);
+            try {
+                long before = originCount(live.getFile(), "sm:im:%");
+                // limit of 1 raw have per want: far below the current rate, so the order only rests
+                PlaceInterMarketOrderRequest.OutputData out = new PlaceInterMarketOrderRequest().handleOnMasterServer(
+                        new PlaceInterMarketOrderRequest.InputData(itemID, want.getItemID(), acc.getAccountNumber(), 1.0, 1L, 0),
+                        "", player).join();
+                TestResult r = assertTrue("inter-market order placed: " + out.errorMessage, out.success);
+                if (!r.passed()) return r;
+                live.flush().orTimeout(10, TimeUnit.SECONDS).join();
+                r = assertEquals("one new group row", before + 1, originCount(live.getFile(), "sm:im:%"));
+                if (!r.passed()) return r;
+                return pass("inter-market order recorded under its group ref");
+            } finally { // the limit order rests; drop it before the fixture removes the market
+                ((ServerMarketManager) backend.MARKET_MANAGER.getSync()).cancelInterMarketOrdersForMarket(want.getItemID());
+            }
+        });
+    }
+
+    /** @return {@code "<origin_server_uid>|<origin_name>"} of the ref's OrderOrigin row, or null if there is none */
+    private static @Nullable String originRow(Path file, String ref) {
+        try (Connection c = DiagnosticsDatabase.connect(file);
+             PreparedStatement ps = c.prepareStatement("SELECT origin_server_uid, origin_name FROM OrderOrigin WHERE ref = ?")) {
+            ps.setString(1, ref);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) + "|" + rs.getString(2) : null;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** @return number of OrderOrigin rows whose ref matches the LIKE pattern; 0 if the file or table does not exist yet */
+    private static long originCount(Path file, String refPattern) {
+        if (!Files.exists(file)) return 0;
+        try (Connection c = DiagnosticsDatabase.connect(file); Statement st = c.createStatement();
+             ResultSet t = st.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE name = 'OrderOrigin'")) {
+            if (!t.next() || t.getLong(1) == 0) return 0;
+            try (PreparedStatement ps = c.prepareStatement("SELECT COUNT(*) FROM OrderOrigin WHERE ref LIKE ?")) {
+                ps.setString(1, refPattern);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? rs.getLong(1) : 0;
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** A master identity that knows exactly one slave. */
+    private static IServerIdentity identity(UUID self, String slaveName, UUID slaveUid) {
+        return new IServerIdentity() {
+            @Override public UUID serverUid() { return self; }
+            @Override public ServerRole role() { return ServerRole.MASTER; }
+            @Override public @Nullable String slaveId() { return null; }
+            @Override public @Nullable UUID masterUid() { return null; }
+            @Override public @Nullable UUID slaveUid(String slaveId) { return slaveName.equals(slaveId) ? slaveUid : null; }
+        };
+    }
+
+    private static void deleteTree(@Nullable Path dir) {
+        if (dir == null) return;
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+        } catch (Exception ignored) {
+            // best effort
+        }
     }
 
     // ── T-166: max order size + trade cooldown ───────────────────────────────

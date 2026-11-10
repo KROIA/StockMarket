@@ -25,6 +25,7 @@ import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
 import net.kroia.stockmarket.minecraft.compat.StockMarketPlaceholders;
 import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.data.DatabaseManager;
+import net.kroia.stockmarket.data.OrderOriginLog;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
@@ -55,6 +56,7 @@ import net.kroia.stockmarket.news.ClientNewsPictureCache;
 import net.kroia.stockmarket.util.*;
 import net.kroia.stockmarket.villagertrading.VillagerTradeManager;
 import net.kroia.stockmarket.villagertrading.VillagerTradeRewriter;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -289,6 +291,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         if(isMaster) {
             SERVER_INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             SERVER_INSTANCES.DATABASE_MANAGER.connectToDatabase(UtilitiesPlatform.getServer());
+            // T-215: order-origin diagnostics, next to stockdata.db; master only, orders are created here
+            OrderOriginLog.open(UtilitiesPlatform.getServer().getWorldPath(LevelResource.ROOT).resolve(DatabaseManager.DATABASE_PATH));
             SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager(SERVER_INSTANCES.DATABASE_MANAGER);
             SERVER_INSTANCES.ORDER_RECORD_MANAGER = new OrderRecordManager(SERVER_INSTANCES.DATABASE_MANAGER);
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createMaster();
@@ -674,6 +678,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.DATABASE_MANAGER.close();
             SERVER_INSTANCES.DATABASE_MANAGER = null;
         }
+        OrderOriginLog.close(); // no-op on slaves
 
         if(MultiServerManager.instanceExists())
         {
