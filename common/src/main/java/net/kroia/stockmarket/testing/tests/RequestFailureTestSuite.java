@@ -10,6 +10,7 @@ import net.kroia.stockmarket.networking.request.OrderHistoryRequest;
 import net.kroia.stockmarket.networking.request.TransactionHistoryRequest;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.InFlightGuard;
 
@@ -46,6 +47,7 @@ public class RequestFailureTestSuite extends TestSuite {
         addTest("async_market_passes_failure_on", this::test_asyncMarketPassesFailureOn);
         addTest("async_market_decodes_answer", this::test_asyncMarketDecodesAnswer);
         addTest("async_market_manager_passes_failure_on", this::test_asyncMarketManagerPassesFailureOn);
+        addTest("create_market_counts_when_factor_read_fails", this::test_createMarketCountsWhenFactorReadFails);
     }
 
     /** The exception a completed future failed with, unwrapped from CompletionException; null if it did not fail. */
@@ -164,5 +166,37 @@ public class RequestFailureTestSuite extends TestSuite {
         AsyncMarketManager answering = AsyncMarketManager.createForTesting(
                 input -> CompletableFuture.completedFuture(AsyncMarketManager.OutputData.of(input.function, true)));
         return assertNotNull("getMarketAsync maps true to a market", answering.getMarketAsync(marketID).join());
+    }
+
+    /**
+     * T-233: a market the server created counts as created even when the following BankSystem factor read fails.
+     * It is not cached locally (the next market list request loads it) and the create is sent once. A refused or
+     * failed create is still {@code false}.
+     */
+    private TestResult test_createMarketCountsWhenFactorReadFails() {
+        ItemID marketID = new ItemID((short) 1);
+        AtomicInteger creates = new AtomicInteger();
+        AsyncMarketManager creating = AsyncMarketManager.createForTesting(input -> {
+            creates.incrementAndGet();
+            return CompletableFuture.completedFuture(AsyncMarketManager.OutputData.of(input.function, true));
+        });
+        ClientMarketManager manager = ClientMarketManager.createForTesting(creating,
+                () -> CompletableFuture.failedFuture(new RequestOutcomeUnknownException("timeout")));
+        TestResult r = assertEquals("created despite the failed factor read", true, manager.requestCreateMarket(marketID).join());
+        if (!r.passed()) return r;
+        r = assertEquals("create sent once", 1, creates.get());
+        if (!r.passed()) return r;
+        r = assertNull("not cached without the factor", manager.getMarket(marketID));
+        if (!r.passed()) return r;
+
+        AsyncMarketManager refusing = AsyncMarketManager.createForTesting(
+                input -> CompletableFuture.completedFuture(AsyncMarketManager.OutputData.of(input.function, false)));
+        r = assertEquals("refused create", false, ClientMarketManager.createForTesting(refusing,
+                () -> CompletableFuture.completedFuture(1)).requestCreateMarket(marketID).join());
+        if (!r.passed()) return r;
+        AsyncMarketManager failing = AsyncMarketManager.createForTesting(
+                input -> CompletableFuture.failedFuture(new RequestOutcomeUnknownException("timeout")));
+        return assertEquals("failed create", false, ClientMarketManager.createForTesting(failing,
+                () -> CompletableFuture.completedFuture(1)).requestCreateMarket(marketID).join());
     }
 }

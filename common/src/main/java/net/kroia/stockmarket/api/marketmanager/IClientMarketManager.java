@@ -31,7 +31,8 @@ public interface IClientMarketManager {
      * Requests the server to create a new market for the given item.
      *
      * @param itemID the item to create a market for
-     * @return a future that completes with {@code true} if the market was created successfully
+     * @return a future that completes with {@code true} once the server created the market, even when loading it
+     *         locally failed (the next {@link #requestMarkets()} loads it), and {@code false} otherwise
      */
     CompletableFuture<Boolean> requestCreateMarket(ItemID itemID);
 

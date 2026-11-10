@@ -17,6 +17,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 public class ClientMarketManager implements IClientMarketManager
 {
@@ -26,6 +27,8 @@ public class ClientMarketManager implements IClientMarketManager
         ClientMarket.setBackend(backend);
     }
     private final IAsyncMarketManager asyncMarketManager;
+    /** Reads BankSystem's item fraction scale factor; the client bank manager in production, a fake in tests. */
+    private final Supplier<CompletableFuture<Integer>> factorRead;
 
     private final Map<ItemID, ClientMarket> clientMarkets = new HashMap<>();
 
@@ -37,7 +40,27 @@ public class ClientMarketManager implements IClientMarketManager
 
     public ClientMarketManager()
     {
-        asyncMarketManager = AsyncMarketManager.createClientManager();
+        this(AsyncMarketManager.createClientManager(),
+                () -> BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync());
+    }
+    private ClientMarketManager(IAsyncMarketManager asyncMarketManager, Supplier<CompletableFuture<Integer>> factorRead)
+    {
+        this.asyncMarketManager = asyncMarketManager;
+        this.factorRead = factorRead;
+    }
+
+    /**
+     * Test seam (T-233): a manager that talks to {@code asyncMarketManager} and reads the item fraction scale
+     * factor from {@code factorRead} instead of the network and BankSystem.
+     *
+     * @param asyncMarketManager replaces the client's market manager (see {@link AsyncMarketManager#createForTesting})
+     * @param factorRead         replaces BankSystem's item fraction scale factor read
+     * @return the manager
+     */
+    public static ClientMarketManager createForTesting(IAsyncMarketManager asyncMarketManager,
+                                                       Supplier<CompletableFuture<Integer>> factorRead)
+    {
+        return new ClientMarketManager(asyncMarketManager, factorRead);
     }
 
 
@@ -125,7 +148,7 @@ public class ClientMarketManager implements IClientMarketManager
     @Override
     public CompletableFuture<List<ItemID>> requestMarkets()
     {
-        return BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync().thenCompose((factor)->
+        return factorRead.get().thenCompose((factor)->
             AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenApply((response) ->
             {
                 if(response == null) // not sent; must not be read as "the server has no markets" (that prunes all)
@@ -173,18 +196,27 @@ public class ClientMarketManager implements IClientMarketManager
         return asyncMarketManager.getTradingCurrencyIDAsync();
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * T-233: once the server confirmed the market, the result is {@code true} even if the following item fraction
+     * scale factor read fails (BankSystem request timeout). The local market is then not created here; the next
+     * {@link #requestMarkets()} loads it. The create itself is never sent again (its outcome counts, see T-227).
+     */
     @Override
     public CompletableFuture<Boolean> requestCreateMarket(ItemID itemID)
     {
         return asyncMarketManager.createMarketAsync(itemID).thenCompose(market -> {
             if (market != null) {
                 info("Market created on server for: " + itemID);
-                return BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager()
-                        .getItemFractionScaleFactorAsync()
-                        .thenApply(factor -> {
-                            createClientMarket(itemID, factor);
-                            return true;
-                        });
+                return factorRead.get().handle((factor, failure) -> {
+                    if (failure != null)
+                        warn("Market " + itemID + " was created, but reading the item fraction scale factor failed ("
+                                + failure + "); the next market list request loads it");
+                    else
+                        createClientMarket(itemID, factor);
+                    return true;
+                });
             }
             warn("Server returned null for createMarketAsync: " + itemID);
             return CompletableFuture.completedFuture(false);
@@ -299,19 +331,20 @@ public class ClientMarketManager implements IClientMarketManager
         return sb.toString();
     }
 
+    // The log helpers skip logging without a client backend (offline tests, dedicated server test runs).
     protected void info(String message) {
-        BACKEND_INSTANCES.LOGGER.info("[ClientMarketManager]: "+message);
+        if (BACKEND_INSTANCES != null) BACKEND_INSTANCES.LOGGER.info("[ClientMarketManager]: "+message);
     }
     protected void error(String message) {
-        BACKEND_INSTANCES.LOGGER.error("[ClientMarketManager]: "+message);
+        if (BACKEND_INSTANCES != null) BACKEND_INSTANCES.LOGGER.error("[ClientMarketManager]: "+message);
     }
     protected void error(String message, Throwable throwable) {
-        BACKEND_INSTANCES.LOGGER.error("[ClientMarketManager]: "+message, throwable);
+        if (BACKEND_INSTANCES != null) BACKEND_INSTANCES.LOGGER.error("[ClientMarketManager]: "+message, throwable);
     }
     protected void warn(String message) {
-        BACKEND_INSTANCES.LOGGER.warn("[ClientMarketManager]: "+message);
+        if (BACKEND_INSTANCES != null) BACKEND_INSTANCES.LOGGER.warn("[ClientMarketManager]: "+message);
     }
     protected void debug(String message) {
-        BACKEND_INSTANCES.LOGGER.debug("[ClientMarketManager]: "+message);
+        if (BACKEND_INSTANCES != null) BACKEND_INSTANCES.LOGGER.debug("[ClientMarketManager]: "+message);
     }
 }
