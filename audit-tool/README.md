@@ -16,7 +16,9 @@ python -I audit-tool trades  <world> --player <name> [--item <id>] [--from "2024
 python -I audit-tool timeline <world> --player <name> [--item 6] [--min-delta 1000000]   (or --account <n>)
 python -I audit-tool candles <world> --item <id> --from "2024-01-01 12:00" --to "2024-01-01 12:30" [--player <name>]
 python -I audit-tool names   <world> [--items]
-python -I audit-tool gui     [<world>]
+python -I audit-tool diag    <world> [--table meta|journal|noteflow|origin] [--from ...] [--to ...] [--csv d.csv]
+python -I audit-tool join    <master world> <slave world> [<slave world> ...] [--csv transfers.csv]
+python -I audit-tool gui     [<world>[;<world>...]]
 python -I audit-tool selftest            (or: python -I audit-tool/selftest.py)
 ```
 
@@ -46,7 +48,41 @@ The exes take the same arguments: `audit.exe report <world> --out report.md`, an
 ### GUI
 
 Load a world. Pick a player, an ItemID and From/To, then click Trades, P&L, Timeline, Candles or Flags. Export CSV
-writes the current table. The candles view shows 1-min candles (close = next open), with the player's buys as
+writes the current table. For Transfers, load the master and its slaves together: separate the paths with `;` in the
+path box, or add each one with `+ World`. All other views use the master.
+
+## Multi-save join (`join`, GUI Transfers)
+
+Load the master and its slave worlds together. The tool joins every cross-server transfer by `transfer_id`, and only by
+id, never by time. Server roles and names come from `data/ModUtilities/server_identity.json`. A world without that
+file counts as the master if it has `banksystem.db`, otherwise as a slave. The tool warns when two saves share a
+`server_uid` (a copied world) or when a slave's `master_uid` is not the loaded master.
+
+| Side | Source |
+|---|---|
+| Slave | `TransferJournal` rows in the slave's `banksystem_diagnostics.db`. Only slaves write the journal. |
+| Master | `TransactionLog` rows whose `ref` is the transfer_id (a UUID), and `SuspicionFlag` rows with `flag_type` 6 (TRANSFER_PARKED) and that `ref`. |
+
+Each transfer compares value in raw units, counted as value going into the master bank:
+- master = the signed sum of its ledger rows;
+- slave = REQUESTED − RETURNED for `TO_MASTER`, or −DELIVERED for `FROM_MASTER`.
+
+A follow-up row with no `items_json` means the full requested amount. FAILED moves nothing.
+
+| Class | Meaning |
+|---|---|
+| `ok` | Both sides agree. This includes partial converter deposits, and rejections whose items were returned. |
+| `parked` | Open admin case (TRANSFER_PARKED flag). Shows `acknowledged` once the admin has ticked it. |
+| `duplicate` | Both sides have rows, but more value arrived than left. Examples: applied and RETURNED; REFUNDED after DELIVERED. |
+| `lost` | Value left one side and never arrived. Examples: a debit with no slave row; REQUESTED + TIMED_OUT with no master row; FAILED without a refund. |
+| `created from nothing` | The slave received value, but the master has no row for it. |
+| `known gap` | A DROP with no master row. User-deletion payouts (BankSystem #127) write the master ledger with `ref = null`, so the master row is not linked. Not a finding. |
+| `data gap` | Replaces lost / created from nothing when the side without rows cannot show the transfer. The master or slave save is not loaded; a slave has no diagnostics DB, or its `Meta.created_ms` is after the transfer; or the master ledger has no `ref` column. |
+| `after snapshot` | Replaces lost / created from nothing when the transfer is newer than the oldest loaded save (`level.dat` `Data.LastPlayed`). That copy may simply predate it. |
+
+The `note` column adds `master ledger rows may have been rolled back` when a matched ledger row is newer than
+`Meta.bank_last_save_ms`. A crash before the next bank save undoes the balance change but keeps the row. A world
+without `level.dat` has no last-save info. That world is reported, and it does not count toward "after snapshot". The candles view shows 1-min candles (close = next open), with the player's buys as
 blue up-triangles and sells as magenta down-triangles. Log price scale is on by default.
 
 ## Safety
@@ -116,6 +152,24 @@ CI: `.github/workflows/audit-tool.yml` (windows-latest).
   or bot book and player-to-player money.
 - `SuspicionFlag` table and `BankSystem/audit/*.log`: the table is dumped generically, and the logs are listed
   (their schema is not final yet).
+- **Diagnostics DBs** are optional and write-only for the mods. Older worlds have none, and the tool then shows
+  "no diagnostics data" for the missing file or table.
+  - `BankSystem/Database/banksystem_diagnostics.db`:
+    - `Meta`: `schema_version`; `created_ms` (first write to the file); `bank_last_save_ms` (last successful
+      `Bank_data` save).
+    - `TransferJournal`: slaves only.
+    - `NoteFlow`: notes created (+) or destroyed (−) outside the bank. The villager columns `villager_uuid`,
+      `dimension`, `x`, `y`, `z` are read when present.
+  - `StockMarket/Database/stockmarket_diagnostics.db` (master only):
+    - `Meta`.
+    - `OrderOrigin(ref, origin_server_uid, origin_name)`. `ref` is `sm:order:<order_id>`, or `sm:im:<group uuid>` for
+      inter-market orders. `origin_name` is the slave name, and `''` means the order was placed on the master.
+    - BankSystem's writer may also add empty `TransferJournal`/`NoteFlow` tables to this file. They are ignored.
+  - The report's Data table shows each file's row counts, the server identity and the last save. It also shows how
+    many ledger rows are newer than `bank_last_save_ms` ("may have been rolled back").
+- **Trades** have an `origin` column: the slave name, `master`, or empty. It is empty for bot orders, orders placed
+  before OrderOrigin existed, and test orders created without a request. The BalanceHistory timeline has no order refs,
+  so it shows no origin.
 
 ## Known gaps
 

@@ -3,7 +3,7 @@
 Units (both mods): money raw = cents, item balances and order volumes raw = items x100, times = epoch ms UTC.
 OrderHistory.price is cents per whole item, so money of a fill in cents = amount * price / 100.
 """
-import bisect, collections, csv, datetime as dt, glob, json, math, os, shutil, sqlite3, statistics, tempfile
+import bisect, collections, csv, datetime as dt, functools, glob, json, math, os, shutil, sqlite3, statistics, tempfile
 import urllib.request, uuid
 
 import nbt
@@ -58,6 +58,18 @@ TRADE_CODES = {c for c, (_, s) in LEDGER_TYPES.items() if s in ('buy', 'sell')}
 ORDER_ID_COLUMNS = ('order_id', 'orderId')   # persisted StockMarket order id (spec: order_id)
 LEDGER_OPTIONAL = ('type_code', 'ref', 'money_amount', 'price', 'currency_item', 'tag', 'virtual_qty',
                    'source_kind', 'note', 'balance_after', 'actor_name', 'other_account')
+
+# Diagnostics DBs (write-only for the mods, optional: older worlds have none). Meta keys: schema_version, created_ms
+# (first write to the file); the BankSystem file also bank_last_save_ms (last successful Bank_data save).
+# The StockMarket file is written by BankSystem's DiagnosticsDatabase, so it may also hold empty TransferJournal /
+# NoteFlow tables; those are ignored, only its Meta and OrderOrigin are read.
+DIAG_BS = 'BankSystem/Database/banksystem_diagnostics.db'
+DIAG_SM = 'StockMarket/Database/stockmarket_diagnostics.db'
+JOURNAL_COLS = ('id', 'transfer_id', 'ts', 'direction', 'path', 'step', 'account_number', 'player_uuid', 'items_json',
+                'ledger_type', 'context', 'detail')
+NOTEFLOW_COLS = ('id', 'ts', 'source', 'player_uuid', 'item_id', 'amount', 'context',
+                 'villager_uuid', 'dimension', 'x', 'y', 'z')   # villager columns: BankSystem 0a6023c1, absent before
+TRANSFER_PARKED = 6        # BankSystem SuspicionChecks.TRANSFER_PARKED: DROP outcome unknown, held for the admin
 
 
 # ----------------------------------------------------------------------------------- helpers
@@ -122,18 +134,23 @@ class World:
         up = os.path.dirname(self.data)
         self.playerdata = next((p for p in (os.path.join(self.data, 'playerdata'), os.path.join(up, 'playerdata'))
                                 if os.path.isdir(p)), None)
-        self.sm = self._open('StockMarket/Database/stockdata.db')
-        self.bs = self._open('BankSystem/Database/banksystem.db')
+        self._load_identity()
+        self.slave = self.identity.get('role') == 'SLAVE'   # slaves have no main DBs and may lack ItemIDs.nbt: no warnings
+        self.sm = self._open('StockMarket/Database/stockdata.db', quiet=self.slave)
+        self.bs = self._open('BankSystem/Database/banksystem.db', quiet=self.slave)
+        self.bsd = self._open(DIAG_BS, quiet=True)   # None = no diagnostics data
+        self.smd = self._open(DIAG_SM, quiet=True)
         self._load_items()
         self._load_names()
         self._load_accounts()
         self._fills = self._ledger = None
 
     # -- sqlite
-    def _open(self, rel):
+    def _open(self, rel, quiet=False):
         p = os.path.join(self.data, rel)
         if not os.path.isfile(p):
-            self.warn('missing ' + rel); return None
+            if not quiet: self.warn('missing ' + rel)
+            return None
         if self.copy:
             self._tmp = self._tmp or tempfile.mkdtemp(prefix='mc_audit_')
             dst = os.path.join(self._tmp, os.path.basename(p))
@@ -176,10 +193,10 @@ class World:
                     stack += [(m + 1, b), (a, m)]
             return out
 
-    def idr(self, db, table):
-        """Salvage range over the table's rowid (tight bounds keep the bisection cheap)."""
+    def idr(self, db, table, col='id'):
+        """Salvage range over the table's id column (tight bounds keep the bisection cheap)."""
         try:
-            lo, hi = db.execute('SELECT min(id), max(id) FROM "%s"' % table).fetchone()
+            lo, hi = db.execute('SELECT min(%s), max(%s) FROM "%s"' % (col, col, table)).fetchone()
         except sqlite3.DatabaseError:
             lo = hi = None
         if lo is None:
@@ -187,7 +204,7 @@ class World:
                 hi = db.execute('SELECT seq FROM sqlite_sequence WHERE name=?', (table,)).fetchone()[0]; lo = 0
             except (sqlite3.DatabaseError, TypeError):
                 lo, hi = 0, 2**63 - 1
-        return ('id', lo, hi, 0)
+        return (col, lo, hi, 0)
 
     def columns(self, db, table):
         if db is None: return set()
@@ -200,7 +217,7 @@ class World:
         if msg not in self.warnings: self.warnings.append(msg)
 
     def close(self):
-        for c in (self.sm, self.bs):
+        for c in (self.sm, self.bs, self.bsd, self.smd):
             if c: c.close()
         if self._tmp: shutil.rmtree(self._tmp, ignore_errors=True)
 
@@ -209,7 +226,8 @@ class World:
     def __exit__(self, *a): self.close()
 
     # -- NBT / JSON metadata
-    def _nbt(self, path):
+    def _nbt(self, path, optional=False):
+        if optional and not os.path.isfile(path): return None
         try:
             return nbt.load(path)
         except (OSError, nbt.NBTError) as e:
@@ -222,9 +240,36 @@ class World:
             if isinstance(d, dict) and isinstance(d.get('data'), list): out += d['data']
         return out
 
+    def _load_identity(self):
+        """ModUtilities `data/ModUtilities/server_identity.json` (server_uid, role, slave_id, master_uid, first_start_ms,
+        known_slaves {slave_id: {uid, last_seen_ms}}) and `level.dat` Data.LastPlayed (last world save, epoch ms).
+        Missing or unreadable -> {} / None (older worlds; "no last-save info")."""
+        self.identity, f = {}, os.path.join(self.data, 'ModUtilities', 'server_identity.json')
+        if os.path.isfile(f) and os.path.getsize(f) < MAX_JSON_BYTES:
+            try:
+                with open(f, encoding='utf-8') as fh:
+                    d = json.load(fh)
+                if isinstance(d, dict): self.identity = d
+            except ValueError as e:
+                self.warn('server_identity.json: %s' % e)
+        f = os.path.join(os.path.dirname(self.data), 'level.dat')
+        d = self._nbt(f, True)
+        lp = d['Data'].get('LastPlayed') if isinstance(d, dict) and isinstance(d.get('Data'), dict) else None
+        self.last_played = lp if isinstance(lp, int) and lp > 0 else None
+
+    def role(self):
+        """MASTER / SLAVE / STANDALONE from server_identity.json. Without it, a world with banksystem.db counts as
+        MASTER (slaves have no main BankSystem DB), any other as SLAVE."""
+        r = self.identity.get('role')
+        return r.upper() if isinstance(r, str) and r else ('MASTER' if self.bs else 'SLAVE')
+
+    def label(self):
+        """Short server name for multi-save output: the slave_id, else the role."""
+        return self.identity.get('slave_id') or self.role().lower()
+
     def _load_items(self):
         self.items = {}
-        d = self._nbt(os.path.join(self.data, 'BankSystem', 'ItemIDs.nbt')) or {}
+        d = self._nbt(os.path.join(self.data, 'BankSystem', 'ItemIDs.nbt'), self.slave) or {}
         for e in d.get('itemIDs', []):
             try:
                 st = e['itemStack']
@@ -236,7 +281,7 @@ class World:
                 self.items.setdefault(a['from'], '%s (alias of #%d)' % (self.items.get(a['to'], '?'), a['to']))
             except (KeyError, TypeError):
                 pass
-        m = self._nbt(os.path.join(self.data, 'BankSystem', 'Meta_data.nbt')) or {}
+        m = self._nbt(os.path.join(self.data, 'BankSystem', 'Meta_data.nbt'), self.slave) or {}
         for e in m.get('itemIDShortNameDigest', []):
             if isinstance(e, dict) and 's' in e and 'n' in e: self.items.setdefault(e['s'], e['n'])
         self.money_id = next((i for i, n in self.items.items() if n == 'banksystem:money'), 6)
@@ -357,9 +402,73 @@ class World:
             self._ledger = out
         return self._ledger
 
+    # -- diagnostics DBs (read-only; every reader returns empty data when the file or table is missing)
+    def meta(self, db):
+        """Meta key -> value of a diagnostics DB; {} when the DB or table is missing."""
+        if 'key' not in self.columns(db, 'Meta'): return {}
+        return dict(self.rows(db, 'SELECT key, value FROM Meta WHERE 1'))
+
+    def meta_ms(self, db, key):
+        """An epoch-ms Meta value as int, None when missing or not a number (= unknown)."""
+        try:
+            return int(self.meta(db).get(key))
+        except (TypeError, ValueError):
+            return None
+
+    def diag_rows(self, db, table, cols):
+        """Rows of a diagnostics table as dicts, only the columns this file has; [] when the DB or table is missing."""
+        have = self.columns(db, table)
+        sel = [c for c in cols if c in have]
+        if not sel: return []
+        rng = self.idr(db, table, 'id' if 'id' in have else 'rowid')
+        return [dict(zip(sel, r)) for r in self.rows(db, 'SELECT %s FROM "%s" WHERE 1' % (','.join(sel), table), (), rng)]
+
+    @functools.cached_property
+    def journal(self):
+        """BankSystem TransferJournal rows (slaves only), sorted by (ts, id)."""
+        return sorted(self.diag_rows(self.bsd, 'TransferJournal', JOURNAL_COLS), key=lambda r: (r.get('ts') or 0, r.get('id') or 0))
+
+    @functools.cached_property
+    def noteflow(self):
+        """BankSystem NoteFlow rows (notes created + / destroyed - outside the bank), sorted by (ts, id)."""
+        return sorted(self.diag_rows(self.bsd, 'NoteFlow', NOTEFLOW_COLS), key=lambda r: (r.get('ts') or 0, r.get('id') or 0))
+
+    @functools.cached_property
+    def origins(self):
+        """StockMarket OrderOrigin (master only): ledger ref ("sm:order:<id>" / "sm:im:<group uuid>") ->
+        (origin_server_uid or None, origin_name: slave name, '' = placed on the master)."""
+        return {r['ref']: (r.get('origin_server_uid'), r.get('origin_name') or '')
+                for r in self.diag_rows(self.smd, 'OrderOrigin', ('ref', 'origin_server_uid', 'origin_name')) if r.get('ref')}
+
+    def origin_of(self, f):
+        """Origin server of a fill: slave name, 'master', or '' when unknown (bot order, older world, no row)."""
+        if f.g1 or f.g2: ref = 'sm:im:' + longs_to_uuid(f.g1 or 0, f.g2 or 0)
+        elif f.order_id is not None: ref = 'sm:order:%s' % f.order_id
+        else: return ''
+        o = self.origins.get(ref)
+        return '' if o is None else (o[1] or 'master')
+
+    def rolled_back(self):
+        """Ledger rows newer than Meta.bank_last_save_ms: a crash before the next bank save may have undone their
+        balance change. None = unknown (no BankSystem diagnostics Meta)."""
+        t = self.meta_ms(self.bsd, 'bank_last_save_ms')
+        return None if t is None else [r for r in self.ledger() if (r.get('ts') or 0) > t]
+
+    def diag_status(self):
+        """Per diagnostics DB: row count per table, or 'no diagnostics data' for a missing file or table."""
+        out = {}
+        for rel, db, tables in ((DIAG_BS, self.bsd, ('Meta', 'TransferJournal', 'NoteFlow')), (DIAG_SM, self.smd, ('Meta', 'OrderOrigin'))):
+            if db is None:
+                out[os.path.basename(rel)] = 'no diagnostics data (file missing)'; continue
+            out[os.path.basename(rel)] = ', '.join(
+                '%s %s' % (t, (self.rows(db, 'SELECT count(*) FROM "%s" WHERE 1' % t) or [('unreadable',)])[0][0] if self.columns(db, t)
+                else 'missing (no diagnostics data)') for t in tables)
+        return out
+
     def schema_summary(self):
         oh = self.columns(self.sm, 'OrderHistory'); tl = self.columns(self.bs, 'TransactionLog')
         self.fills()
+        rb = self.rolled_back()
         return {
             'OrderHistory order id column': self.order_id_col or 'absent (2.1.2 format)',
             'TransactionLog.type_code': 'present' if 'type_code' in tl else 'absent (legacy kind text)',
@@ -367,6 +476,12 @@ class World:
             'TransactionLog.virtual_qty': 'present' if 'virtual_qty' in tl else 'absent',
             'SuspicionFlag table': 'present' if self.columns(self.bs, 'SuspicionFlag') else 'absent',
             'OrderHistory columns': ','.join(sorted(oh)) or 'missing',
+            **self.diag_status(),
+            'Server identity': ('%s %s' % (self.role(), self.identity.get('slave_id') or '')).strip() if self.identity
+                               else 'no server_identity.json (older world)',
+            'Last save (level.dat LastPlayed)': ts(self.last_played) if self.last_played else 'no last-save info',
+            'Ledger rows after the last bank save': 'unknown (no bank_last_save_ms)' if rb is None
+                                                    else '%d (may have been rolled back)' % len(rb),
         }
 
 
@@ -593,6 +708,142 @@ def audit_logs(w):
     return sorted(glob.glob(os.path.join(w.data, 'BankSystem', 'audit', '*.log')))
 
 
+# ----------------------------------------------------------------------------------- multi-save join
+def _is_uuid(s):
+    try:
+        return isinstance(s, str) and str(uuid.UUID(s)) == s
+    except ValueError:
+        return False
+
+
+def _raw_sum(items_json):
+    """Total raw units of a TransferJournal items_json ({"<item_id>": raw}); None when absent or unparsable."""
+    try:
+        return sum(int(v) for v in json.loads(items_json).values())
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _into_bank(r, direction):
+    """Signed raw value a master ledger row moves into the bank (+) or out of it (-). Codes without a fixed sign
+    (UNKNOWN_LEGACY, SHARE_TRADE, codes newer than LEDGER_TYPES) follow the journal direction, else the amount's sign."""
+    s, a = LEDGER_TYPES.get(r['code'], ('?', None))[1], r.get('amount') or 0
+    if isinstance(s, int): return s * a
+    return -abs(a) if direction == 'FROM_MASTER' else abs(a) if direction == 'TO_MASTER' else a
+
+
+UNLINKED_DROP = 'DROP payout, master row not linked (BankSystem #127 ref=null)'
+
+
+def _unlinked_drop(J, L):
+    """Known gap, not a finding: user-deletion payouts (BankSystem #127, ServerBankManager.dropOnSlaves) drop to slaves
+    under a transfer_id the master never writes as ledger ref (ACCOUNT_DELETE_PAYOUT/LOSS rows have ref = null), so
+    any DROP without a master row is shown as this gap. Remove once BankSystem writes ref = transfer_id there."""
+    return not L and any(r.get('path') == 'DROP' for r in J)
+
+
+def join(worlds):
+    """Join master + slave saves by transfer_id (plan v0.3 "What the tool will check", BankSystem delta v0.4).
+
+    Slave side: TransferJournal rows (slaves only). Master side: TransactionLog rows with ref = transfer_id and
+    TRANSFER_PARKED SuspicionFlag rows with ref = transfer_id. Matched by id only, never by time.
+    Per transfer the value is compared in raw units, signed as "into the master bank":
+      master = sum of its ref rows (LedgerType sign);
+      slave  = TO_MASTER: REQUESTED - RETURNED (items left the slave world); FROM_MASTER: -DELIVERED.
+    Classes: ok (equal), parked (open admin case), duplicate (both sides, more value than moved), lost (value
+    left one side and did not arrive), created from nothing (slave got value, master has no row), known gap (a DROP
+    without master row, see _unlinked_drop).
+    'data gap' replaces lost / created from nothing when the side without rows cannot show the transfer (save not
+    loaded, no diagnostics DB, DB created after the transfer, master ledger without ref); 'after snapshot' when the
+    transfer is newer than the oldest loaded save (level.dat LastPlayed). Returns (rows, warnings)."""
+    warns, seen = [], {}
+    for w in worlds:
+        u = w.identity.get('server_uid')
+        if u and u in seen: warns.append('%s and %s share server_uid %s (copied world?)' % (seen[u], w.data, u))
+        if u: seen.setdefault(u, w.data)
+    masters = [w for w in worlds if w.role() != 'SLAVE']
+    slaves = [w for w in worlds if w.role() == 'SLAVE']
+    m = masters[0] if masters else None
+    if len(masters) > 1: warns.append('%d master/standalone saves loaded; using %s' % (len(masters), m.data))
+    if m is None: warns.append('no master save loaded: the master side of every transfer is unknown')
+    mu = m.identity.get('server_uid') if m else None
+    for s in slaves:
+        if mu and s.identity.get('master_uid') not in (None, mu):
+            warns.append('slave %s belongs to master %s, not to the loaded one' % (s.label(), s.identity.get('master_uid')))
+        if s.bsd is None: warns.append('slave %s: no diagnostics data (no %s)' % (s.label(), os.path.basename(DIAG_BS)))
+    warns += ['%s: no last-save info (no level.dat LastPlayed)' % w.label() for w in worlds if w.last_played is None]
+    known = [w.last_played for w in worlds if w.last_played]
+    oldest = min(known) if known else None
+
+    led, parked, noref = collections.defaultdict(list), {}, True
+    if m and m.bs:
+        noref = 'ref' not in m.columns(m.bs, 'TransactionLog')
+        for r in m.ledger():
+            if _is_uuid(r.get('ref')): led[r['ref']].append(r)
+        fc = m.columns(m.bs, 'SuspicionFlag')
+        if 'ref' in fc:
+            for ref, t, ack in m.rows(m.bs, 'SELECT ref, ts, %s FROM SuspicionFlag WHERE flag_type = ?'
+                                      % ('acknowledged' if 'acknowledged' in fc else '0'), (TRANSFER_PARKED,)):
+                if ref: parked[ref] = (t or 0, ack)
+    bank_save = m.meta_ms(m.bsd, 'bank_last_save_ms') if m else None
+    jr, owner = collections.defaultdict(list), {}
+    for s in slaves:
+        for r in s.journal:
+            jr[r['transfer_id']].append(r); owner[r['transfer_id']] = s
+
+    def gap(t, slave_missing):
+        """Why the side without rows cannot show a transfer at time t, or None."""
+        if not slave_missing:
+            return 'no master save loaded' if m is None else 'master has no banksystem.db' if m.bs is None \
+                else 'master ledger has no ref column' if noref else None
+        if not slaves: return 'no slave save loaded'
+        ks = m.identity.get('known_slaves') if m else None
+        missing = sorted(set(ks if isinstance(ks, dict) else ()) - {s.identity.get('slave_id') for s in slaves})
+        if missing: return 'slave save not loaded: ' + ', '.join(missing)
+        for s in slaves:   # master rows do not name the slave, so every loaded slave must be able to show it
+            c = s.meta_ms(s.bsd, 'created_ms')
+            if s.bsd is None: return 'slave %s has no diagnostics data' % s.label()
+            if c is None or c > t: return 'slave %s diagnostics DB created %s, after the transfer' % (s.label(), ts(c) if c else '(unknown)')
+        return None
+
+    out = []
+    for tid in set(jr) | set(led) | set(parked):
+        J, L = jr.get(tid, []), led.get(tid, [])
+        d = next((r['direction'] for r in J if r.get('direction')), None)
+        req = next((r for r in J if r.get('step') == 'REQUESTED'), None)
+        requested = _raw_sum(req.get('items_json')) if req else None
+        part = lambda r: (_raw_sum(r.get('items_json')) if r.get('items_json') else requested) or 0   # null = all
+        sv = ((requested or 0) - sum(part(r) for r in J if r.get('step') == 'RETURNED') if d == 'TO_MASTER'
+              else -sum(part(r) for r in J if r.get('step') == 'DELIVERED') if d == 'FROM_MASTER' else 0)
+        mv = sum(_into_bank(r, d) for r in L)
+        t = min([r.get('ts') or 0 for r in J + L] or [parked.get(tid, (0,))[0]])
+        notes = []
+        if tid in parked:
+            cls = 'parked'
+            if parked[tid][1]: notes.append('acknowledged')
+        elif _unlinked_drop(J, L): cls = 'known gap'; notes.append(UNLINKED_DROP)
+        elif mv == sv: cls = 'ok'
+        elif not J: cls = 'lost'
+        elif not L: cls = 'created from nothing' if mv > sv else 'lost'
+        else: cls = 'duplicate' if mv > sv else 'lost'
+        if cls in ('lost', 'created from nothing'):
+            g = gap(t, not J) if not (J and L) else None
+            if g: cls = 'data gap'; notes.append(g)
+            elif oldest is not None and t > oldest: cls = 'after snapshot'; notes.append('newer than the oldest loaded save %s' % ts(oldest))
+        if bank_save is not None and any((r.get('ts') or 0) > bank_save for r in L):
+            notes.append('master ledger rows may have been rolled back (after the bank save %s)' % ts(bank_save))
+        nm = m or owner.get(tid)
+        acct = next((r.get('account_number') for r in J + L if r.get('account_number') is not None), '')
+        pu = next((r.get('player_uuid') for r in J if r.get('player_uuid')), None) or next((r.get('actor_uuid') for r in L if r.get('actor_uuid')), None)
+        out.append({'transfer_id': tid, 'class': cls, 'time': ts(t), 'time_ms': t,
+                    'path': next((r['path'] for r in J if r.get('path')), ''), 'direction': d or '',
+                    'slave': owner[tid].label() if tid in owner else '', 'account': acct, 'player': nm.pname(pu) if pu else '',
+                    'slave_steps': ' '.join(r.get('step') or '?' for r in J),
+                    'master_rows': ' '.join('%s %s' % (LEDGER_TYPES.get(r['code'], ('code%s' % r['code'],))[0], qty(r.get('amount') or 0)) for r in L),
+                    'into_bank_master': mv / SCALE, 'into_bank_slave': sv / SCALE, 'note': '; '.join(notes)})
+    return sorted(out, key=lambda r: (r['time_ms'], r['transfer_id'])), warns
+
+
 def write_csv(path, rows, header=None):
     """rows: list of dicts (header = keys of first row) or list of sequences with header."""
     with open(path, 'w', newline='', encoding='utf-8') as fh:
@@ -609,7 +860,7 @@ def fill_dicts(w, fills):
              'item': w.iname(f.item), 'item_id': f.item, 'side': 'buy' if f.amount > 0 else 'sell',
              'type': {0: 'market', 1: 'limit'}.get(f.type, f.type), 'qty': f.amount / SCALE, 'price': f.price / 100,
              'money': money_of(f.amount, f.price) / 100, 'order_id': f.order_id,
-             'intermarket': bool(f.g1 or f.g2)} for f in fills]
+             'intermarket': bool(f.g1 or f.g2), 'origin': w.origin_of(f)} for f in fills]
 
 
 def pnl_dicts(w, st):
