@@ -619,8 +619,16 @@ public class AsyncMarket implements IAsyncMarket{
     }
 
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * T-237: an order for an item this side cannot resolve (an item only the master has) is refused here with
+     * {@code false} and never forwarded to the master.
+     */
     @Override
     public CompletableFuture<Boolean> putOrderAsync(Order order) {
+        if (!MultiServerUtils.isMarketResolvableOnThisServer(itemID))
+            return CompletableFuture.completedFuture(false);
         return call(InputData.of(FunctionType.PutOrder_1, itemID, order), false);
     }
 

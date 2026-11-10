@@ -154,6 +154,16 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
     }
 
     /**
+     * T-237: whether the record's market may be shown here (see {@link StockMarketGuiElement#isMarketVisible}).
+     *
+     * @param record a history record
+     * @return false on a slave that cannot resolve the record's item
+     */
+    private static boolean isRecordMarketVisible(OrderRecordStruct record) {
+        return StockMarketGuiElement.isMarketVisible(new ItemID(record.itemID()));
+    }
+
+    /**
      * Clears and rebuilds the record list view, applying market and clear-timestamp filters.
      * <p>
      * Records with a non-null {@code interMarketGroupID} are grouped into pairs and displayed
@@ -168,6 +178,10 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
         List<OrderRecordStruct> standaloneRecords = new ArrayList<>();
 
         for (OrderRecordStruct record : records) {
+            // T-237: a slave hides records on markets for items it cannot resolve (items only the master has).
+            // A hidden leg of an inter-market trade hides the whole trade, see the group loop below.
+            if (record.interMarketGroupID() == null && !isRecordMarketVisible(record))
+                continue;
             // Apply market filter: skip records that don't belong to the current market view.
             // For inter-market trades, we allow records from ANY market since the grouped entry
             // shows both legs (which belong to different markets).
@@ -198,6 +212,8 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
         // Add grouped inter-market trade entries
         for (Map.Entry<UUID, List<OrderRecordStruct>> group : groupedByIMGroupID.entrySet()) {
             List<OrderRecordStruct> legs = group.getValue();
+            if (!legs.stream().allMatch(OrderHistoryPanel::isRecordMarketVisible))
+                continue; // T-237: a leg on a hidden market hides the whole inter-market trade
             if (legs.size() == 2) {
                 // Normal case: exactly 2 legs forming a complete inter-market trade.
                 // Apply market filter for grouped entries: if a market filter is set,

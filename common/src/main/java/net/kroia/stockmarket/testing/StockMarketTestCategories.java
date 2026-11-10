@@ -190,4 +190,9 @@ public class StockMarketTestCategories {
     // admin stop discard, step-start chains.
     public static final TestCategory NEWS_CHAINS = new TestCategory(
             "stockmarket", "sm_news_chains", "News event chain runtime: requirement filter, publish records, chain parse/validation, chance/delay/maturity, caps bypass, depth/ancestry guards, NBT round-trip, admin stop discard and step-start moment tests", BOTH, false);
+
+    // T-237: markets for items a slave cannot resolve are hidden there; runs on both sides
+    // (some tests skip by side), needs the live ItemID registry.
+    public static final TestCategory MARKET_VISIBILITY = new TestCategory(
+            "stockmarket", "sm_market_visibility", "Markets for items a slave cannot resolve: hidden from lists, pairs and order placement on the slave, still listed by the master", BOTH, true);
 }

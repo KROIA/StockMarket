@@ -492,7 +492,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             // Item icons for subscribed markets (each button has a built-in close area in the top-right corner)
             for (ItemID marketID : data.getSubscribedMarkets()) {
                 ItemStack stack = marketID.getStack();
-                if (stack != null) {
+                // T-237: no icon for a market a slave cannot resolve (an item only the master has)
+                if (stack != null && StockMarketGuiElement.isMarketVisible(marketID)) {
                     ItemID currentMarketID = marketID;
                     MarketItemButton itemBtn = new MarketItemButton(stack, marketID,
                             id -> parentScreen.selectMarketForChart(id),

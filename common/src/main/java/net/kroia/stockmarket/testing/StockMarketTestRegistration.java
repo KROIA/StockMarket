@@ -11,6 +11,7 @@ import net.kroia.stockmarket.testing.tests.DatabaseTestSuite;
 import net.kroia.stockmarket.testing.tests.DynamicIndexedArrayTestSuite;
 import net.kroia.stockmarket.testing.tests.InterMarketExecutorTestSuite;
 import net.kroia.stockmarket.testing.tests.InterMarketOrderTestSuite;
+import net.kroia.stockmarket.testing.tests.MarketVisibilityTestSuite;
 import net.kroia.stockmarket.testing.tests.TradingPairTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketMergeConsolidationTestSuite;
@@ -116,6 +117,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new NewsChainsTestSuite());
         TestRegistry.register(new PlaceholderNamingTestSuite());
         TestRegistry.register(new RequestFailureTestSuite()); // T-227: ARRS timeouts / failed futures
+        TestRegistry.register(new MarketVisibilityTestSuite()); // T-237: markets hidden on a slave that cannot resolve their item
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());

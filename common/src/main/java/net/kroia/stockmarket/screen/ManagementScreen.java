@@ -457,6 +457,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
                     List<ItemID> sorted = new ArrayList<>(markets);
                     sorted.sort(MARKET_TYPE_COMPARATOR);
                     for (ItemID id : sorted) {
+                        // T-237: a slave hides markets for items it cannot resolve (an item only
+                        // the master has); the placeholder below is for the master only
+                        if (!StockMarketGuiElement.isMarketVisible(id))
+                            continue;
                         ItemStack stack = id.getStack();
                         if (stack.isEmpty()) {
                             // The ItemID can no longer be resolved to an item (dangling

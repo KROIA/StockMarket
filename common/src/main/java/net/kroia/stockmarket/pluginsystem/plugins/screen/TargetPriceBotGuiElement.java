@@ -285,7 +285,8 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         List<ItemStack> stacks = new ArrayList<>();
         for (ItemID id : sortedMarkets) {
             ItemStack stack = id.getStack();
-            if (stack != null) {
+            // T-237: a slave lists no market for an item it cannot resolve (an item only the master has)
+            if (stack != null && isMarketVisible(id)) {
                 stacks.add(stack);
             }
         }

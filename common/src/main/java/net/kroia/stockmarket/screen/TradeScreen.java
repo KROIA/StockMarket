@@ -440,12 +440,13 @@ public class TradeScreen extends StockMarketGuiScreen {
             StockMarketGuiElement.updatePlayerPreferences(prefs);
         }
 
-        // Restore pair selections from preferences
-        if (prefs.getLastPairHaveMarketID() != null) {
+        // Restore pair selections from preferences; like the last market, only legs that are still
+        // available (T-237: a slave lists no market for an item it cannot resolve)
+        if (prefs.getLastPairHaveMarketID() != null && markets.contains(prefs.getLastPairHaveMarketID())) {
             pairHaveMarketID = prefs.getLastPairHaveMarketID();
             pairSelectorWidget.setHaveMarketID(pairHaveMarketID);
         }
-        if (prefs.getLastPairWantMarketID() != null) {
+        if (prefs.getLastPairWantMarketID() != null && markets.contains(prefs.getLastPairWantMarketID())) {
             pairWantMarketID = prefs.getLastPairWantMarketID();
             pairSelectorWidget.setWantMarketID(pairWantMarketID);
         }
@@ -878,6 +879,10 @@ public class TradeScreen extends StockMarketGuiScreen {
         List<Order> orders = filterOrdersBySelectedAccount(lastStreamedOrders);
         List<InterMarketOrder> interMarketOrders =
                 filterInterMarketOrdersBySelectedAccount(lastStreamedInterMarketOrders);
+        // T-237: a slave hides the player's orders on markets for items it cannot resolve (items only the master has)
+        orders.removeIf(order -> !StockMarketGuiElement.isMarketVisible(order.getItemID()));
+        interMarketOrders.removeIf(order -> !StockMarketGuiElement.isMarketVisible(order.getBuyItemID())
+                || !StockMarketGuiElement.isMarketVisible(order.getSellItemID()));
         pendingOrdersPanel.updateOrders(orders);
         pendingOrdersPanel.updateInterMarketOrders(interMarketOrders);
         orderMarkerOverlay.updateOrders(orders);

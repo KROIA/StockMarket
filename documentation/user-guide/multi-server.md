@@ -69,6 +69,11 @@ Players on any server see the same markets, prices and their own orders. The Man
 (`/stockmarket manage`) works on slaves too; its requests go to the master. The **Mod Settings**
 button is only shown on the master.
 
+If the master has mods that a slave lacks, markets for items from those mods are hidden on that
+slave: they do not appear in the market lists, the Management GUI, the plugin screens, a player's
+orders and history, or command suggestions, and they cannot be traded there. The master and slaves
+with the same mods still show every market.
+
 ---
 
 ## Trust

@@ -599,7 +599,8 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         for (ItemID id : sortedMarkets) {
             subscribedMarketsByShort.put(id.getShort(), id);
             ItemStack stack = id.getStack();
-            if (stack != null) {
+            // T-237: a slave lists no market for an item it cannot resolve (an item only the master has)
+            if (stack != null && isMarketVisible(id)) {
                 stacks.add(stack);
             }
         }

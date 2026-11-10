@@ -9,6 +9,7 @@ import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.market.CrossRateMarket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
+import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketClientHooks;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.player.LocalPlayer;
@@ -301,7 +302,9 @@ public class ClientMarketManager implements IClientMarketManager
         ClientMarket clientMarket = clientMarkets.get(itemID);
         if(clientMarket == null)
         {
-            if(itemID.isValid()) {
+            // T-237: same rule as isValid(), plus the test seam; a market whose item this side cannot resolve
+            // (an item only the master has) gets no ClientMarket, so it is hidden from every market list
+            if(MultiServerUtils.isMarketResolvableOnThisServer(itemID)) {
                 clientMarket = new ClientMarket(itemID, itemFractionScaleFactor);
                 clientMarkets.put(itemID, clientMarket);
                 // Do NOT pre-fetch any candle history here. With N markets and
@@ -315,7 +318,8 @@ public class ClientMarketManager implements IClientMarketManager
             }
             else
             {
-                error("Can't create ClientMarket with ID: " + itemID + ". ID is invalid");
+                // Expected on a slave without the item's mod, so not an error
+                info("No ClientMarket for " + itemID + ": its item cannot be resolved here");
             }
         }
     }

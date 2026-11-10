@@ -40,6 +40,7 @@ public final class DevBootstrap {
         }
         MarketIntegrationTestSuite.setBackend(instances);
         InterMarketExecutorTestSuite.setBackend(instances);
+        MarketVisibilityTestSuite.setBackend(instances); // T-237: runs on master and slave
         StockMarketTestRegistration.register();
         if (isMaster) {
             MatchingEngineTestSuite.setBackend(instances);

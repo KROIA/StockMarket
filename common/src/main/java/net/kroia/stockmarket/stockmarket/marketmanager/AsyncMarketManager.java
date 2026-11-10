@@ -477,9 +477,17 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         return call(InputData.of(FunctionType.GetTradingCurrencyID), ItemID.INVALID_ID);
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * T-237: markets whose item this side cannot resolve (an item only the master has) are left out, so a
+     * slave's commands and tab completion never offer them.
+     */
     @Override
     public CompletableFuture<List<ItemID>> getAvailableMarketIDsAsync() {
-        return call(InputData.of(FunctionType.GetAvailableMarketIDs), List.of());
+        return this.<List<ItemID>>call(InputData.of(FunctionType.GetAvailableMarketIDs), List.of())
+                .thenApply(ids -> ids == null ? null
+                        : ids.stream().filter(MultiServerUtils::isMarketResolvableOnThisServer).toList());
     }
 
     @Override
