@@ -56,20 +56,15 @@ public class ClientMarketManager implements IClientMarketManager
         }
     }
 
+    /** Tries for the join-time server time sync. The request only reads, so sending it again is safe. */
+    private static final int SERVER_TIME_SYNC_ATTEMPTS = 3;
+
     @Override
     public void onPlayerJoin(@Nullable LocalPlayer localPlayer)
     {
         // Sync the server time offset once on join, then request markets.
         // Avoids per-market overwrites of the shared static timeOffsetMS (Issue #44).
-        BACKEND_INSTANCES.NETWORKING.SERVER_TIME_REQUEST.sendRequestToServer(System.currentTimeMillis()).thenAccept(serverTime ->
-        {
-            long currentTime = System.currentTimeMillis();
-            long turnaroundTime = currentTime - serverTime.clientTimeEcho();
-            long currentServerTime = serverTime.serverTime() + turnaroundTime / 2;
-            ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
-            ClientMarket.setCandleUseGameTime(serverTime.candleUseGameTime()); // T-218: before any ClientMarket exists
-            requestMarkets();
-        });
+        syncServerTime(SERVER_TIME_SYNC_ATTEMPTS);
 
         // Fetch player preferences (favorites, last market) from server.
         // The join-time news toast catch-up (T-077) is chained onto the fetch future
@@ -78,6 +73,35 @@ public class ClientMarketManager implements IClientMarketManager
         // or worse, a default of on would toast for opted-out players).
         StockMarketGuiElement.fetchPlayerPreferences()
                 .thenAccept(prefs -> StockMarketClientHooks.runNewsToastCatchUp(BACKEND_INSTANCES, prefs));
+    }
+
+    /**
+     * Measures the server time offset, then requests the markets. A failed request (T-227: no answer in
+     * time, connection lost) is sent again, up to {@code attemptsLeft} times in total; ServerTimeRequest
+     * changes nothing on the server, so a retry is safe.
+     *
+     * @param attemptsLeft tries left, including this one
+     */
+    private void syncServerTime(int attemptsLeft)
+    {
+        BACKEND_INSTANCES.NETWORKING.SERVER_TIME_REQUEST.sendRequestToServer(System.currentTimeMillis()).whenComplete((serverTime, failure) ->
+        {
+            if (failure != null || serverTime == null) {
+                if (attemptsLeft > 1) {
+                    warn("Server time request failed (" + failure + "), retrying");
+                    syncServerTime(attemptsLeft - 1);
+                } else {
+                    error("Server time request failed, giving up; candle times may be off until the next join", failure);
+                }
+                return;
+            }
+            long currentTime = System.currentTimeMillis();
+            long turnaroundTime = currentTime - serverTime.clientTimeEcho();
+            long currentServerTime = serverTime.serverTime() + turnaroundTime / 2;
+            ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
+            ClientMarket.setCandleUseGameTime(serverTime.candleUseGameTime()); // T-218: before any ClientMarket exists
+            requestMarkets();
+        });
     }
 
     @Override

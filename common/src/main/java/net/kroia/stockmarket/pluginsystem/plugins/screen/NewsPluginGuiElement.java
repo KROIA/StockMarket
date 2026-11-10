@@ -129,6 +129,8 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         public static final Component RELOAD = Component.translatable(PREFIX + "reload");
         public static final Component STOP_ALL = Component.translatable(PREFIX + "stop_all");
         public static final Component REQUEST_FAILED = Component.translatable(PREFIX + "request_failed");
+        /** T-227: no answer in time or connection lost; the master may still have applied the operation. */
+        public static final Component REQUEST_OUTCOME_UNKNOWN = Component.translatable(PREFIX + "request_outcome_unknown");
 
         // ── T-083: tabs ──────────────────────────────────────────────────
         public static final Component TAB_ACTIVE = Component.translatable(PREFIX + "tab_active");
@@ -919,11 +921,15 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
                                   boolean userInitiated) {
         final Screen screenAtSend = net.kroia.modutilities.gui.client.ClientCompat.screen();
         BACKEND_INSTANCES.NETWORKING.NEWS_ADMIN_REQUEST.sendRequestToServer(input)
-                .thenAccept(response -> {
-                    if (response == null) {
-                        showStatus(Texts.REQUEST_FAILED.getString(), false);
+                // whenComplete: a failed request (T-227) must reach the status label too. Nothing is resent.
+                .whenComplete((response, error) -> {
+                    if (error != null || response == null) {
+                        showStatus((error != null ? Texts.REQUEST_OUTCOME_UNKNOWN : Texts.REQUEST_FAILED).getString(), false);
                         if (input.op() == NewsAdminRequest.Op.SET_SCHEDULER) {
-                            schedulerTab.restoreConfirmedValues();
+                            if (error != null)
+                                schedulerTab.clearEditedFlags(); // may have been applied: the 500 ms stream shows the real values
+                            else
+                                schedulerTab.restoreConfirmedValues(); // not sent: nothing changed
                         }
                         return;
                     }

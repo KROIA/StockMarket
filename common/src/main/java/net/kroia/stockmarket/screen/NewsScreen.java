@@ -283,9 +283,15 @@ public class NewsScreen extends StockMarketGuiScreen {
         updateLoadMoreButton();
         BACKEND_INSTANCES.NETWORKING.NEWS_HISTORY_REQUEST
                 .sendRequestToServer(new NewsHistoryRequest.InputData(beforeUid, PAGE_SIZE))
-                .thenAccept(response -> Minecraft.getInstance().execute(() -> {
+                // whenComplete: a failed request (no answer in time, connection lost) must also clear
+                // fetchInFlight, or "Load more" stays disabled for good.
+                .whenComplete((response, error) -> Minecraft.getInstance().execute(() -> {
                     fetchInFlight = false;
-                    List<NewsRecord> page = response != null ? response.records() : List.of();
+                    if (error != null || response == null) {
+                        feedDirty = true; // rebuild re-enables "Load more"; not the end of the history
+                        return;
+                    }
+                    List<NewsRecord> page = response.records();
                     if (page.isEmpty()) {
                         // Empty page = the end of the history was reached.
                         endReached = true;

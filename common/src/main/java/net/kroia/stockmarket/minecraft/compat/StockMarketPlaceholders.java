@@ -278,7 +278,8 @@ public final class StockMarketPlaceholders {
             online.add(player.getUUID());
         playerValues.keySet().retainAll(online);
 
-        // The ARRS has no timeout; treat a request older than 10s as lost.
+        // The ARRS fails an unanswered request after 30 s (whenComplete below clears the flag), but the
+        // poll treats a request older than 10 s as lost already so a slow answer does not stall the refresh.
         if (slaveRequestInFlight && now - slaveRequestSentMs < REMOTE_INTEREST_MS)
             return;
         if (!MultiServerUtils.canInteractWithStockMarket())

@@ -729,10 +729,17 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     /**
      * T-179: logs the result of a button-placed order and starts the trade cooldown if it was accepted.
+     * T-227: if the request failed (no answer in time, connection lost) the order may still have been
+     * placed, so the player is told to check their orders. Nothing is resent.
      * @param marketID the order's market
-     * @param result   the server response
+     * @param result   the server response, null if there is none
+     * @param error    the request failure, null on an answer
      */
-    private void onButtonOrderResult(ItemID marketID, CreateOrderRequest.OutputData result) {
+    private void onButtonOrderResult(ItemID marketID, @Nullable CreateOrderRequest.OutputData result, @Nullable Throwable error) {
+        if (error != null || result == null) {
+            showOrderOutcomeUnknown();
+            return;
+        }
         logOrderResult(result);
         if (result.status == CreateOrderRequest.Status.CREATED)
             startTradeCooldown(marketID);
@@ -1505,6 +1512,14 @@ public class TradeScreen extends StockMarketGuiScreen {
         });
     }
 
+    /**
+     * T-227: action-bar message for an order request that got no answer: it may have been placed, so the
+     * player should check their orders before trying again. Safe to call from any thread.
+     */
+    private static void showOrderOutcomeUnknown() {
+        showActionBar(Component.translatable("message.stockmarket.order_status.outcome_unknown"));
+    }
+
     /** T-158: action-bar message telling the player the market is closed. Main thread only. */
     private void showMarketClosedMessage() {
         if (Minecraft.getInstance().player != null)
@@ -1516,25 +1531,25 @@ public class TradeScreen extends StockMarketGuiScreen {
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createMarketOrder(selectedBankAccountNr, quantity).thenAccept(result -> onButtonOrderResult(market.getItemID(), result));
+        market.createMarketOrder(selectedBankAccountNr, quantity).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
     private void onSellMarket(double quantity)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createMarketOrder(selectedBankAccountNr, -quantity).thenAccept(result -> onButtonOrderResult(market.getItemID(), result));
+        market.createMarketOrder(selectedBankAccountNr, -quantity).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
     private void onBuyLimit(double quantity, double price)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createLimitOrder(selectedBankAccountNr, quantity, price).thenAccept(result -> onButtonOrderResult(market.getItemID(), result));
+        market.createLimitOrder(selectedBankAccountNr, quantity, price).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
     private void onSellLimit(double quantity, double price)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createLimitOrder(selectedBankAccountNr, -quantity, price).thenAccept(result -> onButtonOrderResult(market.getItemID(), result));
+        market.createLimitOrder(selectedBankAccountNr, -quantity, price).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
 
     /**
@@ -1555,7 +1570,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, 0L, targetBuyRaw);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> {
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
                     info("Inter-market buy: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
@@ -1573,7 +1589,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, 0L, 0L);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> {
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
                     info("Inter-market sell: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
@@ -1595,7 +1612,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit, targetBuyRaw);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> {
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
                     info("Inter-market buy limit: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
@@ -1615,7 +1633,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, rawRateLimit, 0L);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> {
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
                     info("Inter-market sell limit: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179

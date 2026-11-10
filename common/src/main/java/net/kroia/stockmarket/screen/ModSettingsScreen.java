@@ -89,6 +89,10 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         public static final Component STATUS_LOADED = Component.translatable(PREFIX + "status.loaded");
         public static final Component STATUS_SAVED = Component.translatable(PREFIX + "status.saved");
         public static final Component STATUS_FAILED = Component.translatable(PREFIX + "status.failed");
+        /** T-227: a GET got no answer (timeout or connection lost); nothing was changed. */
+        public static final Component STATUS_NO_RESPONSE = Component.translatable(PREFIX + "status.no_response");
+        /** T-227: a SET / apply-to-all got no answer; the master may still have applied it. */
+        public static final Component STATUS_OUTCOME_UNKNOWN = Component.translatable(PREFIX + "status.outcome_unknown");
         /** T-179: "Apply to all markets" button next to MAX_ORDER_VOLUME_FACTOR (also the confirm label). */
         public static final Component APPLY_ALL_MAX_ORDER = Component.translatable(PREFIX + "apply_all_max_order");
         public static final Component APPLY_ALL_MAX_ORDER_TOOLTIP = Component.translatable(PREFIX + "apply_all_max_order.tooltip");
@@ -581,7 +585,15 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         applyButton.setClickable(false);
         ModSettingsRequest.InputData input = new ModSettingsRequest.InputData(ModSettingsRequest.Action.GET, "");
         AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MOD_SETTINGS_REQUEST, input)
-                .thenAccept(output -> Minecraft.getInstance().execute(() -> handleResponse(output, Texts.STATUS_LOADED.getString())));
+                .whenComplete((output, error) -> Minecraft.getInstance().execute(() -> {
+                    if (error != null || output == null) {
+                        // Apply stays disabled: the fields do not hold the server state, applying them
+                        // would overwrite it. Reopening the screen loads again.
+                        setStatus(Texts.STATUS_NO_RESPONSE.getString(), STATUS_COLOR_ERROR);
+                        return;
+                    }
+                    handleResponse(output, Texts.STATUS_LOADED.getString());
+                }));
     }
 
     /**
@@ -598,7 +610,16 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         applyButton.setClickable(false);
         ModSettingsRequest.InputData input = new ModSettingsRequest.InputData(ModSettingsRequest.Action.SET, payload);
         AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MOD_SETTINGS_REQUEST, input)
-                .thenAccept(output -> Minecraft.getInstance().execute(() -> handleResponse(output, Texts.STATUS_SAVED.getString())));
+                .whenComplete((output, error) -> Minecraft.getInstance().execute(() -> {
+                    if (error != null || output == null) {
+                        // May have been saved; nothing is resent. Apply is usable again: SET carries the
+                        // full state, so pressing it again gives the same result.
+                        applyButton.setClickable(true);
+                        setStatus(Texts.STATUS_OUTCOME_UNKNOWN.getString(), STATUS_COLOR_ERROR);
+                        return;
+                    }
+                    handleResponse(output, Texts.STATUS_SAVED.getString());
+                }));
     }
 
     /**
@@ -672,8 +693,10 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         ModSettingsRequest.InputData input = new ModSettingsRequest.InputData(
                 ModSettingsRequest.Action.APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS, "");
         AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MOD_SETTINGS_REQUEST, input)
-                .thenAccept(output -> Minecraft.getInstance().execute(() -> {
-                    if (output.success())
+                .whenComplete((output, error) -> Minecraft.getInstance().execute(() -> {
+                    if (error != null || output == null)
+                        setStatus(Texts.STATUS_OUTCOME_UNKNOWN.getString(), STATUS_COLOR_ERROR); // nothing resent
+                    else if (output.success())
                         setStatus(Component.translatable(Texts.APPLY_ALL_MAX_ORDER_DONE, output.message(),
                                 String.valueOf(factor)).getString(), STATUS_COLOR_OK);
                     else

@@ -2,6 +2,7 @@ package net.kroia.stockmarket.minecraft.command;
 
 import net.kroia.modutilities.PermissionCompat;
 import net.kroia.modutilities.discord.DiscordWebhooks;
+import net.kroia.modutilities.networking.client_server.arrs.RequestNotSentException;
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
@@ -47,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -943,8 +945,7 @@ public class StockMarketCommands {
                 .whenComplete((response, throwable) -> server.execute(() -> {
                     if (throwable != null || response == null) {
                         // Timeout / transport failure (e.g. master connection dropped mid-request).
-                        source.sendFailure(Component.translatable(
-                                "message.stockmarket.command_news_request_failed"));
+                        source.sendFailure(newsRequestFailure(throwable));
                         return;
                     }
                     if (response.success()) {
@@ -1025,8 +1026,7 @@ public class StockMarketCommands {
                 .sendSchedulerFromServerCommand(player, change)
                 .whenComplete((response, throwable) -> server.execute(() -> {
                     if (throwable != null || response == null) {
-                        source.sendFailure(Component.translatable(
-                                "message.stockmarket.command_news_request_failed"));
+                        source.sendFailure(newsRequestFailure(throwable));
                         return;
                     }
                     if (response.success()) {
@@ -1038,6 +1038,24 @@ public class StockMarketCommands {
                         source.sendSuccess(() -> Component.literal(line), false);
                     }
                 }));
+    }
+
+    /**
+     * T-227: the message for a news admin request that got no usable answer. Only a request that provably
+     * never reached the master ({@link RequestNotSentException}, or no response at all) is reported as plain
+     * "failed". Any other failure, above all {@code RequestOutcomeUnknownException} (no answer in time,
+     * connection lost), may have been applied on the master, so the admin is told to check before retrying.
+     *
+     * @param throwable the failure from the request future, or null when it completed without a response
+     * @return the failure message to send to the command source
+     */
+    private static Component newsRequestFailure(@Nullable Throwable throwable)
+    {
+        Throwable cause = (throwable instanceof CompletionException && throwable.getCause() != null)
+                ? throwable.getCause() : throwable;
+        return Component.translatable(cause == null || cause instanceof RequestNotSentException
+                ? "message.stockmarket.command_news_request_failed"
+                : "message.stockmarket.command_news_request_outcome_unknown");
     }
 
     /**
