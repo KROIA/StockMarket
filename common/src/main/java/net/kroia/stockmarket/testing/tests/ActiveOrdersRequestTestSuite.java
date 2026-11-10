@@ -11,7 +11,10 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
+import net.kroia.stockmarket.networking.request.PlayerPreferencesGetRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
@@ -63,6 +66,7 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
         addTest("passesFilter_timeRange", this::test_passesFilter_timeRange);
         addTest("passesFilter_nullExecutor_noFilter", this::test_passesFilter_nullExecutor_noFilter);
         addTest("passesFilter_nullItemID_allMarkets", this::test_passesFilter_nullItemID_allMarkets);
+        addTest("untrustedSlave_playerReadsRefused", this::test_untrustedSlave_playerReadsRefused);
     }
 
     @Override
@@ -383,6 +387,45 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             return pass("Null itemID queries all available markets");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * T-239: an untrusted slave sets the forwarded player UUID itself, so it must not read that player's orders or
+     * preferences. The same calls directly on the master still answer. Order history uses the same gate line.
+     */
+    private TestResult test_untrustedSlave_playerReadsRefused() {
+        String slaveID = "t239_untrusted_slave";
+        ServerMarketManager manager = backend.MARKET_MANAGER.getServerMarketManager();
+        UUID player = UUID.randomUUID();
+        try {
+            TestResult r = assertFalse("test slave is untrusted",
+                    backend.BANK_SYSTEM_API.getServerBankManager().getSync().isSlaveServerTrusted(slaveID));
+            if (!r.passed()) return r;
+            resetMarket();
+            registerAndAddUser(player, "T239Player");
+            manager.onPlayerJoin(player, "T239Player");
+            bankAccount.addUser(new User(player, "T239Player"), BankPermission.getAllPermissions());
+            manager.setStockmarketAdminMode(player, true); // even an admin's UUID reads nothing through the slave
+            placeTestOrders(player, player, bankAccountNr, bankAccountNr);
+
+            ActiveOrdersRequest.InputData input = new ActiveOrdersRequest.InputData(itemID, -1, null, 0, Long.MAX_VALUE);
+            r = assertFalse("orders read on the master", executeRequest(input, player).orders().isEmpty());
+            if (!r.passed()) return r;
+            r = assertTrue("orders refused through an untrusted slave",
+                    new ActiveOrdersRequest().handleOnMasterServer(input, slaveID, player).join().orders().isEmpty());
+            if (!r.passed()) return r;
+
+            PlayerPreferences prefs = new PlayerPreferences();
+            prefs.setOrderHistoryClearedBeforeMs(12345L);
+            manager.updatePlayerPreferences(player, prefs);
+            r = assertEquals("preferences read on the master", 12345L,
+                    new PlayerPreferencesGetRequest().handleOnMasterServer((byte) 0, "", player).join().getOrderHistoryClearedBeforeMs());
+            if (!r.passed()) return r;
+            return assertEquals("preferences refused through an untrusted slave", 0L,
+                    new PlayerPreferencesGetRequest().handleOnMasterServer((byte) 0, slaveID, player).join().getOrderHistoryClearedBeforeMs());
+        } finally {
+            manager.removeUser(player);
         }
     }
 }

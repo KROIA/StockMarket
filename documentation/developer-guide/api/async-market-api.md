@@ -180,10 +180,10 @@ that follow §3.
 | `updatePlayerPreferencesAsync(UUID, PlayerPreferences)` | `Boolean` | |
 | `onPlayerJoinAsync(UUID, String)` | `void` | Fire and forget; called by StockMarket on join |
 
-Writes forwarded from an **untrusted** slave are refused (the future completes with
-`false`/`null`); public reads keep working. Called from a client, `createMarketAsync` and
-`deleteMarketAsync` need StockMarket admin mode, and the preferences methods only accept the
-player's own UUID. See
+Writes and per-player reads (preferences, admin flag) forwarded from an **untrusted** slave
+are refused (the future completes with `false`/`null`); public reads keep working. Called from
+a client, `createMarketAsync` and `deleteMarketAsync` need StockMarket admin mode, and the
+preferences methods and `isStockmarketAdminAsync` only accept the player's own UUID. See
 [Access Control & Trust Model](../../../README.md#access-control--trust-model).
 
 ### `ISyncServerMarketManager` / `IServerMarketManager`
@@ -232,8 +232,8 @@ Prices and volumes are **raw** backend values unless the method name says `Real`
 | `resetNetPlayerItemFlowAsync()` | `Boolean` | Resets the real and faded net flow (and the NetFlowPlugin anchor) |
 | `resetVirtualOrderbookAsync()`, `clearVirtualOrderbookAsync()` | `Boolean` | Admin-gated; `false` when denied |
 
-Writes are refused when they come from an untrusted slave; admin-gated writes are refused for
-players without StockMarket admin mode. A refusal completes the future with `false`, or with
+Writes and `getSettingsAsync()` are refused when they come from an untrusted slave; admin-gated
+writes are refused for players without StockMarket admin mode. A refusal completes the future with `false`, or with
 `null` when the call is refused before it reaches the market (untrusted slave, a function
 clients may not call, unknown market); treat `null` like `false`. A refusal is not an
 exception.

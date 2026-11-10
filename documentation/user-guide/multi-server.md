@@ -77,9 +77,10 @@ Every slave is **untrusted** until you run, on the master:
 
 <code>/banksystem trust &lt;slaveID&gt;</code>
 
-From an untrusted slave the master serves public data (market list, prices, a player's own
-orders and history, news) but refuses placing and cancelling orders and every management
-read and write. **Trust every slave on which players should trade.** See
+From an untrusted slave the master serves public data (market list, prices, news) but refuses
+placing and cancelling orders, every management read and write, and every per-player read (a
+player's own orders, order history and preferences), because the slave names the player itself.
+**Trust every slave on which players should trade.** See
 [Access Control & Trust Model](../../README.md#access-control--trust-model).
 
 ---

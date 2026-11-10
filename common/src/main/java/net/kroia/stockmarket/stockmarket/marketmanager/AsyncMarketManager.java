@@ -247,7 +247,18 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                     manager.setStockmarketAdminMode(data.uuid, data.bool);
                     yield OutputData.of(input.function);
                 }
-                case FunctionType.IsStockmarketAdmin ->        OutputData.of(input.function, manager.isStockmarketAdmin(input.decodeParams()));
+                case FunctionType.IsStockmarketAdmin -> {
+                    // T-239: a player may ask only about itself. An untrusted slave sets the sender itself, so it
+                    // gets an empty answer (NetworkGate logs it). Refused here, not in
+                    // isAllowedToCallByUntrustedSlaveServer: a refusal there with a null sender (the slave's own
+                    // /stockmarket manage check) would make BankSystem broadcast a notice to every player on it.
+                    UUID uuid = input.decodeParams();
+                    if(!isSelfOrServer(playerSender, uuid))
+                        yield refused(input);
+                    yield NetworkGate.isManagementReadAllowed(slaveID, "IsStockmarketAdmin")
+                            ? OutputData.of(input.function, manager.isStockmarketAdmin(uuid))
+                            : OutputData.of(input.function);
+                }
                 case FunctionType.GetPlayerPreferences -> {
                     UUID uuid = input.decodeParams();
                     yield isSelfOrServer(playerSender, uuid)
@@ -288,10 +299,11 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         }
 
         /**
-         * T-238: may the sender read or write the preferences of {@code subject}? A player only their own.
+         * T-238: may the sender read or write the preferences of {@code subject}, or (T-239) ask whether
+         * {@code subject} has StockMarket admin mode? A player only their own.
          *
          * @param playerSender the player who sent the call; null for a server-internal call, which may access any
-         * @param subject      the player whose preferences are read or written
+         * @param subject      the player whose preferences or admin flag are read or written
          * @return true for a server-internal call or if {@code subject} is the sender
          */
         private static boolean isSelfOrServer(@Nullable UUID playerSender, UUID subject)
@@ -314,7 +326,8 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
         /**
          * Functions a player may send. CreateMarket and DeleteMarket also need StockMarket admin mode, the
-         * preferences functions the sender's own UUID; both are checked in {@link #handleOnMasterServer} (T-238).
+         * preferences functions the sender's own UUID (T-238), IsStockmarketAdmin as well (T-239); checked in
+         * {@link #handleOnMasterServer}.
          */
         @Override
         protected boolean isAllowedToCallByClient(InputData input)
@@ -334,6 +347,11 @@ public class AsyncMarketManager implements IAsyncMarketManager {
             };
         }
 
+        /**
+         * Functions an untrusted slave may send. IsStockmarketAdmin stays listed so a refusal does not make
+         * BankSystem broadcast a notice to the whole slave; {@link #handleOnMasterServer} answers it empty for an
+         * untrusted slave instead (T-239).
+         */
         @Override
         protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input)
         {

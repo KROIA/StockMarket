@@ -8,6 +8,7 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
@@ -60,6 +61,8 @@ public class MarketIntegrationTestSuite extends TestSuite {
         addTest("get_preferences_other_player_refused", this::test_getPreferences_otherPlayerRefused);
         addTest("update_preferences_other_player_refused", this::test_updatePreferences_otherPlayerRefused);
         addTest("slave_forwarded_legit_calls_allowed", this::test_slaveForwarded_legitCallsAllowed);
+        addTest("untrusted_slave_market_settings_refused", this::test_untrustedSlave_marketSettingsRefused);
+        addTest("is_admin_query_refused", this::test_isAdminQuery_refused);
     }
 
     @Override
@@ -574,6 +577,70 @@ public class MarketIntegrationTestSuite extends TestSuite {
         if (!r.passed()) return r;
         return assertEquals("own preferences answered", Boolean.FALSE,
                 managerAs(player).updatePlayerPreferencesAsync(player, new PlayerPreferences()).join());
+    }
+
+    // ---- T-239: an untrusted slave sets the forwarded player UUID itself ----
+
+    /**
+     * T-239: an untrusted slave cannot read a market's settings, even when it names an admin; the admin directly on
+     * the master can. Settings are admin data, so GetSettings is no longer allowed for untrusted slaves.
+     */
+    private TestResult test_untrustedSlave_marketSettingsRefused() {
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        String slaveID = "t239_untrusted_slave";
+        UUID admin = UUID.randomUUID();
+        manager.onPlayerJoin(admin, "T239Admin");
+        manager.setStockmarketAdminMode(admin, true);
+        try {
+            TestResult r = assertFalse("test slave is untrusted",
+                    BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().isSlaveServerTrusted(slaveID));
+            if (!r.passed()) return r;
+            r = assertNotNull("admin reads settings on the master", marketAs("", admin).getSettingsAsync().join());
+            if (!r.passed()) return r;
+            return assertNull("settings refused through an untrusted slave", marketAs(slaveID, admin).getSettingsAsync().join());
+        } finally {
+            manager.removeUser(admin);
+        }
+    }
+
+    /**
+     * T-239: a player may ask only whether they themselves are a StockMarket admin, and an untrusted slave gets no
+     * answer. A server-internal call (null sender, like the slave's /stockmarket manage check) still answers through
+     * a trusted slave.
+     */
+    private TestResult test_isAdminQuery_refused() {
+        ISyncServerBankManager bank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
+        String untrustedSlaveID = "t239_untrusted_slave";
+        String trustedSlaveID = "t239_trusted_slave";
+        boolean wasTrusted = bank.isSlaveServerTrusted(trustedSlaveID);
+        UUID player = UUID.randomUUID();
+        bank.trustSlaveServer(trustedSlaveID);
+        try {
+            TestResult r = assertNull("other player's admin flag refused",
+                    managerAs(player).isStockmarketAdminAsync(UUID.randomUUID()).join());
+            if (!r.passed()) return r;
+            r = assertNotNull("own admin flag answered", managerAs(player).isStockmarketAdminAsync(player).join());
+            if (!r.passed()) return r;
+            r = assertFalse("test slave is untrusted", bank.isSlaveServerTrusted(untrustedSlaveID));
+            if (!r.passed()) return r;
+            r = assertNull("untrusted slave gets no answer",
+                    managerAs(untrustedSlaveID, null).isStockmarketAdminAsync(player).join());
+            if (!r.passed()) return r;
+            return assertNotNull("server-internal call through a trusted slave answered",
+                    managerAs(trustedSlaveID, null).isStockmarketAdminAsync(player).join());
+        } finally {
+            if (!wasTrusted)
+                bank.untrustSlaveServer(trustedSlaveID);
+        }
+    }
+
+    /**
+     * A market whose calls run on this master's request handler as if slave {@code slaveID} ("" = master-local)
+     * forwarded them from {@code playerSender}, through the real encode, handler and decode path.
+     */
+    private AsyncMarket marketAs(String slaveID, UUID playerSender) {
+        return AsyncMarket.createForTesting(serverMarket.getItemID(), input ->
+                AsyncMarket.Request.instance.handleOnMasterServer(input, slaveID, playerSender));
     }
 
     private float emptyVolumeDistribution(double price) {

@@ -22,15 +22,20 @@ import net.kroia.stockmarket.StockMarketMod;
  * choke-point — call it at the very top of each mutating handler and reject
  * the call if it originates from an untrusted slave.
  * <p>
- * <b>Player-facing reads stay open</b> (per T-123 DevNote): markets list,
- * prices, history, news, prefs read all keep working on an untrusted slave so
- * the client UI can still be browsed.
+ * <b>Public reads stay open</b> (per T-123 DevNote): market list, prices,
+ * price history and news keep working on an untrusted slave so the client UI
+ * can still be browsed.
  * <p>
  * <b>Management-data reads ARE gated</b> (T-129): reads that expose
  * administrative data (full plugin list + custom settings, server mod-settings
  * JSON, preset catalog) must NOT reach an untrusted slave, so their handlers
- * additionally call {@link #isManagementReadAllowed}. Ordinary player reads are
- * unaffected.
+ * additionally call {@link #isManagementReadAllowed}.
+ * <p>
+ * <b>Per-player reads ARE gated too</b> (T-239, user decision 2026-11-10):
+ * a player's own active orders, order history, active-orders stream,
+ * preferences and admin flag. The slave sets the forwarded player UUID itself,
+ * so an untrusted slave could otherwise read any player's data by naming them.
+ * These handlers also call {@link #isManagementReadAllowed}.
  * <p>
  * <b>Trust storage — do NOT reimplement.</b> The trusted-slave set lives in
  * BankSystem's {@code ServerBankManager} and is toggled by the
@@ -80,8 +85,10 @@ public final class NetworkGate {
      * <b>administrative/management data</b> that must not be exposed to a
      * self-compiled client behind an untrusted slave — e.g. the full plugin
      * list (metadata + subscribed markets + every per-market custom setting),
-     * the server mod-settings JSON, or the preset catalog. Ordinary player-facing
-     * reads (markets, prices, history, news) stay open and must NOT use this gate.
+     * the server mod-settings JSON, or the preset catalog. Per-player reads (own
+     * orders, order history, order stream, preferences, admin flag) use it as well
+     * (T-239), since the slave sets the player UUID. Public reads (market list,
+     * prices, price history, news) stay open and must NOT use this gate.
      * <ul>
      *   <li>{@code slaveID == null} or empty — master-local call (client on the
      *       master, or the master itself). Always allowed.</li>

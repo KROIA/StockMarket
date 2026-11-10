@@ -32,6 +32,9 @@ import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.util.ProfitAlerts;
+import net.kroia.stockmarket.networking.request.PluginReorderRequest;
+import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
+import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.codec.StreamCodec;
@@ -134,6 +137,9 @@ public class PluginTestSuite extends TestSuite {
         addTest("createCache_deduplication", this::test_createCache_deduplication);
         addTest("createCache_nonexistentMarket_rejected", this::test_createCache_nonexistentMarket_rejected);
         addTest("removeCache_unsubscribesPlugins", this::test_removeCache_unsubscribesPlugins);
+
+        // Network gates
+        addTest("reorder_nonAdmin_getsNoPluginList", this::test_reorder_nonAdmin_getsNoPluginList);
 
         // Logging
         addTest("errorLogging_gatedByLoggerEnabled", this::test_errorLogging_gatedByLoggerEnabled);
@@ -400,6 +406,29 @@ public class PluginTestSuite extends TestSuite {
             return pass("createCache correctly rejects nonexistent market ID");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * T-239: a refused plugin reorder answers with an empty list, not the plugin list with every custom setting.
+     * Adds a plugin first if none exists, so a leak would show.
+     */
+    private TestResult test_reorder_nonAdmin_getsNoPluginList() {
+        if (pluginManager == null)
+            return pass("Skipped - plugin manager not available");
+        ServerPlugin added = pluginManager.getPlugins().isEmpty()
+                ? pluginManager.addPlugin(PluginRegistry.getRegistryObjects().values().iterator().next())
+                : null;
+        try {
+            TestResult r = assertFalse("a plugin exists", pluginManager.getPlugins().isEmpty());
+            if (!r.passed()) return r;
+            UUID instanceID = pluginManager.getPlugins().keySet().iterator().next();
+            List<PluginSyncData> answer = new PluginReorderRequest().handleOnMasterServer(
+                    new PluginReorderRequest.InputData(instanceID, 1), "", UUID.randomUUID()).join();
+            return assertTrue("non-admin reorder gets no plugin list, got " + answer.size(), answer.isEmpty());
+        } finally {
+            if (added != null)
+                pluginManager.removePlugin(added);
         }
     }
 

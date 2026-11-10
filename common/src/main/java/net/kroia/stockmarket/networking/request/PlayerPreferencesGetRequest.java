@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.request;
 
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -12,7 +13,8 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Request to fetch the calling player's trading preferences from the master server.
  * Input is a dummy byte (server identifies the player from the sender UUID).
- * Output is the player's {@link PlayerPreferences}.
+ * Output is the player's {@link PlayerPreferences}; defaults for a call from an untrusted slave,
+ * which sets the sender's UUID itself (T-239).
  */
 public class PlayerPreferencesGetRequest extends StockMarketGenericRequest<Byte, PlayerPreferences> {
 
@@ -28,7 +30,8 @@ public class PlayerPreferencesGetRequest extends StockMarketGenericRequest<Byte,
 
     @Override
     public CompletableFuture<PlayerPreferences> handleOnMasterServer(Byte input, String slaveID, @Nullable UUID playerSender) {
-        if (playerSender == null)
+        // T-239: an untrusted slave sets the player UUID itself, so it could read any player's preferences
+        if (playerSender == null || !NetworkGate.isManagementReadAllowed(slaveID, "PlayerPreferencesGetRequest"))
             return CompletableFuture.completedFuture(getDefaultResponse());
         PlayerPreferences prefs = getServerMarketManager().getPlayerPreferences(playerSender);
         return CompletableFuture.completedFuture(prefs);

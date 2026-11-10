@@ -3,6 +3,7 @@ package net.kroia.stockmarket.networking.request;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.data.filter.UUIDFilter;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -19,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Fetches the requesting player's own completed/cancelled order records from the SQL database.
  * The server filters by the sender's UUID so players can only see their own history.
+ * Refused for an untrusted slave, which sets the sender's UUID itself (T-239).
  */
 public class OrderHistoryRequest extends StockMarketGenericRequest<OrderHistoryRequest.InputData, OrderHistoryRequest.OutputData> {
 
@@ -60,7 +62,9 @@ public class OrderHistoryRequest extends StockMarketGenericRequest<OrderHistoryR
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
-        if (playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender)))
+        // T-239: an untrusted slave sets the player UUID itself, so it could read any player's history
+        if (playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender))
+                || !NetworkGate.isManagementReadAllowed(slaveID, "OrderHistoryRequest"))
             return CompletableFuture.completedFuture(getDefaultResponse());
 
         // Filter by the requesting player's UUID

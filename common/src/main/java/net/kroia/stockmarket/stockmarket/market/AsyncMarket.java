@@ -409,12 +409,14 @@ public class AsyncMarket implements IAsyncMarket{
          * T-123 (untrusted slave gate): tighten the base class default (which
          * would allow every function this class permits from clients) so that
          * mutating function types are refused when forwarded from an untrusted
-         * slave. Read-only queries stay wide open — the news feed, price
-         * requests and market listings must keep working on an untrusted
-         * slave; the untrusted flag only blocks writes.
+         * slave. Public read-only queries stay open — price requests and
+         * market data must keep working on an untrusted slave. GetSettings is
+         * admin data and is refused too (T-239): an untrusted slave sets the
+         * forwarded player UUID itself, so the admin check in the handler
+         * cannot be trusted for it.
          *
          * @param input the forwarded function call
-         * @return true only for read-only functions
+         * @return true only for public read-only functions
          */
         @Override
         protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input)
@@ -427,11 +429,11 @@ public class AsyncMarket implements IAsyncMarket{
                      FunctionType.GetRealVolume_1,
                      FunctionType.GetRealVolume_2,
                      FunctionType.IsMaintenance,
-                     FunctionType.GetCurrentMarketPriceStruct,
-                     FunctionType.GetSettings -> true;
+                     FunctionType.GetCurrentMarketPriceStruct -> true;
                 // SetMaintenance, SetSettings, ResetNetPlayerItemFlow, PutOrder,
                 // SetTradingHours, SetTradingOverride,
                 // GetCurrentMarketPriceStructAndReset are mutating — refused.
+                // GetSettings is admin data — refused (T-239).
                 default -> false;
             };
         }

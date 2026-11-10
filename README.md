@@ -386,10 +386,11 @@ Both require operator level 2 and only run on the master. The master itself (and
 
 From an **untrusted** slave the master refuses **all** of:
 - mutating operations — placing/cancelling orders, and every plugin, preset, market and settings write;
-- management-data reads — the plugin list & settings, the preset catalog and the mod settings;
+- management-data reads — the plugin list & settings, market settings, the preset catalog and the mod settings;
+- per-player reads — a player's active orders (request and live feed), order history, preferences and admin flag, because the slave names the player itself;
 - the live plugin runtime data feed.
 
-A **trusted** slave behaves normally. Trust changes take effect live — untrusting a slave mid-session tears down its live plugin feed within about one stream interval. Public market data (prices, market list, a player's own orders/history, news) stays available even from an untrusted slave.
+A **trusted** slave behaves normally. Trust changes take effect live — untrusting a slave mid-session tears down its live plugin and order feeds within about one stream interval. Public market data (prices, price history, market list, market-wide trades, news) stays available even from an untrusted slave.
 
 ### 2. StockMarket admin (per-player)
 
@@ -409,10 +410,11 @@ The table below summarizes which access each data class needs:
 | Data class | Access required |
 |------------|-----------------|
 | Market list & prices, public orderbook volume | Public — any player |
-| A player's own active orders / order history / transaction history / preferences | Public — any player |
+| Market-wide transaction history | Public — any player |
 | News feed & pictures, server time | Public — any player |
+| A player's own active orders / order history / preferences / admin flag | That player, trusted slave |
 | Placing / cancelling orders | Trusted slave |
-| Plugin list & settings, target prices, live plugin feed | Trusted slave **and** admin |
+| Plugin list & settings, market settings, target prices, live plugin feed | Trusted slave **and** admin |
 | Preset catalog, market / plugin / preset writes | Trusted slave **and** admin |
 | Mod settings (read & write) | Trusted slave **and** admin |
 

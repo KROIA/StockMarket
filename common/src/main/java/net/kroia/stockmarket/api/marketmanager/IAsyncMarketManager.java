@@ -88,9 +88,11 @@ public interface IAsyncMarketManager {
     CompletableFuture<Boolean> setStockmarketAdminModeAsync(UUID playerUUID, boolean isAdmin);
 
     /**
+     * Asks whether a player has StockMarket admin mode. A client may only ask about its own player, and a call
+     * forwarded from an untrusted slave is answered with {@code null} (T-239).
      * @param playerUUID the player
      * @return future resolving to {@code true} if the player has StockMarket admin mode; {@code false} for unknown
-     *         players
+     *         players; {@code null} if the call is refused
      */
     CompletableFuture<Boolean> isStockmarketAdminAsync(UUID playerUUID);
 
