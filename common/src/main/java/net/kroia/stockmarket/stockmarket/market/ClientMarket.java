@@ -800,13 +800,48 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     {
         return createOrder(bankAccountNr, Order.Type.MARKET, volume, 0);
     }
-    public CompletableFuture<CreateOrderRequest.OutputData> createLimitBuyOrder(int bankAccountNr, double volume)
+    /**
+     * Places a market buy order for the local player (see {@link #createOrder}).
+     *
+     * @param bankAccountNr the bank account that pays
+     * @param volume        items to buy, real units; a negative value becomes 0 and is rejected
+     * @return the server's answer; fails per {@link #createOrder}
+     */
+    public CompletableFuture<CreateOrderRequest.OutputData> createMarketBuyOrder(int bankAccountNr, double volume)
     {
         return createOrder(bankAccountNr, Order.Type.MARKET, Math.max(0, volume), 0);
     }
-    public CompletableFuture<CreateOrderRequest.OutputData> createLimitSellOrder(int bankAccountNr, double volume)
+    /**
+     * Places a market sell order for the local player (see {@link #createOrder}).
+     *
+     * @param bankAccountNr the bank account the items come from
+     * @param volume        items to sell as a <b>negative</b> number, real units; a positive value becomes 0 and is
+     *                      rejected
+     * @return the server's answer; fails per {@link #createOrder}
+     */
+    public CompletableFuture<CreateOrderRequest.OutputData> createMarketSellOrder(int bankAccountNr, double volume)
     {
         return createOrder(bankAccountNr, Order.Type.MARKET, Math.min(0, volume), 0);
+    }
+    /**
+     * @deprecated Misnamed: this places a <b>market</b> order, not a limit order. Use
+     * {@link #createMarketBuyOrder(int, double)}, or {@link #createLimitBuyOrder(int, double, double)} for a limit
+     * order.
+     */
+    @Deprecated
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitBuyOrder(int bankAccountNr, double volume)
+    {
+        return createMarketBuyOrder(bankAccountNr, volume);
+    }
+    /**
+     * @deprecated Misnamed: this places a <b>market</b> order, not a limit order. Use
+     * {@link #createMarketSellOrder(int, double)}, or {@link #createLimitSellOrder(int, double, double)} for a limit
+     * order.
+     */
+    @Deprecated
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitSellOrder(int bankAccountNr, double volume)
+    {
+        return createMarketSellOrder(bankAccountNr, volume);
     }
 
 

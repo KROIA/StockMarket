@@ -339,9 +339,15 @@ market.createMarketOrder(accountNr, 16).whenComplete((answer, error) -> {
 ```
 
 Other order helpers: `createLimitOrder(accountNr, volume, price)`,
-`createLimitBuyOrder(accountNr, volume, price)`, `createLimitSellOrder(accountNr, volume, price)`
+`createLimitBuyOrder(accountNr, volume, price)`, `createLimitSellOrder(accountNr, volume, price)`,
+`createMarketBuyOrder(accountNr, volume)`, `createMarketSellOrder(accountNr, volume)` (2.2.0)
 and the general `createOrder(accountNr, Order.Type, volume, price)`. Volumes and prices are
-real units.
+real units. The sell helpers expect a negative volume; a positive one becomes 0 and is
+rejected (the buy helpers turn a negative volume into 0 the same way).
+
+The two-argument `createLimitBuyOrder(accountNr, volume)` and `createLimitSellOrder(accountNr, volume)`
+are **deprecated** since 2.2.0: despite their name they place **market** orders. Use
+`createMarketBuyOrder` / `createMarketSellOrder` instead.
 
 `ClientMarket` also implements `IPriceDataProvider` (candles, current price, paging of older
 history) for charts.
