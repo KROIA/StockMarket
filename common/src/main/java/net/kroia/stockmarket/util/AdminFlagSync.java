@@ -20,7 +20,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Opt-in two-way sync between the per-user StockMarket admin flag and the LuckPerms node
- * {@link StockMarketPermissions#ADMIN} (setting {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION}).
+ * {@link StockMarketPermissions#ADMIN} (setting {@code Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION}).
  * Mirrors BankSystem's {@code AdminFlagSync}. Without the setting or without LuckPerms nothing here does anything.
  * <ul>
  *   <li>{@code /stockmarket op|deop} (master only): sets the flag, then writes the node ({@link #pushToLuckPerms}).
@@ -126,7 +126,7 @@ public final class AdminFlagSync {
     public static boolean isEnabled() {
         StockMarketModBackend.ServerInstances b = BACKEND_INSTANCES;
         return b != null && b.SERVER_SETTINGS != null
-                && Boolean.TRUE.equals(b.SERVER_SETTINGS.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION.get());
+                && Boolean.TRUE.equals(b.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get());
     }
 
     /** @return the master's user store, or null on a slave / before setup */
@@ -135,11 +135,20 @@ public final class AdminFlagSync {
         return b == null || b.MARKET_MANAGER == null ? null : b.MARKET_MANAGER.getServerMarketManager();
     }
 
+    /** True once the LuckPerms listener is registered; the bridge keeps it for every later server start. */
+    private static boolean listening = false;
+
     /**
-     * Registers the LuckPerms listener once at mod init. No-op without LuckPerms. The setting is checked inside
-     * the callback, so turning it on or off at runtime needs no re-registration.
+     * Registers the LuckPerms listener, at most once per JVM. No-op without LuckPerms. Called at server start
+     * (T-217): on the master only while the setting is on (restart-required), on a slave always (it forwards and
+     * the master decides). The setting is still checked inside the callback, so turning it off at runtime stops
+     * the sync without a restart. Safe from a SERVER_STARTED handler (ModUtilities hooks the bridge's lifecycle
+     * at its own init).
      */
     public static void init() {
+        if (listening)
+            return;
+        listening = true;
         LuckPermsBridge.addNodeChangeListener(StockMarketPermissions.ADMIN, AdminFlagSync::onNodeChanged);
     }
 

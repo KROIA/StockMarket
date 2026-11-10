@@ -1,5 +1,6 @@
 package net.kroia.stockmarket;
 
+import com.google.gson.JsonObject;
 import net.kroia.modutilities.PermissionCompat;
 
 import net.kroia.banksystem.BankSystemMod;
@@ -7,6 +8,7 @@ import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
+import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.kroia.stockmarket.util.ClientSettings;
 import net.kroia.stockmarket.util.SlaveTrustCache;
@@ -48,6 +50,7 @@ public class StockMarketModSettings extends ModSettings {
     public final Utilities UTILITIES = createGroup(new Utilities());
     public final Market MARKET = createGroup(new Market());
     public final VillagerTrading VILLAGER_TRADING = createGroup(new VillagerTrading());
+    public final Integrations INTEGRATIONS = createGroup(new Integrations());
     //public final Networking NETWORKING = createGroup(new Networking());
 
     public StockMarketModSettings() {
@@ -66,8 +69,7 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_DEBUG = registerSetting("LOGGING_ENABLE_DEBUG",false, Boolean.class);
-        /** Keep the StockMarket admin flag in sync with the permission node stockmarket.admin (see AdminFlagSync). Read live, master only. */
-        public final Setting<Boolean> SYNC_ADMIN_FLAG_WITH_PERMISSION = registerSetting("SYNC_ADMIN_FLAG_WITH_PERMISSION", false, Boolean.class);
+        // SYNC_ADMIN_FLAG_WITH_PERMISSION moved to Integrations (T-217, see migrateIntegrations).
        // public final Setting<Integer> ADMIN_PERMISSION_LEVEL = registerSetting("ADMIN_PERMISSION_LEVEL",2, Integer.class);
 
         public Utilities() { super("Utilities"); }
@@ -321,6 +323,59 @@ public class StockMarketModSettings extends ModSettings {
     }
 
 
+    /**
+     * T-217: optional integrations with other mods / services, shown in the Mod Settings screen as
+     * one collapsible on/off section each (same layout as BankSystem's Integrations group).
+     * Takes {@code SYNC_ADMIN_FLAG_WITH_PERMISSION} from {@link Utilities}; older settings.json files
+     * are migrated once by {@link #migrateIntegrations(JsonObject)}.
+     * <p>
+     * Only the master loads these values; slaves keep the defaults, so every gate below is decided
+     * on the master (see the propagation notes in {@code ModSettingsRequest}).
+     */
+    public static final class Integrations extends SettingsGroup
+    {
+        /**
+         * TAB / Placeholder API placeholders ({@code StockMarketPlaceholders}). Off: the master skips
+         * the placeholder registration and refresh tick at server start, so slaves receive empty values.
+         * Restart-required (checked once in {@code StockMarketModBackend.onBankSystemSetupComplete}).
+         */
+        public final Setting<Boolean> PLACEHOLDERS_ENABLED = registerSetting("PLACEHOLDERS_ENABLED", true, Boolean.class);
+
+        /**
+         * Keep the StockMarket admin flag in sync with the permission node stockmarket.admin (see AdminFlagSync).
+         * The LuckPerms listener and the one-time migration are set up at server start, so turning it on
+         * needs a restart (restart-required); op/deop read it live. Master only.
+         */
+        public final Setting<Boolean> SYNC_ADMIN_FLAG_WITH_PERMISSION = registerSetting("SYNC_ADMIN_FLAG_WITH_PERMISSION", false, Boolean.class);
+
+        public Integrations() { super("Integrations"); }
+    }
+
+    /**
+     * T-217: one-time move of the pre-Integrations key {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION}
+     * into {@link #INTEGRATIONS}. Works on the raw settings.json root because the old key is no longer
+     * registered. Idempotent without a marker: a file that already has an {@code Integrations} group is
+     * left alone, and the caller re-saves when this returns true, which writes that group and drops the
+     * old key.
+     *
+     * @param root the parsed settings.json root object
+     * @return true if the old value was copied into INTEGRATIONS (the caller must save the file)
+     */
+    public boolean migrateIntegrations(JsonObject root)
+    {
+        if (root.has(INTEGRATIONS.getName()))
+            return false;
+        JsonObject utilities = root.get(UTILITIES.getName()) instanceof JsonObject o ? o : null;
+        String key = INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.getName();
+        if (utilities == null || !utilities.has(key))
+            return false;
+        JsonObject moved = new JsonObject();
+        moved.add(key, utilities.get(key));
+        new SettingsStore().fromJson(INTEGRATIONS, moved);
+        return true;
+    }
+
+
     /*public static final class Networking extends SettingsGroup
     {
         public final Setting<Boolean> ENABLE_SERVER_SERVER_COMMUNICATION = registerSetting("ENABLE_SERVER_SERVER_COMMUNICATION", false, Boolean.class);
@@ -340,7 +395,7 @@ public class StockMarketModSettings extends ModSettings {
      * "Mod Settings" screen and the {@code ModSettingsRequest} GET/SET payloads.
      * <p>
      * This is exactly the set of groups registered via {@code createGroup(...)}
-     * (Utilities, ServerMarket, VillagerTrading). The {@link Player} group is
+     * (Utilities, ServerMarket, VillagerTrading, Integrations). The {@link Player} group is
      * intentionally EXCLUDED: it is never registered, never serialized to
      * settings.json and therefore dead — do not expose it in the UI.
      *
@@ -348,7 +403,7 @@ public class StockMarketModSettings extends ModSettings {
      */
     public List<SettingsGroup> getEditableGroups()
     {
-        return List.of(UTILITIES, MARKET, VILLAGER_TRADING);
+        return List.of(UTILITIES, MARKET, VILLAGER_TRADING, INTEGRATIONS);
     }
 
     /**

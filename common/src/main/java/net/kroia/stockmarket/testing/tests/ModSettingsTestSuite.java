@@ -42,6 +42,66 @@ public class ModSettingsTestSuite extends TestSuite {
         addTest("netFlowHalfLife_keeps_custom", () -> test_halfLifeMigration(30f, false, 30f, false));
         addTest("netFlowHalfLife_marker_present_keeps_10", () -> test_halfLifeMigration(10f, true, 10f, false));
         addTest("netFlowHalfLife_fresh_world", () -> test_halfLifeMigration(null, false, 360f, false));
+        addTest("integrations_migrates_old_sync_key", this::test_integrationsMigratesOldKey);
+        addTest("integrations_present_not_migrated", this::test_integrationsPresentNotMigrated);
+        addTest("integrations_no_old_key_keeps_default", this::test_integrationsNoOldKey);
+    }
+
+    /**
+     * T-217: an old settings.json with {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION=true} and no Integrations
+     * group moves the value; the saved file then has the Integrations group, no old key, and a second run is a no-op.
+     */
+    private TestResult test_integrationsMigratesOldKey() {
+        StockMarketModSettings settings = new StockMarketModSettings();
+        JsonObject root = JsonParser.parseString(
+                "{\"Utilities\":{\"SAVE_INTERVAL_MINUTES\":5,\"SYNC_ADMIN_FLAG_WITH_PERMISSION\":true}}").getAsJsonObject();
+        TestResult r = assertTrue("first migration returns true", settings.migrateIntegrations(root));
+        if (!r.passed()) return r;
+        r = assertTrue("value moved", settings.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get());
+        if (!r.passed()) return r;
+        java.nio.file.Path file = null;
+        try {
+            file = java.nio.file.Files.createTempFile("sm_integrations_migration", ".json");
+            r = assertTrue("settings saved", settings.saveSettings(file.toString()));
+            if (!r.passed()) return r;
+            JsonObject saved = JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject();
+            r = assertTrue("saved file has Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION=true",
+                    saved.getAsJsonObject("Integrations").get("SYNC_ADMIN_FLAG_WITH_PERMISSION").getAsBoolean());
+            if (!r.passed()) return r;
+            r = assertFalse("saved Utilities no longer has the old key",
+                    saved.getAsJsonObject("Utilities").has("SYNC_ADMIN_FLAG_WITH_PERMISSION"));
+            if (!r.passed()) return r;
+            r = assertFalse("second migration is a no-op", new StockMarketModSettings().migrateIntegrations(saved));
+            if (!r.passed()) return r;
+        } catch (Exception e) {
+            return fail("settings IO: " + e);
+        } finally {
+            if (file != null)
+                file.toFile().delete();
+        }
+        return pass("old Utilities key moved to Integrations");
+    }
+
+    /** T-217: a file that already has the Integrations group is left alone, even with a stale old key. */
+    private TestResult test_integrationsPresentNotMigrated() {
+        StockMarketModSettings settings = new StockMarketModSettings();
+        JsonObject root = JsonParser.parseString(
+                "{\"Utilities\":{\"SYNC_ADMIN_FLAG_WITH_PERMISSION\":true},\"Integrations\":{\"SYNC_ADMIN_FLAG_WITH_PERMISSION\":false}}")
+                .getAsJsonObject();
+        TestResult r = assertFalse("migration returns false", settings.migrateIntegrations(root));
+        if (!r.passed()) return r;
+        return assertFalse("value unchanged", settings.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get());
+    }
+
+    /** T-217: without the old key (fresh world or already migrated) nothing changes and the default stays. */
+    private TestResult test_integrationsNoOldKey() {
+        StockMarketModSettings settings = new StockMarketModSettings();
+        JsonObject root = JsonParser.parseString("{\"Utilities\":{\"SAVE_INTERVAL_MINUTES\":5}}").getAsJsonObject();
+        TestResult r = assertFalse("migration returns false", settings.migrateIntegrations(root));
+        if (!r.passed()) return r;
+        r = assertFalse("SYNC_ADMIN_FLAG_WITH_PERMISSION keeps default false", settings.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get());
+        if (!r.passed()) return r;
+        return assertTrue("PLACEHOLDERS_ENABLED keeps default true", settings.INTEGRATIONS.PLACEHOLDERS_ENABLED.get());
     }
 
     /**

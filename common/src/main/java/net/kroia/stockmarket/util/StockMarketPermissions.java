@@ -34,7 +34,7 @@ public final class StockMarketPermissions {
     public static final String NOTIFY = "stockmarket.admin.notify";
 
     /**
-     * Source of the per-user StockMarket admin flag while {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION} is on
+     * Source of the per-user StockMarket admin flag while {@code Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION} is on
      * (see {@link AdminFlagSync}). Not covered by {@code stockmarket.admin.*}; grant it on its own.
      */
     public static final String ADMIN = "stockmarket.admin";

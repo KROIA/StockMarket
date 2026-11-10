@@ -78,7 +78,7 @@ public class StockMarketLuckPermsRemovedTests extends TestSuite {
             return skip("no master server");
         if (!AutoTest.isEnabled())
             return skip("autotest runs only: phase 1 leaves the sync setting on");
-        backend.SERVER_SETTINGS.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION.set(true);
+        backend.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.set(true);
         UUID admin = UUID.randomUUID();
         manager().onPlayerJoin(admin, "LpRemovedAdmin");
         manager().setStockmarketAdminMode(admin, true);

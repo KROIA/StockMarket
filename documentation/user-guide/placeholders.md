@@ -26,6 +26,8 @@ A placeholder mod must be installed on the server:
 
 Without one of them the placeholders are simply not available. No configuration is needed; StockMarket registers its placeholders automatically.
 
+To switch them off, turn off **Mod Settings → Integrations → Placeholders (TAB / Placeholder API)** (`Integrations.PLACEHOLDERS_ENABLED`, default on, ⟳ Restart required) on the master server and restart it.
+
 TAB and Placeholder API are server-side only. Players don't need to install them. In singleplayer the integrated server runs on the client, so TAB must be in the client's `mods` folder there.
 
 ### Known issues
@@ -121,3 +123,4 @@ All values are computed on the master server. A slave server pulls them from the
 - **Player placeholders** are only provided to slaves the master trusts (`/banksystem trust <slaveID>`). On an untrusted slave they are empty.
 - While a slave is not connected to its master, the placeholders show the last received values (empty after a slave restart).
 - Newly created markets appear on a slave within a few seconds.
+- The master decides: while its **Placeholders** setting is off, the placeholders are empty on the slaves too.

@@ -158,6 +158,8 @@ public class DataManager extends DataPersistence {
 
         boolean success = true;
         success &= loadSettings();
+        // Before any other migration: the first settings save writes the Integrations group and drops the old key.
+        migrateIntegrations();
         migrateNetFlowHalfLife();
         success &= loadMarketManager();
         success &= loadPluginManager();
@@ -305,6 +307,29 @@ public class DataManager extends DataPersistence {
         return true;
     }
 
+
+    /**
+     * T-217: moves {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION} of an older settings.json into the
+     * Integrations group ({@link StockMarketModSettings#migrateIntegrations}) and saves the file at once.
+     * Runs right after {@link #loadSettings()} and before anything else saves the settings, otherwise the
+     * save would write a default Integrations group and drop the old key. No-op for a missing file.
+     */
+    private void migrateIntegrations()
+    {
+        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        Path path = getAbsoluteSavePath(SETTINGS_FILE);
+        try {
+            if(!Files.exists(path))
+                return;
+            com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(Files.readString(path)).getAsJsonObject();
+            if(BACKEND_INSTANCES.SERVER_SETTINGS.migrateIntegrations(root) && saveSettings())
+                info("Moved SYNC_ADMIN_FLAG_WITH_PERMISSION (" + BACKEND_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get()
+                        + ") from Utilities into the Integrations group of settings.json");
+        } catch (Exception e) {
+            error("Could not migrate settings.json into the Integrations group", e);
+        }
+    }
 
     /** T-208: marker file (world StockMarket data folder) of the one-shot net-flow half-life migration. */
     public static final String NET_FLOW_HALF_LIFE_MARKER = "NetFlowHalfLife360.marker";

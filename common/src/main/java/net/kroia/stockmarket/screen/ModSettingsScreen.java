@@ -7,6 +7,7 @@ import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.CloseButton;
+import net.kroia.modutilities.gui.elements.FeatureToggleSection;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Master-only admin screen for editing the server's {@code settings.json} in-game.
@@ -51,6 +53,9 @@ import java.util.Set;
  * Fields are built generically from {@link StockMarketModSettings#getEditableGroups()}:
  * Booleans become checkboxes, Integer/Long/Float become numeric text boxes and the
  * ItemStack currency gets an item view + creative-inventory item picker.
+ * Exception: the Integrations group is laid out by hand as collapsible on/off
+ * sections ({@link #buildIntegrationSections}); new settings there must be added
+ * explicitly.
  * <p>
  * <b>DEVELOPER NOTE — when adding a new setting:</b>
  * <ol>
@@ -105,6 +110,10 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         public static Component settingTooltip(String groupName, String settingName) {
             return Component.translatable(PREFIX + "setting." + groupName + "." + settingName + ".tooltip");
         }
+        /** T-217: description text of an Integrations section (one label per line of the lang text). */
+        public static Component settingDescription(String groupName, String settingName) {
+            return Component.translatable(PREFIX + "setting." + groupName + "." + settingName + ".description");
+        }
     }
 
     private static final int ELEMENT_HEIGHT = 20;
@@ -128,6 +137,10 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
      *       does pick it up on recompute, but market settlement does not.)</li>
      *   <li>{@code ServerMarket.CANDLE_USE_GAME_TIME} (T-218): cached once by
      *       ServerMarketManager.isCandleUseGameTime() and sent to clients on join.</li>
+     *   <li>{@code Integrations.PLACEHOLDERS_ENABLED} (T-217): checked once at server start
+     *       (placeholder registration is skipped when off).</li>
+     *   <li>{@code Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION} (T-217): the LuckPerms listener
+     *       is registered at server start only while it is on.</li>
      * </ul>
      * All other registered settings are read live at their point of use
      * (autosave interval and logging flags per call/tick, candle time per tick,
@@ -136,7 +149,9 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
     private static final Set<String> RESTART_REQUIRED_SETTINGS = Set.of(
             "ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE",
             "ServerMarket.CURRENCY",
-            "ServerMarket.CANDLE_USE_GAME_TIME"
+            "ServerMarket.CANDLE_USE_GAME_TIME",
+            "Integrations.PLACEHOLDERS_ENABLED",
+            "Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION"
     );
 
     /**
@@ -161,10 +176,13 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
      */
     private long savedMaxOrderVolumeFactor = -1;
     private final List<FieldBinding> bindings = new ArrayList<>();
-    /** T-219: all setting rows, in the same order as {@link #savedEditorValues}. */
-    private final List<SettingRow> rows = new ArrayList<>();
     /**
-     * T-219: editor values ({@link SettingRow#editorValue()}) as last loaded from / confirmed by
+     * T-219: the current editor value of every field ({@link SettingRow#editorValue()}, and the header
+     * check box of each Integrations section, T-217), in the same order as {@link #savedEditorValues}.
+     */
+    private final List<Supplier<Object>> editorValues = new ArrayList<>();
+    /**
+     * T-219: editor values ({@link #editorValues}) as last loaded from / confirmed by
      * the master. Empty until the first GET response, so nothing counts as unsaved before that.
      */
     private final List<Object> savedEditorValues = new ArrayList<>();
@@ -261,12 +279,57 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
             heading.setHeight(ELEMENT_HEIGHT);
             listView.addChild(heading);
 
+            if (group == workingCopy.INTEGRATIONS) {
+                buildIntegrationSections(workingCopy.INTEGRATIONS);
+                continue;
+            }
             for (Setting<?> setting : group.getAllSettings()) {
                 SettingRow row = new SettingRow(group, setting);
-                rows.add(row);
+                editorValues.add(row::editorValue);
                 listView.addChild(row);
             }
         }
+    }
+
+    /**
+     * T-217: the Integrations group is laid out by hand as one collapsible {@link FeatureToggleSection}
+     * per integration (same layout as BankSystem); the header check box is the integration's on/off setting.
+     */
+    private void buildIntegrationSections(StockMarketModSettings.Integrations group) {
+        addSection(group, group.PLACEHOLDERS_ENABLED);
+        addSection(group, group.SYNC_ADMIN_FLAG_WITH_PERMISSION);
+    }
+
+    /**
+     * T-217: adds one section titled with the toggle's setting label, its description lines as children,
+     * a {@link FieldBinding} for the toggle and its dirty tracking. The header shows the static
+     * restart marker when the toggle is in {@link #RESTART_REQUIRED_SETTINGS}.
+     *
+     * @param group  the settings group (for the lang keys)
+     * @param toggle the Boolean setting the header check box edits
+     * @return the section, so callers can add further child rows
+     */
+    private FeatureToggleSection addSection(SettingsGroup group, Setting<Boolean> toggle) {
+        FeatureToggleSection section = new FeatureToggleSection(Texts.setting(group.getName(), toggle.getName()).getString());
+        section.setRestartRequired(RESTART_REQUIRED_SETTINGS.contains(group.getName() + "." + toggle.getName()));
+        // Labels do not wrap: the lang text carries its own line breaks.
+        for (String line : Texts.settingDescription(group.getName(), toggle.getName()).getString().split("\n")) {
+            Label label = new Label(line);
+            label.setAlignment(Label.Alignment.LEFT);
+            label.setTextColor(STATUS_COLOR_NEUTRAL);
+            section.addChild(label);
+        }
+        bindings.add(new FieldBinding() {
+            @Override public void loadFromSetting() {
+                section.setFeatureEnabled(Boolean.TRUE.equals(toggle.get()));
+            }
+            @Override public void storeToSetting() {
+                toggle.set(section.isFeatureEnabled());
+            }
+        });
+        editorValues.add(section::isFeatureEnabled);
+        listView.addChild(section);
+        return section;
     }
 
     /**
@@ -565,8 +628,8 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
                 refreshFields();
                 // T-219: the fields now show the master's confirmed state — that is the new baseline.
                 savedEditorValues.clear();
-                for (SettingRow row : rows)
-                    savedEditorValues.add(row.editorValue());
+                for (Supplier<Object> value : editorValues)
+                    savedEditorValues.add(value.get());
             } catch (Exception e) {
                 error("Failed to parse mod settings response", e);
                 setStatus(Texts.STATUS_FAILED.getString(), STATUS_COLOR_ERROR);
@@ -637,10 +700,10 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
      * @return true if Apply would send something that is not saved on the master yet
      */
     private boolean hasUnsavedChanges() {
-        if (savedEditorValues.size() != rows.size())
+        if (savedEditorValues.size() != editorValues.size())
             return false; // not loaded yet
-        for (int i = 0; i < rows.size(); i++) {
-            Object current = rows.get(i).editorValue();
+        for (int i = 0; i < editorValues.size(); i++) {
+            Object current = editorValues.get(i).get();
             Object saved = savedEditorValues.get(i);
             boolean same = current instanceof ItemStack a && saved instanceof ItemStack b
                     ? ItemStack.isSameItemSameComponents(a, b) // ItemStack has no equals()

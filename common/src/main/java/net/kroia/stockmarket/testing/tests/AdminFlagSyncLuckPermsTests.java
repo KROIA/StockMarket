@@ -79,7 +79,7 @@ public class AdminFlagSyncLuckPermsTests extends TestSuite {
                 return skip("LuckPerms not installed");
             if (getServer() == null || backend == null || backend.SERVER_SETTINGS == null || manager() == null)
                 return skip("no master server");
-            settingBefore = backend.SERVER_SETTINGS.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION.get();
+            settingBefore = backend.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get();
             try {
                 return test.get();
             } finally {
@@ -272,8 +272,14 @@ public class AdminFlagSyncLuckPermsTests extends TestSuite {
         return new ServerStockMarketCommandHandler();
     }
 
+    /**
+     * Sets the sync setting. Turning it on also registers the LuckPerms listener, which the server start only
+     * does when the setting was already on (T-217, restart-required); {@link AdminFlagSync#init()} is idempotent.
+     */
     private static void setSetting(boolean on) {
-        backend.SERVER_SETTINGS.UTILITIES.SYNC_ADMIN_FLAG_WITH_PERMISSION.set(on);
+        if (on)
+            AdminFlagSync.init();
+        backend.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.set(on);
     }
 
     /** Effective node value; for offline users it waits for their pending node writes (ModUtilities bridge). */

@@ -329,11 +329,16 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         // * ServerMarket.PROFIT_ALERT_THRESHOLD / PROFIT_ALERT_WINDOW_MINUTES (#89): read live when
         //   a player order completes, which only happens on the master — no propagation needed.
         //   (Admins online on a slave are not alerted; see ProfitAlerts.)
-        // * Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION: read live, master only (the admin flags
-        //   live on the master). Slaves keep defaults and forward LuckPerms changes of their
-        //   players whenever the master trusts them; the master applies them only while this
-        //   value is on (AsyncMarketManager SyncAdminFlagFromPermission). Turning it on here may
-        //   trigger the one-time LuckPerms migration (below). No propagation needed.
+        // * Integrations (T-217): slaves never load settings.json and keep the defaults, so every
+        //   Integrations gate is decided on the master. No propagation needed for any of them:
+        //   - PLACEHOLDERS_ENABLED: checked once at server start (restart-required). Off on the
+        //     master = no placeholder values; slaves keep polling PlaceholderSnapshotRequest and get
+        //     empty values. A slave's own value is never read.
+        //   - SYNC_ADMIN_FLAG_WITH_PERMISSION (moved from Utilities): the master's LuckPerms listener
+        //     is registered at server start only while it is on (restart-required); op/deop and the
+        //     master-side check of forwarded slave changes read it live (AsyncMarketManager
+        //     SyncAdminFlagFromPermission). Slaves always listen and forward when trusted. Turning it
+        //     on here may trigger the one-time LuckPerms migration (below).
         String villagerAfter = store.toJsonString(settings.VILLAGER_TRADING);
         if (!villagerAfter.equals(villagerBefore) && BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER != null) {
             BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();

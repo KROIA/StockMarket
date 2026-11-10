@@ -131,7 +131,7 @@ Notes:
 
 ### Syncing StockMarket admin mode with LuckPerms
 
-The Mod Setting `SYNC_ADMIN_FLAG_WITH_PERMISSION` (Mod Settings → Utilities, "Sync admin flag with LuckPerms", default off) keeps StockMarket admin mode and the LuckPerms node `stockmarket.admin` in step, in both directions:
+The Mod Setting `SYNC_ADMIN_FLAG_WITH_PERMISSION` (Mod Settings → Integrations, "Sync admin flag with LuckPerms", default off, ⟳ Restart required) keeps StockMarket admin mode and the LuckPerms node `stockmarket.admin` in step, in both directions:
 
 - `/stockmarket op <player>` sets admin mode and gives the player the node `stockmarket.admin=true` in LuckPerms (this works for offline players too). `/stockmarket deop <player>` clears admin mode and removes the player's own `stockmarket.admin` node.
 - Changing the node in LuckPerms (commands, web editor, a group) updates admin mode straight away, without a rejoin.
@@ -139,5 +139,6 @@ The Mod Setting `SYNC_ADMIN_FLAG_WITH_PERMISSION` (Mod Settings → Utilities, "
 - A player who joins for the first time while a LuckPerms group already grants `stockmarket.admin` becomes a StockMarket admin straight away. Note that `stockmarket.admin.*` does not include `stockmarket.admin` itself; grant it on its own.
 - When the setting is first turned on (at server start or in the Mod Settings screen), every player who already has admin mode gets `stockmarket.admin=true` in LuckPerms, once. This never removes anything. A marker file `AdminFlagLuckPermsMigrated.marker` in the world's `data/StockMarket` folder records that it ran; delete it to run the migration again.
 - With multiple servers: set the option on the master (slaves never load `settings.json`). A slave passes LuckPerms changes of its players on to the master, but only if the master trusts that slave (`/banksystem trust`); the master applies them only while its option is on. Untrusted slaves never change admin mode.
-- The setting takes effect immediately, no restart needed.
+- Turning the setting on needs a restart of the master: LuckPerms changes only reach admin mode after it. `/stockmarket op`/`deop` and the one-time migration apply right away. Turning it off takes effect immediately.
+- Worlds from older versions keep their value: the setting moved from the Utilities group to Integrations and is carried over on the first load.
 - Without LuckPerms the setting does nothing: admin mode only changes through `/stockmarket op` and `deop`, and the node `stockmarket.admin` falls back to operator level 2.

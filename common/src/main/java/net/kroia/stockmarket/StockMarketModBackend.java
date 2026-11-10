@@ -174,7 +174,7 @@ public class StockMarketModBackend implements StockMarketAPI {
                 net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart::new);
 
         EventRegistration.init();
-        AdminFlagSync.init(); // LuckPerms listener for stockmarket.admin, no-op without LuckPerms
+        // AdminFlagSync.init() (LuckPerms listener) runs at server start, see onBankSystemSetupComplete (T-217).
         if (StockMarketMod.ENABLE_DEV_FEATURES) {
             invokeDevBootstrap("init", new Class<?>[0]);
         }
@@ -307,6 +307,9 @@ public class StockMarketModBackend implements StockMarketAPI {
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
             preRegisterPresetItemStacks();
+            // T-217: the LuckPerms listener only while Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION is on (restart-required).
+            if (SERVER_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get())
+                AdminFlagSync.init();
             AdminFlagSync.migrateIfNeeded(); // one-time push of admins to LuckPerms (setting on), users are loaded now
             registerItemPriceProvider();
 
@@ -423,11 +426,18 @@ public class StockMarketModBackend implements StockMarketAPI {
             if (MultiServerUtils.canInteractWithBankSystem()) {
                 onSlaveConnectedRefreshTrustCache();
             }
+
+            // T-217: a slave keeps default settings, so it always listens to LuckPerms and forwards
+            // changes; the master applies them only while its own setting is on.
+            AdminFlagSync.init();
         }
 
         // Placeholders (master + slave): registers player placeholders and the refresh tick.
         // Placed after the master/slave branch so MARKET_MANAGER exists when the tick runs.
-        StockMarketPlaceholders.init(SERVER_INSTANCES);
+        // T-217: Integrations.PLACEHOLDERS_ENABLED is decided on the master (restart-required); a slave keeps
+        // polling, and an off master simply has no values to hand out.
+        if (!isMaster || SERVER_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.PLACEHOLDERS_ENABLED.get())
+            StockMarketPlaceholders.init(SERVER_INSTANCES);
     }
 
     /**
