@@ -18,7 +18,8 @@ public interface IAsyncStockMarketCommandHandler {
      *
      * @param executor the player who ran the command
      * @return future resolving to {@code true} if the screen was opened; {@code false} if the executor is not an
-     *         admin, is offline, or the slave has no master connection
+     *         admin, is offline, or the slave has no master connection or got no answer to the admin check (the
+     *         player is told)
      */
     CompletableFuture<Boolean> stockmarket_manage_async(@NotNull UUID executor);
 
