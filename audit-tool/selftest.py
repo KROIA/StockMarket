@@ -156,13 +156,15 @@ MASTER_UID, SLAVE_UID = '00000000-0000-4000-8000-0000000000aa', '00000000-0000-4
 CREATED, BANK_SAVE, SLAVE_SAVE, MASTER_SAVE = T + 2500, T + 40000, T + 50000, T + 100000   # oldest save = SLAVE_SAVE
 # CREATED is after the slave's first journal row (T + 2001): the writer thread opens the file after the first rows are queued
 GROUP = '12345678-1234-4234-8234-123456789abc'      # inter-market group of the extra fill
+GOLD, GOLD_LATE = 501, 502                         # account 1 slots bound to an external currency: at T, at T + 30000
 
 
 def tid(n):
     return '00000000-0000-4000-8000-%012d' % n
 
 
-# transfer -> expected class (None = skipped). Slave rows: (step, direction, path, items_json, ts); master rows: (type_code, amount, ts)
+# transfer -> expected class (None = skipped). Slave rows: (step, direction, path, items_json, ts);
+# master rows: (type_code, amount, ts[, item_id]) on account 1, item MONEY unless given
 TRANSFERS = {
     1: ('ok', [('REQUESTED', 'TO_MASTER', 'ASYNC_BANK', '{"6":1000}', T + 44000), ('CONFIRMED', None, None, None, T + 44001)],
         [(1, 1000, T + 45000)]),                                   # also newer than bank_last_save_ms -> rolled back note
@@ -189,6 +191,8 @@ TRANSFERS = {
     19: ('ok', [('REQUESTED', 'TO_MASTER', 'ASYNC_BANK', '{"6":120}', T + 19000)], []),   # non-success reply: nothing applied
     20: ('duplicate', [('REQUESTED', 'TO_MASTER', 'ASYNC_BANK', '{"6":130}', T + 20000)], [(1, 130, T + 20001)]),  # applied, slave saw no success
     21: ('known gap', [('DELIVERED', 'FROM_MASTER', 'DROP', '{"6":30000}', T + 21001)], [(25, 300, T + 21000)]),  # pre-#136 100x payout
+    22: ('known gap', [('DELIVERED', 'FROM_MASTER', 'DROP', '{"501":500}', T + 22001)], [(25, 405, T + 22000, GOLD)]),  # 5 coins: 81 vs 100
+    23: ('duplicate', [('DELIVERED', 'FROM_MASTER', 'DROP', '{"502":500}', T + 23001)], [(2, 405, T + 23000, GOLD_LATE)]),  # bound later
 }
 NO_LOG = {15}                                                      # REQUESTED with ledger_type NULL
 
@@ -224,12 +228,15 @@ def build_universe(root):
     bs = sqlite3.connect(os.path.join(md, 'BankSystem', 'Database', 'banksystem.db'))
     for n, (_, _, led) in TRANSFERS.items():
         bs.executemany('INSERT INTO TransactionLog (account_number,actor_uuid,kind,item_id,amount,ts,type_code,ref) VALUES (1,?,?,?,?,?,?,?)',
-                       [(U1, 'X', MONEY, amt, t, code, tid(n)) for code, amt, t in led])
+                       [(U1, 'X', (x + (MONEY,))[3], x[1], x[2], x[0], tid(n)) for x in led])
     bs.execute('CREATE TABLE SuspicionFlag (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, account_number INTEGER NOT NULL, '
                'flag_type INTEGER NOT NULL, severity INTEGER NOT NULL DEFAULT 0, amount INTEGER NOT NULL DEFAULT 0, ref TEXT, details TEXT, '
                'acknowledged INTEGER NOT NULL DEFAULT 0)')
     bs.execute('INSERT INTO SuspicionFlag (ts,account_number,flag_type,amount,ref) VALUES (?,1,6,100,?)', (T + 9001, tid(9)))
     bs.commit(); bs.close()
+    with open(os.path.join(md, 'BankSystem', 'BankAccountBindings.nbt'), 'wb') as f:
+        f.write(nbt.dumps({'version': 1, 'rows': [{'accountId': 1, 'itemShort': GOLD, 'ref': {}, 'boundAt': T},
+                                                  {'accountId': 1, 'itemShort': GOLD_LATE, 'ref': {}, 'boundAt': T + 30000}]}))
     diag_db(os.path.join(md, 'BankSystem', 'Database', 'banksystem_diagnostics.db'),
             [JOURNAL_SQL, NOTEFLOW_OLD] + ['ALTER TABLE NoteFlow ADD COLUMN ' + c for c in ('villager_uuid TEXT', 'dimension TEXT', 'x INTEGER', 'y INTEGER', 'z INTEGER')],
             {'schema_version': 1, 'created_ms': T - 1000, 'bank_last_save_ms': BANK_SAVE},
@@ -288,6 +295,7 @@ def check_diagnostics():
                 assert (got[tid(n)]['class'] if tid(n) in got else None) == cls, (n, cls, got.get(tid(n)))
             assert len(rows) == sum(1 for c, _, _ in TRANSFERS.values() if c) and not warns, (len(rows), warns)
             assert 'passed on' in got[tid(17)]['note'] and 'not applied' in got[tid(19)]['note']
+            assert got[tid(22)]['note'] == core.BOUND_RATIO and m.bound_slots == {(1, GOLD): T, (1, GOLD_LATE): T + 30000}
             assert 'rolled back' in got[tid(1)]['note'] and got[tid(1)]['slave'] == 'slave_a' and got[tid(1)]['player'] == 'Trader'
             assert 'started' in got[tid(11)]['note'] and 'oldest' in got[tid(10)]['note']
             assert got[tid(3)]['into_bank_master'] == got[tid(3)]['into_bank_slave'] == 7.0

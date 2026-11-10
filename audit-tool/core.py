@@ -437,6 +437,19 @@ class World:
         return sorted(self.diag_rows(self.bsd, 'NoteFlow', NOTEFLOW_COLS), key=lambda r: (r.get('ts') or 0, r.get('id') or 0))
 
     @functools.cached_property
+    def bound_slots(self):
+        """BankSystem/BankAccountBindings.nbt (master): (account, item_id) -> boundAt ms of every slot bound to an
+        external currency provider at save time. Unbound slots leave no trace; {} when the file is missing."""
+        d = self._nbt(os.path.join(self.data, 'BankSystem', 'BankAccountBindings.nbt'), True)
+        out = {}
+        for r in d.get('rows', []) if isinstance(d, dict) else ():
+            try:
+                out[(r['accountId'], r['itemShort'])] = r.get('boundAt') or 0
+            except (KeyError, TypeError):
+                pass
+        return out
+
+    @functools.cached_property
     def origins(self):
         """StockMarket OrderOrigin (master only): ledger ref ("sm:order:<id>" / "sm:im:<group uuid>") ->
         (origin_server_uid or None, origin_name: slave name, '' = placed on the master)."""
@@ -749,13 +762,27 @@ DELETE_CODES = (25, 28)    # ACCOUNT_DELETE_PAYOUT, ACCOUNT_DELETE_LOSS
 
 
 def _unlinked_drop(J, L, mv, sv):
-    """Known gap, not a finding, until BankSystem #136 lands. User-deletion payouts (ServerBankManager.dropOnSlaves)
-    drop to slaves under a transfer_id the master never writes as ledger ref (#127: ACCOUNT_DELETE_PAYOUT/LOSS rows
-    have ref = null), so a DROP with DELIVERED rows and no master row is this gap. Before #136 the payout also dropped
-    raw balances as item COUNTS (100x the value), so a linked deletion payout whose DELIVERED total does not match is
-    the same gap. A FAILED-only DROP is not: that leg was passed on to the next slave. Remove with old-data support."""
+    """Known gap, not a finding, for worlds written before BankSystem #136 (in since BankSystem 065093b0, which writes
+    ref = transfer_id per slave leg); newer data links by ref, so this only serves old data. Before #136 user-deletion
+    payouts (ServerBankManager.dropOnSlaves) dropped to slaves under a transfer_id the master never wrote as ledger ref
+    (#127: ACCOUNT_DELETE_PAYOUT/LOSS rows have ref = null), so a DROP with DELIVERED rows and no master row is this
+    gap. The payout also dropped raw balances as item COUNTS (100x the value), so a linked deletion payout whose
+    DELIVERED total does not match is the same gap. A FAILED-only DROP is not: that leg was passed on to the next
+    slave. Remove once pre-#136 worlds no longer need auditing."""
     if not any(r.get('path') == 'DROP' and r.get('step') == 'DELIVERED' for r in J): return False
     return not L or (mv != sv and any(r['code'] in DELETE_CODES for r in L))
+
+
+BOUND_RATIO = 'DROP on a bound external-currency slot: master at provider ratio, slave journal at x100 (not comparable)'
+
+
+def _bound_ratio(J, L, mv, sv, bound):
+    """Known limitation, not a finding: a DROP leg on a slot bound to an external currency provider cannot match. The
+    master row is count x provider ratio (e.g. 81 for bound gold coins), the slave journal count x 100 (the slave
+    does not know the ratio). Detected from the master's BankAccountBindings.nbt: the row's slot was bound at save time
+    and before the row. A slot unbound before the save is not detected."""
+    return mv != sv and any(r.get('path') == 'DROP' for r in J) and \
+        any(bound.get((r.get('account_number'), r.get('item_id')), math.inf) <= (r.get('ts') or 0) for r in L)
 
 
 def join(worlds):
@@ -773,7 +800,7 @@ def join(worlds):
     skipped when the master has no row for them: by design it writes none.
     Classes: ok (equal; also a DROP with only FAILED rows: passed on to the next slave), parked (open admin case),
     duplicate (both sides, more value than moved), lost (value left one side and did not arrive), created from
-    nothing (slave got value, master has no row), known gap (see _unlinked_drop).
+    nothing (slave got value, master has no row), known gap (see _bound_ratio, _unlinked_drop).
     'data gap' replaces lost / created from nothing when the side without rows cannot show the transfer (save not
     loaded, no diagnostics DB, DB started after the transfer, master ledger without ref); 'after snapshot' when the
     transfer is newer than the oldest loaded save (level.dat LastPlayed). Returns (rows, warnings)."""
@@ -807,6 +834,7 @@ def join(worlds):
                                       % ('acknowledged' if 'acknowledged' in fc else '0'), (TRANSFER_PARKED,)):
                 if ref: parked[ref] = (t or 0, ack)
     bank_save = m.meta_ms(m.bsd, 'bank_last_save_ms') if m else None
+    bound = m.bound_slots if m else {}
     if m and bank_save is None: warns.append('%s: no bank-save info (no bank_last_save_ms)' % m.label())
     jr, owner = collections.defaultdict(list), collections.defaultdict(list)   # a DROP can pass through several slaves
     for s in slaves:
@@ -848,6 +876,7 @@ def join(worlds):
         if tid in parked:
             cls = 'parked'
             if parked[tid][1]: notes.append('acknowledged')
+        elif _bound_ratio(J, L, mv, sv, bound): cls = 'known gap'; notes.append(BOUND_RATIO)
         elif _unlinked_drop(J, L, mv, sv): cls = 'known gap'; notes.append(UNLINKED_DROP)
         elif mv == sv:
             cls = 'ok'
