@@ -23,7 +23,8 @@ import java.util.concurrent.CompletableFuture;
  * Output: all market placeholder values plus the player placeholder values for the requested
  * UUIDs. The master handler only reads the placeholder caches and records the UUIDs as
  * "remote interest" so the next master tick computes their values; it never touches market
- * or bank state itself.
+ * or bank state itself. Player values carry per-market portfolio rows, so the slave can sum the portfolio again
+ * without markets it cannot resolve (T-240, {@link StockMarketPlaceholders#withoutUnresolvableMarkets}).
  * <p>
  * Market values are always returned; player values only to trusted slaves
  * ({@link NetworkGate#isManagementReadAllowed}). Not callable by clients.

@@ -54,6 +54,12 @@ public final class StockMarketPlaceholders {
     private static final long WINDOW_QUERY_MS = 60_000;
     private static final long REMOTE_INTEREST_MS = 10_000;
     private static final String[] PLAYER_NAMES = {"open_orders", "open_orders_raw", "portfolio", "portfolio_raw"};
+    /**
+     * T-240: prefix of the per-market rows the master adds to a player's values: key = prefix + market ItemID
+     * short, value = that market's share of the portfolio in raw money units (a long). They let a slave leave out
+     * markets it cannot resolve (see {@link #withoutUnresolvableMarkets}); no placeholder is registered for them.
+     */
+    private static final String PORTFOLIO_PART_PREFIX = "portfolio_part_";
 
     private static volatile StockMarketModBackend.ServerInstances BACKEND;
 
@@ -225,12 +231,8 @@ public final class StockMarketPlaceholders {
         IServerBankManager bankManager = backend.BANK_SYSTEM_API.getServerBankManager().getSync();
         for (UUID uuid : wanted) {
             int orders = openOrders.getOrDefault(uuid, 0) + smm.getPendingInterMarketOrdersForPlayer(uuid).size();
-            long portfolio = bankManager == null ? 0 : portfolioValue(bankManager, smm, uuid);
-            playerValues.put(uuid, Map.of(
-                    "open_orders", String.valueOf(orders),
-                    "open_orders_raw", String.valueOf(orders),
-                    "portfolio", formatMoney(portfolio),
-                    "portfolio_raw", MoneyFormat.formatMoneyRaw(portfolio)));
+            Map<ItemID, Long> parts = bankManager == null ? Map.of() : portfolioParts(bankManager, smm, uuid);
+            playerValues.put(uuid, playerValueMap(orders, parts));
         }
         // 4. drop players that are neither online nor of interest
         playerValues.keySet().retainAll(wanted);
@@ -246,16 +248,18 @@ public final class StockMarketPlaceholders {
     }
 
     /**
-     * Item value of a player's personal account in raw money units: for every non-money bank,
-     * (balance + locked) * market price / raw-units-per-item. Mirrors BankSystem's Total Wealth
+     * Item value of a player's personal account in raw money units, per market: for every non-money bank,
+     * (balance + locked) * market price / raw-units-per-item. The sum mirrors BankSystem's Total Wealth
      * (ServerBankManager.collectBalanceSnapshot) without the cash part. Items without a market count 0.
+     *
+     * @return market -> its non-zero share of the portfolio value
      */
-    private static long portfolioValue(IServerBankManager bankManager, ServerMarketManager smm, UUID uuid) {
+    private static Map<ItemID, Long> portfolioParts(IServerBankManager bankManager, ServerMarketManager smm, UUID uuid) {
         int accountNr = bankManager.getPersonalBankAccountNr(uuid);
         IServerBankAccount account = bankManager.getBankAccount(accountNr);
         if (account == null)
-            return 0;
-        long total = 0;
+            return Map.of();
+        Map<ItemID, Long> parts = new HashMap<>();
         for (Map.Entry<ItemID, IServerBank> entry : account.getAllBanks().entrySet()) {
             ItemID itemID = entry.getKey();
             IServerBank bank = entry.getValue();
@@ -265,11 +269,67 @@ public final class StockMarketPlaceholders {
             if (market == null)
                 continue;
             long price = market.getCurrentMarketPrice();
-            if (price > 0)
-                total += (bank.getBalance() + bank.getLockedBalance()) * price
-                        / BankAccountBindings.getRawUnitsPerItem(accountNr, itemID);
+            long part = price > 0 ? (bank.getBalance() + bank.getLockedBalance()) * price
+                    / BankAccountBindings.getRawUnitsPerItem(accountNr, itemID) : 0;
+            if (part != 0)
+                parts.put(itemID, part);
         }
-        return total;
+        return parts;
+    }
+
+    /**
+     * (Master) Builds a player's placeholder values. The portfolio is the sum of all {@code parts}; each part is
+     * also stored as a {@link #PORTFOLIO_PART_PREFIX} row so a slave can leave out markets it cannot resolve
+     * (T-240, see {@link #withoutUnresolvableMarkets}).
+     *
+     * @param openOrders the player's open order count
+     * @param parts      market -> its share of the portfolio value in raw money units
+     * @return placeholder name -> value (immutable)
+     */
+    public static Map<String, String> playerValueMap(int openOrders, Map<ItemID, Long> parts) {
+        Map<String, String> values = new HashMap<>();
+        long portfolio = 0;
+        for (Map.Entry<ItemID, Long> part : parts.entrySet()) {
+            portfolio += part.getValue();
+            values.put(PORTFOLIO_PART_PREFIX + part.getKey().getShort(), String.valueOf(part.getValue()));
+        }
+        values.put("open_orders", String.valueOf(openOrders));
+        values.put("open_orders_raw", String.valueOf(openOrders));
+        putPortfolio(values, portfolio);
+        return Map.copyOf(values);
+    }
+
+    /**
+     * (Slave) T-240: the player's values with the portfolio summed again without the markets this server cannot
+     * resolve (items only the master has, see {@link MultiServerUtils#isMarketResolvableOnThisServer}), so the
+     * portfolio matches the markets the slave shows. Lookup only, never registers an ItemID.
+     *
+     * @param values a player's values from the master, with {@link #PORTFOLIO_PART_PREFIX} rows
+     * @return {@code values} itself if every market resolves here, otherwise a copy with the reduced portfolio
+     */
+    public static Map<String, String> withoutUnresolvableMarkets(Map<String, String> values) {
+        long portfolio = 0;
+        boolean hidden = false;
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            if (!entry.getKey().startsWith(PORTFOLIO_PART_PREFIX))
+                continue;
+            ItemID marketID = new ItemID(Short.parseShort(entry.getKey().substring(PORTFOLIO_PART_PREFIX.length())));
+            if (MultiServerUtils.isMarketResolvableOnThisServer(marketID))
+                portfolio += Long.parseLong(entry.getValue());
+            else
+                hidden = true;
+        }
+        if (!hidden)
+            return values; // the master's strings, unchanged
+        Map<String, String> filtered = new HashMap<>(values);
+        putPortfolio(filtered, portfolio);
+        return filtered;
+    }
+
+    /** Writes the formatted and raw portfolio value into {@code values}. */
+    private static void putPortfolio(Map<String, String> values, long portfolio) {
+        values.put("portfolio", formatMoney(portfolio));
+        values.put("portfolio_raw", MoneyFormat.formatMoneyRaw(portfolio));
     }
 
     private static void refreshSlave(StockMarketModBackend.ServerInstances backend, MinecraftServer server, long now) {
@@ -291,7 +351,8 @@ public final class StockMarketPlaceholders {
             if (ex != null || out == null || BACKEND != backend)
                 return;
             serverValues = Map.copyOf(out.market());
-            playerValues.putAll(out.players());
+            // T-240: the portfolio leaves out markets this slave cannot resolve, like its market lists
+            out.players().forEach((uuid, values) -> playerValues.put(uuid, withoutUnresolvableMarkets(values)));
         });
     }
 

@@ -71,8 +71,8 @@ button is only shown on the master.
 
 If the master has mods that a slave lacks, markets for items from those mods are hidden on that
 slave: they do not appear in the market lists, the Management GUI, the plugin screens, a player's
-orders and history, or command suggestions, and they cannot be traded there. The master and slaves
-with the same mods still show every market.
+orders and history, or command suggestions, the `portfolio` placeholder does not count them, and they
+cannot be traded there. The master and slaves with the same mods still show every market.
 
 ---
 

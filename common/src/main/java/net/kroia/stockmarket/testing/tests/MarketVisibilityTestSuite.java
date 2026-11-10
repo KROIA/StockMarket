@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.banksystem.api.MoneyFormat;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.testing.TestCategory;
@@ -7,6 +8,7 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
+import net.kroia.stockmarket.minecraft.compat.StockMarketPlaceholders;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
@@ -17,6 +19,7 @@ import net.kroia.stockmarket.util.MultiServerUtils;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -28,7 +31,8 @@ import java.util.function.Function;
  * {@link MultiServerUtils#setUnresolvableForTesting} makes a real item of this server's registry look
  * missing, so no second mod loadout is needed. Items are only looked up, never registered (an untrusted
  * slave may not register items). The fake-transport tests run on both sides, the filters are the same code
- * there; the live market list test runs on a slave and the master test on the master.
+ * there; the live market list test runs on a slave and the master test on the master. T-240 adds the
+ * portfolio placeholder, which a slave sums without those markets.
  */
 public class MarketVisibilityTestSuite extends TestSuite {
 
@@ -56,6 +60,7 @@ public class MarketVisibilityTestSuite extends TestSuite {
         addTest("put_order_refused_without_forwarding", this::test_putOrderRefusedWithoutForwarding);
         addTest("slave_list_hides_unresolvable_master_market", this::test_slaveListHidesUnresolvableMasterMarket);
         addTest("master_still_lists_unresolvable_market", this::test_masterStillListsUnresolvableMarket);
+        addTest("slave_portfolio_excludes_unresolvable_market", this::test_slavePortfolioExcludesUnresolvableMarket);
     }
 
     /**
@@ -185,6 +190,33 @@ public class MarketVisibilityTestSuite extends TestSuite {
             if (marketID != null)
                 MultiServerUtils.setUnresolvableForTesting(marketID, false);
             fixture.cleanup();
+        }
+    }
+
+    /**
+     * T-240: the portfolio placeholder the master computes keeps every market; the slave's copy sums it again
+     * without the market it cannot resolve, and keeps the master's values when every market resolves.
+     */
+    private TestResult test_slavePortfolioExcludesUnresolvableMarket() {
+        List<ItemID> items = twoResolvableItems();
+        if (items == null)
+            return skip("fewer than two resolvable items in the registry");
+        ItemID shown = items.get(0);
+        ItemID hidden = items.get(1);
+        Map<String, String> master = StockMarketPlaceholders.playerValueMap(0, Map.of(shown, 300L, hidden, 700L));
+        TestResult r = assertTrue("all markets resolve: master values kept",
+                StockMarketPlaceholders.withoutUnresolvableMarkets(master) == master);
+        if (!r.passed()) return r;
+        MultiServerUtils.setUnresolvableForTesting(hidden, true);
+        try {
+            r = assertEquals("master keeps both markets", MoneyFormat.formatMoneyRaw(1000), master.get("portfolio_raw"));
+            if (!r.passed()) return r;
+            Map<String, String> slave = StockMarketPlaceholders.withoutUnresolvableMarkets(master);
+            r = assertEquals("slave raw value without the hidden market", MoneyFormat.formatMoneyRaw(300), slave.get("portfolio_raw"));
+            if (!r.passed()) return r;
+            return assertEquals("slave formatted value without the hidden market", MoneyFormat.formatMoney(300), slave.get("portfolio"));
+        } finally {
+            MultiServerUtils.setUnresolvableForTesting(hidden, false);
         }
     }
 
