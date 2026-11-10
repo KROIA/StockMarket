@@ -110,6 +110,7 @@ public class PluginTestSuite extends TestSuite {
         // T-213 C0: golden hashes of the net-flow price model (refactor equivalence)
         addTest("netFlow_golden_equivalence", this::test_netFlowGolden);
         addTest("equilibriumChannel_rollsOver", this::test_equilibriumChannel);
+        addTest("netFlow_migration_splitsVolatility", this::test_netFlowMigration);
         // Trend accumulation
         addTest("volumeDistribution_trendFactor_math", this::test_volumeDistribution_trendFactorMath);
         addTest("volumeDistribution_trend_codec_legacy", this::test_volumeDistribution_trendCodec);
@@ -1703,6 +1704,108 @@ public class PluginTestSuite extends TestSuite {
             return fail(String.format(Locale.ROOT, "golden mismatch (expected script %016x pump %016x): ", GOLDEN_SCRIPT_HASH,
                     GOLDEN_PUMP_HASH) + hashes + out);
         return pass(hashes + out);
+    }
+
+    /** T-213: one plugin entry of a manager save (generic keys, subscribed to {@link #itemID}). */
+    private CompoundTag savedPlugin(String typeID, UUID id, boolean enabled, boolean autoSubscribe) {
+        CompoundTag pt = new CompoundTag();
+        pt.putString("pluginTypeID", typeID);
+        net.kroia.modutilities.NbtCompat.putUUID(pt, "instanceID", id);
+        pt.putBoolean("enabled", enabled);
+        pt.putBoolean("autoSubscribeNewMarkets", autoSubscribe);
+        ListTag markets = new ListTag();
+        CompoundTag mt = new CompoundTag();
+        itemID.save(mt);
+        markets.add(mt);
+        pt.put("subscribedMarkets", markets);
+        return pt;
+    }
+
+    /** T-213: a manager save of the given plugin entries, news migration already done, no NetFlow flag. */
+    private static java.util.Map<String, ListTag> managerSave(CompoundTag... pluginTags) {
+        ListTag plugins = new ListTag();
+        for (CompoundTag t : pluginTags) plugins.add(t);
+        java.util.Map<String, ListTag> save = new java.util.HashMap<>();
+        save.put("plugins", plugins);
+        CompoundTag flags = new CompoundTag();
+        flags.putBoolean("newsPluginAutoCreateDone", true);
+        ListTag managerData = new ListTag();
+        managerData.add(flags);
+        save.put("managerData", managerData);
+        return save;
+    }
+
+    /** T-213: removes every plugin of a test-only manager (drops its market subscriptions). */
+    private static void dispose(ServerPluginManager m) {
+        for (ServerPlugin p : new java.util.ArrayList<ServerPlugin>(m.getPlugins().values())) m.removePlugin(p);
+    }
+
+    /**
+     * T-213 migration on a fresh manager: a pre-T-213 VolatilityPlugin (flow settings in its 6-field bytes, NBT
+     * overrides, saturated flow) loads as NetFlowPlugin + VolatilityPlugin in that order with the same market,
+     * auto-subscribe and enabled state, the NBT-effective settings (old volatility scale -> capacity scale) and the
+     * flow state. The next save carries the flag, so loading it does not split again. A save without a
+     * VolatilityPlugin gets no NetFlowPlugin.
+     */
+    private TestResult test_netFlowMigration() {
+        ServerPluginManager m = new ServerPluginManager(), m2 = new ServerPluginManager(), m3 = new ServerPluginManager();
+        try {
+            CompoundTag vol = savedPlugin(net.kroia.stockmarket.pluginsystem.Plugins.VOLATILITY_PLUGIN.getPluginTypeID(),
+                    UUID.randomUUID(), true, false);
+            ByteBuf buf = Unpooled.buffer();
+            buf.writeFloat(0.4f).writeBoolean(true).writeFloat(1500f).writeFloat(0.1f).writeFloat(5f).writeFloat(0.7f);
+            byte[] bytes = new byte[buf.readableBytes()];
+            buf.readBytes(bytes);
+            buf.release();
+            ListTag csm = new ListTag();
+            CompoundTag ce = new CompoundTag();
+            itemID.save(ce);
+            ce.putByteArray("settingsData", bytes);
+            csm.add(ce);
+            vol.put("customSettingsMap", csm);
+            CompoundTag me = new CompoundTag();
+            itemID.save(me);
+            me.putFloat("maxPriceMult", 4f);       // NBT overrides the bytes (the old plugin ran with these)
+            me.putFloat("permanentImpact", 0.6f);
+            me.putDouble("satFlow", 321.5);
+            me.putDouble("lastFaded", 300.0);
+            ListTag md = new ListTag();
+            md.add(me);
+            CompoundTag pd = new CompoundTag();
+            pd.put("marketData", md);
+            vol.put("pluginData", pd);
+
+            m.load(managerSave(vol));
+            List<ServerPlugin> order = new java.util.ArrayList<ServerPlugin>(m.getPlugins().values());
+            if (order.size() != 2 || !(order.get(0) instanceof NetFlowPlugin flow) || !(order.get(1) instanceof VolatilityPlugin v))
+                return fail("expected [NetFlowPlugin, VolatilityPlugin], got " + order);
+            NetFlowPlugin.Settings expected = new NetFlowPlugin.Settings(true, 1500f, 0.1f, 4f, 0.6f).withCapacityVolatilityScale(0.4f);
+            TestResult r = assertEquals("migrated settings", expected, flow.getMarketSettings(itemID));
+            if (!r.passed()) return r;
+            r = assertEquals("migrated satFlow", 321.5, flow.getSaturatedFlow(itemID));
+            if (!r.passed()) return r;
+            if (!flow.isEnabled() || flow.getAutoSubscribeNewMarkets() || !flow.getSubscribedMarkets().equals(List.of(itemID)))
+                return fail("enabled/autoSubscribe/markets not copied");
+            r = assertEquals("volatility keeps its scale", 0.4f, v.getMarketSettings(itemID).volatilityScale());
+            if (!r.passed()) return r;
+
+            java.util.Map<String, ListTag> save2 = new java.util.HashMap<>();
+            m.save(save2);
+            if (!net.kroia.modutilities.NbtCompat.getBoolean(net.kroia.modutilities.NbtCompat.getCompound(save2.get("managerData"), 0),
+                    "netFlowPluginMigrationDone")) return fail("save must carry netFlowPluginMigrationDone");
+            m2.load(save2);
+            if (m2.getPlugins().size() != 2) return fail("reload must not split again, got " + m2.getPlugins().size() + " plugins");
+
+            m3.load(managerSave(savedPlugin(net.kroia.stockmarket.pluginsystem.Plugins.TARGET_PRICE_BOT_PLUGIN.getPluginTypeID(),
+                    UUID.randomUUID(), true, true)));
+            for (ServerPlugin p : m3.getPlugins().values())
+                if (p instanceof NetFlowPlugin) return fail("no VolatilityPlugin -> no NetFlowPlugin");
+            return pass("split into NetFlow + Volatility with settings, state, flags; idempotent; no-op without Volatility");
+        } finally {
+            dispose(m);
+            dispose(m2);
+            dispose(m3);
+        }
     }
 
     /**

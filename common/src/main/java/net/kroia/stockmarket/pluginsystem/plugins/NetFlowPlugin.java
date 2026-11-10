@@ -177,6 +177,54 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, Void> {
         }
     }
 
+    /**
+     * T-213 migration, decode only: a pre-T-213 VolatilityPlugin settings payload (which also carried the flow
+     * settings) as NetFlow settings. Layouts: 1 float (volatilityScale only: flow defaults); 5 fields (scale,
+     * flowEnabled, sensitivity, min, max: default θ); 6 fields (+ θ); 8 fields (unreleased T-204 dev builds, the
+     * trailing floats are skipped). The old volatility scale becomes the capacity scale, so the equilibrium stays
+     * bit-identical; the toggles get their defaults.
+     */
+    public static final StreamCodec<ByteBuf, Settings> LEGACY_VOLATILITY_CODEC = new StreamCodec<>() {
+        @Override
+        public Settings decode(ByteBuf buf) {
+            Settings d = Settings.createDefault();
+            float vs = buf.readableBytes() >= Float.BYTES ? buf.readFloat() : d.capacityVolatilityScale();
+            if (!buf.isReadable()) return d.withCapacityVolatilityScale(vs);
+            boolean flow = buf.readBoolean();
+            float sens = buf.readFloat();
+            float min = buf.readFloat();
+            float max = buf.readFloat();
+            float theta = buf.readableBytes() >= Float.BYTES ? buf.readFloat() : DEFAULT_PERMANENT_IMPACT;
+            buf.skipBytes(buf.readableBytes());
+            return new Settings(flow, sens, min, max, theta).withCapacityVolatilityScale(vs);
+        }
+
+        @Override
+        public void encode(ByteBuf buf, Settings s) {
+            throw new UnsupportedOperationException("LEGACY_VOLATILITY_CODEC is decode-only (migration)");
+        }
+    };
+
+    /**
+     * T-213 migration: applies the per-market NBT keys a pre-T-213 VolatilityPlugin saved over its settings (the
+     * old plugin ran with these, not with its settings map). Missing keys keep {@code s}, a missing
+     * {@code permanentImpact} becomes the default θ (as the old load did).
+     *
+     * @param s         the settings decoded with {@link #LEGACY_VOLATILITY_CODEC}
+     * @param marketTag one entry of the old plugin's {@code marketData} list
+     * @return the effective settings
+     */
+    public static Settings applyLegacyVolatilityNbt(Settings s, CompoundTag marketTag) {
+        return new Settings(
+                marketTag.contains("flowInfluenceEnabled") ? NbtCompat.getBoolean(marketTag, "flowInfluenceEnabled") : s.flowEnabled(),
+                marketTag.contains("flowSensitivity") ? NbtCompat.getFloat(marketTag, "flowSensitivity") : s.flowSensitivity(),
+                marketTag.contains("minPriceMult") ? NbtCompat.getFloat(marketTag, "minPriceMult") : s.minPriceMult(),
+                marketTag.contains("maxPriceMult") ? NbtCompat.getFloat(marketTag, "maxPriceMult") : s.maxPriceMult(),
+                marketTag.contains("permanentImpact") ? NbtCompat.getFloat(marketTag, "permanentImpact") : DEFAULT_PERMANENT_IMPACT,
+                marketTag.contains("volatilityScale") ? NbtCompat.getFloat(marketTag, "volatilityScale") : s.capacityVolatilityScale(),
+                s.thetaCapEnabled(), s.saturationEnabled());
+    }
+
     /** Per-market state. */
     static class MarketData {
         Settings settings = Settings.createDefault();
