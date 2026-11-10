@@ -25,24 +25,84 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
     public static final String DELETE = "DELETE FROM OrderHistory";
     public static final String COUNT  = "SELECT COUNT(*) FROM OrderHistory";
 
+    /**
+     * Records of {@link #save(OrderRecordStruct)} that share one db-worker job, written in one transaction.
+     *
+     * @see #openBatch
+     */
+    private static final class Batch {
+        final List<OrderRecordStruct> records = new ArrayList<>();
+        final CompletableFuture<Void> done = new CompletableFuture<>();
+    }
+
+    /**
+     * T-226: the batch new records join, null when the next {@link #save(OrderRecordStruct)} has to queue a new
+     * one. Every finished player order used to be its own db-worker job with its own commit (about 7 to 10 ms
+     * each), so heavy trading queued thousands of them, and a server stop hit {@link DatabaseManager#close()}'s
+     * drain cap and dropped the rest. Now one job writes everything that arrived until it started.
+     * <p>
+     * A batch stays open from its first record until its job starts, or until this manager queues another job
+     * ({@link #sealBatch()}), so this manager's jobs keep their FIFO order: a record saved after a
+     * {@code removeHistory} call is still written after that delete. Guarded by {@code this}.
+     */
+    private Batch openBatch;
+
     public OrderRecordManager(DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
     }
 
+    /**
+     * Queues one order record. It joins the open batch, or opens a new one and queues its write job.
+     *
+     * @param data the record to insert
+     * @return completes when the record's batch is committed; fails if the write failed
+     * @throws java.util.concurrent.RejectedExecutionException if a new batch is needed after the database closed
+     */
     public CompletableFuture<Void> save(OrderRecordStruct data) {
-        return CompletableFuture.runAsync(() -> {
-            try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(INSERT)) {
-                queueRecord(preparedStatement, data);
-                preparedStatement.execute();
-                databaseManager.commitTransaction();
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
+        synchronized (this) {
+            if (openBatch == null) {
+                Batch batch = new Batch();
+                databaseManager.getDatabaseThread().execute(() -> writeBatch(batch)); // throws if closed: stays null
+                openBatch = batch;
             }
-        }, databaseManager.getDatabaseThread());
+            // Under the lock, so the job cannot take the records before this one is in.
+            openBatch.records.add(data);
+            return openBatch.done;
+        }
+    }
+
+    /** Ends the open batch, so records saved from now on are written by a job queued behind the next one. */
+    private synchronized void sealBatch() {
+        openBatch = null;
+    }
+
+    /**
+     * The db-worker job of one batch: closes it, then inserts all its records and commits once.
+     *
+     * @param batch the batch to write
+     */
+    private void writeBatch(Batch batch) {
+        List<OrderRecordStruct> records;
+        synchronized (this) {
+            if (openBatch == batch)
+                openBatch = null; // from here on, save() queues a new batch behind this job
+            records = batch.records;
+        }
+        try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(INSERT)) {
+            records.forEach(d -> queueRecord(preparedStatement, d));
+            preparedStatement.executeBatch();
+            databaseManager.commitTransaction();
+            batch.done.complete(null);
+        } catch (SQLException | RuntimeException e) {
+            // Production callers ignore the future, so log here: a failed batch loses all of its records.
+            StockMarketMod.LOGGER.error("Failed to save {} order records", records.size(), e);
+            batch.done.completeExceptionally(e);
+        }
     }
 
 
     public CompletableFuture<Void> save(List<OrderRecordStruct> data) {
+        sealBatch();
         return CompletableFuture.runAsync(() -> {
             try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(INSERT)) {
                 data.forEach(d -> queueRecord(preparedStatement, d));
@@ -92,6 +152,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
     }
 
     public CompletableFuture<Void> removeHistory(Optional<DateFilter> dateFilter, Optional<EqualityFilter> accountFilter, Optional<UUIDFilter> userFilter, Optional<EqualityFilter> marketFilter) {
+        sealBatch(); // records saved after this delete must not be written before it
         return CompletableFuture.runAsync(() -> {
             try {
                 boolean started = false;
@@ -136,6 +197,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
     }
 
     public CompletableFuture<List<OrderRecordStruct>> query(Optional<DateFilter> dateFilter, Optional<EqualityFilter> accountFilter, Optional<UUIDFilter> userFilter, Optional<EqualityFilter> marketFilter, String stmt){
+        sealBatch(); // the result holds the records saved before this call, not later ones
         return CompletableFuture.supplyAsync(() -> {
             try {
                 boolean started = false;
@@ -195,6 +257,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
 
 
     public CompletableFuture<Integer> getRecordCount(Optional<DateFilter> dateFilter, Optional<EqualityFilter> marketFilter){
+        sealBatch(); // counts the records saved before this call, not later ones
         return CompletableFuture.supplyAsync(() -> {
             try {
                 String statement = COUNT;

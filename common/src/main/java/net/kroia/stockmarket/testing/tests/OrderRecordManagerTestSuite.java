@@ -11,8 +11,13 @@ import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 import net.kroia.stockmarket.data.filter.UUIDFilter;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class OrderRecordManagerTestSuite extends TestSuite {
 
@@ -37,6 +42,7 @@ public class OrderRecordManagerTestSuite extends TestSuite {
         addTest("query_noFilters", this::test_query_noFilters);
         addTest("singleton_create", this::test_singleton_create);
         addTest("uuidStoredAsTwoLongs", this::test_uuidStoredAsTwoLongs);
+        addTest("save_coalescesQueuedRecords", this::test_save_coalescesQueuedRecords);
     }
 
     @Override
@@ -196,6 +202,53 @@ public class OrderRecordManagerTestSuite extends TestSuite {
             return pass("UUID stored as two longs (MSB/LSB) — decomposition, reconstruction, and filter clause verified");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * T-226: records saved while the db-worker is busy share one write job instead of one job each, and a
+     * {@code removeHistory} call in between ends that batch, so a record saved after the delete survives it.
+     */
+    private TestResult test_save_coalescesQueuedRecords() {
+        if (manager == null || backend.DATABASE_MANAGER == null)
+            return fail("ORDER_RECORD_MANAGER or DATABASE_MANAGER is null");
+        DatabaseManager db = backend.DATABASE_MANAGER;
+        // Drain what earlier suites queued, so the 5 s waits below time this test's jobs only.
+        if (!pumpUntil(TestFixture.dbBarrier(db)::isDone, TestFixture.DB_DRAIN_TIMEOUT_MS))
+            return fail("db-worker queue did not drain within " + TestFixture.DB_DRAIN_TIMEOUT_MS + " ms");
+        UUID batchedUser = UUID.randomUUID();
+        UUID laterUser = UUID.randomUUID();
+        short item = (short) -31003; // scratch item ID, no real market uses it
+        CountDownLatch hold = new CountDownLatch(1);
+        try {
+            // Keep the db-worker busy, so every save below queues instead of running right away.
+            db.getDatabaseThread().execute(() -> {
+                try { hold.await(10, TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+            });
+            CompletableFuture<Void> batch = manager.save(new OrderRecordStruct(item, 1, batchedUser, 0, 1, 1, 1L));
+            for (int i = 1; i < 50; i++) {
+                if (manager.save(new OrderRecordStruct(item, 1, batchedUser, 0, 1, 1, 1L)) != batch)
+                    return fail("record " + i + " opened a new batch instead of joining the queued one");
+            }
+            CompletableFuture<Void> delete = manager.removeHistory(Optional.empty(), Optional.empty(),
+                    Optional.of(new UUIDFilter(laterUser)), Optional.empty());
+            CompletableFuture<Void> later = manager.save(new OrderRecordStruct(item, 1, laterUser, 0, 1, 1, 1L));
+            TestResult r = assertTrue("a save after removeHistory should open a new batch", later != batch);
+            if (!r.passed()) return r;
+
+            hold.countDown();
+            await(CompletableFuture.allOf(batch, delete, later), 5000);
+            r = assertEquals("records written by the shared batch", 50, await(manager.getHistory(Optional.empty(),
+                    Optional.empty(), Optional.of(new UUIDFilter(batchedUser)), Optional.empty()), 5000).size());
+            if (!r.passed()) return r;
+            return assertEquals("record saved after removeHistory survives the delete", 1, await(manager.getHistory(
+                    Optional.empty(), Optional.empty(), Optional.of(new UUIDFilter(laterUser)), Optional.empty()), 5000).size());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            hold.countDown(); // never leave the db-worker parked
+            manager.removeHistory(Optional.empty(), Optional.empty(), Optional.of(new UUIDFilter(batchedUser)), Optional.empty());
+            manager.removeHistory(Optional.empty(), Optional.empty(), Optional.of(new UUIDFilter(laterUser)), Optional.empty());
         }
     }
 }
