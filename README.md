@@ -312,9 +312,10 @@ Run <code>/stockmarket manage</code> to open the management interface. It has th
 The **Mod Settings** button on the Management GUI's overview tab opens an editor for the server's `settings.json` (`world/data/StockMarket/settings.json`), so autosave interval, logging, market and villager-trading settings can be changed without touching the file:
 * The button is only shown when connected to the **master server** — slave servers never load `settings.json`; the master pushes derived data (e.g. villager prices) to them automatically. The server additionally enforces op level 2 and master status for every request.
 * **Apply** validates and clamps the values server-side, saves them to `settings.json` and re-displays the confirmed state. **Reload** re-fetches the current server values, **Defaults** resets the fields to the compile-time defaults (nothing is saved until Apply).
-* Most settings take effect immediately. Fields marked with an orange **⟳ Restart required** label (orderbook array size, trading currency) are only read once at startup — the new value is saved but only applies after a server restart.
+* Most settings take effect immediately. Fields marked with an orange **⟳ Restart required** label (orderbook array size, trading currency, candle timebase) are only read once at startup — the new value is saved but only applies after a server restart.
 * **Trade cooldown (ms)** (`ServerMarket.TRADE_COOLDOWN_MS`, default `500`, range 0 - 60000, `0` = off): minimum time between two accepted orders of the same player across all markets and both normal and pair (inter-market) orders — stops autoclickers. Rejected orders don't restart it; bots are not affected. Takes effect immediately.
 * **Max order size factor** (`ServerMarket.MAX_ORDER_VOLUME_FACTOR`, default `64`, minimum 1): the default max order size of a market is `max(factor, factor x abundance)`. Used for new markets and presets and for saves without a value; existing markets keep their limit. The **Apply to all markets** button next to it (asks for confirmation) recomputes the max order size of **every** market from its abundance and the **saved** factor — per-market custom limits, including 0 = unlimited, are overwritten. Press Apply first if you changed the factor.
+* **Candles: use in-game time** (`ServerMarket.CANDLE_USE_GAME_TIME`, default off, restart required): one price candle per in-game hour of the master's overworld instead of one per **Candle time (ms)**; the charts then offer 1h / 4h / 1D / 1W in-game candles labelled `Day N` / `hh:00`. **Candle time (ms)** only applies while this is off. Independent of the trading hours clock. See [Candle Timebase](documentation/user-guide/candle-timebase.md).
 * Changes to the **Villager Trading** group are propagated to all connected slave servers right away (the villager price table is recomputed and re-broadcast).
 
 This screen is the recommended way to change any persisted mod setting — admins do not need to edit `settings.json` by hand.
@@ -577,9 +578,8 @@ The same can happen for sell orders, in that case the player will not receive as
 ---
 ### Candle Stick Chart
 The candle stick chart is a common used representation of price history.
-Each candle has a fixed time width. Candles are available for different time scales.
-The timescale can't be changed in the mod.
-A admin can change the time for each candle, default is 1 min.
+Each candle has a fixed time width. The buttons on the chart switch between the timeframes 1m, 5m, 15m, 1h, 4h and 1d.
+An admin can change the time for each candle (**Candle time** in the Mod Settings, default 1 min), or switch the candles to in-game hours with 1h / 4h / 1D / 1W timeframes, see [Candle Timebase](documentation/user-guide/candle-timebase.md).
 A cancle can be defined with 4 values:
 - **Open Price**
   The current price the market had when the new candle was created.
