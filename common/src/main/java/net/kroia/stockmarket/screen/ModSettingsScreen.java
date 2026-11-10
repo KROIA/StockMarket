@@ -126,6 +126,8 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
      *       lazily once and cached in ServerMarketManager ({@code tradingCurrencyID})
      *       and pushed to BankSystem at startup. (The villager-trade price table
      *       does pick it up on recompute, but market settlement does not.)</li>
+     *   <li>{@code ServerMarket.CANDLE_USE_GAME_TIME} (T-218): cached once by
+     *       ServerMarketManager.isCandleUseGameTime() and sent to clients on join.</li>
      * </ul>
      * All other registered settings are read live at their point of use
      * (autosave interval and logging flags per call/tick, candle time per tick,
@@ -133,7 +135,8 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
      */
     private static final Set<String> RESTART_REQUIRED_SETTINGS = Set.of(
             "ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE",
-            "ServerMarket.CURRENCY"
+            "ServerMarket.CURRENCY",
+            "ServerMarket.CANDLE_USE_GAME_TIME"
     );
 
     /**

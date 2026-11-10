@@ -89,7 +89,23 @@ public class StockMarketModSettings extends ModSettings {
     {
         public final Setting<Integer> VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE = registerSetting("VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE", 1000, Integer.class); // Starting balance for new players
         public final Setting<ItemStack> CURRENCY = registerSetting("CURRENCY", BankSystemItems.MONEY.get().getDefaultInstance(), ItemStack.class, new ItemStackJsonParser()); // Starting balance for new players
-        public final Setting<Long> CANDLE_TIME = registerSetting("CANDLE_TIME", 60000L, Long.class); // Time interval of candle sticks in ms
+        public final Setting<Long> CANDLE_TIME = registerSetting("CANDLE_TIME", 60000L, Long.class); // Time interval of candle sticks in ms, real-time mode only
+
+        /**
+         * T-218: candle timebase. {@code false} (default) = one stored candle per
+         * {@link #CANDLE_TIME} of wall-clock time. {@code true} = one stored candle per in-game
+         * hour (1000 ticks) of the master overworld, rotating every 1000 ticks when the daylight
+         * cycle is frozen; charts then offer 1h / 4h / 1D / 1W game buckets. Independent of
+         * {@link #TRADING_HOURS_USE_REAL_TIME}. Both timestamps are stored on every candle, so
+         * switching keeps all history.
+         * <p>
+         * Restart-required: read once by {@code ServerMarketManager.isCandleUseGameTime()} and
+         * sent to clients on join (ServerTimeRequest).
+         * <p>
+         * Slave-propagation: NOT needed. Only the master rotates and serves candles; slave
+         * players receive the flag from the master through ServerTimeRequest.
+         */
+        public final Setting<Boolean> CANDLE_USE_GAME_TIME = registerSetting("CANDLE_USE_GAME_TIME", false, Boolean.class);
 
         /**
          * Server-side hard cap on the number of candles returned by a single

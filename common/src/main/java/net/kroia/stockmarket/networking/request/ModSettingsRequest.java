@@ -306,6 +306,10 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   evaluated only on the master (ServerMarketManager.update reads the
         //   setting live every tick). Slaves/clients receive the resulting market
         //   state + clock via the market price stream — no propagation needed.
+        // * ServerMarket.CANDLE_USE_GAME_TIME (T-218): restart-required, read once by the master's
+        //   ServerMarketManager (candle rotation + history aggregation). Slaves never rotate or
+        //   serve candles; their players get the flag from the master via ServerTimeRequest on
+        //   join — no propagation needed.
         // * ServerMarket.TRADE_COOLDOWN_MS (T-166): read live only in the master-side
         //   order handlers (CreateOrderRequest / PlaceInterMarketOrderRequest
         //   .handleOnMasterServer); slave players' orders are routed to the master,

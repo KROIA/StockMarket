@@ -5,6 +5,7 @@ import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.PriceHistoryData.Candle;
@@ -49,6 +50,8 @@ public class PriceHistoryTestSuite extends TestSuite {
         addTest("floor_time_rounds_down", this::test_floorTime_roundsDown);
         addTest("floor_time_exact", this::test_floorTime_exact);
         addTest("from_sql_data_empty_list", this::test_fromSqlData_emptyList);
+        // Game-time candles (T-218)
+        addTest("gameCandle_rotation", this::test_gameCandle_rotation);
     }
 
     // --- Candle Operations ---
@@ -362,5 +365,31 @@ public class PriceHistoryTestSuite extends TestSuite {
     private TestResult test_fromSqlData_emptyList() {
         PriceHistoryData result = PriceHistoryData.fromSqlData(new ArrayList<>(), 100, SCALE_FACTOR);
         return assertNull("fromSqlData with empty list should return null", result);
+    }
+
+    // --- Game-time candles (T-218) ---
+
+    /**
+     * ServerMarketManager.shouldRotateGameCandle: rotates on an in-game hour change (also
+     * backwards after /time set) and after 1000 ticks when the daylight cycle is frozen.
+     */
+    private TestResult test_gameCandle_rotation() {
+        TestResult r = assertFalse("same hour, 500 ticks: no rotation",
+                ServerMarketManager.shouldRotateGameCandle(1000L, 1500L, 500L));
+        if (!r.passed()) return r;
+        r = assertTrue("hour 1 -> 2 rotates", ServerMarketManager.shouldRotateGameCandle(1500L, 2000L, 500L));
+        if (!r.passed()) return r;
+        r = assertTrue("/time set backwards rotates", ServerMarketManager.shouldRotateGameCandle(5500L, 1200L, 3L));
+        if (!r.passed()) return r;
+        r = assertFalse("frozen daylight, 999 ticks: no rotation",
+                ServerMarketManager.shouldRotateGameCandle(6000L, 6000L, 999L));
+        if (!r.passed()) return r;
+        r = assertTrue("frozen daylight, 1000 ticks rotates",
+                ServerMarketManager.shouldRotateGameCandle(6000L, 6000L, 1000L));
+        if (!r.passed()) return r;
+        r = assertTrue("no overworld (-1), 1000 ticks rotates",
+                ServerMarketManager.shouldRotateGameCandle(-1L, -1L, 1000L));
+        if (!r.passed()) return r;
+        return pass("game candle rotation rules hold");
     }
 }

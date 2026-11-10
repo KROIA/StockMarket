@@ -61,6 +61,16 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             new PriorityQueue<>(Comparator.comparingLong(InterMarketOrder::getTime));
 
     private long candleSaveTimer_lastMs = (System.currentTimeMillis()/60000)*60000;
+
+    /** T-218: game ticks per in-game hour, the length of one stored candle in game-time mode. */
+    public static final long GAME_CANDLE_TICKS = 1000L;
+    /** T-218: cached CANDLE_USE_GAME_TIME (restart-required), read on first use; null = not read yet. */
+    private @Nullable Boolean candleUseGameTime = null;
+    /** T-218: overworld day time at the last game-time candle rotation; MIN_VALUE = not initialised. */
+    private long gameCandleLastDayTime = Long.MIN_VALUE;
+    /** T-218: server ticks since the last game-time candle rotation (frozen daylight fallback). */
+    private long gameCandleTicks = 0;
+
     private final Random random = new Random();
     private ItemID tradingCurrencyID = null;
 
@@ -770,12 +780,32 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             logOpenOrdersToLedger(OrderLedger.PERIODIC);
         }
 
-        long time = System.currentTimeMillis();
-        long candleSaveIntervalMs = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get();
-        if(time - candleSaveTimer_lastMs > candleSaveIntervalMs)
+        if (isCandleUseGameTime())
         {
-            candleSaveTimer_lastMs = time;
-            BACKEND_INSTANCES.DATA_MANAGER.savePriceCandlesToSQL();
+            // T-218: one candle per in-game hour. The first tick only initialises the clock.
+            long dayTime = overworldDayTime(UtilitiesPlatform.getServer());
+            gameCandleTicks++;
+            if (gameCandleLastDayTime == Long.MIN_VALUE)
+            {
+                gameCandleLastDayTime = dayTime;
+                gameCandleTicks = 0;
+            }
+            else if (shouldRotateGameCandle(gameCandleLastDayTime, dayTime, gameCandleTicks))
+            {
+                gameCandleLastDayTime = dayTime;
+                gameCandleTicks = 0;
+                BACKEND_INSTANCES.DATA_MANAGER.savePriceCandlesToSQL();
+            }
+        }
+        else
+        {
+            long time = System.currentTimeMillis();
+            long candleSaveIntervalMs = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get();
+            if (time - candleSaveTimer_lastMs > candleSaveIntervalMs)
+            {
+                candleSaveTimer_lastMs = time;
+                BACKEND_INSTANCES.DATA_MANAGER.savePriceCandlesToSQL();
+            }
         }
 
         // Trading hours: flip open/closed only at the END of the tick, after all order buffers
@@ -843,6 +873,36 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             return MarketPriceStruct.NO_GAME_TIME;
         return server.overworld().getDayTime(); // mc<=1.21.11
         //return server.overworld().getOverworldClockTime(); // mc>=26.1
+    }
+
+    /**
+     * T-218: the candle timebase, read once from {@code CANDLE_USE_GAME_TIME} and cached for the
+     * server lifetime (restart-required). Read lazily because this manager is created before the
+     * settings file is loaded.
+     *
+     * @return {@code true} if candles rotate on in-game hours, {@code false} for wall-clock time
+     */
+    public boolean isCandleUseGameTime()
+    {
+        if (candleUseGameTime == null)
+            candleUseGameTime = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_USE_GAME_TIME.get();
+        return candleUseGameTime;
+    }
+
+    /**
+     * T-218: whether the live game-time candle must be closed. True when the in-game hour
+     * changed (also when it jumped backwards through /time set) or when
+     * {@link #GAME_CANDLE_TICKS} server ticks passed without that (daylight cycle frozen).
+     *
+     * @param lastDayTime        overworld day time at the last rotation
+     * @param dayTime            current overworld day time
+     * @param ticksSinceRotation server ticks since the last rotation
+     * @return {@code true} to rotate now
+     */
+    public static boolean shouldRotateGameCandle(long lastDayTime, long dayTime, long ticksSinceRotation)
+    {
+        return Math.floorDiv(lastDayTime, GAME_CANDLE_TICKS) != Math.floorDiv(dayTime, GAME_CANDLE_TICKS)
+                || ticksSinceRotation >= GAME_CANDLE_TICKS;
     }
 
 

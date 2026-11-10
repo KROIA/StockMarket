@@ -56,6 +56,7 @@ public class ModSettingsTestSuite extends TestSuite {
         source.UTILITIES.LOGGING_ENABLE_INFO.set(false);
         source.MARKET.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE.set(555);
         source.MARKET.CANDLE_TIME.set(120_000L);
+        source.MARKET.CANDLE_USE_GAME_TIME.set(true);
         source.MARKET.CURRENCY.set(new ItemStack(Items.DIAMOND));
         source.VILLAGER_TRADING.ENABLED.set(false);
         source.VILLAGER_TRADING.PRICE_REFRESH_INTERVAL_MINUTES.set(42L);
@@ -77,6 +78,11 @@ public class ModSettingsTestSuite extends TestSuite {
         r = assertEquals("VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE survives round-trip", 555, (int) target.MARKET.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE.get());
         if (!r.passed()) return r;
         r = assertEquals("CANDLE_TIME survives round-trip", 120_000L, (long) target.MARKET.CANDLE_TIME.get());
+        if (!r.passed()) return r;
+        // T-218: default is real time; the in-game timebase flag survives the round-trip.
+        r = assertFalse("CANDLE_USE_GAME_TIME defaults to false", new StockMarketModSettings().MARKET.CANDLE_USE_GAME_TIME.get());
+        if (!r.passed()) return r;
+        r = assertTrue("CANDLE_USE_GAME_TIME survives round-trip", target.MARKET.CANDLE_USE_GAME_TIME.get());
         if (!r.passed()) return r;
         r = assertTrue("CURRENCY item survives round-trip",
                 ItemStack.isSameItemSameComponents(target.MARKET.CURRENCY.get(), new ItemStack(Items.DIAMOND)));
