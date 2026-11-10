@@ -21,12 +21,9 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
-import com.google.gson.reflect.TypeToken;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -59,15 +56,12 @@ public class DataManager extends DataPersistence {
     private static final String NEWS_REGISTRY_FILE = "registry.nbt";
     private static final String NEWS_PICTURES_FOLDER = "pictures";
     private static final String SETTINGS_FILE = "settings.json";
-    private static final String STARTER_KIT_FILE = "starterkit_claims.json";
     private static final String PRESET_DIR = "StockMarket/market_presets";
 
     public static Path getPresetPath() {
         return Platform.getConfigFolder().resolve(PRESET_DIR);
     }
 
-
-    private StarterKitData starterKitData = new StarterKitData();
 
     /**
      * Master-side news history (T-072). The DataManager only exists on the master
@@ -106,10 +100,6 @@ public class DataManager extends DataPersistence {
         setLogger(this::error, this::error, this::info, this::warn);
     }
 
-    public StarterKitData getStarterKitData() {
-        return starterKitData;
-    }
-
     /** @return the master-side news history store (see {@link #newsHistory}) */
     public NewsHistory getNewsHistory() {
         return newsHistory;
@@ -143,7 +133,6 @@ public class DataManager extends DataPersistence {
         success &= saveMarketManager();
         success &= savePluginManager();
         success &= savePresets();
-        success &= saveStarterKit();
         success &= saveNews();
 
         if(!success)
@@ -164,7 +153,6 @@ public class DataManager extends DataPersistence {
         success &= loadMarketManager();
         success &= loadPluginManager();
         success &= loadPresets();
-        success &= loadStarterKit();
         success &= loadNews();
 
         if(!success)
@@ -409,40 +397,8 @@ public class DataManager extends DataPersistence {
         return true;
     }
 
-    // Starter kit claim persistence
-    public boolean saveStarterKit()
-    {
-        Path path = getAbsoluteSavePath(STARTER_KIT_FILE);
-        if(!saveAsJson(starterKitData.getClaimedPlayerUUIDs(), path))
-        {
-            error("saveStarterKit(): Failed to save starter kit claims to Json file");
-            return false;
-        }
-        return true;
-    }
-    private boolean loadStarterKit()
-    {
-        Path path = getAbsoluteSavePath(STARTER_KIT_FILE);
-        if(!Files.exists(path))
-        {
-            // First run — no claims file yet, keep the empty set
-            return true;
-        }
-        HashSet<String> claimed = loadFromJson(path, new TypeToken<HashSet<String>>(){}.getType());
-        if(claimed != null)
-        {
-            starterKitData.setClaimedPlayerUUIDs(claimed);
-        }
-        else
-        {
-            error("loadStarterKit(): Failed to load starter kit claims from Json file");
-            return false;
-        }
-        return true;
-    }
-
     /**
-     * News persistence (T-072/T-096/T-110, pattern: {@link #saveStarterKit}).
+     * News persistence (T-072/T-096/T-110).
      * Writes the world-event registry to
      * {@code world/data/StockMarket/News/registry.nbt}. Since T-110 the history is
      * stored as append-persisted chunk files under

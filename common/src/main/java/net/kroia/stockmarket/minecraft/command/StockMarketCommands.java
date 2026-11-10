@@ -190,19 +190,6 @@ public class StockMarketCommands {
                             return Command.SINGLE_SUCCESS;
                         })
                 )
-                // Dev-only: give a one-time starter kit of items for testing the stock market
-                .then(Commands.literal("starterkit")
-                        .requires(source -> StockMarketMod.ENABLE_DEV_FEATURES)
-                        .executes(context -> {
-                            CommandSourceStack source = context.getSource();
-                            ServerPlayer player = source.getPlayerOrException();
-                            if (isMaster())
-                                masterHandler().stockmarket_starterKit(player.getUUID());
-                            else
-                                player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
-                            return Command.SINGLE_SUCCESS;
-                        })
-                )
                 // /stockmarket preset add <category> [name]
                 // Captures the executing player's MAIN-HAND ItemStack as a new market preset.
                 // Unlike the PresetEditorTab item picker (which builds stacks from the item

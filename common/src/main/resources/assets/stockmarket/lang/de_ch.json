@@ -464,8 +464,6 @@
   "message.stockmarket.command_player_not_found": "Kei UUID für Spieler gfunde: %s",
   "message.stockmarket.command_admin_mode_enabled": "StockMarket-Adminmodus II für Spieler: %s",
   "message.stockmarket.command_admin_mode_disabled": "StockMarket-Adminmodus US für Spieler: %s",
-  "message.stockmarket.command_starter_kit_already_claimed": "Du hesch s Starterkit scho abgholt!",
-  "message.stockmarket.command_starter_kit_claimed": "Starterkit abgholt! Lueg i dis Inventar.",
   "message.stockmarket.command_async_failed": "Befehlsusfüehrig für Spieler %s fehlgschlage",
   "message.stockmarket.command_async_result_failure": "Befehl %s vom Spieler %s fehlgschlage",
   "message.stockmarket.command_master_only": "Dä Befehl cha nur uf em Master-Server bruucht wärde!",

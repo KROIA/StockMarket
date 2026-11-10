@@ -615,7 +615,7 @@ With player flow influence enabled (NetFlowPlugin), it shifts with the faded net
 ---
 
 ## Development
-Dev-only code (in-game unit tests, the `devTestScreen`, `exportrecipes` and `starterkit` commands, debug performance logging) is compiled only when the Gradle property `enable_dev_features` is `true`. It defaults to `false` in `gradle.properties` (keep it that way in commits); enable it for a local build with:
+Dev-only code (in-game unit tests, the `devTestScreen` and `exportrecipes` commands, debug performance logging) is compiled only when the Gradle property `enable_dev_features` is `true`. It defaults to `false` in `gradle.properties` (keep it that way in commits); enable it for a local build with:
 
 ```
 ./gradlew build -Penable_dev_features=true

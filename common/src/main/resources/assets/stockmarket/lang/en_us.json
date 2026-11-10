@@ -464,8 +464,6 @@
   "message.stockmarket.command_player_not_found": "No UUID found for player: %s",
   "message.stockmarket.command_admin_mode_enabled": "StockMarket admin mode ON for player: %s",
   "message.stockmarket.command_admin_mode_disabled": "StockMarket admin mode OFF for player: %s",
-  "message.stockmarket.command_starter_kit_already_claimed": "You have already claimed the starter kit!",
-  "message.stockmarket.command_starter_kit_claimed": "Starter kit claimed! Check your inventory.",
   "message.stockmarket.command_async_failed": "Command execution failed for player: %s",
   "message.stockmarket.command_async_result_failure": "Command %s from player %s failed",
   "message.stockmarket.command_master_only": "This command can only be used on the master server!",
