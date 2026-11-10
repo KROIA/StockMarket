@@ -348,6 +348,12 @@ public class InterMarketExecutor
         long actualSellFilled = -sellOrder.getFilledVolume();
         long actualDollarYield = sellOrder.getTransferredMoney();
 
+        // #97: the sale is settled now (items withdrawn, proceeds in the money bank), so record it on the
+        // inter-market order before any early return below. Otherwise a cancel after the sale loses it
+        // (no ledger row, history record or Discord post) and unlocks the full sell volume instead of
+        // only the unsold rest.
+        order.getSellOrder().edit(sellOrder.getFilledVolume(), sellOrder.getTransferredMoney());
+
         if (actualSellFilled <= 0 || actualDollarYield <= 0)
         {
             logWarn("Sell leg filled 0 volume or yielded 0 dollars, canceling buy leg");
@@ -428,15 +434,9 @@ public class InterMarketExecutor
         long actualBuyFilled = buyOrder.getFilledVolume();      // positive for buys
         long actualDollarSpent = -buyOrder.getTransferredMoney(); // transferredMoney is negative for buys
 
-        // Update the inner orders of the InterMarketOrder to reflect actual fills
-        Order imoBuyOrder = order.getBuyOrder();
-        Order imoSellOrder = order.getSellOrder();
-
-        // Edit the buy leg: add filled volume and transferred money
-        imoBuyOrder.edit(actualBuyFilled, buyOrder.getTransferredMoney());
-
-        // Edit the sell leg: add filled volume (negative) and transferred money (positive)
-        imoSellOrder.edit(sellOrder.getFilledVolume(), sellOrder.getTransferredMoney());
+        // Update the buy leg of the InterMarketOrder to reflect actual fills
+        // (the sell leg was recorded right after the sale, see #97 above)
+        order.getBuyOrder().edit(actualBuyFilled, buyOrder.getTransferredMoney());
 
         // No dust deposit needed here — commitSell already deposited the sell
         // proceeds and commitBuy already withdrew the buy cost, so the net

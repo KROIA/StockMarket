@@ -5,11 +5,15 @@ import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.data.filter.UUIDFilter;
+import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
@@ -17,7 +21,12 @@ import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.minecraft.nbt.CompoundTag;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 /**
@@ -189,6 +198,9 @@ public class InterMarketExecutorTestSuite extends TestSuite {
         addTest("N3_limit_imo_partial_fill_cancel_conserves", this::test_N3_limit_imo_partial_fill_cancel_conserves);
         addTest("N4_limit_imo_unfilled_cancel_conserves", this::test_N4_limit_imo_unfilled_cancel_conserves);
         addTest("N5_limit_imo_partial_fill_maintenance_cancel_conserves", this::test_N5_limit_imo_partial_fill_maintenance_cancel_conserves);
+
+        // Category O: market order stopped after its sale (#97)
+        addTest("O1_market_imo_stopped_after_sale_records_it", this::test_O1_market_imo_stopped_after_sale_records_it);
     }
 
     @Override
@@ -5181,6 +5193,88 @@ public class InterMarketExecutorTestSuite extends TestSuite {
             return fail("Exception: " + e.getMessage());
         } finally {
             marketA.setMaintenance(false);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Category O: market order stopped after its sale (#97)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * #97: a market inter-market order whose sell leg filled but whose buy leg cannot run must still record the
+     * sale. The resting buyer on A bids for 10 A but can only pay for 3. The depth simulation ignores buyer funds,
+     * so it plans with 990 money, enough for 1 raw unit of B at 50000. The real sale yields 297, the post-sell buy
+     * simulation finds 0 B, and the executor returns CANCELED ("Post-sell buy simulation yielded 0 items").
+     * The order must still show the sale, unlock only the unsold 7 A (the own resting sell keeps its reservation),
+     * save one history record and post one market-exchange with bought 0. Master only (history and Discord).
+     */
+    private TestResult test_O1_market_imo_stopped_after_sale_records_it() {
+        if (BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null || BACKEND_INSTANCES.DATABASE_MANAGER == null)
+            return skip("master only (order history and Discord feed)");
+        Setting<Boolean> discord = BACKEND_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.DISCORD_ENABLED;
+        boolean discordBefore = discord.get();
+        BiConsumer<String, Map<String, String>> sinkBefore = StockMarketDiscord.sink;
+        List<Map.Entry<String, Map<String, String>>> posts = new ArrayList<>();
+        try {
+            resetState(100, 80, p -> 0f, p -> 0f);
+            placeCounterpartyLimitOrder(marketA, 10 * scaleFactor, 99);
+            IServerBank cpMoney = counterpartyAccount.getBank(moneyID);
+            unlockAll(cpMoney);
+            cpMoney.setBalance(297); // pays for 3 of the 10 A it bids for (setBalance sets the total)
+            cpMoney.lockAmount(297);
+            placeCounterpartyLimitOrder(marketB, -scaleFactor, 50000); // 1 raw unit of B costs 500
+            long ownA = placeOwnLimitOrder(marketA, -5 * scaleFactor, 200); // another order's A reservation
+            IServerBank aBank = bankAccount.getBank(itemA_ID);
+            long totalA = aBank.getTotalBalance();
+
+            // buyVolume 0 = sell-direction market order, like PlaceInterMarketOrderRequest
+            InterMarketOrder imo = new InterMarketOrder(itemB_ID, itemA_ID, Order.Type.MARKET,
+                    0, marketB.getCurrentMarketPrice(), 10 * scaleFactor, marketA.getCurrentMarketPrice(),
+                    System.currentTimeMillis(), testPlayerUUID, bankAccountNr, 0);
+            StockMarketDiscord.sink = (type, v) -> {
+                if (testPlayerUUID.toString().equals(v.get("player_uuid")))
+                    synchronized (posts) { posts.add(Map.entry(type, v)); }
+            };
+            discord.set(true);
+            if (!enqueueIMO(imo))
+                return fail("InterMarketOrder was not enqueued");
+            marketManager.update();
+            if (isPending(imo))
+                return fail("Market inter-market order should be terminal after one tick");
+
+            long sold = -imo.getSellOrder().getFilledVolume();
+            if (sold != 3 * scaleFactor || imo.getSellOrder().getTransferredMoney() != 297
+                    || imo.getBuyOrder().getFilledVolume() != 0)
+                return fail("Order should show 3 A sold for 297 and nothing bought: sold " + sold + ", money "
+                        + imo.getSellOrder().getTransferredMoney() + ", bought " + imo.getBuyOrder().getFilledVolume());
+            if (aBank.getTotalBalance() != totalA - sold)
+                return fail("A total should be " + (totalA - sold) + ", got " + aBank.getTotalBalance());
+            if (aBank.getLockedBalance() != ownA)
+                return fail("A locked should be the own resting sell's " + ownA + " (nothing stranded, nothing freed), got "
+                        + aBank.getLockedBalance());
+
+            List<Map.Entry<String, Map<String, String>>> got;
+            synchronized (posts) { got = new ArrayList<>(posts); }
+            if (got.size() != 1 || !"market-exchange".equals(got.get(0).getKey()))
+                return fail("Expected 1 market-exchange post, got " + got);
+            Map<String, String> v = got.get(0).getValue();
+            if (!"3".equals(v.get("sold_amount")) || !"0".equals(v.get("bought_amount")) || !"2.97".equals(v.get("leftover")))
+                return fail("Exchange values " + v);
+
+            // The history record is written by the db-worker: drain earlier suites' backlog, then read.
+            if (!pumpUntil(TestFixture.dbBarrier(BACKEND_INSTANCES.DATABASE_MANAGER)::isDone, TestFixture.DB_DRAIN_TIMEOUT_MS))
+                return fail("db-worker queue did not drain within " + TestFixture.DB_DRAIN_TIMEOUT_MS + " ms");
+            List<OrderRecordStruct> records = await(BACKEND_INSTANCES.ORDER_RECORD_MANAGER.getHistory(Optional.empty(),
+                    Optional.empty(), Optional.of(new UUIDFilter(testPlayerUUID)), Optional.empty()), 5000).stream()
+                    .filter(r -> imo.getInterMarketGroupID().equals(r.interMarketGroupID())).toList();
+            if (records.size() != 1 || records.get(0).amount() != -sold)
+                return fail("Expected 1 history record of the sale (amount " + -sold + "), got " + records);
+            return pass("Sold 3 A for 297, bought 0; only the unsold 7 A unlocked, 1 history record, 1 market-exchange");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            discord.set(discordBefore);
+            StockMarketDiscord.sink = sinkBefore;
         }
     }
 }
