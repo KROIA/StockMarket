@@ -8,7 +8,6 @@
       {"name": "Item-ID", "value": "{item_id}", "inline": true},
       {"name": "Menge", "value": "{amount}", "inline": true},
       {"name": "Ø Preis", "value": "{price}", "inline": true},
-      {"name": "Marktübergreifende Gruppe", "value": "{interMarketGroup}", "inline": false},
       {"name": "Zeit", "value": "{time}", "inline": false}
     ]
   },
@@ -21,6 +20,24 @@
       {"name": "Item-ID", "value": "{item_id}", "inline": true},
       {"name": "Menge", "value": "{amount}", "inline": true},
       {"name": "Ø Preis", "value": "{price}", "inline": true},
+      {"name": "Zeit", "value": "{time}", "inline": false}
+    ]
+  },
+  "market-exchange": {
+    "title": "StockMarket-Tausch",
+    "color": 3447003,
+    "fields": [
+      {"name": "Spieler", "value": "{player}", "inline": true},
+      {"name": "Restgeld", "value": "{leftover}", "inline": true},
+      {"name": "Währung", "value": "{currency}", "inline": true},
+      {"name": "Verkauft", "value": "{sold_item}", "inline": true},
+      {"name": "Verkaufte Menge", "value": "{sold_amount}", "inline": true},
+      {"name": "Ø Verkaufspreis", "value": "{sold_price}", "inline": true},
+      {"name": "Gekauft", "value": "{bought_item}", "inline": true},
+      {"name": "Gekaufte Menge", "value": "{bought_amount}", "inline": true},
+      {"name": "Ø Kaufpreis", "value": "{bought_price}", "inline": true},
+      {"name": "Item-ID verkauft", "value": "{sold_item_id}", "inline": true},
+      {"name": "Item-ID gekauft", "value": "{bought_item_id}", "inline": true},
       {"name": "Marktübergreifende Gruppe", "value": "{interMarketGroup}", "inline": false},
       {"name": "Zeit", "value": "{time}", "inline": false}
     ]

@@ -8,7 +8,6 @@
       {"name": "Item ID", "value": "{item_id}", "inline": true},
       {"name": "Amount", "value": "{amount}", "inline": true},
       {"name": "Avg. price", "value": "{price}", "inline": true},
-      {"name": "Inter-market group", "value": "{interMarketGroup}", "inline": false},
       {"name": "Time", "value": "{time}", "inline": false}
     ]
   },
@@ -21,6 +20,24 @@
       {"name": "Item ID", "value": "{item_id}", "inline": true},
       {"name": "Amount", "value": "{amount}", "inline": true},
       {"name": "Avg. price", "value": "{price}", "inline": true},
+      {"name": "Time", "value": "{time}", "inline": false}
+    ]
+  },
+  "market-exchange": {
+    "title": "Market exchange",
+    "color": 3447003,
+    "fields": [
+      {"name": "Player", "value": "{player}", "inline": true},
+      {"name": "Leftover", "value": "{leftover}", "inline": true},
+      {"name": "Currency", "value": "{currency}", "inline": true},
+      {"name": "Sold item", "value": "{sold_item}", "inline": true},
+      {"name": "Sold amount", "value": "{sold_amount}", "inline": true},
+      {"name": "Sold avg. price", "value": "{sold_price}", "inline": true},
+      {"name": "Bought item", "value": "{bought_item}", "inline": true},
+      {"name": "Bought amount", "value": "{bought_amount}", "inline": true},
+      {"name": "Bought avg. price", "value": "{bought_price}", "inline": true},
+      {"name": "Sold item ID", "value": "{sold_item_id}", "inline": true},
+      {"name": "Bought item ID", "value": "{bought_item_id}", "inline": true},
       {"name": "Inter-market group", "value": "{interMarketGroup}", "inline": false},
       {"name": "Time", "value": "{time}", "inline": false}
     ]

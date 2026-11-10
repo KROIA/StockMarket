@@ -155,12 +155,14 @@ StockMarket can post player trades and trading alerts to Discord channels throug
 
 | Type | Posted when | Fields |
 |---|---|---|
-| `market-buy` | A player's buy order is finished: fully filled, or canceled after some fills. Inter-market orders post one message per leg. | Player, Item, Item ID, Amount, Avg. price, Inter-market group (inter-market legs only), Time |
+| `market-buy` | A player's buy order against money is finished: fully filled, or canceled after some fills. | Player, Item, Item ID, Amount, Avg. price, Time |
 | `market-sell` | The same for sell orders. | Same as `market-buy` |
+| `market-exchange` | A player's inter-market order (item for item) is finished: fully filled, or canceled after some fills. One message per order, never one per leg. A partial fill shows what happened, e.g. sold 64, bought 0. | Player, Leftover, Currency, Sold item, Sold amount, Sold avg. price, Bought item, Bought amount, Bought avg. price, Sold item ID, Bought item ID, Inter-market group, Time |
 | `market-alert` | A trading alert is raised, e.g. the profit alert. | Alert text, Time |
 
 * Bot orders and orders without any fill are never posted.
-* `minAmount` filters trades by the traded item quantity (`Amount`).
+* `minAmount` filters trades by item quantity. For `market-buy` and `market-sell` this is the traded quantity (`Amount`). For `market-exchange` it is the quantity the player entered in the order: the amount to sell when the player gave only that, otherwise the amount to buy. For a limit order that gave the amount to sell, this is the buy amount at the limit rate.
+* `Leftover` is the money from the sale that was not spent on the purchase. It goes back to the player's account.
 * The embed language follows `language` in `stockmarket.json` (`en_us`, `de_de`, `de_ch`, `zh_cn`). A type can override `title`, `color` and `fields`.
 * Webhook URLs contain a secret token. They are never logged or shown in game; keep `webhooks.json` private.
 * Alert texts name the player and the player's UUID. Route `market-alert` to a channel that only admins can read.
@@ -184,4 +186,11 @@ To protect players' privacy, the default trade messages leave out the bank accou
 }
 ```
 
-Do the same for `market-sell`, then run `/modutilities discord reload`. Available values: `{player}`, `{player_uuid}`, `{account}` (`#<number>`), `{item}`, `{item_id}`, `{amount}`, `{price}`, `{interMarketGroup}`, `{time}`. A field whose value is empty is left out. Your `fields` list is kept when StockMarket updates its default templates.
+Do the same for the other trade types, then run `/modutilities discord reload`. A field whose value is empty is left out. All numbers are plain numbers with a `.` as the decimal point, e.g. `2.5`.
+
+Available values:
+
+* `market-buy` and `market-sell`: `{player}`, `{player_uuid}`, `{account}` (`#<number>`), `{item}`, `{item_id}`, `{amount}`, `{price}` (average), `{time}`.
+* `market-exchange`: `{player}`, `{player_uuid}`, `{account}`, `{sold_item}`, `{sold_item_id}`, `{sold_amount}`, `{sold_price}` (average), `{bought_item}`, `{bought_item_id}`, `{bought_amount}`, `{bought_price}` (average), `{leftover}`, `{currency}` (the currency's name), `{amount}` (the quantity the player entered, see `minAmount` above), `{interMarketGroup}`, `{time}`.
+
+Your `fields` list is kept when StockMarket updates its default templates.

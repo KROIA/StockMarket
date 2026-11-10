@@ -228,7 +228,7 @@
   "gui.stockmarket.mod_settings_screen.setting.Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION": "与 LuckPerms 同步管理员标记",
   "gui.stockmarket.mod_settings_screen.setting.Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION.description": "在 StockMarket 管理员标记与 LuckPerms 节点 stockmarket.admin\n之间双向同步。/stockmarket op|deop 也会写入该节点；\nLuckPerms 的更改会更新该标记。\n未安装 LuckPerms 时无效。",
   "gui.stockmarket.mod_settings_screen.setting.Integrations.DISCORD_ENABLED": "Discord 推送（交易与警报）",
-  "gui.stockmarket.mod_settings_screen.setting.Integrations.DISCORD_ENABLED.description": "将玩家交易（market-buy、market-sell）和管理员警报\n（market-alert）发送到 Discord Webhook。仅主服务器。\n在 config/modutilities/discord/stockmarket.json 中\n为各类型指定 Webhook，然后执行 /modutilities discord reload。\n所有类型默认禁用。",
+  "gui.stockmarket.mod_settings_screen.setting.Integrations.DISCORD_ENABLED.description": "将玩家交易（market-buy、market-sell、market-exchange）\n和管理员警报（market-alert）发送到 Discord Webhook。\n仅主服务器。\n在 config/modutilities/discord/stockmarket.json 中\n为各类型指定 Webhook，然后执行 /modutilities discord reload。\n所有类型默认禁用。",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE": "订单簿数组长度",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE.tooltip": "市场虚拟订单簿价格数组的长度。\n只有新建的市场会使用修改后的值；\n已有市场保持原长度，直到服务器重启。\n范围：100 - 1000000。",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CURRENCY": "交易货币",

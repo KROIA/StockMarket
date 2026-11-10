@@ -8,7 +8,6 @@
       {"name": "物品 ID", "value": "{item_id}", "inline": true},
       {"name": "数量", "value": "{amount}", "inline": true},
       {"name": "平均价格", "value": "{price}", "inline": true},
-      {"name": "跨市场组", "value": "{interMarketGroup}", "inline": false},
       {"name": "时间", "value": "{time}", "inline": false}
     ]
   },
@@ -21,6 +20,24 @@
       {"name": "物品 ID", "value": "{item_id}", "inline": true},
       {"name": "数量", "value": "{amount}", "inline": true},
       {"name": "平均价格", "value": "{price}", "inline": true},
+      {"name": "时间", "value": "{time}", "inline": false}
+    ]
+  },
+  "market-exchange": {
+    "title": "跨市场兑换",
+    "color": 3447003,
+    "fields": [
+      {"name": "玩家", "value": "{player}", "inline": true},
+      {"name": "剩余资金", "value": "{leftover}", "inline": true},
+      {"name": "货币", "value": "{currency}", "inline": true},
+      {"name": "卖出物品", "value": "{sold_item}", "inline": true},
+      {"name": "卖出数量", "value": "{sold_amount}", "inline": true},
+      {"name": "卖出均价", "value": "{sold_price}", "inline": true},
+      {"name": "买入物品", "value": "{bought_item}", "inline": true},
+      {"name": "买入数量", "value": "{bought_amount}", "inline": true},
+      {"name": "买入均价", "value": "{bought_price}", "inline": true},
+      {"name": "卖出物品 ID", "value": "{sold_item_id}", "inline": true},
+      {"name": "买入物品 ID", "value": "{bought_item_id}", "inline": true},
       {"name": "跨市场组", "value": "{interMarketGroup}", "inline": false},
       {"name": "时间", "value": "{time}", "inline": false}
     ]

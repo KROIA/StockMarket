@@ -1060,10 +1060,10 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     {
         if (order.isBotOrder()) return;
 
+        // T-228: one Discord message for the whole order (sold, bought, leftover), as both legs are final here
+        // (master, if enabled); skips orders where neither leg filled itself.
+        StockMarketDiscord.postExchange(order, getTradingCurrencyID());
         InterMarketOrder.HistoricalRecordPair records = order.getHistoricalRecord();
-        // T-217: one Discord post per leg with fills (master, if enabled); skips null and unfilled legs itself.
-        StockMarketDiscord.postOrder(records.buyRecord());
-        StockMarketDiscord.postOrder(records.sellRecord());
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
 
         // Save buy-leg record if it has fills

@@ -46,9 +46,9 @@ import java.util.function.Supplier;
  * <p>
  * Covers the generated config file, the default templates (no account or UUID fields), a player buy and sell
  * through the real order-finished path (resting order with fills, canceled via {@code ServerMarket.cancelOrder}
- * -> {@code saveOrderRecord}), both legs of an inter-market order (canceled via
- * {@code ServerMarketManager.cancelInterMarketOrder} -> {@code saveInterMarketOrderRecord}), unfilled and bot
- * orders, the live switch, and alerts through {@link TradeAlerts#raise}.
+ * -> {@code saveOrderRecord}), an inter-market order as one market-exchange post, fully and partially filled
+ * (canceled via {@code ServerMarketManager.cancelInterMarketOrder} -> {@code saveInterMarketOrderRecord}), unfilled
+ * and bot orders, the live switch, and alerts through {@link TradeAlerts#raise}.
  * <p>
  * <b>Server type:</b> master only (the backend is only set on the master; a slave never registers the feed), except
  * the template check, which runs everywhere. Scratch markets, account and user; the order history rows of the
@@ -94,7 +94,8 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         addTest("player_buy_posts_values", () -> master(this::playerBuy));
         addTest("player_sell_posts_sell", () -> master(this::playerSell));
         addTest("unfilled_and_bot_post_nothing", () -> master(this::unfilledAndBot));
-        addTest("inter_market_posts_one_per_leg", () -> master(this::interMarketLegs));
+        addTest("inter_market_posts_one_exchange", () -> master(this::interMarketExchange));
+        addTest("inter_market_partial_fill_posts_what_filled", () -> master(this::interMarketPartialFill));
         addTest("inter_market_unfilled_and_bot_post_nothing", () -> master(this::interMarketUnfilledAndBot));
         addTest("switch_off_posts_nothing", () -> master(this::switchOff));
         addTest("alert_posts_message", () -> master(this::alert));
@@ -149,7 +150,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
 
     // ------------------------------------------------------------------ tests
 
-    /** The master start registered the feed: stockmarket.json lists the three types. */
+    /** The master start registered the feed: stockmarket.json lists every type. */
     private TestResult configFile() {
         Path file = Platform.getConfigFolder().resolve("modutilities").resolve("discord").resolve(StockMarketMod.MOD_ID + ".json");
         try {
@@ -164,11 +165,15 @@ public class DiscordIntegrationTestSuite extends TestSuite {
     }
 
     /**
-     * The shipped market-buy / market-sell templates of every language show no account number and no UUID (an
-     * admin adds them via {@code fields} in stockmarket.json), but keep every other field.
+     * The shipped market-buy / market-sell / market-exchange templates of every language show no account number and
+     * no UUID (an admin adds them via {@code fields} in stockmarket.json), but keep every other field.
      */
     private TestResult defaultTemplates() {
-        List<String> required = List.of("{player}", "{item}", "{item_id}", "{amount}", "{price}", "{interMarketGroup}", "{time}");
+        List<String> trade = List.of("{player}", "{item}", "{item_id}", "{amount}", "{price}", "{time}");
+        Map<String, List<String>> requiredByType = Map.of("market-buy", trade, "market-sell", trade,
+                "market-exchange", List.of("{player}", "{sold_item}", "{sold_item_id}", "{sold_amount}", "{sold_price}",
+                        "{bought_item}", "{bought_item_id}", "{bought_amount}", "{bought_price}", "{leftover}",
+                        "{currency}", "{interMarketGroup}", "{time}"));
         for (String lang : List.of("en_us", "de_de", "de_ch", "zh_cn")) {
             // classpath, not Mod.findResource: in a Loom dev run the common module's resources are not part of the
             // mod container's root paths (they are in the release jar)
@@ -176,11 +181,14 @@ public class DiscordIntegrationTestSuite extends TestSuite {
                 if (in == null)
                     return fail("missing template file " + lang + ".json");
                 JsonObject root = JsonParser.parseString(new String(in.readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject();
-                for (String type : List.of("market-buy", "market-sell")) {
+                for (var e : requiredByType.entrySet()) {
+                    String type = e.getKey();
+                    if (!root.has(type))
+                        return fail(lang + " lacks " + type);
                     String values = root.getAsJsonObject(type).getAsJsonArray("fields").toString();
                     if (values.contains("{account}") || values.contains("{player_uuid}"))
                         return fail(lang + " " + type + " shows account or UUID: " + values);
-                    for (String r : required)
+                    for (String r : e.getValue())
                         if (!values.contains(r))
                             return fail(lang + " " + type + " lacks " + r);
                 }
@@ -188,7 +196,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
                 return fail("cannot read " + lang + ".json: " + e);
             }
         }
-        return pass("4 languages: market-buy/-sell without {account} and {player_uuid}, all other fields kept");
+        return pass("4 languages: market-buy/-sell/-exchange without {account} and {player_uuid}, all other fields kept");
     }
 
     /**
@@ -232,37 +240,56 @@ public class DiscordIntegrationTestSuite extends TestSuite {
     }
 
     /**
-     * A canceled player inter-market order with fills on both legs posts one market-buy (want leg) and one
-     * market-sell (have leg), both carrying the order's inter-market group.
+     * A canceled player inter-market order with fills on both legs posts exactly one market-exchange (no
+     * market-buy / market-sell per leg) with the sold and bought values and the leftover money. A buy-direction
+     * order: {@code amount} is the bought quantity the player asked for.
      */
-    private TestResult interMarketLegs() {
+    private TestResult interMarketExchange() {
+        InterMarketOrder imo = filledExchange();
+        var posts = capture(true, () -> putAndCancel(imo));
+        if (posts.size() != 1 || !"market-exchange".equals(posts.get(0).getKey()))
+            return fail("expected 1 market-exchange, got " + posts);
+        Map<String, String> v = posts.get(0).getValue();
+        if (!PLAYER_NAME.equals(v.get("player")) || !("#" + accountNr).equals(v.get("account"))
+                || !imo.getInterMarketGroupID().toString().equals(v.get("interMarketGroup"))
+                || v.get("time") == null || !v.get("time").matches("<t:\\d+:f>")
+                || v.get("currency") == null || v.get("currency").isBlank())
+            return fail("player, account, group, time or currency " + v);
+        if (!itemID.getName().equals(v.get("sold_item_id")) || v.get("sold_item") == null
+                || !"1".equals(v.get("sold_amount")) || !"20".equals(v.get("sold_price")))
+            return fail("sold values " + v);
+        if (!other.getItemID().getName().equals(v.get("bought_item_id")) || v.get("bought_item") == null
+                || !"2".equals(v.get("bought_amount")) || !"9".equals(v.get("bought_price")))
+            return fail("bought values " + v);
+        if (!"2".equals(v.get("leftover")) || !"5".equals(v.get("amount")))
+            return fail("leftover / amount " + v);
+        return pass("1 market-exchange: sold 1 @ 20, bought 2 @ 9, leftover 2, amount 5 (buy target)");
+    }
+
+    /**
+     * A sell-direction inter-market order (buy target 0) that sold half its items and bought nothing posts what
+     * happened: sold 1, bought 0, the proceeds as leftover; {@code amount} is the sold quantity the player asked
+     * for. The cancel unlocks the unsold rest.
+     */
+    private TestResult interMarketPartialFill() {
         InterMarketOrder imo = new InterMarketOrder(other.getItemID(), itemID, Order.Type.MARKET,
-                500, 0, 100, 0, System.nanoTime(), player, accountNr);
-        imo.getBuyOrder().edit(200, -1800); // bought 2 for 18 -> avg 9
-        imo.getSellOrder().edit(-100, 1500); // sold the whole 1 for 15: nothing left to unlock on cancel
+                0, 0, 200, 0, System.nanoTime(), player, accountNr);
+        imo.getSellOrder().edit(-100, 1500); // sold 1 of 2 for 15, bought nothing
+        IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(accountNr);
         var posts = capture(true, () -> {
-            if (!manager().putInterMarketOrder(imo))
-                throw new IllegalStateException("inter-market order not enqueued");
-            if (!manager().cancelInterMarketOrder(imo.getInterMarketGroupID(), player))
-                throw new IllegalStateException("inter-market cancel did not find the order");
+            account.getBank(itemID).lockAmount(100); // the unsold item still locked by the order; the cancel unlocks it
+            putAndCancel(imo);
         });
-        String group = imo.getInterMarketGroupID().toString();
-        if (posts.size() != 2)
-            return fail("expected 2 posts, got " + posts);
-        Map<String, String> buy = null, sell = null;
-        for (var p : posts) {
-            if ("market-buy".equals(p.getKey())) buy = p.getValue();
-            if ("market-sell".equals(p.getKey())) sell = p.getValue();
-        }
-        if (buy == null || sell == null)
-            return fail("expected one market-buy and one market-sell, got " + posts);
-        if (!group.equals(buy.get("interMarketGroup")) || !group.equals(sell.get("interMarketGroup")))
-            return fail("interMarketGroup missing or wrong: buy " + buy + ", sell " + sell);
-        if (!other.getItemID().getName().equals(buy.get("item_id")) || !"2".equals(buy.get("amount")) || !"9".equals(buy.get("price")))
-            return fail("buy leg values " + buy);
-        if (!itemID.getName().equals(sell.get("item_id")) || !"1".equals(sell.get("amount")) || !"15".equals(sell.get("price")))
-            return fail("sell leg values " + sell);
-        return pass("2 posts (buy 2 @ 9, sell 1 @ 15), both with interMarketGroup " + group);
+        if (posts.size() != 1 || !"market-exchange".equals(posts.get(0).getKey()))
+            return fail("expected 1 market-exchange, got " + posts);
+        Map<String, String> v = posts.get(0).getValue();
+        if (!"1".equals(v.get("sold_amount")) || !"15".equals(v.get("sold_price"))
+                || !"0".equals(v.get("bought_amount")) || !"0".equals(v.get("bought_price"))
+                || !"15".equals(v.get("leftover")) || !"2".equals(v.get("amount")))
+            return fail("values " + v);
+        long locked = account.getBank(itemID).getLockedBalance();
+        return locked == 0 ? pass("1 market-exchange: sold 1 @ 15, bought 0, leftover 15, amount 2 (sell target)")
+                : fail("cancel left " + locked + " locked");
     }
 
     /** A canceled player inter-market order without fills, and a bot inter-market order with fills, post nothing. */
@@ -308,7 +335,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
     }
 
     /**
-     * Posts one embed per type (market-buy, market-sell, market-alert) to the webhook in the file named by
+     * Posts one embed per type (market-buy, market-sell, market-exchange, market-alert) to the webhook in the file named by
      * {@value #LIVE_ENV}, through the real {@link DiscordWebhooks} config and sender. Swaps webhooks.json and
      * stockmarket.json for the test and restores both byte for byte (finally). The URL is a secret: it never goes
      * into a result, log or exception text. Skips when the env var is unset or the file does not exist.
@@ -356,7 +383,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         return restored ? result : fail("could not restore webhooks.json / stockmarket.json in " + dir + "; fix by hand");
     }
 
-    /** Body of {@link #live()}: writes the test config, posts the 3 types, waits for the sender. Caller restores. */
+    /** Body of {@link #live()}: writes the test config, posts every type once, waits for the sender. Caller restores. */
     private TestResult livePosts(String url, Path dir, Path hooksFile, Path routesFile, Setting<Boolean> setting) throws IOException {
         JsonObject hooks = new JsonObject();
         hooks.addProperty("live-test", url);
@@ -394,6 +421,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         setting.set(true);
         filledAndCanceled(500, 200, -1800);  // market-buy: 2 for 18 -> avg 9
         filledAndCanceled(-500, -200, 4000); // market-sell: 2 for 40 -> avg 20
+        putAndCancel(filledExchange());      // market-exchange: sold 1 @ 20, bought 2 @ 9, leftover 2
         String alert = LIVE + ": test alert, please ignore";
         TradeAlerts.raise(alert, Component.literal(alert));
         for (String t : StockMarketDiscord.TYPES)
@@ -445,6 +473,26 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         order.edit(filledVolume, money);
         if (!market.cancelOrder(player, order.getTime(), order.getType(), order.getStartPrice(), order.getTargetVolume()))
             throw new IllegalStateException("cancel did not find the order");
+    }
+
+    /**
+     * A buy-direction player inter-market order (buy 5 of {@link #other} for {@link #market}'s item) with fills on
+     * both legs: sold the whole 1 for 20 (nothing left to unlock on cancel), bought 2 for 18, so 2 money is left over.
+     */
+    private InterMarketOrder filledExchange() {
+        InterMarketOrder imo = new InterMarketOrder(other.getItemID(), itemID, Order.Type.MARKET,
+                500, 0, 100, 0, System.nanoTime(), player, accountNr);
+        imo.getSellOrder().edit(-100, 2000);
+        imo.getBuyOrder().edit(200, -1800);
+        return imo;
+    }
+
+    /** Enqueues {@code imo} and cancels it through the player cancel path, which closes it (saveInterMarketOrderRecord -> Discord). */
+    private void putAndCancel(InterMarketOrder imo) {
+        if (!manager().putInterMarketOrder(imo))
+            throw new IllegalStateException("inter-market order not enqueued");
+        if (!manager().cancelInterMarketOrder(imo.getInterMarketGroupID(), player))
+            throw new IllegalStateException("inter-market cancel did not find the order");
     }
 
     /**
