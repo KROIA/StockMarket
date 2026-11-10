@@ -34,6 +34,9 @@ All settings are **per market**. Select a market icon in the plugin entry of the
 | Round Level Scale | `1` | number >= 0 | Extra volume at round prices (100, 200, 250, 300, 500, 1000, ...) as a multiple of the depth near the fair price; 0 = off |
 | Round Level Width | `0.03` | 0.005 - 0.5 | Width of a round-price cluster in log price (0.03 = about +-3 % around the level) |
 | Round Level Range | `1.1` | 0.05 - 5 | How far from the fair price round-price clusters stay visible (log-price distance at which a cluster drops to 37 %) |
+| Trend Period (min) | `10` | number > 0 | Time constant of the price's moving average. The book refills against a move away from it |
+| Trend Gain | `10` | number >= 0 | How strongly the distance between the price and its moving average speeds up the refill of the opposite side (asks while the price is above the average, bids while below) and slows the other side; 0 = off |
+| Trend Max Factor | `4` | number >= 1 | Largest speed-up or slow-down of a side's refill (between 1/x and x); 1 = off |
 
 The text fields accept only non-negative numbers.
 
@@ -134,6 +137,10 @@ This is an exponential approach. The **time constant** `1 / (rate x Speed)` seco
 - Keep `rate x Speed` well below 1. Values above 1 per second can overshoot the target after a server lag.
 - Speed `0` freezes the book: consumed volume never comes back (only a Reset Volume refills it).
 - For a market where players should be able to "drain" liquidity and feel the scarcity, lower Accumulation Rate (e.g. `0.02` gives a refill time constant of about 17 minutes).
+
+### Trend Period, Trend Gain and Trend Max Factor
+
+The plugin tracks a moving average of the price (time constant **Trend Period**). While the price is above it, the sell side refills faster and the buy side slower; below it the other way round. This applies inside the order book window and to the remembered depth outside it, so the book leans against a sustained move. **Trend Gain** sets how strongly the distance to the average changes the refill speed, and **Trend Max Factor** caps the change: with the default `4` a side refills at most 4 times faster or slower than the normal Accumulation Rate x Speed. Set Trend Gain to `0` or Trend Max Factor to `1` to switch it off.
 
 ## Generic Settings
 

@@ -312,9 +312,19 @@ double getDefaultRealPrice()
 Returns the default (initial) price of the market.
 
 ```java
+void setDefaultRealPrice(double defaultRealPrice)
+```
+Sets the market's default price (real units, must be > 0). **Not** buffered: applied to the market immediately and saved with its settings. Meant for rare, permanent level shifts (the NewsPlugin uses it to bake in a news impact that does not revert). For continuous steering use `setTargetPrice` / `addToTargetPrice`.
+
+```java
 double getPrice()
 ```
 Returns the current market price.
+
+```java
+double getMaxRealOrderVolume()
+```
+Returns the market's max order size: the most items a single player order may buy or sell. `0` = unlimited. Bot orders are not limited by it. *(2.2.0)*
 
 ### Market Metadata
 
@@ -357,6 +367,25 @@ void addToTargetPrice(double delta)
 ```
 Adds a delta to the target price. Positive values increase, negative values decrease.
 
+### Equilibrium Price *(2.2.0)*
+
+A channel between plugins for the price the market settles at without noise. The NetFlowPlugin publishes it; the VolatilityPlugin adds its random walk on top, and the virtual order book is centred on it. All three are `default` methods, so existing implementations keep compiling.
+
+```java
+default void setEquilibriumPrice(double equilibriumPrice)
+```
+Publishes this tick's equilibrium price (real units). Rolled over once per tick like the target price. Default: no-op.
+
+```java
+default double getEquilibriumPrice()
+```
+Returns the value set this tick, else last tick's, else the default price (for example when no NetFlowPlugin runs on the market). Default: `getDefaultRealPrice()`.
+
+```java
+default boolean isTargetPriceSetThisTick()
+```
+Whether a plugin already wrote the target price this tick (`setTargetPrice` or `addToTargetPrice`). Lets a plugin set a fallback target only when nobody else did. Default: `false`.
+
 ### Order Placement
 
 ```java
@@ -384,12 +413,42 @@ float getCurrentCandleTradedVolume()
 ```
 Returns the accumulated traded volume for the current price candle. Resets when a new candle starts. Useful for tracking market activity and building volume-based indicators.
 
+```java
+boolean isVirtualOrderbookEnabled()
+```
+Whether the market uses the virtual order book. When `false`, plugins that read or write virtual volume should skip the market.
+
+```java
+void clearVirtualOrderbook()
+```
+Sets all virtual volume to zero and keeps it at zero through later price moves ("sticky" clear), until `resetVirtualOrderbook()` is called.
+
+```java
+void resetVirtualOrderbook()
+```
+Refills the virtual order book from the default volume distribution and ends a sticky clear.
+
 ### Player Metrics
 
 ```java
 double getNetPlayerItemFlow()
 ```
 Returns the cumulative net items sold/bought by players for this market. Positive = players net-sold into the market (supply exceeds demand), negative = players net-bought from the market (demand exceeds supply). Useful for supply/demand-driven pricing plugins.
+
+```java
+default void setNetPlayerItemFlow(double netPlayerItemFlow)
+```
+Overwrites the net flow counter (real units, same sign). Applied immediately, not buffered. Default: no-op. *(2.2.0)*
+
+```java
+default double getFadedNetPlayerItemFlow()
+```
+The same counter, but it decays toward 0 with the half-life of the Mod Setting `NET_FLOW_HALF_LIFE_MINUTES` (default 360 min). A burst of trades fades out; steady demand or supply keeps it up. **Price plugins should use this value.** Default: `getNetPlayerItemFlow()` (no fading). *(2.2.0)*
+
+```java
+default void setFadedNetPlayerItemFlow(double fadedNetPlayerItemFlow)
+```
+Overwrites the faded net flow. Applied immediately. Default: no-op. *(2.2.0)*
 
 ---
 
@@ -442,6 +501,19 @@ Returns real volume at a specific backend price.
 float getRealVirtualVolume(long backendPrice)
 ```
 Returns real virtual volume at a specific backend price.
+
+```java
+default float getRealVirtualVolume(double minPrice, double maxPrice)
+```
+Like `getRealVolume(minPrice, maxPrice)`, but only the virtual depth; resting limit orders (for example player orders) are not counted. Positive = buy side, negative = sell side. Default: `0` (no depth information). *(2.1.2)*
+
+```java
+default float getRealVirtualVolumeToPrice(double targetRealPrice, double capReal)
+```
+The virtual volume a market order must consume to move the price from the current price to `targetRealPrice`, read level by level the way the matching engine walks the book (including the remembered depth outside the order book window). Only the side the order eats is counted. Resting limit orders are not counted, so an order of this size ends at or before the target. Use it to size orders that must not overshoot.
+- `capReal`: stop counting at this many items (your order limit); `Double.POSITIVE_INFINITY` = no cap.
+- Returns a signed real volume: negative = ask volume a buy consumes (target above the price), positive = bid volume a sell consumes (target below), `0` if the target is the current price.
+- Default: `0`. *(2.2.0)*
 
 ```java
 long getRawVolume(long backendPrice)
@@ -497,6 +569,11 @@ void resetVirtualVolume()
 ```
 Resets all virtual volume to zero.
 
+```java
+default void setVirtualDepthSideFactors(float bidFactor, float askFactor)
+```
+Sets how fast the remembered virtual depth outside the editable range recovers, per side. A factor f > 1 refills that side's missing volume f times faster and removes excess f times slower; f < 1 the other way round; 1 = the Mod Setting `VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES`. Applied with the other cached changes; the values stay until set again. Default: no-op. *(2.2.0)*
+
 ### Volume Distribution
 
 ```java
@@ -512,12 +589,22 @@ Removes a previously registered volume distribution calculator.
 ```java
 float getDefaultRealVolume(double pickPrice)
 ```
-Returns the combined real volume from all registered distribution calculators at the given price.
+Returns the combined real volume from all registered distribution calculators at the given price. Since 2.2.0 the calculators are centred on the market's fair price (`IPluginMarket.getEquilibriumPrice()`) instead of the current price, so the default depth does not follow a dumped or pumped price; the bid/ask split stays at the current price. Positive = buy side (below the current price), negative = sell side.
+
+```java
+default float getDefaultRealVolumeAround(double centerPrice, double pickPrice)
+```
+Like `getDefaultRealVolume`, but centred and split at `centerPrice`, for example to read the default book around the default price whatever the price is now. Default: falls back to `getDefaultRealVolume(pickPrice)`. *(2.2.0)*
 
 ```java
 float getDefaultRawVolume(double pickPrice)
 ```
 Returns the combined raw volume from all registered distribution calculators at the given price.
+
+```java
+float[] getDefaultRawVolume(long backendStartPrice, int count)
+```
+Batch version: the default raw volume of `count` consecutive backend price levels starting at `backendStartPrice` (index `i` = price `backendStartPrice + i`). Much cheaper than one call per level.
 
 ---
 

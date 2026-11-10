@@ -9,6 +9,8 @@ This guide covers two common ways to set up the stock market on a server, with c
 * [Recommendation](#recommendation)
 * [Permissions (LuckPerms)](#permissions-luckperms)
 * [Discord feed](#discord-feed)
+* [Profit alert](#profit-alert)
+* [Backups](#backups)
 
 ---
 
@@ -114,7 +116,7 @@ StockMarket admin commands and functions check these permission nodes, so a perm
 | `stockmarket.admin.command.exportrecipes` | `/stockmarket exportrecipes` (dev builds only) |
 | `stockmarket.admin.command.devtest` | `/stockmarket devTestScreen` (dev builds only) |
 | `modutilities.command.discord` | `/stockmarket discord status` and `/stockmarket discord reload` (a ModUtilities node, also used by `/modutilities discord` and `/banksystem discord`; without a permission mod it requires operator level 3) |
-| `stockmarket.admin.notify` | Receiving chat notifications when another admin changes settings |
+| `stockmarket.admin.notify` | Receiving chat notifications when another admin changes settings, and [profit alerts](#profit-alert) |
 | `stockmarket.admin` | Source of the StockMarket admin flag while `SYNC_ADMIN_FLAG_WITH_PERMISSION` is on (see below) |
 
 Example: give the `admin` group every StockMarket admin right:
@@ -195,3 +197,30 @@ Available values:
 * `market-exchange`: `{player}`, `{player_uuid}`, `{account}`, `{sold_item}`, `{sold_item_id}`, `{sold_amount}`, `{sold_price}` (average), `{bought_item}`, `{bought_item_id}`, `{bought_amount}`, `{bought_price}` (average), `{leftover}`, `{currency}` (the currency's name), `{amount}` (the quantity the player entered, see `minAmount` above), `{interMarketGroup}`, `{time}`.
 
 Your `fields` list is kept when StockMarket updates its default templates.
+
+## Profit alert
+
+The master server watches how much money each player makes from trading and warns the admins when it is unusually much, for example when a player has found a way to exploit the market.
+
+* **Profit alert threshold** (`ServerMarket.PROFIT_ALERT_THRESHOLD`, default `1,000,000`, `0` = off) and **Profit alert window (min)** (`ServerMarket.PROFIT_ALERT_WINDOW_MINUTES`, default `60`, range 1 - 10080) are in the Market group of the [Mod Settings](mod-settings.md). Both take effect immediately.
+* Counted is the **realized profit**: sell proceeds minus buy costs of the player's finished orders, summed over all markets. It is cash based, so selling items bought long ago also counts. Bot orders are not counted.
+* Each player has fixed windows: a window starts with the player's first finished order and lasts the set number of minutes. When the profit within a window first goes above the threshold, an alert is raised once for that window. The windows are kept in memory only; a restart starts new ones.
+* The alert goes to:
+  * every online player with the permission `stockmarket.admin.notify` (operator level 2 without a permission mod), as a chat message: *"Alert: &lt;player&gt; realized &lt;amount&gt; trading profit within &lt;minutes&gt; min."*
+  * the server log, as a warning starting with `[StockMarket Alert]`, with the player's name and UUID
+  * the Discord type `market-alert`, if the [Discord feed](#discord-feed) is on and the type is enabled
+* Only the master checks profits, so trades made on slave servers are covered too.
+
+## Backups
+
+StockMarket keeps price candles, order history and other trade data in an SQLite database on the master: `world/data/StockMarket/Database/stockdata.db`. A copy made while the server writes to it can be broken. Pause the writes while you copy it:
+
+| Command | Effect |
+|---|---|
+| `/stockmarket backup pause` | Finishes all queued writes, then stops writing. Wait for the console line `[StockMarket] db-worker paused for backup` before you start copying. |
+| `/stockmarket backup resume` | Starts writing again. Writes that came in during the pause are queued and done now. |
+| `/stockmarket backup status` | Shows whether the writes are paused and for how many seconds. |
+
+* The commands need the permission `stockmarket.admin.command.backup` (operator level 2 without a permission mod) and only work on the master server. They work from the console, so a backup script can use them (for example through RCON).
+* A pause ends by itself after **120 seconds**, with a warning in the log, so a forgotten `resume` cannot stop the market data for good. Copy the database within that time.
+* Trading goes on during the pause. Saving to the database, and loading chart and order history (which also goes through the database queue), wait until it ends.

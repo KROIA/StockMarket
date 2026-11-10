@@ -5,7 +5,9 @@ Index of all documentation pages. For an introduction to the mod, its blocks, co
 ## User Guide
 For players, server admins and content creators.
 
-- [Admin Setup Use Cases](user-guide/admin-setup.md) — standard bot-driven market vs. player-driven market, LuckPerms permissions, Discord feed
+- [Admin Setup Use Cases](user-guide/admin-setup.md) — standard bot-driven market vs. player-driven market, LuckPerms permissions, Discord feed, profit alert, database backups
+- [Mod Settings Reference](user-guide/mod-settings.md) — every server-wide setting with default, range and restart note
+- [Multi-Server Setup](user-guide/multi-server.md) — master/slave servers: what runs where, trust, commands on a slave
 - [Trading Hours](user-guide/trading-hours.md) — daily open/close windows, `/stockmarket open|close`, closed markets vs. maintenance mode
 - [Candle Timebase](user-guide/candle-timebase.md) — price candles on real time or in-game hours, chart timeframes and `Day N` labels
 - [Placeholders](user-guide/placeholders.md) — text placeholders (prices, 24h change, volume, player orders and portfolio) for scoreboards, tab lists and chat
@@ -38,3 +40,4 @@ For mod developers extending StockMarket.
 
 ### API
 - [Market Creation API](developer-guide/api/market-creation-api.md) — create, query and close markets from other mods
+- [Market Access API](developer-guide/api/async-market-api.md) — sync, async and client market interfaces, order status codes and the request-failure contract

@@ -25,8 +25,11 @@ before you have confirmed the mod is present, and isolate all StockMarket calls
 behind a presence check (see the guard pattern in §8).
 
 Everything in this API is **in-process**: no packets, no networking, no thread
-primitives. Slave servers may call the same API — StockMarket internally
-dispatches to the master via its existing request path.
+primitives. The integration works on the **master** (or a single server), where
+the markets live. It does **not** forward to the master on a slave server: there,
+`openMarket` returns `FAILED` ("StockMarket server not initialized"),
+`marketExistsFor` and `isMarketOpen` return `false`, and `closeMarket` /
+`setMarketOpen` do nothing. Run your integration code on the master.
 
 ---
 
@@ -267,7 +270,7 @@ Two different operations — do not confuse them:
 - **`setMarketOpen(subject, false)`** — **reversible maintenance mode**. The market keeps
   existing (price history intact); it is only hidden and its player orders are
   cancelled+refunded. Reopen it any time with `setMarketOpen(subject, true)`.
-- **`closeMarket(subject)`** — **permanent delete** (see §8). The market is
+- **`closeMarket(subject)`** — **permanent delete** (see §6). The market is
   removed entirely (unsubscribed from all plugins, deleted, removal broadcast to
   clients). There is no "reopen"; you must `openMarket` again to recreate it.
 
