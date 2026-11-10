@@ -1,8 +1,12 @@
 package net.kroia.stockmarket.villagertrading;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.stockmarket.StockMarketMod;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MerchantContainer;
@@ -10,6 +14,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.trading.ItemCost;
 import net.minecraft.world.item.trading.MerchantOffer;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -28,7 +33,8 @@ import java.util.Optional;
  * price is accepted, the cheapest sufficient combination is consumed, and
  * overpayment returns exact change (fewest notes).
  * <p>
- * Everything except {@link #deliverChange} is a pure function of the offer and
+ * Everything except {@link #deliverChange} and the NoteFlow logging
+ * ({@link #recordTrade}) is a pure function of the offer and
  * the two payment-slot stacks — deliberately: the client's {@code MerchantMenu}
  * runs {@code satisfiedBy} (trade preview / red X) and {@code take} (take
  * prediction) locally on offers synced via {@code ClientboundMerchantOffersPacket},
@@ -396,16 +402,20 @@ public final class MoneyPayment {
      *       visually and the container sync corrects the view).</li>
      * </ol>
      * Runs on both logical sides, exactly like vanilla's payment-slot returns.
+     * On the server every change stack is logged as created notes
+     * ({@link #NOTE_FLOW_CHANGE}, T-216).
      *
      * @param changeRaw the raw change value ({@code <= 0} is a no-op)
      * @param slots     the merchant trade container (payment slots 0 and 1)
      * @param player    the trading player
+     * @param villager  the trading villager for the NoteFlow row, or {@code null}
      */
-    public static void deliverChange(long changeRaw, MerchantContainer slots, Player player) {
+    public static void deliverChange(long changeRaw, MerchantContainer slots, Player player, @Nullable Entity villager) {
         if (changeRaw <= 0 || slots == null || player == null) {
             return;
         }
         for (ItemStack note : makeChange(changeRaw)) {
+            recordNoteFlow(NOTE_FLOW_CHANGE, player, note, note.getCount(), villager);
             // 1a. Merge into a payment slot holding the same denomination.
             for (int slot = 0; slot <= 1 && !note.isEmpty(); slot++) {
                 ItemStack current = slots.getItem(slot);
@@ -432,6 +442,83 @@ public final class MoneyPayment {
                 player.getInventory().placeItemBackInInventory(note); // mc<=26.2
                 //player.getInventory().placeItemBackInInventory(note, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
             }
+        }
+    }
+
+    // ========================================================================
+    // NoteFlow diagnostics (T-216)
+    // ========================================================================
+
+    /** NoteFlow source: money a villager pays out as a trade result (notes created, positive). */
+    public static final String NOTE_FLOW_PAY = "stockmarket:villager_pay";
+    /** NoteFlow source: change handed back for an overpayment (notes created, positive). */
+    public static final String NOTE_FLOW_CHANGE = "stockmarket:villager_change";
+    /** NoteFlow source: money the player pays to a villager (notes destroyed, negative). */
+    public static final String NOTE_FLOW_CONSUME = "stockmarket:villager_consume";
+
+    /**
+     * Notes of a payment slot that a trade used up: the count {@link #consume}
+     * (or vanilla {@code take}) removed from the slot. Pure.
+     *
+     * @param before copy of the payment slot taken before the trade
+     * @param after  the same payment slot after the trade, before change is delivered
+     * @return the consumed note count; {@code 0} when {@code before} is not money
+     */
+    public static int notesTaken(ItemStack before, ItemStack after) {
+        if (!isMoneyStack(before)) {
+            return 0;
+        }
+        // A slot used up completely holds an empty stack, which never matches.
+        return before.getCount() - (ItemStack.isSameItemSameComponents(before, after) ? after.getCount() : 0);
+    }
+
+    /**
+     * Logs the notes one villager trade destroyed (payment, {@link #NOTE_FLOW_CONSUME})
+     * and created (a money result, {@link #NOTE_FLOW_PAY}) to BankSystem's NoteFlow
+     * log. The change is logged by {@link #deliverChange}, so call this before it:
+     * change may merge into the payment slots. Server side only (no-op on the
+     * client); never throws.
+     *
+     * @param offer      the traded offer
+     * @param paidBefore copies of payment slots 0 and 1 taken before the trade
+     * @param slots      the merchant trade container after the trade
+     * @param player     the trading player
+     * @param villager   the trading villager, or {@code null}
+     */
+    public static void recordTrade(MerchantOffer offer, ItemStack[] paidBefore, MerchantContainer slots,
+                                   Player player, @Nullable Entity villager) {
+        for (int slot = 0; slot <= 1; slot++) {
+            recordNoteFlow(NOTE_FLOW_CONSUME, player, paidBefore[slot],
+                    -notesTaken(paidBefore[slot], slots.getItem(slot)), villager);
+        }
+        ItemStack payout = offer.getResult();
+        recordNoteFlow(NOTE_FLOW_PAY, player, payout, payout.getCount(), villager);
+    }
+
+    /**
+     * Writes one NoteFlow row on the server thread (BankSystem reads the
+     * villager's uuid, dimension and position right away, the write is async).
+     * Skips the client, zero counts and stacks that are not money. Diagnostics
+     * never break a trade: any failure is logged and swallowed.
+     *
+     * @param source      one of the {@code NOTE_FLOW_*} sources
+     * @param player      the trading player
+     * @param notes       the money stack (only item and components are used)
+     * @param signedCount note count: positive = created, negative = destroyed
+     * @param villager    the trading villager, or {@code null}
+     */
+    private static void recordNoteFlow(String source, Player player, ItemStack notes, long signedCount,
+                                       @Nullable Entity villager) {
+        if (signedCount == 0 || player.level().isClientSide() || !isMoneyStack(notes)) {
+            return;
+        }
+        try {
+            ItemID item = ItemIDManager.getItemID(notes);
+            if (item.isValid()) {
+                BankSystemMod.getAPI().getNoteFlowLog().record(source, player.getUUID(), item, signedCount, villager, null);
+            }
+        } catch (RuntimeException e) {
+            StockMarketMod.LOGGER.warn("[MoneyPayment] NoteFlow row " + source + " not written", e);
         }
     }
 
