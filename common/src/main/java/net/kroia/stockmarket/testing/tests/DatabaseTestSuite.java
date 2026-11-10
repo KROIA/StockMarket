@@ -6,6 +6,7 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 
 import java.sql.Connection;
 import java.util.concurrent.Callable;
@@ -58,28 +59,25 @@ public class DatabaseTestSuite extends TestSuite {
      * the test thread races in-flight db-worker commits and causes intermittent
      * "cannot commit/rollback - no transaction is active" failures.
      *
+     * <p>
+     * Earlier suites can leave a backlog of writes queued; it is drained first ({@link TestFixture#dbBarrier}) so
+     * the 10 s budget measures the test body, not the backlog.
+     *
      * @param body the test body to execute on the database thread
      * @return the body's result, or a failure on exception/timeout
      */
-    /** Safety cap for draining the db-worker backlog before a test body runs. */
-    private static final long DRAIN_TIMEOUT_MINUTES = 5;
-
     private TestResult onDbThread(Callable<TestResult> body) {
         if (backend.DATABASE_MANAGER == null)
             return fail("DATABASE_MANAGER is null");
         ExecutorService db = backend.DATABASE_MANAGER.getDatabaseThread();
-        // The db-worker is a FIFO single-thread executor and earlier suites (heavy trading)
-        // can leave a long backlog of writes queued. Drain it first with a no-op barrier so
-        // the 10 s budget below measures the test body, not the backlog. pumpUntil keeps the
-        // server's queued tasks running meanwhile, so the wait cannot deadlock the server thread.
         Future<?> barrier;
         try {
-            barrier = db.submit(() -> {});
+            barrier = TestFixture.dbBarrier(backend.DATABASE_MANAGER);
         } catch (RejectedExecutionException e) {
             return fail("db-worker rejected the drain barrier: " + e);
         }
-        if (!pumpUntil(barrier::isDone, TimeUnit.MINUTES.toMillis(DRAIN_TIMEOUT_MINUTES)))
-            return fail("db-worker queue did not drain within " + DRAIN_TIMEOUT_MINUTES + " min before the test body could start");
+        if (!pumpUntil(barrier::isDone, TestFixture.DB_DRAIN_TIMEOUT_MS))
+            return fail("db-worker queue did not drain within " + TestFixture.DB_DRAIN_TIMEOUT_MS + " ms before the test body could start");
         try {
             return db.submit(body).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {

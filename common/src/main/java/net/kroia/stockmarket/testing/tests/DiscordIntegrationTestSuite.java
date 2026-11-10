@@ -129,9 +129,15 @@ public class DiscordIntegrationTestSuite extends TestSuite {
             }
             if (player != null && backend != null) {
                 manager().removeUser(player);
-                if (backend.ORDER_RECORD_MANAGER != null)
+                if (backend.ORDER_RECORD_MANAGER != null && backend.DATABASE_MANAGER != null) {
+                    // Earlier suites can leave a long db-worker backlog: drain it first, so the 5 s below
+                    // time the delete itself, not the queue ahead of it.
+                    if (!pumpUntil(TestFixture.dbBarrier(backend.DATABASE_MANAGER)::isDone, TestFixture.DB_DRAIN_TIMEOUT_MS))
+                        throw new IllegalStateException("db-worker queue did not drain within "
+                                + TestFixture.DB_DRAIN_TIMEOUT_MS + " ms");
                     await(backend.ORDER_RECORD_MANAGER.removeHistory(Optional.empty(), Optional.empty(),
                             Optional.of(new UUIDFilter(player)), Optional.empty()), 5000);
+                }
             }
         } finally {
             market = null;

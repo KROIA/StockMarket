@@ -11,6 +11,7 @@ import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -89,6 +90,11 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             throw new RuntimeException("MarketPriceManagerTestSuite requires backend to be set");
         }
         manager = backend.MARKET_PRICE_HISTORY_MANAGER;
+        // The tests give each live-manager call 5 s; drain the backlog earlier suites left on the db-worker
+        // first, so those 5 s time the call, not the queue ahead of it. Nothing refills it between the tests.
+        if (backend.DATABASE_MANAGER != null
+                && !pumpUntil(TestFixture.dbBarrier(backend.DATABASE_MANAGER)::isDone, TestFixture.DB_DRAIN_TIMEOUT_MS))
+            throw new IllegalStateException("db-worker queue did not drain within " + TestFixture.DB_DRAIN_TIMEOUT_MS + " ms");
     }
 
     private TestResult test_mapRow_returnsNull_onSQLException() {
