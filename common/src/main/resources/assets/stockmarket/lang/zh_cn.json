@@ -26,6 +26,7 @@
   "message.stockmarket.order_status.order_too_large": "订单过大：每笔最多 %s 个物品",
   "message.stockmarket.order_status.outcome_unknown": "服务器无响应 — 订单可能已提交。重试前请先检查你的订单。",
   "message.stockmarket.order_status.trading_too_fast": "交易过快：请等待 %s 秒",
+  "message.stockmarket.order_status.account_frozen": "该银行账户已被管理员冻结，无法交易",
   "message.stockmarket.order_status.market_order_partially_filled": "市价单仅部分成交：已成交 %s / %s 个%s，其余部分已取消并退还",
   "message.stockmarket.alert.profit": "警报：%1$s 在 %3$s 分钟内实现了 %2$s 的交易利润。",
   "commands.stockmarket.backup.pause_submitted": "已请求暂停备份 — 请等到控制台出现 '[StockMarket] db-worker paused for backup' 后再开始归档。",

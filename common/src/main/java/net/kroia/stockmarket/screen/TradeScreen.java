@@ -1477,17 +1477,23 @@ public class TradeScreen extends StockMarketGuiScreen {
                 showActionBar(Component.translatable("message.stockmarket.order_status.order_too_large", result.detail));
             else if (result.status == CreateOrderRequest.Status.TRADING_TOO_FAST)
                 showActionBar(tradingTooFastMessage(result.detail));
+            else if (result.status == CreateOrderRequest.Status.ACCOUNT_FROZEN)
+                showActionBar(Component.translatable("message.stockmarket.order_status.account_frozen"));
         }
     }
 
     /**
      * T-166: shows a translated message for the inter-market order error codes that carry a
-     * number after a colon ("ORDER_TOO_LARGE:&lt;limit&gt;", "TRADING_TOO_FAST:&lt;remaining ms&gt;").
-     * Other codes are only logged.
+     * number after a colon ("ORDER_TOO_LARGE:&lt;limit&gt;", "TRADING_TOO_FAST:&lt;remaining ms&gt;"),
+     * and for "ACCOUNT_FROZEN" (T-195). Other codes are only logged.
      * @param errorMessage the error code from {@link PlaceInterMarketOrderRequest.OutputData#errorMessage}, may be null
      */
     private static void showInterMarketError(@Nullable String errorMessage) {
         if (errorMessage == null) return;
+        if (errorMessage.equals("ACCOUNT_FROZEN")) { // T-195
+            showActionBar(Component.translatable("message.stockmarket.order_status.account_frozen"));
+            return;
+        }
         int colon = errorMessage.indexOf(':');
         if (colon < 0) return;
         long value;

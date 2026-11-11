@@ -481,6 +481,7 @@
   "message.stockmarket.order_status.order_too_large": "Order zu groß: max. %s Items pro Order",
   "message.stockmarket.order_status.outcome_unknown": "Keine Antwort vom Server - die Order wurde eventuell platziert. Prüfe deine Orders vor einem neuen Versuch.",
   "message.stockmarket.order_status.trading_too_fast": "Zu schnell gehandelt: warte %s s",
+  "message.stockmarket.order_status.account_frozen": "Dieses Bankkonto wurde von einem Admin gesperrt und kann nicht handeln",
   "message.stockmarket.order_status.market_order_partially_filled": "Market-Order nur teilweise ausgeführt: %s von %s %s gehandelt, der Rest wurde storniert und zurückerstattet",
   "message.stockmarket.alert.profit": "Alarm: %1$s hat innerhalb von %3$s min %2$s Handelsgewinn realisiert.",
   "gui.stockmarket.management_screen.tab_overview": "Übersicht",

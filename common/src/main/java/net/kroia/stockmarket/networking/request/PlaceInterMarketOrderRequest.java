@@ -228,6 +228,13 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             }
         }
 
+        // 4c. T-195: an admin-frozen account may not trade. Checked here on the master (slaves only
+        // forward), after the membership gate and before the "have" items are locked.
+        if (serverBankManager.getSync().isAccountFrozen(input.bankAccountNr)) {
+            future.complete(new OutputData(false, "ACCOUNT_FROZEN"));
+            return future;
+        }
+
         // 5. Validate player has the "have" items in their item bank
         IServerBank itemBank = bankAccount.getBank(input.haveItemID);
         if (itemBank == null) {

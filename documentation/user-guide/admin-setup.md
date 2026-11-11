@@ -10,6 +10,7 @@ This guide covers two common ways to set up the stock market on a server, with c
 * [Permissions (LuckPerms)](#permissions-luckperms)
 * [Discord feed](#discord-feed)
 * [Profit alert](#profit-alert)
+* [Frozen bank accounts](#frozen-bank-accounts)
 * [Backups](#backups)
 * [Order origin record](#order-origin-record)
 
@@ -211,6 +212,10 @@ The master server watches how much money each player makes from trading and warn
   * the server log, as a warning starting with `[StockMarket Alert]`, with the player's name and UUID
   * the Discord type `market-alert`, if the [Discord feed](#discord-feed) is on and the type is enabled
 * Only the master checks profits, so trades made on slave servers are covered too.
+
+## Frozen bank accounts
+
+When a BankSystem admin freezes a bank account, StockMarket cancels all of its open orders on every market (including inter-market orders), which releases the reserved money and items, and rejects new orders for it with *"This bank account is frozen by an admin and cannot trade"*. Unfreezing only allows trading again; cancelled orders are not restored. The master decides, so orders placed through slave servers are covered too.
 
 ## Backups
 

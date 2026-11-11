@@ -481,6 +481,7 @@
   "message.stockmarket.order_status.order_too_large": "Order z gross: max. %s Items pro Order",
   "message.stockmarket.order_status.outcome_unknown": "Kei Antwort vom Server - d Order isch villicht platziert worde. Prüef dini Orders vor emne neue Versuech.",
   "message.stockmarket.order_status.trading_too_fast": "Z schnäll ghandlet: wart %s s",
+  "message.stockmarket.order_status.account_frozen": "Das Bankkonto isch vomene Admin gsperrt und cha nöd handle",
   "message.stockmarket.order_status.market_order_partially_filled": "Market-Order nur teilwiis usgfüehrt: %s vo %s %s ghandlet, de Rest isch storniert und zruggzahlt worde",
   "message.stockmarket.alert.profit": "Alarm: %1$s hät innert %3$s min %2$s Handelsgwünn realisiert.",
   "gui.stockmarket.management_screen.tab_overview": "Übersicht",

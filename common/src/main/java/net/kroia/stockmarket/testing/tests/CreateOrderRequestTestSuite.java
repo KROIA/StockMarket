@@ -4,6 +4,7 @@ import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.multi_server.IServerIdentity;
@@ -114,6 +115,11 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         addTest("cooldown_rejectedDoesNotRestart", this::test_cooldown_rejectedDoesNotRestart);
         addTest("cooldown_zeroOff", this::test_cooldown_zeroOff);
         addTest("move_afterLimitLowered_orderSurvives", this::test_move_afterLimitLowered_orderSurvives);
+
+        // T-195: BankSystem account freeze blocks trading and cancels open orders
+        addTest("freeze_rejectsPlacement", this::test_freeze_rejectsPlacement);
+        addTest("freeze_unfreezeAllowsTradingAgain", this::test_freeze_unfreezeAllowsTradingAgain);
+        addTest("freeze_cancelsOpenOrdersAndUnlocks", this::test_freeze_cancelsOpenOrdersAndUnlocks);
     }
 
     /**
@@ -1189,6 +1195,141 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             r = assertEquals("credit is used up", CreateOrderRequest.Status.ORDER_TOO_LARGE, again.status);
             if (!r.passed()) return r;
             return pass("Moving an order is not blocked by a lowered limit; the exemption is server-verified");
+        });
+    }
+
+    // ── T-195: account freeze ────────────────────────────────────────────────
+
+    /** Freezes or unfreezes an account through BankSystem; a real change fires the freeze event. */
+    private void setFrozen(IServerBankAccount acc, boolean frozen) {
+        backend.BANK_SYSTEM_API.getServerBankManager().getSync()
+                .setAccountFrozen(acc.getAccountNumber(), frozen, LedgerActor.system());
+    }
+
+    /** Places a resting inter-market limit order (have = shared market item, far-off rate limit). */
+    private PlaceInterMarketOrderRequest.OutputData restingInterMarket(IServerMarket want, IServerBankAccount acc, UUID player) {
+        return new PlaceInterMarketOrderRequest().handleOnMasterServer(
+                new PlaceInterMarketOrderRequest.InputData(itemID, want.getItemID(), acc.getAccountNumber(), 1.0, 1L, 0),
+                "", player).join();
+    }
+
+    /**
+     * A frozen account cannot place a limit, market, slave-forwarded or inter-market order,
+     * and nothing gets locked.
+     */
+    private TestResult test_freeze_rejectsPlacement() {
+        return withLimits(0, 0, () -> {
+            IServerMarket want = fixture.createMarket("freeze_want");
+            want.test_setCurrentMarketPrice(100);
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("FreezeReject", 1_000_000_000L, 1_000_000L, player);
+            setFrozen(acc, true);
+            try {
+                TestResult r = assertEquals("limit buy rejected", CreateOrderRequest.Status.ACCOUNT_FROZEN, smallBuy(acc, player).status);
+                if (!r.passed()) return r;
+                CreateOrderRequest.OutputData sell = executeRequest(new CreateOrderRequest.InputData(
+                        itemID, acc.getAccountNumber(), Order.Type.MARKET, -1.0, 0.0), player);
+                r = assertEquals("market sell rejected", CreateOrderRequest.Status.ACCOUNT_FROZEN, sell.status);
+                if (!r.passed()) return r;
+                // Slave-forwarded order: the master's placeOrder decides, whatever the slave thinks.
+                CreateOrderRequest.OutputData forwarded = backend.NETWORKING.CREATE_ORDER_REQUEST.placeOrder(
+                        new CreateOrderRequest.InputData(itemID, acc.getAccountNumber(), Order.Type.LIMIT, 1.0, 1.0),
+                        player, "audit-test-slave").join();
+                r = assertEquals("slave-forwarded order rejected", CreateOrderRequest.Status.ACCOUNT_FROZEN, forwarded.status);
+                if (!r.passed()) return r;
+                PlaceInterMarketOrderRequest.OutputData im = restingInterMarket(want, acc, player);
+                r = assertTrue("inter-market rejected: " + im.errorMessage, !im.success && "ACCOUNT_FROZEN".equals(im.errorMessage));
+                if (!r.passed()) return r;
+                r = assertEquals("no money locked", 0L, acc.getBank(moneyID).getLockedBalance());
+                if (!r.passed()) return r;
+                r = assertEquals("no items locked", 0L, acc.getBank(itemID).getLockedBalance());
+                if (!r.passed()) return r;
+                return pass("Frozen account: all placement paths rejected with ACCOUNT_FROZEN");
+            } finally {
+                setFrozen(acc, false);
+            }
+        });
+    }
+
+    /** After an unfreeze the same account trades normally again. */
+    private TestResult test_freeze_unfreezeAllowsTradingAgain() {
+        return withLimits(0, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("FreezeUnfreeze", 1_000_000_000L, 0, player);
+            setFrozen(acc, true);
+            TestResult r = assertEquals("rejected while frozen", CreateOrderRequest.Status.ACCOUNT_FROZEN, smallBuy(acc, player).status);
+            if (!r.passed()) return r;
+            setFrozen(acc, false);
+            return assertEquals("accepted after unfreeze", CreateOrderRequest.Status.CREATED, smallBuy(acc, player).status);
+        });
+    }
+
+    /**
+     * Freezing cancels the account's open orders in every market through the normal cancel path:
+     * a resting limit order in the book, a buffered one, one on a second market and a pending
+     * inter-market order. All locked money and items are released; another account's order stays.
+     */
+    private TestResult test_freeze_cancelsOpenOrdersAndUnlocks() {
+        return withLimits(0, 0, () -> {
+            IServerMarket want = fixture.createMarket("freeze_cancel_want");
+            want.test_setCurrentMarketPrice(100);
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("FreezeCancel", 1_000_000_000L, 1_000_000L, player);
+            acc.createBank(want.getItemID(), 0);
+            UUID other = UUID.randomUUID();
+            IServerBankAccount otherAcc = freshAccount("FreezeCancelOther", 1_000_000_000L, 0, other);
+            ServerMarketManager manager = backend.MARKET_MANAGER.getServerMarketManager();
+            try {
+                TestResult r = assertEquals("book buy placed", CreateOrderRequest.Status.CREATED, smallBuy(acc, player).status);
+                if (!r.passed()) return r;
+                r = assertEquals("other account's buy placed", CreateOrderRequest.Status.CREATED, smallBuy(otherAcc, other).status);
+                if (!r.passed()) return r;
+                serverMarket.update(); // both buys move into the book
+                // Buffered sell far above the market (not yet matched) and a buy on the second market.
+                r = assertEquals("buffered sell placed", CreateOrderRequest.Status.CREATED, executeRequest(new CreateOrderRequest.InputData(
+                        itemID, acc.getAccountNumber(), Order.Type.LIMIT, -2.0, 100_000.0), player).status);
+                if (!r.passed()) return r;
+                r = assertEquals("second-market buy placed", CreateOrderRequest.Status.CREATED, executeRequest(new CreateOrderRequest.InputData(
+                        want.getItemID(), acc.getAccountNumber(), Order.Type.LIMIT, 1.0, 1.0), player).status);
+                if (!r.passed()) return r;
+                PlaceInterMarketOrderRequest.OutputData im = restingInterMarket(want, acc, player);
+                r = assertTrue("inter-market order placed: " + im.errorMessage, im.success);
+                if (!r.passed()) return r;
+                r = assertTrue("money locked before freeze", acc.getBank(moneyID).getLockedBalance() > 0);
+                if (!r.passed()) return r;
+                r = assertTrue("items locked before freeze", acc.getBank(itemID).getLockedBalance() > 0);
+                if (!r.passed()) return r;
+
+                setFrozen(acc, true); // fires the event -> cancelOrdersOfBankAccount on the master
+
+                for (IServerMarket m : List.of(serverMarket, want)) {
+                    for (Order o : m.getLimitOrders()) {
+                        r = assertTrue("no resting order of the frozen account", o.getBankAccountNr() != acc.getAccountNumber());
+                        if (!r.passed()) return r;
+                    }
+                }
+                r = assertTrue("no pending inter-market order", manager.getPendingInterMarketOrdersForPlayer(player).isEmpty());
+                if (!r.passed()) return r;
+                r = assertEquals("money unlocked", 0L, acc.getBank(moneyID).getLockedBalance());
+                if (!r.passed()) return r;
+                r = assertEquals("items unlocked", 0L, acc.getBank(itemID).getLockedBalance());
+                if (!r.passed()) return r;
+                serverMarket.update(); // the cancelled buffered sell must not reach the book
+                boolean otherStill = false;
+                for (Order o : serverMarket.getLimitOrders()) {
+                    r = assertTrue("buffered sell not booked", o.getBankAccountNr() != acc.getAccountNumber());
+                    if (!r.passed()) return r;
+                    otherStill |= o.getBankAccountNr() == otherAcc.getAccountNumber();
+                }
+                r = assertTrue("other account's order untouched", otherStill);
+                if (!r.passed()) return r;
+                return pass("Freeze cancelled book, buffered, second-market and inter-market orders; all funds unlocked");
+            } finally {
+                setFrozen(acc, false);
+                want.test_clearOrderbook();
+                want.test_clearIncomingOrderBuffers();
+                manager.cancelInterMarketOrdersForMarket(want.getItemID());
+            }
         });
     }
 }

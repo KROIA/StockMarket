@@ -6,6 +6,7 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.IBankSystemEvents;
+import net.kroia.banksystem.api.event.AccountFreezeChangedEvent;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
@@ -309,6 +310,8 @@ public class StockMarketModBackend implements StockMarketAPI {
             // merges that happen later (e.g. VolatileItemComponents config edits + admin
             // confirmation via CONFIRM_ITEMID_MERGE).
             BankSystemMod.getAPI().getEvents().getItemIDsMergedEvent().addListener(ITEM_IDS_MERGED_LISTENER);
+            // T-195: master-only; cancel a frozen account's open orders (see onAccountFreezeChanged).
+            BankSystemMod.getAPI().getEvents().getAccountFreezeChangedEvent().addListener(ACCOUNT_FREEZE_LISTENER);
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
             preRegisterPresetItemStacks();
@@ -513,6 +516,23 @@ public class StockMarketModBackend implements StockMarketAPI {
      *
      * @param aliasToCanonical merged alias ItemID mapped to its canonical ItemID
      */
+    /**
+     * T-195: BankSystem froze or unfroze a bank account (master only, fired once per real change on
+     * the caller's thread). A freeze cancels all open orders of the account across all markets
+     * through the normal cancel path, so the locked money and items are released and the CLOSE
+     * ledger rows are written. New orders are refused by the placement checks in
+     * {@code CreateOrderRequest} and {@code PlaceInterMarketOrderRequest}. An unfreeze needs nothing:
+     * those checks simply pass again.
+     *
+     * @param event the account, its new state and the admin who changed it
+     */
+    private static void onAccountFreezeChanged(AccountFreezeChangedEvent event) {
+        if (!event.frozen() || SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
+        var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        if (serverMarketManager != null)
+            serverMarketManager.cancelOrdersOfBankAccount(event.accountNumber());
+    }
+
     private static void onItemIDsMerged(Map<ItemID, ItemID> aliasToCanonical) {
         if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
         var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
@@ -666,6 +686,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         // Listeners added in onServerStart (master or slave branch); removing an absent one is a no-op.
         IBankSystemEvents events = BankSystemMod.getAPI().getEvents();
         events.getItemIDsMergedEvent().removeListener(ITEM_IDS_MERGED_LISTENER);
+        events.getAccountFreezeChangedEvent().removeListener(ACCOUNT_FREEZE_LISTENER);
         events.getMasterServerSlaveConnected().removeListener(SLAVE_CONNECTED_LISTENER);
         events.getTrustChangedSignal().removeListener(TRUST_CHANGED_LISTENER);
         events.getSlaveConnectionAcceptedSignal().removeListener(SLAVE_ACCEPTED_LISTENER);
@@ -818,6 +839,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     private static final Runnable BANK_SETUP_COMPLETE_LISTENER = StockMarketModBackend::onBankSystemSetupComplete;
     private static final Runnable BANK_DATA_LOADED_LISTENER = StockMarketModBackend::onPostBankSystemDataLoaded;
     private static final Consumer<Map<ItemID, ItemID>> ITEM_IDS_MERGED_LISTENER = StockMarketModBackend::onItemIDsMerged;
+    private static final Consumer<AccountFreezeChangedEvent> ACCOUNT_FREEZE_LISTENER = StockMarketModBackend::onAccountFreezeChanged;
     private static final Runnable SLAVE_CONNECTED_LISTENER = () -> {
         if (SERVER_INSTANCES == null || SERVER_INSTANCES.VILLAGER_TRADE_MANAGER == null) return;
         SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.broadcastTable();

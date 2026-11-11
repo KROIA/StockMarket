@@ -69,7 +69,9 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         // Appended (T-166): |volume| exceeds the market's maxOrderVolume. OutputData.detail = the limit.
         ORDER_TOO_LARGE,
         // Appended (T-166): the player's global trade cooldown has not elapsed. OutputData.detail = remaining ms.
-        TRADING_TOO_FAST
+        TRADING_TOO_FAST,
+        // Appended (T-195): the bank account is frozen by a BankSystem admin.
+        ACCOUNT_FROZEN
     }
     public static class OutputData
     {
@@ -136,7 +138,7 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
      * <p>
      * Checks, in order: market exists, volume != 0, price >= 0, market open, max order size and
      * trade cooldown (T-166), account exists, player is a member with WITHDRAW + DEPOSIT (or the
-     * personal owner), no INTER_MARKET type, enough balance. Then it locks the money (buy) or items
+     * personal owner), account not frozen (T-195), no INTER_MARKET type, enough balance. Then it locks the money (buy) or items
      * (sell) and calls {@code putOrder}; if the market refuses the order, the lock is released again.
      * The caller must have checked the sender and the slave gate already. A placed order's origin
      * server is recorded in the diagnostics DB (T-215, {@link OrderOriginLog}).
@@ -259,6 +261,15 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                 future.complete(response);
                 return future; // User is not allowed to deposit
             }
+        }
+
+        // T-195: an admin-frozen account may not trade. Checked here on the master (slaves only
+        // forward), after the membership gate (so only members learn the freeze state) and before
+        // any funds are locked.
+        if(serverBankManager.getSync().isAccountFrozen(input.bankAccountNr)) {
+            response.status = Status.ACCOUNT_FROZEN;
+            future.complete(response);
+            return future;
         }
 
         if(input.type == Order.Type.INTER_MARKET) {

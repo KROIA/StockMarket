@@ -1182,6 +1182,36 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
 
     /**
+     * T-195: cancels every open order of one bank account across all markets, including its pending
+     * inter-market orders. Called on the master when BankSystem freezes the account. Uses the normal
+     * cancel bookkeeping, so the reserved money and items are unlocked and the CLOSE ledger rows are
+     * written (BankSystem does not block these raw unlocks on a frozen account). Bot orders are untouched.
+     *
+     * @param bankAccountNr the bank account whose orders are cancelled
+     * @return the number of cancelled orders (an inter-market order counts once)
+     */
+    public int cancelOrdersOfBankAccount(int bankAccountNr)
+    {
+        int count = 0;
+        for (ServerMarket market : markets.values())
+            count += market.cancelOrdersOfBankAccount(bankAccountNr);
+        Iterator<InterMarketOrder> it = pendingInterMarketOrders.iterator();
+        while (it.hasNext())
+        {
+            InterMarketOrder order = it.next();
+            if (!order.isBotOrder() && order.getBankAccountNr() == bankAccountNr)
+            {
+                it.remove();
+                onInterMarketOrderCanceled(order);
+                count++;
+            }
+        }
+        if (count > 0)
+            info("Bank account " + bankAccountNr + " frozen: cancelled " + count + " open order(s)");
+        return count;
+    }
+
+    /**
      * Cancels a specific pending inter-market order identified by its group ID.
      * Only cancels if the order belongs to the specified player.
      * @param groupID the interMarketGroupID of the order

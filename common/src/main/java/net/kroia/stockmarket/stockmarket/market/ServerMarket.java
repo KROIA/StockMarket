@@ -412,6 +412,43 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         return false;
     }
 
+    /**
+     * T-195: cancels every open player order of one bank account in this market, through the same
+     * bookkeeping as a player cancel ({@link #onOrderCanceled(Order)}: unlocks the reserved money or
+     * items, writes the CLOSE ledger row and the order history record). Covers the resting limit
+     * orders and the orders still buffered for this tick's matching. Inter-market legs are skipped;
+     * their parent order is cancelled by {@code ServerMarketManager.cancelOrdersOfBankAccount}.
+     *
+     * @param bankAccountNr the bank account whose orders are cancelled
+     * @return the number of cancelled orders
+     */
+    public int cancelOrdersOfBankAccount(int bankAccountNr)
+    {
+        int count = 0;
+        for (Order order : getLimitOrders()) // copy, safe to remove while iterating
+        {
+            if (order.isBotOrder() || order.getBankAccountNr() != bankAccountNr) continue;
+            orderbook.removeOrder(order);
+            onOrderCanceled(order);
+            count++;
+        }
+        for (PriorityQueue<Order> buffer : List.of(buyMarketOrders_inputBuffer, sellMarketOrders_inputBuffer,
+                buyLimitOrders_inputBuffer, sellLimitOrders_inputBuffer))
+        {
+            List<Order> matches = new ArrayList<>();
+            for (Order order : buffer)
+                if (order.isPlayerOrder() && order.getType() != Order.Type.INTER_MARKET && order.getBankAccountNr() == bankAccountNr)
+                    matches.add(order);
+            for (Order order : matches)
+            {
+                buffer.remove(order);
+                onOrderCanceled(order);
+                count++;
+            }
+        }
+        return count;
+    }
+
     public PriorityQueue<Order> getIncomingBuyMarketOrders()
     {
         return buyMarketOrders_inputBuffer;
