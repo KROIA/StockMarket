@@ -4,6 +4,7 @@ import net.kroia.modutilities.testing.TestCategory;
 
 import static net.kroia.modutilities.testing.TestCategory.ServerType.BOTH;
 import static net.kroia.modutilities.testing.TestCategory.ServerType.MASTER_ONLY;
+import static net.kroia.modutilities.testing.TestCategory.ServerType.SLAVE_ONLY;
 
 public class StockMarketTestCategories {
 
@@ -203,4 +204,8 @@ public class StockMarketTestCategories {
     // T-140: master-owned client settings (initial chart window) at join, after a SET, and on a slave.
     public static final TestCategory CLIENT_SETTINGS_SYNC = new TestCategory(
             "stockmarket", "sm_client_settings_sync", "Initial chart window sync: server-instances accessor, ServerTimeRequest join value, client fallback order, SET re-push and the slave getting the master's value", BOTH, true);
+
+    // T-246: the slave-masterdown autotest cell (run_matrix --configs slave-masterdown); skips in every other cell.
+    public static final TestCategory MASTER_DOWN = new TestCategory(
+            "stockmarket", "sm_master_down", "Slave with its master down: StockMarket screens and the StockMarket block refuse with the StockMarket message (slave-masterdown cell only)", SLAVE_ONLY, true);
 }

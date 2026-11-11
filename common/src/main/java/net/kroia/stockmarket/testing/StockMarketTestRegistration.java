@@ -13,6 +13,7 @@ import net.kroia.stockmarket.testing.tests.DynamicIndexedArrayTestSuite;
 import net.kroia.stockmarket.testing.tests.InterMarketExecutorTestSuite;
 import net.kroia.stockmarket.testing.tests.InterMarketOrderTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketVisibilityTestSuite;
+import net.kroia.stockmarket.testing.tests.MasterDownTestSuite;
 import net.kroia.stockmarket.testing.tests.TradingPairTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketMergeConsolidationTestSuite;
@@ -121,6 +122,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new RequestFailureTestSuite()); // T-227: ARRS timeouts / failed futures
         TestRegistry.register(new MarketVisibilityTestSuite()); // T-237: markets hidden on a slave that cannot resolve their item
         TestRegistry.register(new ClientSettingsSyncTestSuite()); // T-140: initial chart window sync (master + slave)
+        TestRegistry.register(new MasterDownTestSuite()); // T-246: slave-masterdown cell only (T-245 screen refusal)
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());

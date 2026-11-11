@@ -3,13 +3,12 @@ package net.kroia.stockmarket.minecraft.block.custom;
 import net.kroia.banksystem.minecraft.block.custom.TerminalBlock;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
-import net.kroia.stockmarket.util.MultiServerUtils;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
 //import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -60,15 +59,15 @@ public class StockMarketBlock extends TerminalBlock {
         }
     }*/
     /**
-     * T-245: on a slave without a master link, refuse with the StockMarket "not connected" message before the
-     * BankSystem base class runs its own (identical) check, which would print the BankSystem wording.
-     * With an item in hand the final base {@code useItemOn} does the check and shows the BankSystem message.
+     * The chat line the BankSystem base class shows when this slave has no master link and refuses the block,
+     * with or without an item in hand (BankSystem #170 hook; T-246). Replaces the BankSystem wording with the
+     * StockMarket one. Public (widened from protected) so the slave-masterdown tests can check the wording.
+     *
+     * @return the translatable StockMarket "not connected" message
      */
     @Override
-    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
-        if (!level.isClientSide() && !MultiServerUtils.canInteractWithStockMarket(player.getUUID()))
-            return InteractionResult.FAIL;
-        return super.useWithoutItem(state, level, pos, player, hit);
+    public Component getNoMasterMessage() {
+        return Component.translatable("message.stockmarket.slave_not_connected");
     }
 
     /**

@@ -57,6 +57,19 @@ public class OpenUIPacket extends StockMarketNetworkPacket {
 
 
     /**
+     * The decision behind {@link #sendToClient} (T-245, split out for the T-246 slave-masterdown tests): whether this
+     * server may open {@code guiType} for the player. On a refusal the player gets the "not connected" chat message.
+     *
+     * @param player  the player asking for the screen
+     * @param guiType the screen to open
+     * @return false on a slave without a master link for a screen that {@link GUIType#needsMaster() needs the master}
+     */
+    public static boolean canOpen(ServerPlayer player, GUIType guiType)
+    {
+        return !guiType.needsMaster() || MultiServerUtils.canInteractWithStockMarket(player.getUUID());
+    }
+
+    /**
      * Tells the player's client to open a screen. Every server-driven StockMarket screen open goes through here.
      * T-245: on a slave without a master link a screen that {@link GUIType#needsMaster() needs the master} is
      * refused and the player gets the "not connected" chat message instead. Master and standalone servers are
@@ -67,7 +80,7 @@ public class OpenUIPacket extends StockMarketNetworkPacket {
      */
     public static void sendToClient(ServerPlayer player, GUIType guiType)
     {
-        if (guiType.needsMaster() && !MultiServerUtils.canInteractWithStockMarket(player.getUUID()))
+        if (!canOpen(player, guiType))
             return;
         OpenUIPacket packet = new OpenUIPacket(guiType);
         packet.sendToClient(player);
