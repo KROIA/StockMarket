@@ -2270,7 +2270,9 @@ public class PluginTestSuite extends TestSuite {
     /** Stage B scenarios (every market). */
     private static final String[] T208_GATE_SET = {"pump0", "pump5", "pump10", "pump30", "pump60", "pump24h", "dump5", "dump60",
             "limitWide", "limitTight", "organic10", "organic60", "organic360", "twoPumpers10", "twoPumpers60",
-            "pumpPlusOrganic10", "pumpPlusOrganic60"};
+            "pumpPlusOrganic10", "pumpPlusOrganic60", "cycles20"};
+    /** SM-255 (#89 incident replay): ticks between the starts of two round trips of a cycles{n} scenario. */
+    private static final int T208_CYCLE_TICKS = 240;
     /** 24 h hold: mark-to-book checkpoints in minutes after the buy leg (the executed exit follows the last). */
     private static final int[] T208_CHECKPOINTS_MIN = {5, 10, 30, 60, 120, 360, 720, 1440};
     /** Plugin-only ticks before the players start. */
@@ -2337,7 +2339,9 @@ public class PluginTestSuite extends TestSuite {
      * pump{min} (60 buys, hold, market exit), pump24h (24 h hold with checkpoints), dump{min} (sell 60, hold,
      * buy 60 back), limitWide / limitTight (60 buys, 5 min hold, 4 resting sells at 1.25-2.5x the default
      * price / 1.005-1.03x the price at exit), organic{min} (1 buy per 30 s), twoPumpers{min} (30 buys each, the
-     * second 3 min later), pumpPlusOrganic{min} (pump plus an organic buyer for 10 min).
+     * second 3 min later), pumpPlusOrganic{min} (pump plus an organic buyer for 10 min), cycles{n} (SM-255, the #89
+     * incident pattern: n fast round trips, each 10 buys as fast as the cooldown allows, a 1 s wait and a market
+     * sell-back, one every {@link #T208_CYCLE_TICKS}; one scripted player per round trip, profit is their sum).
      */
     private static T208Scenario t208Scenario(String name, long maxOrder) {
         switch (name) {
@@ -2352,6 +2356,11 @@ public class PluginTestSuite extends TestSuite {
         int n = Integer.parseInt(name.replaceAll("\\D", ""));
         if (name.startsWith("pumpPlusOrganic"))
             return new T208Scenario(null, 0, true, n, new PlayerPlan(0, 60, 10, n * 1200, true), new PlayerPlan(0, 20, 600, 0, false));
+        if (name.startsWith("cycles")) {
+            PlayerPlan[] trips = new PlayerPlan[n];
+            for (int i = 0; i < n; i++) trips[i] = new PlayerPlan(i * T208_CYCLE_TICKS, 10, 10, 20, true);
+            return new T208Scenario(null, 0, true, 0, trips);
+        }
         if (name.startsWith("twoPumpers"))
             return new T208Scenario(null, 0, true, n, new PlayerPlan(0, 30, 10, n * 1200, true), new PlayerPlan(3600, 30, 10, n * 1200, true));
         if (name.startsWith("pump")) return new T208Scenario(null, 0, true, n, new PlayerPlan(0, 60, 10, n * 1200, true));
