@@ -67,8 +67,12 @@ public interface IStockMarketIntegration {
     void closeMarket(@NotNull ItemID subject);
 
     /**
-     * Opens or closes the market for the given subject for trading by toggling
-     * the existing {@code marketOpen} flag. This does <b>not</b> create or delete
+     * Opens or closes the market for the given subject for trading. This maps to the
+     * market's <b>Maintenance</b> state: {@code open=true} = end maintenance
+     * ({@code maintenance=false}), {@code open=false} = maintenance ({@code maintenance=true}).
+     * Maintenance blocks players only; bots keep trading. The maintenance
+     * flag is persisted across restarts. The method name is kept for compatibility —
+     * BankSystem calls it reflectively by name. This does <b>not</b> create or delete
      * the market — see {@link #openMarket(ItemID, MarketConfig)} and
      * {@link #closeMarket(ItemID)} for lifecycle management.
      * <p>
@@ -94,7 +98,8 @@ public interface IStockMarketIntegration {
 
     /**
      * Returns whether the market for the given subject is currently open for
-     * trading (i.e. the {@code marketOpen} flag is set). Returns {@code false} if
+     * trading, i.e. it is <b>not under maintenance</b> ({@code = !maintenance}; see
+     * {@link #setMarketOpen(ItemID, boolean)}). Name kept for BankSystem reflection. Returns {@code false} if
      * the market is closed <b>or</b> if no market exists for {@code subject}.
      * <p>
      * Server-thread only.

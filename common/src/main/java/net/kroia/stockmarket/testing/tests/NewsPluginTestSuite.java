@@ -70,6 +70,11 @@ public class NewsPluginTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Eligibility & scheduling
         addTest("eligibility_requires_resolved_markets", this::test_eligibility_requiresResolvedMarkets);
@@ -130,6 +135,8 @@ public class NewsPluginTestSuite extends TestSuite {
         final ItemID id;
         double targetPrice;
         double defaultPrice;
+        /** Net player flow in real units (also used by VolatilityPluginTestSuite). */
+        double netFlow;
 
         TestMarket(ItemID id, double price) {
             this.id = id;
@@ -145,17 +152,28 @@ public class NewsPluginTestSuite extends TestSuite {
         @Override public long convertRealPriceToBackendPrice(double realPrice) { return (long) (realPrice * 100.0); }
         @Override public double getPreviousTargetPrice() { return targetPrice; }
         @Override public double getTargetPrice() { return targetPrice; }
-        @Override public void setTargetPrice(double v) { targetPrice = v; }
+        @Override public void setTargetPrice(double v) { targetPrice = v; targetSet = true; }
         @Override public void addToTargetPrice(double delta) { targetPrice += delta; }
         @Override public long placeOrder(double amount, double price) { return 0; }
         @Override public void placeOrder(double amount) { }
         @Override public float getNaturalAbundance() { return 10f; }
-        @Override public double getNetPlayerItemFlow() { return 0; }
+        @Override public double getMaxRealOrderVolume() { return 0; }
+        @Override public double getNetPlayerItemFlow() { return netFlow; }
+        @Override public void setNetPlayerItemFlow(double v) { netFlow = v; }
+        /** The mock does not fade: the faded flow is the same field as the real one. */
+        @Override public double getFadedNetPlayerItemFlow() { return netFlow; }
+        @Override public void setFadedNetPlayerItemFlow(double v) { netFlow = v; }
         @Override public boolean isMarketOpen() { return true; }
         @Override public float getCurrentCandleTradedVolume() { return 0; }
         @Override public boolean isVirtualOrderbookEnabled() { return true; }
         @Override public void clearVirtualOrderbook() { }
         @Override public void resetVirtualOrderbook() { }
+        /** T-213 equilibrium channel: last published equilibrium (NaN = none) and the "target written" flag. */
+        double equilibrium = Double.NaN;
+        boolean targetSet;
+        @Override public void setEquilibriumPrice(double v) { equilibrium = v; }
+        @Override public double getEquilibriumPrice() { return Double.isNaN(equilibrium) ? defaultPrice : equilibrium; }
+        @Override public boolean isTargetPriceSetThisTick() { return targetSet; }
     }
 
     /**

@@ -8,7 +8,9 @@ import net.kroia.stockmarket.networking.request.OrderHistoryRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
+import net.kroia.stockmarket.util.InFlightGuard;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.network.chat.Component;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -39,6 +41,8 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
     private boolean needsRebuild = false;
     private List<OrderRecordStruct> pendingRecords = new ArrayList<>();
     private long lastRefreshMs = 0;
+    /** One {@link OrderHistoryRequest} at a time, released even when the request fails. */
+    private final InFlightGuard refreshGuard = new InFlightGuard();
     @org.jetbrains.annotations.Nullable
     private ItemID currentMarketID;
     // Client-side "clear" — hides records older than this timestamp without deleting from SQL
@@ -55,7 +59,7 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
         recordListView.setLayout(layout);
         addChild(recordListView);
 
-        clearButton = new Button("Clear", this::onClearHistory);
+        clearButton = new Button(Component.translatable("gui.stockmarket.order_history_panel.clear").getString(), this::onClearHistory);
         clearButton.setBackgroundColor(0xFFe8711c);
         clearButton.setHoverColor(0xFFe04c12);
         addChild(clearButton);
@@ -68,21 +72,35 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
     /**
      * Sends an {@link OrderHistoryRequest} to the server and updates the panel
      * when the response arrives.
+     * <p>
+     * At most one request is in flight (the master reads the history on its DB executor, which can
+     * be slow). A refresh asked for while one is running is not dropped: it runs on the first frame
+     * after the running one has completed.
      */
     public void refresh() {
-        BACKEND_INSTANCES.NETWORKING.ORDER_HISTORY_REQUEST.sendRequestToServer(
-                new OrderHistoryRequest.InputData(MAX_RESULTS)
-        ).thenAccept(response -> updateRecords(response.records()));
+        boolean sent = refreshGuard.send(
+                () -> BACKEND_INSTANCES.NETWORKING.ORDER_HISTORY_REQUEST.sendRequestToServer(
+                        new OrderHistoryRequest.InputData(MAX_RESULTS)),
+                response -> updateRecords(response.records()));
+        if (!sent)
+            lastRefreshMs = 0; // poll again as soon as the running request is done
     }
 
     /**
      * Replaces the displayed records. Thread-safe via dirty flag.
+     * <p>
+     * The auto-refresh polls every few seconds; if the server returns the same records
+     * (OrderRecordStruct is a record of value fields, so List.equals compares contents)
+     * the rebuild is skipped. Filter changes (market switch) trigger their own rebuild
+     * in {@link #setCurrentMarketID(ItemID)}.
      *
      * @param records the new list of order history records
      */
     public void updateRecords(List<OrderRecordStruct> records) {
+        List<OrderRecordStruct> next = records != null ? new ArrayList<>(records) : new ArrayList<>();
+        if (next.equals(pendingRecords)) return; // unchanged -> keep current widgets
+        pendingRecords = next;
         needsRebuild = true;
-        pendingRecords = records != null ? new ArrayList<>(records) : new ArrayList<>();
     }
 
     @Override
@@ -92,7 +110,7 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
             rebuildRecordList(pendingRecords);
         }
         long now = System.currentTimeMillis();
-        if (now - lastRefreshMs > AUTO_REFRESH_INTERVAL_MS) {
+        if (!refreshGuard.isInFlight() && now - lastRefreshMs > AUTO_REFRESH_INTERVAL_MS) {
             lastRefreshMs = now;
             refresh();
         }
@@ -107,9 +125,15 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
     }
 
     /**
-     * Sets the current market for filtering the clear operation.
+     * Sets the current market used to filter the displayed records.
+     * Forces a rebuild on change, because {@link #updateRecords(List)} skips
+     * rebuilds when the server data is unchanged and would otherwise keep
+     * showing the previous market's filter.
+     *
+     * @param marketID the market to filter by, or null to show all markets
      */
     public void setCurrentMarketID(@org.jetbrains.annotations.Nullable ItemID marketID) {
+        if (!java.util.Objects.equals(this.currentMarketID, marketID)) needsRebuild = true;
         this.currentMarketID = marketID;
     }
 
@@ -130,6 +154,16 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
     }
 
     /**
+     * T-237: whether the record's market may be shown here (see {@link StockMarketGuiElement#isMarketVisible}).
+     *
+     * @param record a history record
+     * @return false on a slave that cannot resolve the record's item
+     */
+    private static boolean isRecordMarketVisible(OrderRecordStruct record) {
+        return StockMarketGuiElement.isMarketVisible(new ItemID(record.itemID()));
+    }
+
+    /**
      * Clears and rebuilds the record list view, applying market and clear-timestamp filters.
      * <p>
      * Records with a non-null {@code interMarketGroupID} are grouped into pairs and displayed
@@ -144,6 +178,10 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
         List<OrderRecordStruct> standaloneRecords = new ArrayList<>();
 
         for (OrderRecordStruct record : records) {
+            // T-237: a slave hides records on markets for items it cannot resolve (items only the master has).
+            // A hidden leg of an inter-market trade hides the whole trade, see the group loop below.
+            if (record.interMarketGroupID() == null && !isRecordMarketVisible(record))
+                continue;
             // Apply market filter: skip records that don't belong to the current market view.
             // For inter-market trades, we allow records from ANY market since the grouped entry
             // shows both legs (which belong to different markets).
@@ -174,6 +212,8 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
         // Add grouped inter-market trade entries
         for (Map.Entry<UUID, List<OrderRecordStruct>> group : groupedByIMGroupID.entrySet()) {
             List<OrderRecordStruct> legs = group.getValue();
+            if (!legs.stream().allMatch(OrderHistoryPanel::isRecordMarketVisible))
+                continue; // T-237: a leg on a hidden market hides the whole inter-market trade
             if (legs.size() == 2) {
                 // Normal case: exactly 2 legs forming a complete inter-market trade.
                 // Apply market filter for grouped entries: if a market filter is set,
@@ -252,7 +292,7 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
 
             // BUY / SELL — positive amount = buy, negative = sell
             boolean isBuy = record.amount() > 0;
-            typeLabel = new Label(isBuy ? "BUY" : "SELL");
+            typeLabel = new Label(Component.translatable(isBuy ? "gui.stockmarket.order_row.buy" : "gui.stockmarket.order_row.sell").getString());
             typeLabel.setTextFontScale(0.8f);
             addChild(typeLabel);
 
@@ -345,7 +385,9 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
             // "Traded X.XX -> Y.YY" text
             double sellAmount = Math.abs(MarketManager.convertToRealAmountStatic(sellLeg.amount()));
             double buyAmount = Math.abs(MarketManager.convertToRealAmountStatic(buyLeg.amount()));
-            tradeLabel = new Label(String.format("Traded %.2f -> %.2f", sellAmount, buyAmount));
+            tradeLabel = new Label(Component.translatable("gui.stockmarket.order_history_panel.traded",
+                    String.format(Locale.ROOT, "%.2f", sellAmount),
+                    String.format(Locale.ROOT, "%.2f", buyAmount)).getString());
             tradeLabel.setTextFontScale(0.8f);
             addChild(tradeLabel);
 

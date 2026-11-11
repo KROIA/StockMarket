@@ -27,6 +27,11 @@ public class NewsRegistryTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Auto fire records
         addTest("record_fire_creates_entry", this::test_recordFire_createsEntry);
