@@ -40,6 +40,7 @@ public final class DevBootstrap {
         }
         MarketIntegrationTestSuite.setBackend(instances);
         InterMarketExecutorTestSuite.setBackend(instances);
+        MarketVisibilityTestSuite.setBackend(instances); // T-237: runs on master and slave
         StockMarketTestRegistration.register();
         if (isMaster) {
             MatchingEngineTestSuite.setBackend(instances);
@@ -52,7 +53,12 @@ public final class DevBootstrap {
             ServerMarketTestSuite.setBackend(instances);
             PluginTestSuite.setBackend(instances);
             MarketMergeConsolidationTestSuite.setBackend(instances);
+            VillagerTradeRewriteTestSuite.setBackend(instances); // T-243 market-impact test
             NewsHistoryRequestTestSuite.setBackend(instances);
+            DiscordIntegrationTestSuite.setBackend(instances);
+            PumpDumpDetectorTestSuite.setBackend(instances); // T-192
+            AdminFlagSyncLuckPermsTests.setBackend(instances);
+            StockMarketLuckPermsRemovedTests.setBackend(instances);
         }
     }
 }

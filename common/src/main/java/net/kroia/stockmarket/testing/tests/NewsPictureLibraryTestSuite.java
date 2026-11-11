@@ -42,6 +42,11 @@ public class NewsPictureLibraryTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // PngHeader
         addTest("png_header_valid_parse", this::test_pngHeader_validParse);

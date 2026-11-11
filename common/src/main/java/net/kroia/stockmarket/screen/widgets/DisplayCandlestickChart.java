@@ -11,6 +11,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * CandlestickChart variant for the display block system.
@@ -175,11 +176,16 @@ public class DisplayCandlestickChart extends CandlestickChart {
             ClientMarket haveMarket = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(secondMarketID);
             if (haveMarket == null || wantMarket == null) return false;
 
-            haveMarket.subscribeToMarketPriceUpdate();
-            wantMarket.subscribeToMarketPriceUpdate();
-
+            // Resolve the provider BEFORE subscribing: a failed attempt leaves connected == false,
+            // so disconnect() would never release subscriptions taken here and every retry
+            // (once per frame) would leak two ref-counted price streams.
             IPriceDataProvider provider = BACKEND_INSTANCES.MARKET_MANAGER.getCrossRateMarket(secondMarketID, targetMarketID);
             if (provider == null) return false;
+
+            // Subscribe only on the success path (returns true -> connected) so each
+            // subscribe is paired with exactly one unsubscribe in disconnect().
+            haveMarket.subscribeToMarketPriceUpdate();
+            wantMarket.subscribeToMarketPriceUpdate();
 
             setPriceDataProvider(new DisplayProviderWrapper(provider, displayViewportKey));
             if (initialViewport != null) {
@@ -237,6 +243,22 @@ public class DisplayCandlestickChart extends CandlestickChart {
         @Override
         public @NotNull String getViewportKey() {
             return key;
+        }
+
+        // The two pagination methods below MUST be forwarded: the interface defaults
+        // report "no data / nothing older", which left the display chart empty until
+        // some other screen (TradeScreen) had fetched the same market/timeframe.
+
+        /** Forwards older-history paging to the wrapped provider. */
+        @Override
+        public @NotNull CompletableFuture<Boolean> requestOlderData(long candleDeltaMs, long beforeTimestamp) {
+            return delegate.requestOlderData(candleDeltaMs, beforeTimestamp);
+        }
+
+        /** Forwards the "server has older data" query to the wrapped provider. */
+        @Override
+        public boolean hasMoreOlderData(long candleDeltaMs) {
+            return delegate.hasMoreOlderData(candleDeltaMs);
         }
     }
 }

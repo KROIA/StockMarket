@@ -15,6 +15,13 @@ import java.util.concurrent.CompletableFuture;
  * Client-side plugin manager interface.
  * Provides access to synced plugin data received from the server.
  * Data is fetched on-demand via requests when the management GUI is opened.
+ * <p>
+ * Request failures (2.2.0): the request futures fail with ModUtilities'
+ * {@link net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException} when no answer came in
+ * time or the connection was lost, often wrapped in a {@link java.util.concurrent.CompletionException}. The server
+ * may have applied the change: never undo or resend it automatically, reload the plugin list instead. A failed
+ * {@link #requestPluginList()} or {@link #requestReorderPlugin} leaves the cached list as it was. See
+ * {@code documentation/developer-guide/api/async-market-api.md}, section 3.
  */
 public interface IClientPluginManager {
     /** Returns the last synced list of plugin data (metadata + subscriptions). */

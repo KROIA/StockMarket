@@ -7,6 +7,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -79,7 +80,9 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
-        if(playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender)))
+        // T-239: an untrusted slave sets the player UUID itself, so it could read any player's orders
+        if(playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender))
+                || !NetworkGate.isManagementReadAllowed(slaveID, "ActiveOrdersRequest"))
             return CompletableFuture.completedFuture(new OutputData(List.of()));
         CompletableFuture<OutputData>  future = new CompletableFuture<>();
         List<Order> orderData = new ArrayList<>();

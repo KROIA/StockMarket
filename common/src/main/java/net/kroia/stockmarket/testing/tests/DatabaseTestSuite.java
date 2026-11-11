@@ -6,9 +6,11 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 
 import java.sql.Connection;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -57,14 +59,27 @@ public class DatabaseTestSuite extends TestSuite {
      * the test thread races in-flight db-worker commits and causes intermittent
      * "cannot commit/rollback - no transaction is active" failures.
      *
+     * <p>
+     * Earlier suites can leave a backlog of writes queued; it is drained first ({@link TestFixture#dbBarrier}) so
+     * the 10 s budget measures the test body, not the backlog.
+     *
      * @param body the test body to execute on the database thread
      * @return the body's result, or a failure on exception/timeout
      */
     private TestResult onDbThread(Callable<TestResult> body) {
         if (backend.DATABASE_MANAGER == null)
             return fail("DATABASE_MANAGER is null");
+        ExecutorService db = backend.DATABASE_MANAGER.getDatabaseThread();
+        Future<?> barrier;
         try {
-            return backend.DATABASE_MANAGER.getDatabaseThread().submit(body).get(10, TimeUnit.SECONDS);
+            barrier = TestFixture.dbBarrier(backend.DATABASE_MANAGER);
+        } catch (RejectedExecutionException e) {
+            return fail("db-worker rejected the drain barrier: " + e);
+        }
+        if (!pumpUntil(barrier::isDone, TestFixture.DB_DRAIN_TIMEOUT_MS))
+            return fail("db-worker queue did not drain within " + TestFixture.DB_DRAIN_TIMEOUT_MS + " ms before the test body could start");
+        try {
+            return db.submit(body).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("Test body failed on db-worker thread: " + e);
         }

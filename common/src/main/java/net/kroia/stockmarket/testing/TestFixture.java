@@ -5,12 +5,16 @@ import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.ISyncServerPluginManager;
+import net.kroia.stockmarket.data.DatabaseManager;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -21,6 +25,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Scratch-resource allocator shared by the in-game test suites.
@@ -108,6 +115,43 @@ public class TestFixture {
      */
     public TestFixture(String label) {
         this.label = label;
+    }
+
+    /**
+     * Registry access for codec round trips in tests: the running game's, or offline (no server, as in
+     * {@code gradlew :common:test}) the vanilla built-in registries, which need {@code Bootstrap.bootStrap()} first.
+     * Enough for item stacks and plain codecs; data-driven registries (enchantments, ...) exist only in game.
+     *
+     * @return the registry access, null only in game when neither side has one
+     */
+    public static RegistryAccess registryAccess() {
+        if (UtilitiesPlatform.isPlatformSet() && UtilitiesPlatform.getServer() != null)
+            return UtilitiesPlatform.getRegistryAccess();
+        return RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+    }
+
+    /** Upper bound for draining the db-worker backlog with {@link #dbBarrier} (a safety cap, not a budget). */
+    public static final long DB_DRAIN_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5);
+
+    /**
+     * Submits a no-op barrier job to the {@code db-worker}. The worker is a FIFO single-thread executor, so the
+     * barrier is done once every job queued before it has run. Earlier suites (heavy trading) can leave a long
+     * backlog of writes; drain it before a timed database call so that call's timeout measures the call, not the
+     * backlog:
+     * <pre>
+     * if (!pumpUntil(TestFixture.dbBarrier(db)::isDone, TestFixture.DB_DRAIN_TIMEOUT_MS))
+     *     return fail("db-worker queue did not drain");
+     * await(manager.removeHistory(...), 5000);
+     * </pre>
+     * {@code TestSuite.pumpUntil} keeps the server's queued tasks running meanwhile, so the wait cannot deadlock
+     * the server thread.
+     *
+     * @param db the live (or an isolated) database manager
+     * @return the barrier's future, done when the queue ahead of it has drained
+     * @throws RejectedExecutionException if the db-worker is already shut down
+     */
+    public static Future<?> dbBarrier(DatabaseManager db) {
+        return db.getDatabaseThread().submit(() -> {});
     }
 
     /**

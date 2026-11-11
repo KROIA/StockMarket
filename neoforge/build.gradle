@@ -87,6 +87,20 @@ dependencies {
     shadowBundle project(path: ':common', configuration: 'transformProductionNeoForge')
 }
 
+// Opt-in LuckPerms for dev runs (runClient/runServer, tools/autotest --luckperms): -Pwith_luckperms=true.
+// modLocalRuntime: dev runtime only, never in the mod jar or the published POM/Gradle module metadata.
+if ((findProperty('with_luckperms') ?: 'false').toBoolean()) {
+    repositories {
+        maven {
+            url = 'https://api.modrinth.com/maven'
+            content { includeGroup 'maven.modrinth' }
+        }
+    }
+    dependencies {
+        modLocalRuntime "maven.modrinth:luckperms:${rootProject.luckperms_neoforge_version}"
+    }
+}
+
 processResources {
     inputs.property 'version', project.version
     inputs.property 'minecraft_version', rootProject.minecraft_version

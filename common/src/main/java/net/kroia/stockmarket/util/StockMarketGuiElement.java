@@ -155,6 +155,19 @@ public abstract class StockMarketGuiElement extends GuiElement {
         return !isMasterServer() && !isSlaveTrusted();
     }
 
+    /**
+     * T-237: whether a market may be shown on this client. On a slave, markets whose item the slave cannot
+     * resolve (the item's mod only exists on the master) are hidden everywhere; the master shows every
+     * market, including broken ones, so an admin can still remove them.
+     *
+     * @param marketID the market's item
+     * @return true if the market may be shown
+     */
+    public static boolean isMarketVisible(@Nullable ItemID marketID)
+    {
+        return isMasterServer() || MultiServerUtils.isMarketResolvableOnThisServer(marketID);
+    }
+
 
     protected @Nullable ClientMarket getMarket(ItemID marketID)
     {
