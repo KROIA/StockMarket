@@ -107,13 +107,6 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
         genericPluginData.setAutoSubscribeNewMarkets(autoSubscribe);
     }
 
-    public int getSubscriptionOrder() {
-        return genericPluginData.getSubscriptionOrder();
-    }
-    public void setSubscriptionOrder(int order) {
-        genericPluginData.setSubscriptionOrder(order);
-    }
-
     public GenericPluginData getGenericPluginData() {
         return genericPluginData;
     }
@@ -266,13 +259,14 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
     public final void update_internal()
     {
         state  = State.EXEC_UPDATE;
-        update(cache.getInterfaces());
+        // Only markets inside their trading hours; closed markets keep a static price.
+        update(cache.getOpenInterfaces());
         state  = State.NONE;
     }
     public final void finalize_internal()
     {
         state  = State.EXEC_FINALIZE;
-        finalize(cache.getInterfaces());
+        finalize(cache.getOpenInterfaces());
         state  = State.NONE;
     }
 
@@ -432,6 +426,19 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
         } finally {
             buf.release();
         }
+    }
+
+    /**
+     * Replaces the custom settings of one market from inside the plugin or a test (e.g. to persist a
+     * value the plugin derived at runtime): stores them in the per-market map, which is what gets saved
+     * and synced to the UI, and calls {@link #onCustomSettingsApplied}.
+     *
+     * @param marketID the market whose settings are replaced
+     * @param settings the new settings (not null)
+     */
+    public final void replaceCustomSettings(ItemID marketID, @NotNull TSettings settings) {
+        customSettingsMap.put(marketID, settings);
+        onCustomSettingsApplied(marketID, settings);
     }
 
     /**

@@ -24,6 +24,8 @@ import java.util.UUID;
  * <p>
  * Updates are sent at most every 500ms and only when the order set has changed (detected by
  * comparing order count and a content hash).
+ * <p>
+ * A stream to an untrusted slave is stopped (T-239): the slave sets the player UUID itself.
  */
 public class ActiveOrdersStream extends StockMarketGenericStream<Byte, ActiveOrdersStream.ResponseData> {
 
@@ -87,7 +89,9 @@ public class ActiveOrdersStream extends StockMarketGenericStream<Byte, ActiveOrd
         if (now - lastUpdateMs < UPDATE_INTERVAL_MS) return;
         lastUpdateMs = now;
 
-        if (playerUUID == null) {
+        // T-239: an untrusted slave sets the player UUID itself, so it could stream any player's orders.
+        // Trust is re-queried every update, so untrusting the slave stops the stream.
+        if (playerUUID == null || !isStreamTrustAllowed("ActiveOrdersStream")) {
             stopStream();
             return;
         }

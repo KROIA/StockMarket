@@ -6,6 +6,7 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.IBankSystemEvents;
+import net.kroia.banksystem.api.event.AccountFreezeChangedEvent;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
@@ -21,9 +22,11 @@ import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommandHandler;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
+import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
 import net.kroia.stockmarket.minecraft.compat.StockMarketPlaceholders;
 import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.data.DatabaseManager;
+import net.kroia.stockmarket.data.OrderOriginLog;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
@@ -40,6 +43,9 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.PluginManager;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
+import net.kroia.stockmarket.stockmarket.market.OrderLedger;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -51,6 +57,7 @@ import net.kroia.stockmarket.news.ClientNewsPictureCache;
 import net.kroia.stockmarket.util.*;
 import net.kroia.stockmarket.villagertrading.VillagerTradeManager;
 import net.kroia.stockmarket.villagertrading.VillagerTradeRewriter;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -132,6 +139,36 @@ public class StockMarketModBackend implements StockMarketAPI {
         return CLIENT_INSTANCES;
     }
 
+    /**
+     * T-140: read-only accessor for the server-side instances holder.
+     * <p>
+     * Non-null only in a JVM that runs a StockMarket server (dedicated server, or the integrated
+     * server of a single-player / LAN world) between server setup and shutdown. A client connected
+     * to a remote server always sees {@code null}. Callers must null-check and must not cache the
+     * result across server restarts (a new holder is created on every server start).
+     *
+     * @return the current server instances, or {@code null} if no server runs in this JVM
+     */
+    public static @Nullable ServerInstances getServerInstances() {
+        return SERVER_INSTANCES;
+    }
+
+    /**
+     * T-179: current {@code MARKET.MAX_ORDER_VOLUME_FACTOR} of the running (master) server, read live.
+     * Without a running server (remote client, or before setup) the compile-time default is returned —
+     * client-side derivations are never authoritative (markets/presets come from the master with explicit values).
+     *
+     * @return the factor, &ge; 1
+     */
+    public static long getMaxOrderVolumeFactor() {
+        ServerInstances server = SERVER_INSTANCES;
+        if (server == null || server.SERVER_SETTINGS == null)
+            return MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR;
+        Long factor = server.SERVER_SETTINGS.MARKET.MAX_ORDER_VOLUME_FACTOR.get();
+        return factor == null ? MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR
+                : Math.max(1L, factor);
+    }
+
     StockMarketModBackend()
     {
         COMMON_INSTANCES.LOGGER = new StockMarketLogger();
@@ -155,6 +192,7 @@ public class StockMarketModBackend implements StockMarketAPI {
                 net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart::new);
 
         EventRegistration.init();
+        // AdminFlagSync.init() (LuckPerms listener) runs at server start, see onBankSystemSetupComplete (T-217).
         if (StockMarketMod.ENABLE_DEV_FEATURES) {
             invokeDevBootstrap("init", new Class<?>[0]);
         }
@@ -258,6 +296,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         DataManager.setBackend(SERVER_INSTANCES);
         StockMarketLogger.setBackend(SERVER_INSTANCES);
         VillagerTradeRewriter.setBackend(SERVER_INSTANCES);
+        AdminFlagSync.setBackend(SERVER_INSTANCES);
+        net.kroia.stockmarket.util.TradeAlerts.setBackend(SERVER_INSTANCES); // T-192 alert toggle
 
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
         villagerAutosaveTicks = 0;
@@ -267,6 +307,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         if(isMaster) {
             SERVER_INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             SERVER_INSTANCES.DATABASE_MANAGER.connectToDatabase(UtilitiesPlatform.getServer());
+            // T-215: order-origin diagnostics, next to stockdata.db; master only, orders are created here
+            OrderOriginLog.open(UtilitiesPlatform.getServer().getWorldPath(LevelResource.ROOT).resolve(DatabaseManager.DATABASE_PATH));
             SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager(SERVER_INSTANCES.DATABASE_MANAGER);
             SERVER_INSTANCES.ORDER_RECORD_MANAGER = new OrderRecordManager(SERVER_INSTANCES.DATABASE_MANAGER);
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createMaster();
@@ -283,9 +325,16 @@ public class StockMarketModBackend implements StockMarketAPI {
             // merges that happen later (e.g. VolatileItemComponents config edits + admin
             // confirmation via CONFIRM_ITEMID_MERGE).
             BankSystemMod.getAPI().getEvents().getItemIDsMergedEvent().addListener(ITEM_IDS_MERGED_LISTENER);
+            // T-195: master-only; cancel a frozen account's open orders (see onAccountFreezeChanged).
+            BankSystemMod.getAPI().getEvents().getAccountFreezeChangedEvent().addListener(ACCOUNT_FREEZE_LISTENER);
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
             preRegisterPresetItemStacks();
+            // T-217: the LuckPerms listener only while Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION is on (restart-required).
+            if (SERVER_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get())
+                AdminFlagSync.init();
+            AdminFlagSync.migrateIfNeeded(); // one-time push of admins to LuckPerms (setting on), users are loaded now
+            StockMarketDiscord.register(SERVER_INSTANCES); // T-217: master only; creates config/modutilities/discord/stockmarket.json
             registerItemPriceProvider();
 
             // Villager trade repricing: build the initial price table now that
@@ -401,11 +450,18 @@ public class StockMarketModBackend implements StockMarketAPI {
             if (MultiServerUtils.canInteractWithBankSystem()) {
                 onSlaveConnectedRefreshTrustCache();
             }
+
+            // T-217: a slave keeps default settings, so it always listens to LuckPerms and forwards
+            // changes; the master applies them only while its own setting is on.
+            AdminFlagSync.init();
         }
 
         // Placeholders (master + slave): registers player placeholders and the refresh tick.
         // Placed after the master/slave branch so MARKET_MANAGER exists when the tick runs.
-        StockMarketPlaceholders.init(SERVER_INSTANCES);
+        // T-217: Integrations.PLACEHOLDERS_ENABLED is decided on the master (restart-required); a slave keeps
+        // polling, and an off master simply has no values to hand out.
+        if (!isMaster || SERVER_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.PLACEHOLDERS_ENABLED.get())
+            StockMarketPlaceholders.init(SERVER_INSTANCES);
     }
 
     /**
@@ -475,6 +531,23 @@ public class StockMarketModBackend implements StockMarketAPI {
      *
      * @param aliasToCanonical merged alias ItemID mapped to its canonical ItemID
      */
+    /**
+     * T-195: BankSystem froze or unfroze a bank account (master only, fired once per real change on
+     * the caller's thread). A freeze cancels all open orders of the account across all markets
+     * through the normal cancel path, so the locked money and items are released and the CLOSE
+     * ledger rows are written. New orders are refused by the placement checks in
+     * {@code CreateOrderRequest} and {@code PlaceInterMarketOrderRequest}. An unfreeze needs nothing:
+     * those checks simply pass again.
+     *
+     * @param event the account, its new state and the admin who changed it
+     */
+    private static void onAccountFreezeChanged(AccountFreezeChangedEvent event) {
+        if (!event.frozen() || SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
+        var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        if (serverMarketManager != null)
+            serverMarketManager.cancelOrdersOfBankAccount(event.accountNumber());
+    }
+
     private static void onItemIDsMerged(Map<ItemID, ItemID> aliasToCanonical) {
         if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
         var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
@@ -593,9 +666,33 @@ public class StockMarketModBackend implements StockMarketAPI {
         }
     }
 
+    /**
+     * T-191: writes a SHUTDOWN ledger row for every open player order with fills that are not in the
+     * ledger yet. Must run while BankSystem's database is still open, so Fabric calls it from an
+     * earlier SERVER_STOPPING phase (BankSystem's stop handler runs first there); on NeoForge
+     * StockMarket's stop handler already runs before BankSystem's. Calling it again is harmless:
+     * the second call finds no unlogged fills. Master only (no-op on a slave).
+     *
+     * @param server the stopping server (unused, keeps the lifecycle-callback signature)
+     */
+    public static void flushLedgerOnShutdown(MinecraftServer server)
+    {
+        if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null)
+            return;
+        ServerMarketManager manager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        if (manager == null)
+            return;
+        try {
+            manager.logOpenOrdersToLedger(OrderLedger.SHUTDOWN);
+        } catch (RuntimeException e) {
+            SERVER_INSTANCES.LOGGER.error("[StockMarketModBackend] Failed to write SHUTDOWN ledger rows", e);
+        }
+    }
+
     // Called from the server side
     public static void onServerStop(MinecraftServer server)
     {
+        flushLedgerOnShutdown(server); // T-191: before saveDataToFiles, so the logged state is saved
         if (SERVER_INSTANCES != null && SERVER_INSTANCES.BANK_SYSTEM_API != null) {
             SERVER_INSTANCES.BANK_SYSTEM_API.setItemPriceProvider(null);
         }
@@ -604,17 +701,20 @@ public class StockMarketModBackend implements StockMarketAPI {
         // Listeners added in onServerStart (master or slave branch); removing an absent one is a no-op.
         IBankSystemEvents events = BankSystemMod.getAPI().getEvents();
         events.getItemIDsMergedEvent().removeListener(ITEM_IDS_MERGED_LISTENER);
+        events.getAccountFreezeChangedEvent().removeListener(ACCOUNT_FREEZE_LISTENER);
         events.getMasterServerSlaveConnected().removeListener(SLAVE_CONNECTED_LISTENER);
         events.getTrustChangedSignal().removeListener(TRUST_CHANGED_LISTENER);
         events.getSlaveConnectionAcceptedSignal().removeListener(SLAVE_ACCEPTED_LISTENER);
         events.getSlaveConnectionLostSignal().removeListener(SLAVE_LOST_LISTENER);
         StockMarketPlaceholders.shutdown();
+        StockMarketDiscord.shutdown();
         saveDataToFiles(server);
 
         if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATABASE_MANAGER != null) {
             SERVER_INSTANCES.DATABASE_MANAGER.close();
             SERVER_INSTANCES.DATABASE_MANAGER = null;
         }
+        OrderOriginLog.close(); // no-op on slaves
 
         if(MultiServerManager.instanceExists())
         {
@@ -754,6 +854,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     private static final Runnable BANK_SETUP_COMPLETE_LISTENER = StockMarketModBackend::onBankSystemSetupComplete;
     private static final Runnable BANK_DATA_LOADED_LISTENER = StockMarketModBackend::onPostBankSystemDataLoaded;
     private static final Consumer<Map<ItemID, ItemID>> ITEM_IDS_MERGED_LISTENER = StockMarketModBackend::onItemIDsMerged;
+    private static final Consumer<AccountFreezeChangedEvent> ACCOUNT_FREEZE_LISTENER = StockMarketModBackend::onAccountFreezeChanged;
     private static final Runnable SLAVE_CONNECTED_LISTENER = () -> {
         if (SERVER_INSTANCES == null || SERVER_INSTANCES.VILLAGER_TRADE_MANAGER == null) return;
         SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.broadcastTable();

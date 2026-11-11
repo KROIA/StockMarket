@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.stockmarket.networking.request.ModSettingsRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -74,7 +75,21 @@ public class ClientSettings {
      */
     boolean slaveTrusted = true;
 
-    boolean fillMissingCandlesticks = true;
+    /**
+     * T-140: the master's {@code MARKET.PRICE_HISTORY_INITIAL_LOAD_CANDLES} (candles loaded when a
+     * chart first opens). {@code 0} = not synced yet; {@code ClientMarket} then falls back to the
+     * local server's setting (integrated world) or 512.
+     * <p>
+     * Deliberately NOT part of {@link #STREAM_CODEC} / {@code PlayerJoinSyncPacket}: that packet is
+     * built by the server the player joined, and a slave only has compile-time defaults. The value
+     * comes from the master instead:
+     * <ul>
+     *   <li>at join, through {@code ServerTimeRequest} (routed to the master, also from a slave),</li>
+     *   <li>after an admin SET, through {@code ClientSettingsSyncPacket} (master &rarr; its players
+     *       and every slave &rarr; their players).</li>
+     * </ul>
+     */
+    int initialLoadCandles = 0;
 
     public ClientSettings() {
     }
@@ -137,11 +152,25 @@ public class ClientSettings {
         this.slaveTrusted = slaveTrusted;
     }
 
-    public void setFillMissingCandlesticks(boolean fillMissingCandlesticks) {
-        this.fillMissingCandlesticks = fillMissingCandlesticks;
+    /**
+     * @return the master's initial chart window in candles, or {@code 0} if no sync has arrived yet
+     *         (see {@link #initialLoadCandles})
+     */
+    public int getInitialLoadCandles() {
+        return initialLoadCandles;
     }
-    public boolean isFillMissingCandlesticks() {
-        return fillMissingCandlesticks;
+
+    /**
+     * Client-side setter for the value synced from the master (T-140). Values &le; 0 reset to
+     * "not synced"; others are clamped into the server's sanitize bounds, so a misbehaving server
+     * cannot make the client request absurd windows.
+     *
+     * @param initialLoadCandles the master's {@code PRICE_HISTORY_INITIAL_LOAD_CANDLES}
+     */
+    public void setInitialLoadCandles(int initialLoadCandles) {
+        this.initialLoadCandles = initialLoadCandles <= 0 ? 0 : Math.clamp(initialLoadCandles,
+                ModSettingsRequest.MIN_PRICE_HISTORY_INITIAL_LOAD, ModSettingsRequest.MAX_PRICE_HISTORY_INITIAL_LOAD);
     }
+
 
 }

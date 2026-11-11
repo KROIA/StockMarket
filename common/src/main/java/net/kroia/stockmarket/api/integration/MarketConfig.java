@@ -34,10 +34,10 @@ public record MarketConfig(
 ) {
     /**
      * Returns a sensible default config: virtual orderbook enabled, price 1.0,
-     * natural abundance 10.0 (matches {@code ServerMarketManager.createMarket}'s
+     * natural abundance 100.0 (matches {@code ServerMarketManager.createMarket}'s
      * preset-less fallback), plugin auto-subscribe active.
      */
     public static MarketConfig defaults() {
-        return new MarketConfig(true, 1.0f, 10.0f, false);
+        return new MarketConfig(true, 1.0f, 100.0f, false);
     }
 }

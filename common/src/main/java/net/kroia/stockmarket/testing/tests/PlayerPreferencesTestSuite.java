@@ -23,6 +23,11 @@ public class PlayerPreferencesTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("add_favorite_basic", this::test_addFavorite_basic);
         addTest("add_favorite_ignores_duplicate", this::test_addFavorite_ignoresDuplicate);

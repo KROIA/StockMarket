@@ -8,6 +8,7 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
@@ -92,11 +93,10 @@ public class PluginSettingsRequest extends StockMarketGenericRequest<PluginSetti
         plugin.setDescription(updated.getDescription());
         plugin.setLoggerEnabled(updated.isLoggerEnabled());
         plugin.setAutoSubscribeNewMarkets(updated.getAutoSubscribeNewMarkets());
-        plugin.setSubscriptionOrder(updated.getSubscriptionOrder());
 
         // Notify other admins about the settings change
         broadcastToAdmins(playerSender,
-                getPlayerName(playerSender) + " updated settings for plugin '" + plugin.getName() + "'");
+                Component.translatable("message.stockmarket.admin_broadcast.plugin_settings_updated", getPlayerName(playerSender), plugin.getName()));
 
         return CompletableFuture.completedFuture(new OutputData(true, plugin.getGenericPluginData()));
     }

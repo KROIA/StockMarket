@@ -92,7 +92,7 @@ Execution order determines the sequence in which plugins run each update cycle. 
 1. Click the **up arrow** button to move a plugin up (it will execute earlier).
 2. Click the **down arrow** button to move a plugin down (it will execute later).
 
-The list updates immediately to show the new order. See the [Plugin System Overview](overview.md) for why execution order matters.
+The list updates immediately to show the new order. See the [Plugin System Overview](overview.md) for why execution order matters. Plugins with auto-subscribe enabled also subscribe newly created markets in this order.
 
 ## Subscribing Markets to Plugins
 
@@ -114,6 +114,17 @@ To remove a market from a plugin:
 3. Release the mouse while still over the close button to confirm removal. If you change your mind, move the mouse away before releasing — the removal is cancelled.
 4. The plugin stops affecting that market immediately.
 
+## Selecting a Plugin and Stepping Through Its Markets
+
+Click anywhere inside a plugin entry to select it; the selected plugin is shown with a darker background. The selection is kept when the list refreshes.
+
+With a plugin selected, press the **Left** / **Right** arrow keys to select the previous / next market of that plugin for the chart, the same as clicking its icon:
+
+- The selection wraps around from the last market to the first and back.
+- If the chart shows a market the plugin is not subscribed to, **Right** jumps to its first market and **Left** to its last.
+- The market icon row scrolls so the selected icon stays visible.
+- The arrow keys are ignored while a text box has focus, so you can still move the cursor in settings fields.
+
 ## Filtering Plugins by Market
 
 When you have many plugins and markets, filtering helps you focus on a specific market:
@@ -131,18 +142,19 @@ Plugins have two types of settings interfaces: inline settings and custom screen
 
 ### Inline Settings
 
-Used by **VolatilityPlugin** and **DefaultOrderbookVolumeDistributionPlugin**.
+Used by **NetFlowPlugin**, **VolatilityPlugin** and **DefaultOrderbookVolumeDistributionPlugin**.
 
 1. The settings fields appear directly inside the plugin entry in the list.
 2. Change the values in the text fields.
 3. Click **Apply** to send the new settings to the server.
 
-**VolatilityPlugin fields:**
-- Volatility Scale
+**Apply** sends the values for the selected market only; **Apply to all** sends them to every market subscribed to the plugin (after a confirmation dialog). Hover over a field to see its tooltip.
 
-**DefaultOrderbookVolumeDistributionPlugin fields:**
-- Volume Scale
-- Speed
+**NetFlowPlugin fields:** Player Flow Influence, Flow Sensitivity, Min/Max Price Multiplier, Permanent Impact, Capacity Volatility Scale, Book Depth Cap, Flow Saturation and the Long-term Anchor settings, plus a read-only line with the current anchor -- see [NetFlowPlugin](plugins/net-flow-plugin.md).
+
+**VolatilityPlugin fields:** Volatility Scale -- see [VolatilityPlugin](plugins/volatility-plugin.md).
+
+**DefaultOrderbookVolumeDistributionPlugin fields:** Volume Scale, Speed, Accumulation Rate, Decumulation Rate, plus a **Reset Volume** button -- see [Order Book Volume Distribution](plugins/orderbook-volume-distribution.md).
 
 ### Custom Screen Settings
 
@@ -153,7 +165,7 @@ Used by **TargetPriceBot**.
    - **Top left:** A candlestick chart with an adjacent orderbook volume histogram showing price history and volume distribution. An orange horizontal line shows the live target price that the bot is steering toward.
    - **Bottom left:** A market selector. Click an item to switch the chart to that market's data.
    - **Right side:** PID gain settings (P Gain, I Gain, D Gain, Rate) as text input fields.
-3. Edit the PID values and click **Apply** to send changes to the server.
+3. Edit the PID values and click **Apply** to send changes to the server (or **Apply to all** for every subscribed market). See [TargetPriceBot](plugins/target-price-bot.md) for what each value does.
 4. Press **Escape** to return to the plugin list.
 
 The candlestick chart updates in real time while the screen is open, showing both the price history and the current target price.
@@ -165,6 +177,6 @@ All plugin configuration is saved automatically when the server saves world data
 - Which plugins are enabled or disabled
 - The execution order
 - Which markets each plugin is subscribed to
-- All plugin-specific settings (volatility scale, PID gains, volume scale, speed)
+- All plugin-specific settings (see the [per-plugin pages](overview.md#default-plugins))
 
 Settings survive server restarts. A fresh world starts with all three default plugins registered and subscribed to the first available market.
