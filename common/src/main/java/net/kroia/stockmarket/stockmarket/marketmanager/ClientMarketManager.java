@@ -124,6 +124,9 @@ public class ClientMarketManager implements IClientMarketManager
             long currentServerTime = serverTime.serverTime() + turnaroundTime / 2;
             ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
             ClientMarket.setCandleUseGameTime(serverTime.candleUseGameTime()); // T-218: before any ClientMarket exists
+            // T-140: the master's initial chart window, before any chart can open (markets are requested below).
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SETTINGS != null)
+                BACKEND_INSTANCES.SETTINGS.setInitialLoadCandles(serverTime.initialLoadCandles());
             requestMarkets();
         });
     }

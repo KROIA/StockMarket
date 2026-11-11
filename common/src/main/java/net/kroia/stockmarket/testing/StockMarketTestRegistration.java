@@ -3,6 +3,7 @@ package net.kroia.stockmarket.testing;
 import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.stockmarket.testing.tests.ActiveOrdersRequestTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientMarketTestSuite;
+import net.kroia.stockmarket.testing.tests.ClientSettingsSyncTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientNewsCacheTestSuite;
 import net.kroia.stockmarket.testing.tests.NewsChainsTestSuite;
 import net.kroia.stockmarket.testing.tests.CreateOrderRequestTestSuite;
@@ -119,6 +120,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new PlaceholderNamingTestSuite());
         TestRegistry.register(new RequestFailureTestSuite()); // T-227: ARRS timeouts / failed futures
         TestRegistry.register(new MarketVisibilityTestSuite()); // T-237: markets hidden on a slave that cannot resolve their item
+        TestRegistry.register(new ClientSettingsSyncTestSuite()); // T-140: initial chart window sync (master + slave)
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());

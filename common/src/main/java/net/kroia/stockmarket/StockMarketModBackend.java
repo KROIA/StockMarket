@@ -140,6 +140,20 @@ public class StockMarketModBackend implements StockMarketAPI {
     }
 
     /**
+     * T-140: read-only accessor for the server-side instances holder.
+     * <p>
+     * Non-null only in a JVM that runs a StockMarket server (dedicated server, or the integrated
+     * server of a single-player / LAN world) between server setup and shutdown. A client connected
+     * to a remote server always sees {@code null}. Callers must null-check and must not cache the
+     * result across server restarts (a new holder is created on every server start).
+     *
+     * @return the current server instances, or {@code null} if no server runs in this JVM
+     */
+    public static @Nullable ServerInstances getServerInstances() {
+        return SERVER_INSTANCES;
+    }
+
+    /**
      * T-179: current {@code MARKET.MAX_ORDER_VOLUME_FACTOR} of the running (master) server, read live.
      * Without a running server (remote client, or before setup) the compile-time default is returned —
      * client-side derivations are never authoritative (markets/presets come from the master with explicit values).

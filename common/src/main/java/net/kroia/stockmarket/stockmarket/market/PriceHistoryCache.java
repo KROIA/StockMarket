@@ -401,21 +401,13 @@ public class PriceHistoryCache
     }
 
     /**
-     * Best-effort access to the client-side backend for logging. Kept in one
-     * place so the cache stays self-contained; callers don't need to inject a
-     * logger.
+     * Access to the client-side backend for logging. Kept in one place so the
+     * cache stays self-contained; callers don't need to inject a logger.
+     * T-140: reads {@code ClientMarket.BACKEND_INSTANCES} directly (protected,
+     * same package) instead of reflectively.
      */
     private static StockMarketModBackend.@Nullable ClientInstances getBackendUnsafe()
     {
-        try
-        {
-            java.lang.reflect.Field f = ClientMarket.class.getDeclaredField("BACKEND_INSTANCES");
-            f.setAccessible(true);
-            return (StockMarketModBackend.ClientInstances) f.get(null);
-        }
-        catch (ReflectiveOperationException e)
-        {
-            return null;
-        }
+        return ClientMarket.BACKEND_INSTANCES;
     }
 }

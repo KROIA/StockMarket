@@ -61,7 +61,7 @@ Group `ServerMarket` in `settings.json`.
 | Candle time (ms) | `CANDLE_TIME` | 60000 | 1000 - 86400000 | Length of one price candle. Only used while *Candles: use in-game time* is off |
 | Candles: use in-game time | `CANDLE_USE_GAME_TIME` | off | | One candle per in-game hour of the master's overworld; charts offer 1h / 4h / 1D / 1W. **Restart required**. See [Candle Timebase](candle-timebase.md) |
 | Price history: max candles / response | `PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE` | 4096 | 16 - 65536 | Server cap per price-history answer; the client pages for more |
-| Price history: initial load candles | `PRICE_HISTORY_INITIAL_LOAD_CANDLES` | 512 | 16 - 8192 | Candles a chart requests when it opens |
+| Price history: initial load candles | `PRICE_HISTORY_INITIAL_LOAD_CANDLES` | 512 | 16 - 8192 | Candles a chart requests when it opens (and per older page). Sent to every player at join, also on slave servers; changes reach online players right away |
 | Trading hours: use real time | `TRADING_HOURS_USE_REAL_TIME` | off | | Trading hours follow the master's local clock instead of the in-game time. See [Trading Hours](trading-hours.md) |
 | Trade cooldown (ms) | `TRADE_COOLDOWN_MS` | 500 | 0 - 60000 | Minimum time between two accepted orders of the same player, across all markets. 0 = off. Rejected orders do not restart it; bots are not affected |
 | Max order size factor | `MAX_ORDER_VOLUME_FACTOR` | 64 | ≥ 1 | Default max order size of a market = `max(factor, factor x abundance)`. Used for new markets, presets and saves without a value |

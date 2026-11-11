@@ -145,11 +145,12 @@ public class StockMarketModSettings extends ModSettings {
          * <p>
          * Read live on every chart open — no restart required.
          * <p>
-         * Slave-propagation: NOT propagated. This is a client-only preference;
-         * it lives in the master's settings.json so admins can tune the default,
-         * but slaves never consume it (they don't render charts) and the client
-         * receives its value via the normal GET path when opening the Mod
-         * Settings screen. No push-broadcast is needed.
+         * Slave-propagation: slaves never read it (they don't render charts). Clients
+         * get the master's value at join through {@code ServerTimeRequest} (routed to the
+         * master, also from a slave) and, after an admin change, through
+         * {@code ClientSettingsSyncPacket} (master players + relay to every slave's
+         * players) — T-140. Without a synced value the client uses the setting of a
+         * server in its own JVM (single-player) or 512.
          */
         public final Setting<Integer> PRICE_HISTORY_INITIAL_LOAD_CANDLES = registerSetting("PRICE_HISTORY_INITIAL_LOAD_CANDLES", 512, Integer.class);
 

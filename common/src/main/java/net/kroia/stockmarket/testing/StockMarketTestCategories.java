@@ -199,4 +199,8 @@ public class StockMarketTestCategories {
     // T-192: pump-and-dump detector (pump + buy-sell cycle checks) and the per-admin alert toggle.
     public static final TestCategory PUMP_DUMP = new TestCategory(
             "stockmarket", "sm_pump_dump", "Pump-and-dump detector: pump and buy-sell cycle flags, window expiry, detector switch, and the persisted per-admin alert toggle (off = no chat, flag still recorded)", MASTER_ONLY, true);
+
+    // T-140: master-owned client settings (initial chart window) at join, after a SET, and on a slave.
+    public static final TestCategory CLIENT_SETTINGS_SYNC = new TestCategory(
+            "stockmarket", "sm_client_settings_sync", "Initial chart window sync: server-instances accessor, ServerTimeRequest join value, client fallback order, SET re-push and the slave getting the master's value", BOTH, true);
 }

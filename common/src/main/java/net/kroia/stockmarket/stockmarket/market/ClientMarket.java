@@ -14,6 +14,7 @@ import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
+import net.kroia.stockmarket.util.ClientSettings;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.NotNull;
@@ -30,8 +31,8 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     }
 
     /**
-     * Fallback used when no server-side setting override is discoverable on the
-     * client (e.g. dedicated server without the setting yet propagated). Matches
+     * Fallback used while no synced value has arrived and no server runs in this
+     * JVM (see {@link #resolveInitialLoadCandles}). Matches
      * the default in {@code StockMarketModSettings.Market.PRICE_HISTORY_INITIAL_LOAD_CANDLES}.
      */
     private static final int DEFAULT_INITIAL_LOAD_CANDLES = 512;
@@ -448,36 +449,38 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     }
 
     /**
-     * Best-effort read of the server-side "initial candles per chart open"
-     * setting. When the client is co-located with the master (integrated
-     * server / single-player) this reflects the real value; on a dedicated
-     * client (where {@code SERVER_INSTANCES} is null in this JVM), the setting
-     * is not reachable and {@link #DEFAULT_INITIAL_LOAD_CANDLES} is returned.
-     * <p>
-     * The setting is deliberately NOT propagated to slaves/clients (see
-     * {@code StockMarketModSettings.Market.PRICE_HISTORY_INITIAL_LOAD_CANDLES}),
-     * so using the constant fallback on a dedicated client is expected behaviour.
-     * The reflective lookup exists purely to give integrated-server single-player
-     * the admin-tuned value without needing a new sync packet.
+     * @return the number of candles to load when a chart first opens (and per older page), see
+     *         {@link #resolveInitialLoadCandles}
      */
     private int getInitialLoadCandlesSafe()
     {
-        try
-        {
-            java.lang.reflect.Field f = StockMarketModBackend.class.getDeclaredField("SERVER_INSTANCES");
-            f.setAccessible(true);
-            Object srvObj = f.get(null);
-            if (srvObj instanceof StockMarketModBackend.ServerInstances srv
-                    && srv.SERVER_SETTINGS != null
-                    && srv.SERVER_SETTINGS.MARKET != null)
-            {
-                return srv.SERVER_SETTINGS.MARKET.getPriceHistoryInitialLoadCandles();
-            }
-        }
-        catch (Throwable ignored)
-        {
-            // Fall through to the fallback.
-        }
+        return resolveInitialLoadCandles(BACKEND_INSTANCES != null ? BACKEND_INSTANCES.SETTINGS : null,
+                StockMarketModBackend.getServerInstances());
+    }
+
+    /**
+     * T-140: picks the initial chart window size (in candles), in this order:
+     * <ol>
+     *   <li>the master's value synced to this client ({@link ClientSettings#getInitialLoadCandles()},
+     *       set at join by {@code ServerTimeRequest} and after an admin change by
+     *       {@code ClientSettingsSyncPacket}) &mdash; works on dedicated servers and slaves,</li>
+     *   <li>the setting of a server running in this JVM (integrated single-player / LAN host) while
+     *       no sync has arrived yet,</li>
+     *   <li>{@link #DEFAULT_INITIAL_LOAD_CANDLES} (512).</li>
+     * </ol>
+     *
+     * @param synced the client's synced settings, may be {@code null}
+     * @param local  the server instances of this JVM ({@link StockMarketModBackend#getServerInstances()}),
+     *               may be {@code null}
+     * @return the window size in candles, &gt; 0
+     */
+    public static int resolveInitialLoadCandles(@Nullable ClientSettings synced,
+                                                @Nullable StockMarketModBackend.ServerInstances local)
+    {
+        if (synced != null && synced.getInitialLoadCandles() > 0)
+            return synced.getInitialLoadCandles();
+        if (local != null && local.SERVER_SETTINGS != null && local.SERVER_SETTINGS.MARKET != null)
+            return local.SERVER_SETTINGS.MARKET.getPriceHistoryInitialLoadCandles();
         return DEFAULT_INITIAL_LOAD_CANDLES;
     }
 
@@ -690,7 +693,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
             long seedPrice = currentMarketPrice != 0 ? currentMarketPrice : response.getCurrentMarketPrice();
             container.loadFromCache(currentServerTimeMs(),
                     seedPrice,
-                    BACKEND_INSTANCES.SETTINGS.isFillMissingCandlesticks());
+                    true); // always gap-fill (the never-set ClientSettings flag was removed, T-140)
         }
 
         // Bootstrap follow-up: when the response left the local cache empty

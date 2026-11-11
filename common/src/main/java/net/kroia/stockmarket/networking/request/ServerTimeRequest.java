@@ -14,7 +14,8 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Returns the master server's wall clock (for client/server time offset sync) plus the
- * trading-hours clocks (T-158). Slaves route this request to the master
+ * trading-hours clocks (T-158), the candle timebase (T-218) and the initial chart window size (T-140).
+ * Clients send it once per join, so it doubles as the join-time sync of master-owned client settings. Slaves route this request to the master
  * ({@code needsRoutingToMaster()}), so all values always describe the master.
  */
 public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTimeRequest.OutputData> {
@@ -27,18 +28,32 @@ public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTim
      * @param useRealTime     {@code true} if trading hours currently follow real time, {@code false} for in-game time
      * @param candleUseGameTime T-218: the master's candle timebase ({@code CANDLE_USE_GAME_TIME} as cached at
      *                        startup); clients pick their chart deltas from it on join
+     * @param initialLoadCandles T-140: the master's {@code PRICE_HISTORY_INITIAL_LOAD_CANDLES} (candles loaded
+     *                        when a chart first opens); clients store it in {@code ClientSettings} on join.
+     *                        Later admin changes reach clients through {@code ClientSettingsSyncPacket}.
      */
     public record OutputData(long serverTime, long clientTimeEcho, int realMinuteOfDay, int gameMinuteOfDay, boolean useRealTime,
-                             boolean candleUseGameTime)
+                             boolean candleUseGameTime, int initialLoadCandles)
     {
-        public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_LONG, OutputData::serverTime,
-                ByteBufCodecs.VAR_LONG, OutputData::clientTimeEcho,
-                ByteBufCodecs.VAR_INT, OutputData::realMinuteOfDay,
-                ByteBufCodecs.VAR_INT, OutputData::gameMinuteOfDay,
-                ByteBufCodecs.BOOL, OutputData::useRealTime,
-                ByteBufCodecs.BOOL, OutputData::candleUseGameTime,
-                OutputData::new
+        // Written by hand: StreamCodec.composite in 1.21.1 takes at most 6 fields.
+        public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = StreamCodec.of(
+                (buf, d) -> {
+                    ByteBufCodecs.VAR_LONG.encode(buf, d.serverTime());
+                    ByteBufCodecs.VAR_LONG.encode(buf, d.clientTimeEcho());
+                    ByteBufCodecs.VAR_INT.encode(buf, d.realMinuteOfDay());
+                    ByteBufCodecs.VAR_INT.encode(buf, d.gameMinuteOfDay());
+                    ByteBufCodecs.BOOL.encode(buf, d.useRealTime());
+                    ByteBufCodecs.BOOL.encode(buf, d.candleUseGameTime());
+                    ByteBufCodecs.VAR_INT.encode(buf, d.initialLoadCandles());
+                },
+                buf -> new OutputData(
+                        ByteBufCodecs.VAR_LONG.decode(buf),
+                        ByteBufCodecs.VAR_LONG.decode(buf),
+                        ByteBufCodecs.VAR_INT.decode(buf),
+                        ByteBufCodecs.VAR_INT.decode(buf),
+                        ByteBufCodecs.BOOL.decode(buf),
+                        ByteBufCodecs.BOOL.decode(buf),
+                        ByteBufCodecs.VAR_INT.decode(buf))
         );
     }
 
@@ -49,7 +64,7 @@ public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTim
 
     @Override
     protected OutputData getDefaultResponse() {
-        return new OutputData(0, 0, 0, 0, false, false);
+        return new OutputData(0, 0, 0, 0, false, false, 0); // initialLoadCandles 0 = not synced, client falls back
     }
 
     @Override
@@ -61,7 +76,9 @@ public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTim
                 ServerMarketManager.gameMinuteOfDay(UtilitiesPlatform.getServer()),
                 useRealTime,
                 // T-218: the cached (restart-required) value, matching how the master rotates candles.
-                getServerMarketManager() instanceof ServerMarketManager smm && smm.isCandleUseGameTime()));
+                getServerMarketManager() instanceof ServerMarketManager smm && smm.isCandleUseGameTime(),
+                // T-140: read live, so a join after an admin change gets the new value.
+                BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.getPriceHistoryInitialLoadCandles()));
     }
 
     @Override

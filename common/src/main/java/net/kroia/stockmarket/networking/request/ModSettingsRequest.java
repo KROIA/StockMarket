@@ -258,6 +258,7 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         // to detect whether the VillagerTrading group changed (slave propagation).
         ItemStack currencyBefore = settings.MARKET.CURRENCY.get();
         String villagerBefore = store.toJsonString(settings.VILLAGER_TRADING);
+        int initialLoadBefore = settings.MARKET.getPriceHistoryInitialLoadCandles(); // T-140 client re-push
 
         String applyError = null;
         try {
@@ -307,10 +308,12 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   the master (slave requests are auto-routed). No slave-broadcast is
         //   required — the value is authoritative simply because only the master
         //   reads it. No client-side value is ever trusted.
-        // * ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES (T-137):
-        //   client-only preference (initial chart window size). Clients fetch the
-        //   current value via the normal GET path when opening the Mod Settings
-        //   screen, so no push-broadcast is needed.
+        // * ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES (T-137 / T-140):
+        //   client-side initial chart window size. Slaves never read it. Clients get
+        //   the master's value at join through ServerTimeRequest (routed to the
+        //   master, also from a slave). When a SET changes it, the master pushes the
+        //   new value to every online player via ClientSettingsSyncPacket (own players
+        //   + relay to every slave, which forwards it to its players) — see below.
         // * ServerMarket.TRADING_HOURS_USE_REAL_TIME (T-158): trading hours are
         //   evaluated only on the master (ServerMarketManager.update reads the
         //   setting live every tick). Slaves/clients receive the resulting market
@@ -362,6 +365,11 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
             BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER.broadcastTable();
             info("VillagerTrading settings changed — price table recomputed and broadcast to slaves");
         }
+
+        // T-140: re-push the initial chart window to every online player (master + slaves).
+        if (net.kroia.stockmarket.networking.packet.ClientSettingsSyncPacket.broadcastIfChanged(
+                initialLoadBefore, settings.MARKET.getPriceHistoryInitialLoadCandles()))
+            info("Initial chart window changed — pushed to all online players");
 
         // Notify other online admins about the change.
         broadcastToAdmins(playerSender, Component.translatable("message.stockmarket.admin_broadcast.mod_settings_updated", getPlayerName(playerSender)));
