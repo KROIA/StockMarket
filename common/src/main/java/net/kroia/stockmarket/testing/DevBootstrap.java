@@ -56,6 +56,7 @@ public final class DevBootstrap {
             VillagerTradeRewriteTestSuite.setBackend(instances); // T-243 market-impact test
             NewsHistoryRequestTestSuite.setBackend(instances);
             DiscordIntegrationTestSuite.setBackend(instances);
+            PumpDumpDetectorTestSuite.setBackend(instances); // T-192
             AdminFlagSyncLuckPermsTests.setBackend(instances);
             StockMarketLuckPermsRemovedTests.setBackend(instances);
         }

@@ -89,6 +89,10 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
     public static final long MIN_PROFIT_ALERT_WINDOW_MINUTES = 1L;
     /** Maximum profit alert window (#89) in minutes (1 week). */
     public static final long MAX_PROFIT_ALERT_WINDOW_MINUTES = 10_080L;
+    /** Minimum pump-and-dump cycle window (T-192) in minutes. */
+    public static final long MIN_PUMP_DUMP_CYCLE_MINUTES = 1L;
+    /** Maximum pump-and-dump cycle window (T-192) in minutes (1 week). */
+    public static final long MAX_PUMP_DUMP_CYCLE_MINUTES = 10_080L;
 
     /** Minimum villager price refresh interval in minutes. */
     public static final long MIN_PRICE_REFRESH_INTERVAL_MINUTES = 1L;
@@ -334,6 +338,12 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         // * ServerMarket.PROFIT_ALERT_THRESHOLD / PROFIT_ALERT_WINDOW_MINUTES (#89): read live when
         //   a player order completes, which only happens on the master — no propagation needed.
         //   (Admins online on a slave are not alerted; see ProfitAlerts.)
+        // * ServerMarket.PUMP_DUMP_ENABLED / PUMP_DUMP_PRICE_MOVE_PERCENT / PUMP_DUMP_CYCLE_MINUTES /
+        //   PUMP_DUMP_CYCLE_PROFIT (T-192): read live by PumpDumpDetector when a player order finishes,
+        //   which only happens on the master — no propagation needed.
+        // * Utilities.ALERTS_DEFAULT_ON (T-192): read live by TradeAlerts when an alert is sent; alerts
+        //   are only raised and sent on the master — no propagation needed. The per-admin toggle
+        //   (/stockmarket alerts on|off) is stored in the master's StockMarket user data.
         // * Integrations (T-217): slaves never load settings.json and keep the defaults, so every
         //   Integrations gate is decided on the master. No propagation needed for any of them:
         //   - PLACEHOLDERS_ENABLED: checked once at server start (restart-required). Off on the
@@ -383,6 +393,9 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
      *   <li>{@code ServerMarket.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER} ∈ [2, 10,000]; NaN = default</li>
      *   <li>{@code ServerMarket.PROFIT_ALERT_THRESHOLD} &ge; 0; NaN/Infinite = default</li>
      *   <li>{@code ServerMarket.PROFIT_ALERT_WINDOW_MINUTES} ∈ [1, 10,080]</li>
+     *   <li>{@code ServerMarket.PUMP_DUMP_PRICE_MOVE_PERCENT} &ge; 0; NaN/Infinite = default</li>
+     *   <li>{@code ServerMarket.PUMP_DUMP_CYCLE_MINUTES} ∈ [1, 10,080]</li>
+     *   <li>{@code ServerMarket.PUMP_DUMP_CYCLE_PROFIT} &ge; 0; NaN/Infinite = default</li>
      *   <li>{@code VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES} ∈ [1, 10,080]</li>
      *   <li>{@code VillagerTrading.VILLAGER_BUY_MARGIN / VILLAGER_SELL_MARGIN} ∈ [0.01, 100];
      *       NaN/Infinite values fall back to the setting's default</li>
@@ -429,6 +442,12 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
                 0f, Float.MAX_VALUE, settings.MARKET.PROFIT_ALERT_THRESHOLD.getDefaultValue()));
         settings.MARKET.PROFIT_ALERT_WINDOW_MINUTES.set(clamp(settings.MARKET.PROFIT_ALERT_WINDOW_MINUTES.get(),
                 MIN_PROFIT_ALERT_WINDOW_MINUTES, MAX_PROFIT_ALERT_WINDOW_MINUTES));
+        settings.MARKET.PUMP_DUMP_PRICE_MOVE_PERCENT.set(clampFloat(settings.MARKET.PUMP_DUMP_PRICE_MOVE_PERCENT.get(),
+                0f, Float.MAX_VALUE, settings.MARKET.PUMP_DUMP_PRICE_MOVE_PERCENT.getDefaultValue()));
+        settings.MARKET.PUMP_DUMP_CYCLE_MINUTES.set(clamp(settings.MARKET.PUMP_DUMP_CYCLE_MINUTES.get(),
+                MIN_PUMP_DUMP_CYCLE_MINUTES, MAX_PUMP_DUMP_CYCLE_MINUTES));
+        settings.MARKET.PUMP_DUMP_CYCLE_PROFIT.set(clampFloat(settings.MARKET.PUMP_DUMP_CYCLE_PROFIT.get(),
+                0f, Float.MAX_VALUE, settings.MARKET.PUMP_DUMP_CYCLE_PROFIT.getDefaultValue()));
         ItemStack currency = settings.MARKET.CURRENCY.get();
         if (currency == null || currency.isEmpty()) {
             // Never allow an empty trading currency — keep the previous one.

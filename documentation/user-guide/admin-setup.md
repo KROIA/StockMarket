@@ -9,7 +9,7 @@ This guide covers two common ways to set up the stock market on a server, with c
 * [Recommendation](#recommendation)
 * [Permissions (LuckPerms)](#permissions-luckperms)
 * [Discord feed](#discord-feed)
-* [Profit alert](#profit-alert)
+* [Trading alerts](#trading-alerts)
 * [Frozen bank accounts](#frozen-bank-accounts)
 * [Backups](#backups)
 * [Order origin record](#order-origin-record)
@@ -118,7 +118,7 @@ StockMarket admin commands and functions check these permission nodes, so a perm
 | `stockmarket.admin.command.exportrecipes` | `/stockmarket exportrecipes` (dev builds only) |
 | `stockmarket.admin.command.devtest` | `/stockmarket devTestScreen` (dev builds only) |
 | `modutilities.command.discord` | `/stockmarket discord status` and `/stockmarket discord reload` (a ModUtilities node, also used by `/modutilities discord` and `/banksystem discord`; without a permission mod it requires operator level 3) |
-| `stockmarket.admin.notify` | Receiving chat notifications when another admin changes settings, and [profit alerts](#profit-alert) |
+| `stockmarket.admin.notify` | Receiving chat notifications when another admin changes settings, and [trading alerts](#trading-alerts); `/stockmarket alerts on\|off` |
 | `stockmarket.admin` | Source of the StockMarket admin flag while `SYNC_ADMIN_FLAG_WITH_PERMISSION` is on (see below) |
 
 Example: give the `admin` group every StockMarket admin right:
@@ -200,18 +200,38 @@ Available values:
 
 Your `fields` list is kept when StockMarket updates its default templates.
 
-## Profit alert
+## Trading alerts
 
-The master server watches how much money each player makes from trading and warns the admins when it is unusually much, for example when a player has found a way to exploit the market.
+The master server watches player trading and warns the admins about unusual patterns. There are two checks, the profit alert and the pump-and-dump detector. Both only observe trades: they never change prices or orders and never block a player. Bot orders are not checked. Only the master checks, so trades made on slave servers are covered too.
+
+### Profit alert
+
+Warns when a player makes unusually much money from trading, for example when a player has found a way to exploit the market.
 
 * **Profit alert threshold** (`ServerMarket.PROFIT_ALERT_THRESHOLD`, default `1,000,000`, `0` = off) and **Profit alert window (min)** (`ServerMarket.PROFIT_ALERT_WINDOW_MINUTES`, default `60`, range 1 - 10080) are in the Market group of the [Mod Settings](mod-settings.md). Both take effect immediately.
 * Counted is the **realized profit**: sell proceeds minus buy costs of the player's finished orders, summed over all markets. It is cash based, so selling items bought long ago also counts. Bot orders are not counted.
 * Each player has fixed windows: a window starts with the player's first finished order and lasts the set number of minutes. When the profit within a window first goes above the threshold, an alert is raised once for that window. The windows are kept in memory only; a restart starts new ones.
-* The alert goes to:
-  * every online player with the permission `stockmarket.admin.notify` (operator level 2 without a permission mod), as a chat message: *"Alert: &lt;player&gt; realized &lt;amount&gt; trading profit within &lt;minutes&gt; min."*
-  * the server log, as a warning starting with `[StockMarket Alert]`, with the player's name and UUID
-  * the Discord type `market-alert`, if the [Discord feed](#discord-feed) is on and the type is enabled
-* Only the master checks profits, so trades made on slave servers are covered too.
+* Chat message: *"Alert: &lt;player&gt; realized &lt;amount&gt; trading profit within &lt;minutes&gt; min."*
+
+### Pump-and-dump detector
+
+Warns when a player pushes a price up to sell their own items above it. It is on by default; turn it off with **Pump-and-dump detection** (`ServerMarket.PUMP_DUMP_ENABLED`). All its settings are in the Market group of the [Mod Settings](mod-settings.md) and take effect immediately.
+
+* **Pump:** a player's market buy is flagged when the price rose by more than **Pump price move (%)** (`ServerMarket.PUMP_DUMP_PRICE_MOVE_PERCENT`, default `20`, `0` = off) during the tick that executed it, while the same player has an own sell order resting above the price from before the buy. Chat message: *"Alert: &lt;player&gt; market-bought &lt;item&gt; and moved the price &lt;percent&gt;% with an own sell order resting above."*
+* **Buy-sell cycle:** a player's sell is flagged when the player bought the same item on the same market within **Buy-sell cycle window (min)** (`ServerMarket.PUMP_DUMP_CYCLE_MINUTES`, default `30`, range 1 - 10080) and the profit over the average buy price is above **Buy-sell cycle profit threshold** (`ServerMarket.PUMP_DUMP_CYCLE_PROFIT`, default `100,000`, `0` = off). The window starts with the first buy; items sold beyond what was bought in the window are not counted. Chat message: *"Alert: &lt;player&gt; sold &lt;item&gt; bought within &lt;minutes&gt; min for &lt;amount&gt; profit."*
+* Unlike the cash-based profit alert, the cycle check uses the buy price, so selling old stock does not trigger it. The open buys are kept in memory only; a restart starts fresh.
+
+### Where alerts go
+
+Every alert goes to:
+
+* the server log, as a warning starting with `[StockMarket Alert]`, with the player's name and UUID. This is the record of every alert, also while chat alerts are off.
+* the Discord type `market-alert`, if the [Discord feed](#discord-feed) is on and the type is enabled
+* every online player on the master with the permission `stockmarket.admin.notify` (operator level 2 without a permission mod) and chat alerts on, as a red chat message
+
+### Turning chat alerts off
+
+`/stockmarket alerts off` stops the alert chat messages for you; `/stockmarket alerts on` turns them back on. The choice is saved per admin with the StockMarket data and survives restarts. Admins who never used the command follow **Alert chat on by default** (`Utilities.ALERTS_DEFAULT_ON`, default on). The command needs the permission `stockmarket.admin.notify` and only works on the master server. Alerts are still written to the log and posted to Discord while your chat alerts are off.
 
 ## Frozen bank accounts
 

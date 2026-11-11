@@ -15,6 +15,7 @@ import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.ProfitAlerts;
+import net.kroia.stockmarket.util.PumpDumpDetector;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
@@ -104,6 +105,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final PriorityQueue<Order> sellMarketOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
     private final PriorityQueue<Order> buyLimitOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
     private final PriorityQueue<Order> sellLimitOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
+    /** T-192: finished player MARKET buys of the current matching pass, for the pump check after it. */
+    private final List<Order> pumpCandidates = new ArrayList<>();
 
 
     public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice, float naturalAbundance)
@@ -840,7 +843,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             return;
         orderbook.setCurrentMarketPrice(currentMarketPrice);
 
+        long priceBeforeMatching = currentMarketPrice; // T-192 pump check
+        pumpCandidates.clear();
         matchingEngine.update(currentMarketPrice);
+        checkPumps(priceBeforeMatching);
         candleTradedVolume += matchingEngine.getLastTradedVolume();
         trackPlayerNetFlow(matchingEngine.getLastPlayerFilledVolume());
 
@@ -892,7 +898,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     /**
      * #89: feeds a finished player order's net money (all fills of the order, sell proceeds
      * positive, buy costs negative) into the per-player profit alert. Inter-market legs count too,
-     * so a pair trade nets out to its real money result.
+     * so a pair trade nets out to its real money result. Also feeds the T-192 pump-and-dump detector.
      *
      * @param order the consumed or canceled order (fill state is final)
      */
@@ -903,12 +909,34 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
             return;
         StockMarketModSettings.Market s = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET;
+        // T-192: pump-and-dump detector (observes only). Market buys wait for the end of the matching pass.
+        if (order.isMarketOrder() && order.isBuyOrder())
+            pumpCandidates.add(order);
+        PumpDumpDetector.onOrderFinished(itemID, order, s);
         Float threshold = s.PROFIT_ALERT_THRESHOLD.get();
         Long window = s.PROFIT_ALERT_WINDOW_MINUTES.get();
         if (threshold == null || threshold <= 0 || window == null)
             return;
         ProfitAlerts.onOrderFinished(order.getExecutorPlayerUUID(),
                 MarketManager.convertToRealAmountStatic(order.getTransferredMoney()), threshold, window);
+    }
+
+    /**
+     * T-192: runs the pump check for the player market buys of the matching pass that just ended. The
+     * market price is final for this tick here ({@code onPriceChanged} ran at the end of the pass).
+     * <p>
+     * ponytail: the price move is per tick, not per order, so several buys in one tick share it; the
+     * own-sell-above condition keeps that from flagging bystanders.
+     *
+     * @param priceBeforeMatching the market price before the pass
+     */
+    private void checkPumps(long priceBeforeMatching)
+    {
+        if (pumpCandidates.isEmpty() || BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        PumpDumpDetector.checkPumps(itemID, pumpCandidates, priceBeforeMatching, currentMarketPrice,
+                orderbook.getSellLimitOrders(), BACKEND_INSTANCES.SERVER_SETTINGS.MARKET);
+        pumpCandidates.clear();
     }
 
     /**

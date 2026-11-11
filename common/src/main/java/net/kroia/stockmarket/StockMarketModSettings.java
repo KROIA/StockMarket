@@ -69,6 +69,16 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_DEBUG = registerSetting("LOGGING_ENABLE_DEBUG",false, Boolean.class);
+        /**
+         * T-192: default of the per-admin alert chat toggle ({@code /stockmarket alerts on|off}) for admins
+         * that never used the command. Alerts are always written to the server log (and the Discord feed);
+         * this only decides whether an admin gets the chat message. Mirrors BankSystem's
+         * {@code Utilities.ALERTS_DEFAULT_ON}.
+         * <p>
+         * Read live on every alert — no restart required. Slave-propagation: NOT needed (alerts are raised
+         * and sent on the master only).
+         */
+        public final Setting<Boolean> ALERTS_DEFAULT_ON = registerSetting("ALERTS_DEFAULT_ON", true, Boolean.class);
         // SYNC_ADMIN_FLAG_WITH_PERMISSION moved to Integrations (T-217, see migrateIntegrations).
        // public final Setting<Integer> ADMIN_PERMISSION_LEVEL = registerSetting("ADMIN_PERMISSION_LEVEL",2, Integer.class);
 
@@ -240,6 +250,41 @@ public class StockMarketModSettings extends ModSettings {
          * Read live — no restart required. Slave-propagation: NOT needed (master only).
          */
         public final Setting<Long> PROFIT_ALERT_WINDOW_MINUTES = registerSetting("PROFIT_ALERT_WINDOW_MINUTES", 60L, Long.class);
+
+        /**
+         * T-192: master switch of the pump-and-dump detector ({@link net.kroia.stockmarket.util.PumpDumpDetector}).
+         * Off = neither the pump check nor the buy-sell cycle check runs. Detection only observes fills; it
+         * never changes prices, orders or a player's net flow.
+         * <p>
+         * Read live on every finished player order — no restart required. Slave-propagation: NOT needed
+         * (orders are matched on the master only).
+         */
+        public final Setting<Boolean> PUMP_DUMP_ENABLED = registerSetting("PUMP_DUMP_ENABLED", true, Boolean.class);
+
+        /**
+         * T-192: pump check. A player MARKET buy is flagged when the market price rose by more than this
+         * percentage during the tick that executed it, while the same player has an own SELL limit order
+         * resting above the price before that tick. 0 = pump check off.
+         * <p>
+         * Read live — no restart required. Slave-propagation: NOT needed (master only).
+         */
+        public final Setting<Float> PUMP_DUMP_PRICE_MOVE_PERCENT = registerSetting("PUMP_DUMP_PRICE_MOVE_PERCENT", 20f, Float.class);
+
+        /**
+         * T-192: cycle check window in minutes. Items a player bought on one market and sold again on the
+         * same market within this time form a buy-sell cycle.
+         * <p>
+         * Read live — no restart required. Slave-propagation: NOT needed (master only).
+         */
+        public final Setting<Long> PUMP_DUMP_CYCLE_MINUTES = registerSetting("PUMP_DUMP_CYCLE_MINUTES", 30L, Long.class);
+
+        /**
+         * T-192: cycle check threshold (real money). A sell is flagged when its profit over the average
+         * buy price of the same player's buys in the cycle window exceeds this. 0 = cycle check off.
+         * <p>
+         * Read live — no restart required. Slave-propagation: NOT needed (master only).
+         */
+        public final Setting<Float> PUMP_DUMP_CYCLE_PROFIT = registerSetting("PUMP_DUMP_CYCLE_PROFIT", 100_000f, Float.class);
 
         public Market() { super("ServerMarket"); }
 

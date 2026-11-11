@@ -31,6 +31,11 @@ public class User implements ServerSaveable {
     private String userName;
     private boolean isStockMarketAdmin = false;
     private PlayerPreferences preferences = new PlayerPreferences();
+    /**
+     * T-192: per-admin alert chat toggle ({@code /stockmarket alerts on|off}); null = never set, the
+     * config default {@code Utilities.ALERTS_DEFAULT_ON} applies. Server-side only (not in the stream codec).
+     */
+    private @Nullable Boolean alertsEnabled = null;
 
     private User()
     {
@@ -56,7 +61,9 @@ public class User implements ServerSaveable {
      */
     public static User createWithChangedName(User oldUser, String newName)
     {
-        return new User(oldUser.userUUID, newName, oldUser.isStockMarketAdmin, oldUser.preferences);
+        User user = new User(oldUser.userUUID, newName, oldUser.isStockMarketAdmin, oldUser.preferences);
+        user.alertsEnabled = oldUser.alertsEnabled;
+        return user;
     }
     public static @Nullable User createFromTag(CompoundTag tag)
     {
@@ -86,6 +93,14 @@ public class User implements ServerSaveable {
     public void setPreferences(PlayerPreferences preferences) {
         this.preferences = preferences;
     }
+    /** T-192: @return the admin's own alert chat toggle, or null if never set (config default applies) */
+    public @Nullable Boolean getAlertsEnabled() {
+        return alertsEnabled;
+    }
+    /** T-192: sets the admin's alert chat toggle; null = back to the config default. */
+    public void setAlertsEnabled(@Nullable Boolean alertsEnabled) {
+        this.alertsEnabled = alertsEnabled;
+    }
 
     @Override
     public boolean save(CompoundTag tag) {
@@ -97,6 +112,8 @@ public class User implements ServerSaveable {
         CompoundTag prefsTag = new CompoundTag();
         preferences.save(prefsTag);
         tag.put("preferences", prefsTag);
+        if (alertsEnabled != null)
+            tag.putBoolean("alertsEnabled", alertsEnabled);
         return true;
     }
 
@@ -121,6 +138,7 @@ public class User implements ServerSaveable {
         } else {
             preferences = new PlayerPreferences();
         }
+        alertsEnabled = tag.contains("alertsEnabled") ? NbtCompat.getBoolean(tag, "alertsEnabled") : null;
         return true;
     }
 

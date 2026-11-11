@@ -5,7 +5,7 @@ Index of all documentation pages. For an introduction to the mod, its blocks, co
 ## User Guide
 For players, server admins and content creators.
 
-- [Admin Setup Use Cases](user-guide/admin-setup.md) — standard bot-driven market vs. player-driven market, LuckPerms permissions, Discord feed, profit alert, database backups
+- [Admin Setup Use Cases](user-guide/admin-setup.md) — standard bot-driven market vs. player-driven market, LuckPerms permissions, Discord feed, trading alerts (profit alert, pump-and-dump detector), database backups
 - [Mod Settings Reference](user-guide/mod-settings.md) — every server-wide setting with default, range and restart note
 - [Multi-Server Setup](user-guide/multi-server.md) — master/slave servers: what runs where, trust, commands on a slave
 - [Trading Hours](user-guide/trading-hours.md) — daily open/close windows, `/stockmarket open|close`, closed markets vs. maintenance mode

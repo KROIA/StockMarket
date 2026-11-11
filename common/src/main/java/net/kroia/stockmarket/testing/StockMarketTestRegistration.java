@@ -39,6 +39,7 @@ import net.kroia.stockmarket.testing.tests.OrderbookTestSuite;
 import net.kroia.stockmarket.testing.tests.PIDTestSuite;
 import net.kroia.stockmarket.testing.tests.PlaceholderNamingTestSuite;
 import net.kroia.stockmarket.testing.tests.PluginTestSuite;
+import net.kroia.stockmarket.testing.tests.PumpDumpDetectorTestSuite;
 import net.kroia.stockmarket.testing.tests.PriceHistoryCacheTestSuite;
 import net.kroia.stockmarket.testing.tests.PriceHistoryTestSuite;
 import net.kroia.stockmarket.testing.tests.NormalizedRandomPriceGeneratorTestSuite;
@@ -134,6 +135,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new VillagerTradeRewriteTestSuite());
         TestRegistry.register(new NewsHistoryRequestTestSuite());
         TestRegistry.register(new NewsPictureRequestTestSuite());
+        TestRegistry.register(new PumpDumpDetectorTestSuite()); // T-192 pump-and-dump detector + alert toggle
         TestRegistry.register(new DiscordIntegrationTestSuite()); // T-217 Discord feed via the sink seam, never a real webhook
         // The long market simulation gates, one topic each; autotest-out/test-selection.json keeps them off
         TestRegistry.register(new PluginTestSuite.T207GateTestSuite());

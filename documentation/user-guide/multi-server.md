@@ -62,7 +62,7 @@ automatically on first start. Restart the servers after editing the file.
 | Admin flag (`/stockmarket op`) | ✔ | — |
 | Villager trading | ✔ | ✔ with the master's prices (pushed at every price refresh and when the Villager Trading settings change) |
 | Placeholders | ✔ | ✔, values pulled from the master |
-| Discord feed, profit alert | ✔ | — (trades on slaves are posted by the master) |
+| Discord feed, trading alerts (profit alert, pump-and-dump detector) | ✔ | — (trades on slaves are posted and checked by the master; alert chat reaches admins on the master only) |
 | Clock for trading hours and in-game candles | ✔ | players on slaves follow the master's clock |
 
 Players on any server see the same markets, prices and their own orders. The Management GUI

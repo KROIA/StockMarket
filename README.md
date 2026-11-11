@@ -357,9 +357,10 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 | /stockmarket news                  | Open the in-game newspaper with the latest market news. Admin subcommands manage the news event system — see the [full command reference](documentation/user-guide/news-system/configuration.md#admin-commands) | Subcommands only |
 | /stockmarket open \<market\>, /stockmarket close \<market\> | Force a market open or closed until its next scheduled trading-hours change — see [Trading Hours](documentation/user-guide/trading-hours.md) | :heavy_check_mark: |
 | /stockmarket backup pause\|resume\|status | Pause the database writes while you copy the database (master only) — see [Backups](documentation/user-guide/admin-setup.md#backups) | :heavy_check_mark: |
+| /stockmarket alerts on\|off | Turn trading alert chat messages on or off for yourself (master only, saved) — see [Trading alerts](documentation/user-guide/admin-setup.md#turning-chat-alerts-off) | :heavy_check_mark: |
 | /stockmarket discord status\|reload | Show or reload the Discord webhook routing — see [Discord feed](documentation/user-guide/admin-setup.md#discord-feed) | :heavy_check_mark: (op level 3) |
 
-`/stockmarket op`, `deop`, `preset add` and `backup` only work on the master server. Each admin command has its own permission node — see [Permissions (LuckPerms)](documentation/user-guide/admin-setup.md#permissions-luckperms).
+`/stockmarket op`, `deop`, `preset add`, `alerts` and `backup` only work on the master server. Each admin command has its own permission node — see [Permissions (LuckPerms)](documentation/user-guide/admin-setup.md#permissions-luckperms).
 
 
 

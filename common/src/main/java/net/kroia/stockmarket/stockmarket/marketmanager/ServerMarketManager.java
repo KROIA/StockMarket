@@ -444,6 +444,16 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         return user == null ? null : user.getName();
     }
 
+    /**
+     * T-192: the StockMarket user record (persisted with the market data), e.g. for the per-admin alert toggle.
+     *
+     * @param playerUUID the user to look up
+     * @return the user, or null if unknown
+     */
+    public @Nullable User getUser(UUID playerUUID) {
+        return userMap.get(playerUUID);
+    }
+
     /** @return true if a StockMarket user exists for this UUID */
     public boolean userExists(UUID playerUUID) {
         return userMap.containsKey(playerUUID);

@@ -69,6 +69,25 @@ public class StockMarketCommands {
         return BACKEND_INSTANCES.COMMAND_HANDLER.getSync() != null;
     }
 
+    /**
+     * T-192: {@code /stockmarket alerts on|off}. Stores the executor's alert chat toggle on the master;
+     * alerts are still logged (and posted to Discord) while it is off.
+     *
+     * @param source  the command source (must be a player)
+     * @param enabled true = chat alerts on
+     * @return the command result
+     */
+    private static int setAlerts(CommandSourceStack source, boolean enabled) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        if (!isMaster())
+            player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+        else if (net.kroia.stockmarket.util.TradeAlerts.setAlertsEnabled(player.getUUID(), enabled))
+            player.sendSystemMessage(Component.translatable(enabled ? "message.stockmarket.alerts.on" : "message.stockmarket.alerts.off"));
+        else
+            player.sendSystemMessage(Component.translatable("message.stockmarket.alerts.failed"));
+        return Command.SINGLE_SUCCESS;
+    }
+
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext commandBuildContext, Commands.CommandSelection commandSelection) {
 
@@ -159,6 +178,13 @@ public class StockMarketCommands {
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
+                )
+                // T-192: /stockmarket alerts on|off - the executor's own alert chat toggle (persisted, master only).
+                // Same node as receiving alerts: whoever gets them may switch them off.
+                .then(Commands.literal("alerts")
+                        .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.NOTIFY, StockMarketPermissions.FALLBACK_LEVEL))
+                        .then(Commands.literal("on").executes(context -> setAlerts(context.getSource(), true)))
+                        .then(Commands.literal("off").executes(context -> setAlerts(context.getSource(), false)))
                 )
                 .then(Commands.literal("manage")
                         .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_MANAGE, StockMarketPermissions.FALLBACK_LEVEL))

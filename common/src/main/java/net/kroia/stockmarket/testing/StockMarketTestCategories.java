@@ -195,4 +195,8 @@ public class StockMarketTestCategories {
     // (some tests skip by side), needs the live ItemID registry.
     public static final TestCategory MARKET_VISIBILITY = new TestCategory(
             "stockmarket", "sm_market_visibility", "Markets for items a slave cannot resolve: hidden from lists, pairs, order placement and the portfolio placeholder on the slave, still listed by the master", BOTH, true);
+
+    // T-192: pump-and-dump detector (pump + buy-sell cycle checks) and the per-admin alert toggle.
+    public static final TestCategory PUMP_DUMP = new TestCategory(
+            "stockmarket", "sm_pump_dump", "Pump-and-dump detector: pump and buy-sell cycle flags, window expiry, detector switch, and the persisted per-admin alert toggle (off = no chat, flag still recorded)", MASTER_ONLY, true);
 }

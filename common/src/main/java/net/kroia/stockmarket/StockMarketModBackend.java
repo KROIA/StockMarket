@@ -283,6 +283,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketLogger.setBackend(SERVER_INSTANCES);
         VillagerTradeRewriter.setBackend(SERVER_INSTANCES);
         AdminFlagSync.setBackend(SERVER_INSTANCES);
+        net.kroia.stockmarket.util.TradeAlerts.setBackend(SERVER_INSTANCES); // T-192 alert toggle
 
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
         villagerAutosaveTicks = 0;

@@ -46,6 +46,7 @@ Use this screen instead of editing `settings.json` by hand.
 | Log warnings | `LOGGING_ENABLE_WARNING` | on | | |
 | Log errors | `LOGGING_ENABLE_ERROR` | on | | |
 | Log debug messages | `LOGGING_ENABLE_DEBUG` | off | | Very verbose; for troubleshooting |
+| Alert chat on by default | `ALERTS_DEFAULT_ON` | on | | Whether admins get trading alerts in chat until they use `/stockmarket alerts on\|off`. See [Trading alerts](admin-setup.md#turning-chat-alerts-off) |
 
 ---
 
@@ -69,6 +70,10 @@ Group `ServerMarket` in `settings.json`.
 | Virtual depth price ceiling (x price) | `VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER` | 100 | 2 - 10000 | No virtual sell volume above this multiple of the current price. A buy that walks the book stops there and its remainder is cancelled |
 | Profit alert threshold | `PROFIT_ALERT_THRESHOLD` | 1,000,000 | | Realized profit one player may make within the window before admins are alerted. 0 = off. See [Profit alert](admin-setup.md#profit-alert) |
 | Profit alert window (min) | `PROFIT_ALERT_WINDOW_MINUTES` | 60 | 1 - 10080 | Length of the profit alert window |
+| Pump-and-dump detection | `PUMP_DUMP_ENABLED` | on | | Flags pump-and-dump patterns as admin alerts; detection only. See [Pump-and-dump detector](admin-setup.md#pump-and-dump-detector) |
+| Pump price move (%) | `PUMP_DUMP_PRICE_MOVE_PERCENT` | 20 | | A player market buy moving the price more than this, with the player's own sell resting above, is flagged. 0 = off |
+| Buy-sell cycle window (min) | `PUMP_DUMP_CYCLE_MINUTES` | 30 | 1 - 10080 | Buys and sells of the same item within this time form a cycle |
+| Buy-sell cycle profit threshold | `PUMP_DUMP_CYCLE_PROFIT` | 100,000 | | Profit over the average buy price of a cycle above which the sell is flagged. 0 = off |
 
 **Apply to all markets** (next to *Max order size factor*) recomputes the max order size of
 **every** market from its abundance and the **saved** factor, after a confirmation. Custom
