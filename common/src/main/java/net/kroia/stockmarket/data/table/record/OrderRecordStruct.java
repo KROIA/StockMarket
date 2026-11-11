@@ -13,8 +13,16 @@ import java.util.UUID;
  * @param interMarketGroupID Nullable UUID that links trade records belonging to the same inter-market transaction.
  *                           All order records created by a single cross-market trade share the same group ID,
  *                           allowing them to be correlated after the fact. Null for regular (non-inter-market) trades.
+ * @param orderID            T-191: persisted order ID (ledger ref {@code sm:order:<id>}, column {@code order_id}).
+ *                           Null for inter-market legs (their ledger ref is the group ID) and pre-T-191 rows.
  */
-public record OrderRecordStruct(/*long orderID, */short itemID, int bankaccountID, UUID user, int type, long amount, long price, long time, @Nullable UUID interMarketGroupID) {
+public record OrderRecordStruct(short itemID, int bankaccountID, UUID user, int type, long amount, long price, long time,
+                                @Nullable UUID interMarketGroupID, @Nullable Long orderID) {
+
+    /** Record without an order ID (inter-market legs, older call sites). */
+    public OrderRecordStruct(short itemID, int bankaccountID, UUID user, int type, long amount, long price, long time, @Nullable UUID interMarketGroupID) {
+        this(itemID, bankaccountID, user, type, amount, price, time, interMarketGroupID, null);
+    }
 
     /**
      * Backward-compatible constructor for regular (non-inter-market) trades.
@@ -39,6 +47,7 @@ public record OrderRecordStruct(/*long orderID, */short itemID, int bankaccountI
             ByteBufCodecs.VAR_LONG.encode(buf, val.price());
             ByteBufCodecs.VAR_LONG.encode(buf, val.time());
             ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).encode(buf, val.interMarketGroupID());
+            ExtraCodecUtils.nullable(ByteBufCodecs.VAR_LONG).encode(buf, val.orderID());
         }
 
         @Override
@@ -51,7 +60,8 @@ public record OrderRecordStruct(/*long orderID, */short itemID, int bankaccountI
                     ByteBufCodecs.VAR_LONG.decode(buf),
                     ByteBufCodecs.VAR_LONG.decode(buf),
                     ByteBufCodecs.VAR_LONG.decode(buf),
-                    ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).decode(buf)
+                    ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).decode(buf),
+                    ExtraCodecUtils.nullable(ByteBufCodecs.VAR_LONG).decode(buf)
             );
         }
     };

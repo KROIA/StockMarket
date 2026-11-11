@@ -21,7 +21,6 @@ public class PluginDetailScreen extends StockMarketGuiScreen {
         private static final Component TITLE = Component.translatable(PREFIX + "title");
     }
 
-    private final StockMarketGuiScreen parent;
     private final PluginSyncData pluginData;
     private final Label nameLabel;
     private final Label descriptionLabel;
@@ -37,8 +36,10 @@ public class PluginDetailScreen extends StockMarketGuiScreen {
      */
     @SuppressWarnings("rawtypes")
     public PluginDetailScreen(StockMarketGuiScreen parent, PluginSyncData pluginData, PluginGuiElement pluginGuiElement) {
-        super(Texts.TITLE);
-        this.parent = parent;
+        // Parent goes to the GuiScreen base so its onClose() returns to it and restores
+        // the cursor. Closing with a null parent and then calling setScreen(parent)
+        // re-grabs/releases the mouse, which re-centers the cursor.
+        super(Texts.TITLE, parent);
         this.pluginData = pluginData;
         this.pluginGuiElement = pluginGuiElement;
 
@@ -57,10 +58,7 @@ public class PluginDetailScreen extends StockMarketGuiScreen {
         if (pluginGuiElement != null) {
             pluginGuiElement.stopDataStream();
         }
-        super.onClose();
-        if (parent != null) {
-            setScreen(parent);
-        }
+        super.onClose(); // returns to the parent (base class) with the cursor preserved
     }
 
     @Override

@@ -4,6 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -70,7 +71,22 @@ public class CancelOrderRequest extends StockMarketGenericRequest<CancelOrderReq
             return CompletableFuture.completedFuture(false);
 
         Order.Type type = types[input.typeOrdinal];
+        // T-166: remember the remaining volume of the player's own limit order (same match as
+        // cancelOrder) so a chart move can re-place it despite max order size / cooldown.
+        // Server-side only — see ServerMarketManager.MoveCredit for the trust reasoning.
+        long remaining = 0;
+        if (type == Order.Type.LIMIT) {
+            for (Order o : market.getLimitOrders()) {
+                if (playerSender.equals(o.getExecutorPlayerUUID()) && o.getTime() == input.time && o.getType() == type
+                        && o.getStartPrice() == input.startPrice && o.getTargetVolume() == input.targetVolume) {
+                    remaining = o.getRemainingVolume();
+                    break;
+                }
+            }
+        }
         boolean cancelled = market.cancelOrder(playerSender, input.time, type, input.startPrice, input.targetVolume);
+        if (cancelled && remaining != 0)
+            ((ServerMarketManager) getServerMarketManager()).grantMoveCredit(playerSender, input.itemID, null, remaining);
         return CompletableFuture.completedFuture(cancelled);
     }
 

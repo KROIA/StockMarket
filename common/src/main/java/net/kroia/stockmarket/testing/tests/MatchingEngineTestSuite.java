@@ -8,15 +8,23 @@ import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.plugin.interaction.IVolumeDistributionCalculator;
+import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.market.core.DepthMemory;
 import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
+import net.kroia.stockmarket.stockmarket.market.core.VirtualOrderbook;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
+import java.util.List;
+import java.util.Locale;
+import java.util.Random;
 import java.util.UUID;
 
 public class MatchingEngineTestSuite extends TestSuite {
@@ -96,14 +104,39 @@ public class MatchingEngineTestSuite extends TestSuite {
         addTest("marketPrice_walksUp_onBuy", this::test_marketPrice_walksUp_onBuy);
         addTest("marketPrice_walksDown_onSell", this::test_marketPrice_walksDown_onSell);
 
-        // Timeout Handling
-        addTest("drainVirtualSell_timeout", this::test_drainVirtualSell_timeout);
-        addTest("drainVirtualBuy_timeout", this::test_drainVirtualBuy_timeout);
+        // Walk ends on an empty book (price floor / safety bound)
+        addTest("walk_emptyBookSell_endsAtPriceFloor", this::test_walk_emptyBookSell_endsAtPriceFloor);
+        addTest("walk_emptyBookBuy_endsAtPriceCeiling", this::test_walk_emptyBookBuy_endsAtPriceCeiling);
+        // #88/#94: orders walk until filled, consume every level in their way, never rest crossed
+        addTest("walk_marketBuy_fillsBeforeFarSell", this::test_walk_marketBuy_fillsBeforeFarSell);
+        addTest("walk_marketBuy_consumesGapBeforeFarSell", this::test_walk_marketBuy_consumesGapBeforeFarSell);
+        addTest("walk_limitBuy_fillsBeforeFarSell", this::test_walk_limitBuy_fillsBeforeFarSell);
+        addTest("walk_marketSell_fillsBeforeFarBuy", this::test_walk_marketSell_fillsBeforeFarBuy);
+        addTest("walk_emptyGap_fillsFarSell", this::test_walk_emptyGap_fillsFarSell);
+        addTest("walk_limitBuyFarAbove_neverRestsAboveMarket", this::test_walk_limitBuyFarAbove_neverRestsAboveMarket);
+        addTest("walk_limitSellFarBelow_neverRestsBelowMarket", this::test_walk_limitSellFarBelow_neverRestsBelowMarket);
+        addTest("walk_altSellExploit_noProfit", this::test_walk_altSellExploit_noProfit);
+        addTest("walk_priceCeiling_cancelsMarketRemainder", this::test_walk_priceCeiling_cancelsMarketRemainder);
+        // T-198: depth memory
+        addTest("depthMemory_maxOrder_sameFillsOnOff", this::test_depthMemory_maxOrder_sameFillsOnOff);
+        addTest("depthMemory_sweepThenSellBack_loses", this::test_depthMemory_sweepThenSellBack_loses);
+        addTest("sideVolume_orderOfExactSizeStopsAtTarget", this::test_sideVolume_orderOfExactSizeStopsAtTarget);
+        addTest("walk_emptyGap_isFast", this::test_walk_emptyGap_isFast);
+        addTest("walk_diamondPreset_priceImpact", this::test_walk_diamondPreset_priceImpact);
+        // T-211: skip of memory segments that read 0
+        addTest("zeroSlotSkip_sameResultsOnOff", this::test_zeroSlotSkip_sameResultsOnOff);
+        addTest("zeroSlotSkip_emptyBuyToCeiling_isFast", this::test_zeroSlotSkip_emptyBuyToCeiling_isFast);
+        addTest("depthMemory_fadeStep_timing_diamond", this::test_depthMemory_fadeStepTiming);
 
         // Inter-market net player flow (issue #36 follow-up)
         addTest("interMarketMarketOrder_creditsFlowOnBothMarkets", this::test_interMarketMarketOrder_creditsFlowOnBothMarkets);
         addTest("interMarketLimitOrder_creditsFlowOnBothMarkets", this::test_interMarketLimitOrder_creditsFlowOnBothMarkets);
         addTest("consumeBuySideDepth_droppedRestingOrder_unlocksFunds", this::test_consumeBuySideDepth_droppedRestingOrder_unlocksFunds);
+
+        // Large-volume regressions (T-173, T-175, T-176)
+        addTest("marketSell_thinBook_countsOnlyFilled", this::test_marketSell_thinBook_countsOnlyFilled);
+        addTest("candleTradedVolume_keepsSmallFillsAfterHugeFill", this::test_candleTradedVolume_keepsSmallFillsAfterHugeFill);
+        addTest("affordableVolume_hugeFunds_saturates", this::test_affordableVolume_hugeFunds_saturates);
     }
 
     @Override
@@ -632,11 +665,12 @@ public class MatchingEngineTestSuite extends TestSuite {
         }
     }
 
-    // ── Timeout Handling ──────────────────────────────────────────────────────
+    // ── Walk end on an empty book ─────────────────────────────────────────────
 
-    private TestResult test_drainVirtualSell_timeout() {
+    /** A market sell into a book whose volume rounds to 0 walks to the price floor and ends quickly. */
+    private TestResult test_walk_emptyBookSell_endsAtPriceFloor() {
         try {
-            // Use a volume provider that always returns tiny volume so the loop hits timeout
+            // Tiny volume that rounds to 0 at every level
             resetMarketState(false, 10);
             serverMarket.test_setDefaultVolumeProviderFunction(p -> 0.0001f);
             serverMarket.test_resetVirtualOrderBookVolume();
@@ -649,16 +683,20 @@ public class MatchingEngineTestSuite extends TestSuite {
             serverMarket.update();
             long elapsed = System.currentTimeMillis() - start;
 
-            // Should complete in reasonable time due to timeout, not hang
-            TestResult r = assertTrue("Should complete within 30 seconds (timeout prevents hang)", elapsed < 30000);
+            TestResult r = assertTrue("Should complete within 30 seconds", elapsed < 30000);
             if (!r.passed()) return r;
-            return pass("drainVirtualSell timeout prevents infinite loop (completed in " + elapsed + "ms)");
+            return pass("Empty-book sell walk ended at the price floor in " + elapsed + "ms");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }
     }
 
-    private TestResult test_drainVirtualBuy_timeout() {
+    /**
+     * T-198: a market buy into a provider-backed book whose volume rounds to 0 ends at the price
+     * ceiling (no default asks above multiplier x price): nothing fills, the remainder is canceled
+     * (never rests), the price is unchanged and the walk is fast.
+     */
+    private TestResult test_walk_emptyBookBuy_endsAtPriceCeiling() {
         try {
             resetMarketState(false, 10);
             serverMarket.test_setDefaultVolumeProviderFunction(p -> -0.0001f);
@@ -671,11 +709,781 @@ public class MatchingEngineTestSuite extends TestSuite {
             serverMarket.update();
             long elapsed = System.currentTimeMillis() - start;
 
-            TestResult r = assertTrue("Should complete within 30 seconds (timeout prevents hang)", elapsed < 30000);
+            if (largeBuy.getFilledVolume() != 0)
+                return fail("Empty book must not fill, filled " + largeBuy.getFilledVolume());
+            if (bestRealBid() != Long.MIN_VALUE)
+                return fail("Market remainder must not rest: best bid " + bestRealBid());
+            if (serverMarket.getCurrentMarketPrice() != 10)
+                return fail("Price moved on an empty book: " + serverMarket.getCurrentMarketPrice());
+            TestResult r = assertTrue("Should complete within 2 seconds, took " + elapsed + " ms", elapsed < 2000);
             if (!r.passed()) return r;
-            return pass("drainVirtualBuy timeout prevents infinite loop (completed in " + elapsed + "ms)");
+            return pass("Empty-book buy walk ended at the price ceiling in " + elapsed + "ms");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ── #88/#94: orders walk until filled and never rest crossed ─────────────
+
+    /** Raw start price of the walk tests (100 coins). */
+    private static final long WALK_START = 10000;
+    /** Raw price of the far order (5000 coins). */
+    private static final long WALK_FAR = 500000;
+    /** Raw volume per level of the uniform test book. */
+    private static final long WALK_LEVEL_VOLUME = 5;
+
+    /** @return the scratch market as a master ServerMarket (the walk tests need its orderbook) */
+    private ServerMarket master() {
+        return (ServerMarket) serverMarket;
+    }
+
+    /** @return highest resting real bid, or Long.MIN_VALUE if none */
+    private long bestRealBid() {
+        long best = Long.MIN_VALUE;
+        for (Order o : master().getOrderbook().getBuyLimitOrders()) best = Math.max(best, o.getStartPrice());
+        return best;
+    }
+
+    /** @return lowest resting real ask, or Long.MAX_VALUE if none */
+    private long bestRealAsk() {
+        long best = Long.MAX_VALUE;
+        for (Order o : master().getOrderbook().getSellLimitOrders()) best = Math.min(best, o.getStartPrice());
+        return best;
+    }
+
+    /**
+     * Uniform virtual depth ({@value #WALK_LEVEL_VOLUME} raw per level); account2 rests a big
+     * player sell far above, account1 is rich enough to buy it all.
+     *
+     * @param volume raw volume of the far sell
+     * @return the resting far sell
+     */
+    private Order placeFarPlayerSell(long volume) {
+        resetMarketState(true, WALK_START);
+        ItemID item = serverMarket.getItemID();
+        bankAccount2.getBank(item).setBalance(volume);
+        bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000_000L);
+        Order farSell = new Order(item, Order.Type.LIMIT, -volume, WALK_FAR, 0, UUID.randomUUID(), bankAccountNr2);
+        serverMarket.putOrder(farSell);
+        serverMarket.update();
+        return farSell;
+    }
+
+    /** A market buy smaller than the depth below a far sell fills on the way and never touches it. */
+    private TestResult test_walk_marketBuy_fillsBeforeFarSell() {
+        try {
+            Order farSell = placeFarPlayerSell(1_000_000);
+            Order buy = new Order(serverMarket.getItemID(), Order.Type.MARKET, 1_000_000, WALK_START, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+            if (!buy.isFilled())
+                return fail("Buy should fill completely from the depth below the far sell, filled " + buy.getFilledVolume());
+            if (farSell.getFilledVolume() != 0)
+                return fail("Far sell was touched: " + farSell.getFilledVolume());
+            long expected = WALK_START + 1_000_000 / WALK_LEVEL_VOLUME;   // asks start one level above the market price
+            if (serverMarket.getCurrentMarketPrice() != expected)
+                return fail("Price should end at " + expected + " (every level consumed), was " + serverMarket.getCurrentMarketPrice());
+            return pass("Filled on the way, price " + serverMarket.getCurrentMarketPrice() + ", far sell untouched");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** A market buy bigger than the depth below a far sell consumes every level first, then the far sell. */
+    private TestResult test_walk_marketBuy_consumesGapBeforeFarSell() {
+        try {
+            Order farSell = placeFarPlayerSell(1_000_000);
+            long volume = 3_000_000;
+            Order buy = new Order(serverMarket.getItemID(), Order.Type.MARKET, volume, WALK_START, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+            long virtual = (WALK_FAR - WALK_START) * WALK_LEVEL_VOLUME;   // levels start+1 .. far
+            if (!buy.isFilled())
+                return fail("Buy should fill, filled " + buy.getFilledVolume());
+            if (-farSell.getFilledVolume() != volume - virtual)
+                return fail("Far sell should fill exactly the rest after all " + virtual + " raw of virtual depth: expected "
+                        + (volume - virtual) + ", got " + -farSell.getFilledVolume());
+            if (serverMarket.getCurrentMarketPrice() != WALK_FAR)
+                return fail("Price should be the far sell price, was " + serverMarket.getCurrentMarketPrice());
+            return pass("Consumed " + virtual + " raw of virtual depth, then " + (volume - virtual) + " from the far sell");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** A limit buy at the far price fills on the way like a market buy and rests nothing. */
+    private TestResult test_walk_limitBuy_fillsBeforeFarSell() {
+        try {
+            Order farSell = placeFarPlayerSell(1_000_000);
+            Order buy = new Order(serverMarket.getItemID(), Order.Type.LIMIT, 1_000_000, WALK_FAR, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+            if (!buy.isFilled())
+                return fail("Limit buy should fill on the way, filled " + buy.getFilledVolume());
+            if (farSell.getFilledVolume() != 0)
+                return fail("Far sell was touched: " + farSell.getFilledVolume());
+            if (bestRealBid() != Long.MIN_VALUE)
+                return fail("Nothing may rest, best bid " + bestRealBid());
+            return pass("Limit buy filled at " + serverMarket.getCurrentMarketPrice() + ", far sell untouched");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** Sell side: a market sell fills from the bids on the way and never touches a far player bid. */
+    private TestResult test_walk_marketSell_fillsBeforeFarBuy() {
+        try {
+            long start = WALK_FAR;
+            long farBid = WALK_START;
+            resetMarketState(true, start);
+            ItemID item = serverMarket.getItemID();
+            bankAccount2.getBank(moneyID).setBalance(1_000_000_000_000_000L);
+            bankAccount1.getBank(item).setBalance(1_000_000);
+            Order farBuy = new Order(item, Order.Type.LIMIT, 1_000_000, farBid, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.putOrder(farBuy);
+            serverMarket.update();
+
+            Order sell = new Order(item, Order.Type.MARKET, -1_000_000, start, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(sell);
+            serverMarket.update();
+
+            if (!sell.isFilled())
+                return fail("Sell should fill from the bids on the way, filled " + sell.getFilledVolume());
+            if (farBuy.getFilledVolume() != 0)
+                return fail("Far bid @" + farBid + " was filled (" + farBuy.getFilledVolume() + ")");
+            if (serverMarket.getCurrentMarketPrice() <= farBid)
+                return fail("Price dropped to the far bid: " + serverMarket.getCurrentMarketPrice());
+            return pass("Sell filled down to " + serverMarket.getCurrentMarketPrice() + ", far bid untouched");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** With no virtual depth between the price and a far real ask, the ask fills (real-only book). */
+    private TestResult test_walk_emptyGap_fillsFarSell() {
+        try {
+            resetMarketState(false, WALK_START);   // no virtual depth anywhere
+            ItemID item = serverMarket.getItemID();
+            long volume = 1000;
+            bankAccount2.getBank(item).setBalance(volume);
+            bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000L);
+            Order farSell = new Order(item, Order.Type.LIMIT, -volume, WALK_FAR, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.putOrder(farSell);
+            serverMarket.update();
+
+            Order buy = new Order(item, Order.Type.MARKET, volume, WALK_START, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+
+            if (!farSell.isFilled() || !buy.isFilled())
+                return fail("Empty book: far sell should fill completely, sell filled " + farSell.getFilledVolume()
+                        + ", buy filled " + buy.getFilledVolume());
+            if (serverMarket.getCurrentMarketPrice() != WALK_FAR)
+                return fail("Price should be the far sell price " + WALK_FAR + ", was " + serverMarket.getCurrentMarketPrice());
+            return pass("Empty gap skipped, far sell filled at " + WALK_FAR);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * #94: a limit buy at 5000 with the price at 200 never rests above the market. Small: it
+     * fills on the way. Big: it consumes all depth up to 5000, the rest rests AT 5000 and the
+     * market price is 5000.
+     */
+    private TestResult test_walk_limitBuyFarAbove_neverRestsAboveMarket() {
+        try {
+            long start = 20000;   // 200 coins
+            for (long volume : new long[]{ 100_000, 3_000_000 }) {
+                resetMarketState(true, start);
+                bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000_000L);
+                Order buy = new Order(serverMarket.getItemID(), Order.Type.LIMIT, volume, WALK_FAR, 0, UUID.randomUUID(), bankAccountNr1);
+                serverMarket.putOrder(buy);
+                serverMarket.update();
+                long price = serverMarket.getCurrentMarketPrice();
+                if (bestRealBid() > price)
+                    return fail("Volume " + volume + ": bid " + bestRealBid() + " rests above the market price " + price);
+                if (!buy.isFilled() && price != WALK_FAR)
+                    return fail("Volume " + volume + ": remainder rests but the price is " + price + ", not the limit " + WALK_FAR);
+                long depth = (WALK_FAR - start) * WALK_LEVEL_VOLUME;   // levels start+1 .. limit
+                if (volume > depth && buy.getFilledVolume() != depth)
+                    return fail("Volume " + volume + ": should consume all " + depth + " raw up to the limit, filled " + buy.getFilledVolume());
+            }
+            return pass("Small limit buy filled on the way; big one consumed all depth and rests at " + WALK_FAR + " = market price");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** Mirror of {@link #test_walk_limitBuyFarAbove_neverRestsAboveMarket}: a limit sell far below never rests below the market. */
+    private TestResult test_walk_limitSellFarBelow_neverRestsBelowMarket() {
+        try {
+            long start = WALK_FAR;
+            long limit = 20000;
+            for (long volume : new long[]{ 100_000, 3_000_000 }) {
+                resetMarketState(true, start);
+                bankAccount1.getBank(serverMarket.getItemID()).setBalance(volume);
+                Order sell = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -volume, limit, 0, UUID.randomUUID(), bankAccountNr1);
+                serverMarket.putOrder(sell);
+                serverMarket.update();
+                long price = serverMarket.getCurrentMarketPrice();
+                if (bestRealAsk() < price)
+                    return fail("Volume " + volume + ": ask " + bestRealAsk() + " rests below the market price " + price);
+                if (!sell.isFilled() && price != limit)
+                    return fail("Volume " + volume + ": remainder rests but the price is " + price + ", not the limit " + limit);
+            }
+            return pass("Small limit sell filled on the way; big one rests at " + limit + " = market price");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * #94 alt-sell exploit: A places a limit buy far above the market, alt B market-sells into its
+     * resting rest, then A sells everything the pair gained into the virtual bids. The pair must
+     * not profit: A paid for every level up to the limit before anything could rest there.
+     * <p>
+     * Runs with the T-198 depth memory OFF: this checks the walk itself. With memory on the
+     * walked range stays consumed, so the pair cannot even sell its items back (it keeps them at
+     * a far bigger loss); that case is covered by {@code depthMemory_sweepThenSellBack_loses}.
+     */
+    private TestResult test_walk_altSellExploit_noProfit() {
+        StockMarketModSettings.Market ms = backend.SERVER_SETTINGS.MARKET;
+        Float prevHalfLife = ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
+        ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(0f);
+        try {
+            long start = 20000;
+            resetMarketState(true, start);
+            ItemID item = serverMarket.getItemID();
+            IServerBank aMoney = bankAccount1.getBank(moneyID), bMoney = bankAccount2.getBank(moneyID);
+            IServerBank aItems = bankAccount1.getBank(item), bItems = bankAccount2.getBank(item);
+            long rich = 1_000_000_000_000_000L;
+            aMoney.setBalance(rich); bMoney.setBalance(rich);
+            aItems.setBalance(0);
+
+            // 1) A: limit buy far above the market
+            Order pump = new Order(item, Order.Type.LIMIT, 3_000_000, WALK_FAR, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(pump);
+            serverMarket.update();
+            long resting = pump.getRemainingVolume();
+
+            // 2) B: market-sells into A's resting rest
+            bItems.setBalance(Math.max(resting, 0));
+            long bItemsStart = bItems.getTotalBalance();
+            if (resting > 0) {
+                serverMarket.putOrder(new Order(item, Order.Type.MARKET, -resting, 0, 0, UUID.randomUUID(), bankAccountNr2));
+                serverMarket.update();
+            }
+            // 3) A sells what the pair gained from the market back into the virtual bids
+            long pairGain = aItems.getTotalBalance() - (bItemsStart - bItems.getTotalBalance());
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, -pairGain, 0, 0, UUID.randomUUID(), bankAccountNr1));
+            serverMarket.update();
+
+            long pairItems = aItems.getTotalBalance() + bItems.getTotalBalance() - bItemsStart;
+            long profit = aMoney.getTotalBalance() + bMoney.getTotalBalance() - 2 * rich;
+            if (pairItems > 0)
+                return fail("Pair still holds " + pairItems + " raw items, profit not comparable (" + profit + ")");
+            if (profit > 0)
+                return fail("Pair profit " + profit + " > 0 (price after pump " + WALK_FAR + ", resting rest " + resting + ")");
+            return pass("Pair profit " + profit + " <= 0 (resting rest " + resting + ", pair net items " + pairItems + ")");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prevHalfLife);
+        }
+    }
+
+    /**
+     * T-198: the walk has no level limit; the price ceiling ends it. With the multiplier set to 2
+     * a market buy from 100 coins fills every level up to exactly 200 coins and the remainder is
+     * canceled (a market order never rests). T-211: depth memory off, so every level reads the flat provider
+     * (with memory the slot straddling the ceiling reads its sloped profile, not exactly 5 per level).
+     */
+    private TestResult test_walk_priceCeiling_cancelsMarketRemainder() {
+        StockMarketModSettings.Market ms = backend.SERVER_SETTINGS.MARKET;
+        Float prevMult = ms.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER.get();
+        Float prevHalfLife = ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
+        try {
+            ms.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER.set(2f);
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(0f);
+            resetMarketState(true, WALK_START);
+            bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000_000L);
+            Order buy = new Order(serverMarket.getItemID(), Order.Type.MARKET, 1_000_000, WALK_START, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(buy);
+            long t0 = System.currentTimeMillis();
+            serverMarket.update();
+            long ms0 = System.currentTimeMillis() - t0;
+
+            long ceiling = 2 * WALK_START;
+            if (bestRealBid() != Long.MIN_VALUE)
+                return fail("Remainder must be canceled, not rest: best bid " + bestRealBid());
+            if (buy.getFilledVolume() != (ceiling - WALK_START) * WALK_LEVEL_VOLUME)   // levels start+1 .. ceiling
+                return fail("Should fill exactly the levels up to the ceiling, filled " + buy.getFilledVolume());
+            if (serverMarket.getCurrentMarketPrice() != ceiling)
+                return fail("Price should end at the ceiling " + ceiling + ", is " + serverMarket.getCurrentMarketPrice());
+            return pass("Ceiling ended the walk at " + serverMarket.getCurrentMarketPrice() + " in " + ms0 + " ms, remainder canceled");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            ms.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER.set(prevMult);
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prevHalfLife);
+        }
+    }
+
+    /** Diamond-like production depth (preset price 160, abundance 50), centred on the market's pre-trade price. */
+    private void useDiamondDepth() {
+        long sf = scaleFactor;
+        DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc =
+                new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(160.0, 50f);
+        serverMarket.test_setDefaultVolumeProviderFunction(real -> {
+            double market = serverMarket.getCurrentMarketPrice() / (double) sf;
+            float v = Math.abs(calc.getVolume(market, real));
+            return market > real ? v : -v;
+        });
+        serverMarket.test_setCurrentMarketPrice(160 * sf);
+        serverMarket.test_clearOrderbook();
+    }
+
+    /**
+     * Runs one market order of {@code items} real items on the diamond depth from a fresh book.
+     * @return { filled raw volume, transferred money, end price }
+     */
+    private long[] diamondOrder(long items, boolean buy) {
+        useDiamondDepth();
+        long raw = items * scaleFactor;
+        bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000_000L);
+        bankAccount1.getBank(serverMarket.getItemID()).setBalance(raw);
+        Order o = new Order(serverMarket.getItemID(), Order.Type.MARKET, buy ? raw : -raw, 0, 0, UUID.randomUUID(), bankAccountNr1);
+        serverMarket.putOrder(o);
+        serverMarket.update();
+        return new long[]{ o.getFilledVolume(), o.getTransferredMoney(), serverMarket.getCurrentMarketPrice() };
+    }
+
+    /**
+     * T-198: a max-size order (3,200 diamonds) gets identical fills with the depth memory on and off,
+     * both buying and selling (memory only changes depth outside the window on the side the price
+     * came from).
+     */
+    private TestResult test_depthMemory_maxOrder_sameFillsOnOff() {
+        StockMarketModSettings.Market ms = backend.SERVER_SETTINGS.MARKET;
+        Float prev = ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
+        try {
+            StringBuilder out = new StringBuilder();
+            for (boolean buy : new boolean[]{ true, false }) {
+                ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(30f);
+                long[] on = diamondOrder(3200, buy);
+                ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(0f);
+                long[] off = diamondOrder(3200, buy);
+                if (on[0] != off[0] || on[1] != off[1] || on[2] != off[2])
+                    return fail((buy ? "buy" : "sell") + " differs: on " + java.util.Arrays.toString(on) + " off " + java.util.Arrays.toString(off));
+                out.append(buy ? "buy " : "sell ").append(java.util.Arrays.toString(on)).append("; ");
+            }
+            return pass("Identical fills {volume, money, end price}: " + out);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prev);
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        }
+    }
+
+    /**
+     * T-200: on memory-thinned diamond depth (sweep up, sell back), a market buy of exactly
+     * {@code getRawVirtualSideVolume(price, target)} fills completely, ends at or below the target and
+     * leaves no ask volume up to the target (so one more raw unit would pass it); mirrored for a sell
+     * back down to the buy's start.
+     */
+    private TestResult test_sideVolume_orderOfExactSizeStopsAtTarget() {
+        StockMarketModSettings.Market ms = backend.SERVER_SETTINGS.MARKET;
+        Float prev = ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
+        try {
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(30f);
+            useDiamondDepth();
+            ItemID item = serverMarket.getItemID();
+            bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000_000L);
+            bankAccount1.getBank(item).setBalance(0);
+            // Sweep up and sell everything back: the asks between the price and the sweep top are thin now
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, 20_000L * scaleFactor, 0, 0, UUID.randomUUID(), bankAccountNr1));
+            serverMarket.update();
+            long top = serverMarket.getCurrentMarketPrice();
+            long bought = bankAccount1.getBank(item).getBalance();
+            bankAccount1.getBank(item).lockAmount(bought);
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, -bought, 0, 0, UUID.randomUUID(), bankAccountNr1));
+            serverMarket.update();
+
+            StringBuilder out = new StringBuilder();
+            long buyStart = serverMarket.getCurrentMarketPrice();
+            for (boolean buy : new boolean[]{ true, false }) {
+                net.kroia.stockmarket.stockmarket.market.core.Orderbook book = master().getOrderbook();
+                long start = serverMarket.getCurrentMarketPrice();
+                long target = buy ? top : buyStart;   // buy up to the sweep top, then sell back down
+                long v = book.getRawVirtualSideVolume(start, target, buy, Long.MAX_VALUE);
+                if (v <= 0) return fail("No volume between " + start + " and " + target);
+                if (!buy) { bankAccount1.getBank(item).setBalance(v); bankAccount1.getBank(item).lockAmount(v); }
+                Order o = new Order(item, Order.Type.MARKET, buy ? v : -v, 0, 0, UUID.randomUUID(), bankAccountNr1);
+                serverMarket.putOrder(o);
+                serverMarket.update();
+                long end = serverMarket.getCurrentMarketPrice();
+                String side = buy ? "buy" : "sell";
+                if (Math.abs(o.getFilledVolume()) != v)
+                    return fail(side + " filled " + o.getFilledVolume() + " of " + v);
+                if (buy ? end > target : end < target)
+                    return fail(side + " of " + v + " passed the target " + target + ": end " + end);
+                long left = book.getRawVirtualSideVolume(end, target, buy, Long.MAX_VALUE);
+                if (left != 0)
+                    return fail(side + " left " + left + " raw between " + end + " and " + target);
+                out.append(String.format(java.util.Locale.ROOT, "%s %d raw: %d -> %d (target %d); ", side, v, start, end, target));
+            }
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prev);
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+            serverMarket.test_clearOrderbook();
+        }
+    }
+
+    /**
+     * T-198: sweep a large part of the production ask side (200,000 diamonds), then sell everything
+     * back at once. With the memory on the sell meets the consumed (thin) depth and loses money;
+     * the memory-off result is reported for comparison.
+     */
+    private TestResult test_depthMemory_sweepThenSellBack_loses() {
+        StockMarketModSettings.Market ms = backend.SERVER_SETTINGS.MARKET;
+        Float prev = ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
+        try {
+            double[] profit = new double[2];
+            double[] top = new double[2];
+            for (int i = 0; i < 2; i++) {
+                ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(i == 0 ? 30f : 0f);
+                useDiamondDepth();
+                ItemID item = serverMarket.getItemID();
+                long raw = 200_000L * scaleFactor;
+                long money = 1_000_000_000_000_000L;
+                bankAccount1.getBank(moneyID).setBalance(money);
+                bankAccount1.getBank(item).setBalance(0);
+                serverMarket.putOrder(new Order(item, Order.Type.MARKET, raw, 0, 0, UUID.randomUUID(), bankAccountNr1));
+                serverMarket.update();
+                top[i] = serverMarket.getCurrentMarketPrice() / (double) scaleFactor;
+                long bought = bankAccount1.getBank(item).getBalance();
+                bankAccount1.getBank(item).lockAmount(bought);
+                serverMarket.putOrder(new Order(item, Order.Type.MARKET, -bought, 0, 0, UUID.randomUUID(), bankAccountNr1));
+                serverMarket.update();
+                long left = bankAccount1.getBank(item).getTotalBalance();
+                profit[i] = (bankAccount1.getBank(moneyID).getTotalBalance() - money) / (double) scaleFactor
+                        + left / (double) scaleFactor * 160;
+            }
+            String report = String.format(java.util.Locale.ROOT, "memory on: profit %.0f (top %.2f) | memory off: profit %.0f (top %.2f)",
+                    profit[0], top[0], profit[1], top[1]);
+            if (profit[0] >= 0)
+                return fail("Sweep + immediate sell-back must lose with the memory on. " + report);
+            return pass(report);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prev);
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+            serverMarket.test_clearOrderbook();
+        }
+    }
+
+    /**
+     * Performance: a walk across a large empty gap (490,000 levels) completes fast, both for a
+     * cleared book (window-bounded skip) and a provider-backed empty book (one provider call per level).
+     */
+    private TestResult test_walk_emptyGap_isFast() {
+        try {
+            StringBuilder times = new StringBuilder();
+            for (boolean cleared : new boolean[]{ true, false }) {
+                resetMarketState(false, WALK_START);
+                if (cleared)
+                    master().getOrderbook().clearVirtualVolume();
+                ItemID item = serverMarket.getItemID();
+                bankAccount2.getBank(item).setBalance(1000);
+                bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000L);
+                serverMarket.putOrder(new Order(item, Order.Type.LIMIT, -1000, WALK_FAR, 0, UUID.randomUUID(), bankAccountNr2));
+                serverMarket.update();
+
+                Order buy = new Order(item, Order.Type.MARKET, 1000, WALK_START, 0, UUID.randomUUID(), bankAccountNr1);
+                serverMarket.putOrder(buy);
+                long t0 = System.nanoTime();
+                serverMarket.update();
+                long ms = (System.nanoTime() - t0) / 1_000_000;
+                if (cleared)
+                    master().getOrderbook().setVirtualCleared(false);
+                if (!buy.isFilled())
+                    return fail((cleared ? "cleared" : "provider") + " book: far sell not reached, filled " + buy.getFilledVolume());
+                if (ms > 2000)
+                    return fail((cleared ? "cleared" : "provider") + " book: gap walk took " + ms + " ms");
+                times.append(cleared ? "cleared " : ", provider ").append(ms).append(" ms");
+            }
+            return pass("490,000-level empty gap: " + times);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Report only (T-196 item 1): price impact of one max-size order on a diamond-like market
+     * (preset price 160, abundance 5 x 10 = 50, production depth shape). Asserts only that the
+     * order fills and moves the price less than 10%; the numbers are in the pass message.
+     */
+    private TestResult test_walk_diamondPreset_priceImpact() {
+        try {
+            long sf = scaleFactor;
+            long start = 160 * sf;
+            DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc =
+                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(160.0, 50f);
+            StringBuilder out = new StringBuilder();
+            for (long items : new long[]{ 3200, 32000 }) {
+                for (boolean buySide : new boolean[]{ true, false }) {
+                    // Same contract as PluginOrderBook: computed around the pre-trade price, ask sign at and above it
+                    serverMarket.test_setDefaultVolumeProviderFunction(real -> {
+                        double market = serverMarket.getCurrentMarketPrice() / (double) sf;
+                        float v = Math.abs(calc.getVolume(market, real));
+                        return market > real ? v : -v;
+                    });
+                    serverMarket.test_setCurrentMarketPrice(start);
+                    serverMarket.test_clearOrderbook();
+                    long raw = items * sf;
+                    bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000_000L);
+                    bankAccount1.getBank(serverMarket.getItemID()).setBalance(raw);
+                    Order o = new Order(serverMarket.getItemID(), Order.Type.MARKET, buySide ? raw : -raw, 0, 0, UUID.randomUUID(), bankAccountNr1);
+                    serverMarket.putOrder(o);
+                    serverMarket.update();
+                    long end = serverMarket.getCurrentMarketPrice();
+                    if (!o.isFilled())
+                        return fail(items + (buySide ? " buy" : " sell") + " not filled: " + o.getFilledVolume());
+                    double move = 100.0 * (end - start) / start;
+                    if (Math.abs(move) >= 10)
+                        return fail(items + (buySide ? " buy" : " sell") + " moved the price " + move + "%");
+                    double avg = Math.abs((double) o.getTransferredMoney() / o.getFilledVolume());
+                    out.append(String.format(java.util.Locale.ROOT, "%s %d: %.2f -> %.2f (%+.3f%%), avg %.4f; ",
+                            buySide ? "buy" : "sell", items, start / (double) sf, end / (double) sf, move, avg));
+                }
+            }
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        }
+    }
+
+    // ── T-210 / T-211: zero slot skip ──────────────────────────────────────────────────
+
+    /** T-210 test calculator with ask volume only in a band far above the price (not monotone). */
+    private static final class FarBandCalculator implements IVolumeDistributionCalculator {
+        @Override
+        public float getVolume(double marketPrice, double volumePickPrice) {
+            double r = volumePickPrice / marketPrice;
+            return r >= 3.0 && r <= 3.05 ? 3f : 0f;
+        }
+    }
+
+    /**
+     * T-210: sets the scratch market's provider the way PluginOrderBook does: sum of |calculator volume|
+     * around the current price. {@code calcs == null}: no plugin, the built-in fallback provider (memory
+     * not initialised, T-211). Resets the book, so a plugin-like provider starts from a dense memory. Empties the books and funds account 1.
+     */
+    private void useCalculators(List<IVolumeDistributionCalculator> calcs, long startPrice) {
+        long sf = scaleFactor;
+        if (calcs == null) {
+            serverMarket.test_setDefaultVolumeProviderFunction(null);
+        } else {
+            serverMarket.test_setDefaultVolumeProviderFunction(real -> {
+                float market = (float) (serverMarket.getCurrentMarketPrice() / (double) sf);
+                float v = 0;
+                for (IVolumeDistributionCalculator c : calcs) v += Math.abs(c.getVolume(market, real));
+                return market > real ? v : -v;
+            });
+        }
+        serverMarket.test_setCurrentMarketPrice(startPrice);
+        serverMarket.test_clearOrderbook();
+        serverMarket.test_resetVirtualOrderBookVolume();
+        ItemID item = serverMarket.getItemID();
+        bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000_000L);
+        bankAccount1.getBank(item).setBalance(1_000_000_000_000_000L);
+    }
+
+    /**
+     * T-210: one seeded scenario: provider + random stored slots far above the price (volume 0, thin, thick),
+     * then random market buys and sells and a final buy that walks to the ceiling. Per order it records
+     * filled volume, money, end price and remainder. With {@code checkQueries} it also compares findVolume
+     * and sideVolume with the skip on and off on the same state before every order.
+     *
+     * @return the order records, or a string starting with "MISMATCH" naming the first query that differed
+     */
+    private String askSkipScenario(List<IVolumeDistributionCalculator> calcs, long start, long seed, boolean checkQueries) {
+        useCalculators(calcs, start);
+        serverMarket.update();   // a tick on the empty memory restarts the 1 s recovery phase (same per run)
+        Random rnd = new Random(seed);
+        Random queryRnd = new Random(~seed);   // separate, so the queries do not change the order sequence
+        VirtualOrderbook vob = master().test_getVirtualOrderbook();
+        DepthMemory mem = vob.getDepthMemory();
+        long winStart = vob.getMinEditablePrice(), winEnd = vob.getMaxEditablePrice();
+        int k0 = DepthMemory.slotOf(Math.max(winEnd + 1, start * 106 / 100));
+        int k1 = DepthMemory.slotOf(vob.getAskCeiling());
+        for (int i = 0; i < 8; i++) {
+            int k = k0 + 1 + rnd.nextInt(Math.max(1, k1 - k0));
+            long n = DepthMemory.outside(k, true, winStart, winEnd);
+            int kind = rnd.nextInt(3);   // 0: consumed, 1: thin (< 1 per tick), 2: thick
+            mem.setVolume(k, true, kind == 0 ? 0 : n * (kind == 1 ? 0.6 : 2 + rnd.nextDouble() * 20));
+        }
+        StringBuilder rec = new StringBuilder();
+        ItemID item = serverMarket.getItemID();
+        long unit = Math.max(1, start / 10);
+        for (int i = 0; i <= 6; i++) {
+            long price = serverMarket.getCurrentMarketPrice();
+            if (checkQueries) {
+                long ceil = vob.getAskCeiling();
+                long[] from = { price + 1, price + 1 + (long) (queryRnd.nextDouble() * (ceil - price)) };
+                for (long f : from) {
+                    VirtualOrderbook.test_setZeroSlotSkip(true);
+                    long fOn = vob.findVolume(f, ceil, true);
+                    long sOn = vob.sideVolume(f - 1, ceil, true, Long.MAX_VALUE);
+                    VirtualOrderbook.test_setZeroSlotSkip(false);
+                    long fOff = vob.findVolume(f, ceil, true);
+                    long sOff = vob.sideVolume(f - 1, ceil, true, Long.MAX_VALUE);
+                    VirtualOrderbook.test_setZeroSlotSkip(true);
+                    if (fOn != fOff || sOn != sOff)
+                        return "MISMATCH seed " + seed + " order " + i + " from " + f + ": findVolume " + fOn + "/" + fOff
+                                + ", sideVolume " + sOn + "/" + sOff;
+                }
+            }
+            boolean last = i == 6;
+            boolean buy = last || rnd.nextBoolean();
+            long vol = last ? 1_000_000_000_000L : unit * (1 + rnd.nextInt(2000));
+            Order o = new Order(item, Order.Type.MARKET, buy ? vol : -vol, 0, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(o);
+            serverMarket.update();
+            rec.append(buy ? "B" : "S").append(o.getFilledVolume()).append('/').append(o.getTransferredMoney())
+               .append('/').append(serverMarket.getCurrentMarketPrice()).append('/')
+               .append(vol - Math.abs(o.getFilledVolume())).append(' ');
+        }
+        return rec.toString();
+    }
+
+    /**
+     * T-211: the skip of memory segments that read 0 is exact. Seeded random books and memory states on diamond and dirt depth:
+     * walks (fills, money, end price, remainder) and findVolume / sideVolume are identical with the skip on
+     * and off. Also covers a market with a non-monotone second calculator and the no-plugin fallback provider.
+     */
+    private TestResult test_zeroSlotSkip_sameResultsOnOff() {
+        StockMarketModSettings.Market ms = backend.SERVER_SETTINGS.MARKET;
+        Float prev = ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
+        try {
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(30f);
+            IVolumeDistributionCalculator diamond = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(160.0, 50f);
+            IVolumeDistributionCalculator dirt = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(0.1, 2000f);
+            List<IVolumeDistributionCalculator> withBand = List.of(diamond, new FarBandCalculator());
+
+            // name, calculators (null = fallback provider), start price in raw, seeds
+            Object[][] cases = {
+                    { "diamond", List.of(diamond), 160L * scaleFactor, 4 },
+                    { "dirt", List.of(dirt), (long) scaleFactor / 10, 4 },
+                    { "diamond+band", withBand, 160L * scaleFactor, 1 },
+                    { "fallback", null, 160L * scaleFactor, 1 },
+            };
+            StringBuilder out = new StringBuilder();
+            for (Object[] c : cases) {
+                @SuppressWarnings("unchecked")
+                List<IVolumeDistributionCalculator> calcs = (List<IVolumeDistributionCalculator>) c[1];
+                long start = (Long) c[2];
+                long tOn = 0, tOff = 0;
+                for (int seed = 0; seed < (Integer) c[3]; seed++) {
+                    String q = askSkipScenario(calcs, start, seed, true);
+                    if (q.startsWith("MISMATCH")) return fail(c[0] + ": " + q);
+                    VirtualOrderbook.test_setZeroSlotSkip(true);
+                    long t0 = System.nanoTime();
+                    String on = askSkipScenario(calcs, start, seed, false);
+                    long t1 = System.nanoTime();
+                    VirtualOrderbook.test_setZeroSlotSkip(false);
+                    String off = askSkipScenario(calcs, start, seed, false);
+                    long t2 = System.nanoTime();
+                    VirtualOrderbook.test_setZeroSlotSkip(true);
+                    if (!on.equals(off) || !on.equals(q))
+                        return fail(c[0] + " seed " + seed + " walks differ: on " + on + " | off " + off + " | queried " + q);
+                    tOn += t1 - t0;
+                    tOff += t2 - t1;
+                }
+                out.append(String.format(Locale.ROOT, "%s: on %d ms, off %d ms; ", c[0], tOn / 1_000_000, tOff / 1_000_000));
+            }
+            return pass("Identical walks and searches; " + out);
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            VirtualOrderbook.test_setZeroSlotSkip(true);
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prev);
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        }
+    }
+
+    /**
+     * T-210: a market buy into empty default depth (diamond shape scaled to nothing) at price 160 walks to
+     * the ceiling (100 x price, ~1.6M levels) in under 50 ms with the skip, at least 10x faster than without.
+     */
+    private TestResult test_zeroSlotSkip_emptyBuyToCeiling_isFast() {
+        StockMarketModSettings.Market mset = backend.SERVER_SETTINGS.MARKET;
+        Float prevHalfLife = mset.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
+        try {
+            mset.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(30f);   // the skip works on the memory
+            IVolumeDistributionCalculator empty = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(160.0, 1e-9f);
+            long[] ms = new long[2];
+            for (int run = 0; run < 2; run++) {
+                VirtualOrderbook.test_setZeroSlotSkip(run == 0);
+                useCalculators(List.of(empty), 160L * scaleFactor);
+                Order o = new Order(serverMarket.getItemID(), Order.Type.MARKET, 1_000_000L * scaleFactor, 0, 0, UUID.randomUUID(), bankAccountNr1);
+                serverMarket.putOrder(o);
+                long t0 = System.nanoTime();
+                serverMarket.update();
+                ms[run] = (System.nanoTime() - t0) / 1_000_000;
+                if (o.getFilledVolume() != 0) return fail("Empty book filled " + o.getFilledVolume());
+                if (serverMarket.getCurrentMarketPrice() != 160L * scaleFactor) return fail("Price moved");
+            }
+            if (ms[0] >= 50) return fail("Skip on took " + ms[0] + " ms (off " + ms[1] + " ms)");
+            if (ms[1] < 10 * Math.max(1, ms[0])) return fail("Skip on " + ms[0] + " ms is not 10x faster than off " + ms[1] + " ms");
+            return pass("Empty buy to the ceiling: skip on " + ms[0] + " ms, off " + ms[1] + " ms");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            VirtualOrderbook.test_setZeroSlotSkip(true);
+            mset.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prevHalfLife);
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        }
+    }
+
+    /**
+     * T-211: wall time of one 1 s recovery step of the dense memory on diamond depth (price 160, ceiling 100x),
+     * with and without a rebuild of the per-slot targets. Median of 30 after a warm-up. Fails above 50 ms.
+     */
+    private TestResult test_depthMemory_fadeStepTiming() {
+        StockMarketModSettings.Market mset = backend.SERVER_SETTINGS.MARKET;
+        Float prevHalfLife = mset.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
+        try {
+            mset.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(30f);
+            useCalculators(List.of(new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(160.0, 50f)), 160L * scaleFactor);
+            VirtualOrderbook vob = master().test_getVirtualOrderbook();
+            if (!vob.getDepthMemory().isInitialised()) return fail("Memory not initialised after the reset");
+            double[] us = new double[2];
+            for (int r = 0; r < 2; r++) {
+                boolean refresh = r == 0;
+                for (int i = 0; i < 10; i++) vob.test_fadeStepNanos(refresh);
+                long[] t = new long[30];
+                for (int i = 0; i < t.length; i++) t[i] = vob.test_fadeStepNanos(refresh);
+                java.util.Arrays.sort(t);
+                us[r] = t[t.length / 2] / 1000.0;
+            }
+            String msg = String.format(Locale.ROOT, "%d slot sides; step with D refresh %.1f us, without %.1f us",
+                    vob.getDepthMemory().size(), us[0], us[1]);
+            if (us[0] > 50_000) return fail("Too slow: " + msg);
+            return pass(msg);
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            mset.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prevHalfLife);
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
         }
     }
 
@@ -697,13 +1505,13 @@ public class MatchingEngineTestSuite extends TestSuite {
         serverMarket.test_setDefaultVolumeProviderFunction(p -> 5f);
         serverMarket.test_setCurrentMarketPrice(havePrice);
         serverMarket.test_resetVirtualOrderBookVolume();
-        serverMarket.setMarketOpen(true);
+        serverMarket.setMaintenance(false);
 
         wantMarket.test_clearOrderbook();
         wantMarket.test_setDefaultVolumeProviderFunction(p -> 5f);
         wantMarket.test_setCurrentMarketPrice(wantPrice);
         wantMarket.test_resetVirtualOrderBookVolume();
-        wantMarket.setMarketOpen(true);
+        wantMarket.setMaintenance(false);
 
         unlockAll(flowAccount.getBank(serverMarket.getItemID()));
         unlockAll(flowAccount.getBank(wantMarket.getItemID()));
@@ -882,5 +1690,107 @@ public class MatchingEngineTestSuite extends TestSuite {
 
     private float uniformVolumeDistribution(double price) {
         return (float) uniformVolumeDistributionScale / backend.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
+    }
+
+    // ── Large-volume regressions (T-173, T-175, T-176) ───────────────────────
+
+    /**
+     * T-173: a player market sell far larger than the thin virtual book stops at the walk
+     * limit / price floor. Only the filled part may count: flow == -filled, the item bank
+     * loses exactly the filled volume and the cancelled rest is unlocked again.
+     */
+    private TestResult test_marketSell_thinBook_countsOnlyFilled() {
+        try {
+            resetMarketState(true, 50);
+            serverMarket.test_resetVirtualOrderBookVolume();
+            serverMarket.resetNetPlayerItemFlow();
+            if (!(serverMarket instanceof ServerMarket market))
+                return fail("Expected the scratch market to be a master ServerMarket");
+
+            IServerBank itemBank = bankAccount1.getBank(serverMarket.getItemID());
+            unlockAll(itemBank);
+            long start = 2_000_000;
+            itemBank.setBalance(start);
+            long target = 1_000_000;
+            itemBank.lockAmount(target);   // as CreateOrderRequest does
+
+            Order sell = new Order(serverMarket.getItemID(), Order.Type.MARKET, -target, 0, 0,
+                    UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(sell);
+            serverMarket.update();
+
+            long filled = sell.getFilledVolume();   // negative
+            if (filled >= 0 || -filled >= target)
+                return fail("Expected a partial fill, got filledVolume=" + filled + " of " + -target);
+            if (market.getNetPlayerItemFlow() != -filled)
+                return fail("Flow should be " + -filled + " (filled only), got " + market.getNetPlayerItemFlow());
+            if (itemBank.getTotalBalance() != start + filled)
+                return fail("Item balance should be start - filled = " + (start + filled)
+                        + ", got " + itemBank.getTotalBalance());
+            if (itemBank.getLockedBalance() != 0)
+                return fail("Cancelled rest should be unlocked, still locked: " + itemBank.getLockedBalance());
+            return pass("Filled " + -filled + " of " + target + " raw; flow and balance count only the fill");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * T-175: after a huge fill (2^26 raw), 100 fills of 1 raw must still be counted in the
+     * candle volume. A float accumulator drops every one of them (ulp at 2^26 is 8).
+     */
+    private TestResult test_candleTradedVolume_keepsSmallFillsAfterHugeFill() {
+        try {
+            resetMarketState(false, 10);
+            serverMarket.test_resetVirtualOrderBookVolume();
+            ItemID id = serverMarket.getItemID();
+            long huge = 1L << 26;
+            int smallFills = 100;
+
+            // Resting bot bid below the market price, big enough for every sell below.
+            serverMarket.putOrder(new Order(id, Order.Type.LIMIT, huge + smallFills, 9, 0));
+            serverMarket.update();
+            serverMarket.getCurrentMarketPriceStructAndReset();   // fresh candle
+
+            serverMarket.putOrder(new Order(id, Order.Type.MARKET, -huge, 0, 0));
+            serverMarket.update();
+            for (int i = 0; i < smallFills; i++) {
+                serverMarket.putOrder(new Order(id, Order.Type.MARKET, -1, 0, 0));
+                serverMarket.update();
+            }
+
+            float expected = (float) (huge + smallFills);
+            float got = serverMarket.getCurrentCandleTradedVolume();
+            if (Math.abs(got - expected) > Math.ulp(expected))
+                return fail("Candle volume should be ~" + (huge + smallFills) + ", got " + (long) got
+                        + " (small fills lost)");
+            return pass("Candle volume " + (long) got + " includes the " + smallFills + " small fills");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** T-176: affordable volume and the shared mul/div helper saturate instead of wrapping negative. */
+    private TestResult test_affordableVolume_hugeFunds_saturates() {
+        try {
+            long v = MatchingEngine.affordableVolume(Long.MAX_VALUE - 5, 1);
+            if (v != Long.MAX_VALUE)
+                return fail("affordableVolume(MAX-5, 1) should saturate to Long.MAX_VALUE, got " + v);
+            long funds = 100_000_000_000_000_000L;   // 1e17 raw: funds * SF overflows a long
+            v = MatchingEngine.affordableVolume(funds, 1000);
+            long exact = java.math.BigInteger.valueOf(funds).multiply(java.math.BigInteger.valueOf(scaleFactor))
+                    .divide(java.math.BigInteger.valueOf(1000)).longValue();
+            if (v < exact || v > exact + 1)
+                return fail("affordableVolume(1e17, 1000) should be ~" + exact + ", got " + v);
+            if (MatchingEngine.mulDivSaturated(Long.MAX_VALUE, Long.MAX_VALUE, 1) != Long.MAX_VALUE)
+                return fail("mulDivSaturated should saturate high");
+            if (MatchingEngine.mulDivSaturated(Long.MIN_VALUE, 2, 1) != Long.MIN_VALUE)
+                return fail("mulDivSaturated should saturate low");
+            if (MatchingEngine.mulDivSaturated(7, 9, 2) != 31)
+                return fail("mulDivSaturated(7, 9, 2) should be 31");
+            return pass("Huge funds saturate, exact results otherwise");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
     }
 }

@@ -42,6 +42,11 @@ public class NewsRequirementTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Predicate semantics
         addTest("fired_before_default_min_times", this::test_firedBefore_defaultMinTimes);

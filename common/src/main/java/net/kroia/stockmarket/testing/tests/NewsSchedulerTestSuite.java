@@ -55,6 +55,11 @@ public class NewsSchedulerTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Pre-scheduled queue (timeline)
         addTest("queue_refills_to_size_with_offsets_in_range", this::test_queue_refillsToSizeWithOffsetsInRange);

@@ -27,6 +27,12 @@ import java.util.List;
  */
 public class DisplayConfigScreen extends StockMarketGuiScreen {
 
+    /** T-159: lang keys of this screen (gui.stockmarket.display_config_screen.*). */
+    private static class Texts {
+        private static final String PREFIX = "gui.stockmarket.display_config_screen.";
+        private static final Component TITLE = Component.translatable(PREFIX + "title");
+    }
+
     private final BlockPos blockPos;
     private StockMarketDisplayBlockEntity.DisplayType selectedType;
     private ItemID selectedItemID;
@@ -58,31 +64,31 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
     private static final int HOVER_COLOR = ColorUtilities.getRGB(60, 140, 100);
 
     public DisplayConfigScreen(BlockPos blockPos, StockMarketDisplayBlockEntity.DisplayType currentType, ItemID currentItemID, ItemID currentSecondItemID) {
-        super(Component.literal("Configure Display"));
+        super(Texts.TITLE);
         this.blockPos = blockPos;
         this.selectedType = (currentType != null && currentType != StockMarketDisplayBlockEntity.DisplayType.NONE)
                 ? currentType : StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART;
         this.selectedItemID = currentItemID;
         this.selectedSecondItemID = currentSecondItemID;
 
-        titleLabel = new Label("Configure Display");
+        titleLabel = new Label(Texts.TITLE.getString());
         titleLabel.setAlignment(GuiElement.Alignment.CENTER);
         addElement(titleLabel);
 
-        typeLabel = new Label("Display Type:");
+        typeLabel = new Label(Component.translatable(Texts.PREFIX + "display_type").getString());
         addElement(typeLabel);
 
-        priceChartButton = new Button("Price Chart");
+        priceChartButton = new Button(Component.translatable(Texts.PREFIX + "price_chart").getString());
         priceChartButton.setOnFallingEdge(() -> {
             selectedType = StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART;
             updateTypeButtons();
         });
         addElement(priceChartButton);
 
-        marketLabel = new Label("I want (item to display):");
+        marketLabel = new Label(Component.translatable(Texts.PREFIX + "market").getString());
         addElement(marketLabel);
 
-        searchLabel = new Label("Search");
+        searchLabel = new Label(Component.translatable("gui.stockmarket.create_market_tab.search").getString());
         addElement(searchLabel);
 
         searchField = new TextBox();
@@ -100,10 +106,10 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         selectedLabel = new Label("");
         addElement(selectedLabel);
 
-        secondMarketLabel = new Label("I have / currency (optional):");
+        secondMarketLabel = new Label(Component.translatable(Texts.PREFIX + "second_market").getString());
         addElement(secondMarketLabel);
 
-        secondSearchLabel = new Label("Search");
+        secondSearchLabel = new Label(Component.translatable("gui.stockmarket.create_market_tab.search").getString());
         addElement(secondSearchLabel);
 
         secondSearchField = new TextBox();
@@ -121,7 +127,7 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         secondSelectedLabel = new Label("");
         addElement(secondSelectedLabel);
 
-        clearSecondButton = new Button("Clear pair");
+        clearSecondButton = new Button(Component.translatable(Texts.PREFIX + "clear_pair").getString());
         clearSecondButton.setOnFallingEdge(() -> {
             selectedSecondItemID = null;
             loadSecondMarkets();
@@ -129,7 +135,7 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         });
         addElement(clearSecondButton);
 
-        applyButton = new Button("Apply");
+        applyButton = new Button(Component.translatable(Texts.PREFIX + "apply").getString());
         applyButton.setOnFallingEdge(this::onApply);
         addElement(applyButton);
 
@@ -211,17 +217,17 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
     private void updateSelectedLabel() {
         if (selectedItemID != null) {
             String name = selectedItemID.getStack().getHoverName().getString();
-            selectedLabel.setText("Selected: " + name);
+            selectedLabel.setText(Component.translatable(Texts.PREFIX + "selected", name).getString());
         } else {
-            selectedLabel.setText("No market selected");
+            selectedLabel.setText(Component.translatable(Texts.PREFIX + "no_market_selected").getString());
         }
 
         if (selectedSecondItemID != null) {
             String firstName = selectedItemID != null ? selectedItemID.getStack().getHoverName().getString() : "?";
             String secondName = selectedSecondItemID.getStack().getHoverName().getString();
-            secondSelectedLabel.setText("Pair: " + firstName + " / " + secondName);
+            secondSelectedLabel.setText(Component.translatable(Texts.PREFIX + "pair", firstName, secondName).getString());
         } else {
-            secondSelectedLabel.setText("No pair (Item/Money mode)");
+            secondSelectedLabel.setText(Component.translatable(Texts.PREFIX + "no_pair").getString());
         }
     }
 
@@ -232,7 +238,7 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         allMarketRows.clear();
 
         if (markets == null || markets.isEmpty()) {
-            Label noMarkets = new Label("No markets available");
+            Label noMarkets = new Label(Component.translatable(Texts.PREFIX + "no_markets").getString());
             noMarkets.setAlignment(GuiElement.Alignment.CENTER);
             marketListView.addChild(noMarkets);
             updateSelectedLabel();
@@ -315,7 +321,7 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         allSecondMarketRows.clear();
 
         if (markets == null || markets.isEmpty()) {
-            Label noMarkets = new Label("No markets available");
+            Label noMarkets = new Label(Component.translatable(Texts.PREFIX + "no_markets").getString());
             noMarkets.setAlignment(GuiElement.Alignment.CENTER);
             secondMarketListView.addChild(noMarkets);
             return;
