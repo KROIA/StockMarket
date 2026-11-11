@@ -265,5 +265,5 @@ The table `OrderOrigin` has one row per player order the master accepted:
 | `origin_name` | The slave's `slaveID`, or empty for an order placed on the master itself |
 
 * Bot orders are not recorded. The account, item, amounts and time of an order are not repeated here; look them up in the order history or the BankSystem transaction ledger under the same reference.
-* Only the master writes the file; it is created with the first player order.
-* Gameplay never reads it. You can delete it while the server is stopped; it is created again with the next player order.
+* Only the master writes the file; it is created when the master starts.
+* Gameplay never reads it. You can delete it while the server is stopped; it is created again at the next start.

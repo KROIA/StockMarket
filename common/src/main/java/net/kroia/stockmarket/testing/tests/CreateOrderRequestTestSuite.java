@@ -934,7 +934,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             if (!r.passed()) return r;
             r = assertEquals("forwarded order placed", CreateOrderRequest.Status.CREATED, forwarded.status);
             if (!r.passed()) return r;
-            live.flush().orTimeout(10, TimeUnit.SECONDS).join();
+            awaitFlush(live);
             IServerIdentity id = MultiServerManager.getIdentity();
             r = assertEquals("master-local row", (id == null ? "null" : id.serverUid().toString()) + "|",
                     originRow(live.getFile(), OrderLedger.orderRef(local.orderEcho.getOrderID())));
@@ -963,7 +963,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
                         "", player).join();
                 TestResult r = assertTrue("inter-market order placed: " + out.errorMessage, out.success);
                 if (!r.passed()) return r;
-                live.flush().orTimeout(10, TimeUnit.SECONDS).join();
+                awaitFlush(live);
                 r = assertEquals("one new group row", before + 1, originCount(live.getFile(), "sm:im:%"));
                 if (!r.passed()) return r;
                 return pass("inter-market order recorded under its group ref");
@@ -971,6 +971,28 @@ public class CreateOrderRequestTestSuite extends TestSuite {
                 ((ServerMarketManager) backend.MARKET_MANAGER.getSync()).cancelInterMarketOrdersForMarket(want.getItemID());
             }
         });
+    }
+
+    /**
+     * Waits up to 10 s for every queued write of {@code db} to be committed. On timeout the exception carries the
+     * stack of each writer thread, so a stalled writer shows where it hangs.
+     *
+     * @param db the writer to flush
+     */
+    private static void awaitFlush(DiagnosticsDatabase db) {
+        try {
+            db.flush().get(10, TimeUnit.SECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            StringBuilder sb = new StringBuilder("flush timed out; writer threads:");
+            Thread.getAllStackTraces().forEach((t, stack) -> {
+                if (!t.getName().equals(OrderOriginLog.THREAD_NAME)) return;
+                sb.append("\n\"").append(t.getName()).append("\" ").append(t.getState());
+                for (StackTraceElement el : stack) sb.append("\n    at ").append(el);
+            });
+            throw new IllegalStateException(sb.toString(), e);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** @return {@code "<origin_server_uid>|<origin_name>"} of the ref's OrderOrigin row, or null if there is none */

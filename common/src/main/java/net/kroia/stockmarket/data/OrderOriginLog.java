@@ -16,8 +16,8 @@ import java.util.UUID;
  * {@code <world>/data/StockMarket/Database/stockmarket_diagnostics.db}.
  * <p>
  * The file is written by BankSystem's {@link DiagnosticsDatabase} with this mod's own schema: its own connection and
- * daemon thread {@value #THREAD_NAME} (never the server thread or the StockMarket db-worker), created on the first
- * write, a corrupt file is moved aside and recreated, a full queue drops writes. Gameplay never reads it, so deleting
+ * daemon thread {@value #THREAD_NAME} (never the server thread or the StockMarket db-worker), opened at master start,
+ * a corrupt file is moved aside and recreated, a full queue drops writes. Gameplay never reads it, so deleting
  * it never changes game state. The file holds only Meta (created_ms, schema_version {@value #SCHEMA_VERSION}) and
  * OrderOrigin, none of BankSystem's tables; no other Meta keys are written.
  * <p>
@@ -46,13 +46,17 @@ public final class OrderOriginLog {
     private OrderOriginLog() {}
 
     /**
-     * Opens the log for this server session (master start). The file is created by the first row.
+     * Opens the log for this server session (master start) and queues an idempotent schema statement, so the writer
+     * opens (creates) the file now, on its own thread. Creating the .db, -wal and -shm files can take seconds while a
+     * real-time virus scanner checks them; done lazily, the first orders' rows would wait behind that.
      *
      * @param databaseFolder the StockMarket database folder of the world
      */
     public static void open(Path databaseFolder) {
         close();
-        live = create(databaseFolder.resolve(FILE_NAME));
+        DiagnosticsDatabase db = create(databaseFolder.resolve(FILE_NAME));
+        db.execute(SCHEMA.get(0)); // CREATE TABLE IF NOT EXISTS: a no-op write that only triggers the open
+        live = db;
     }
 
     /**
