@@ -102,7 +102,6 @@ public class ServerMarketTestSuite extends TestSuite {
         addTest("ledger_marketOrder_oneCloseRow", this::test_ledger_marketOrder_oneCloseRow);
         addTest("ledger_periodic_onlyWhenChanged", this::test_ledger_periodic_onlyWhenChanged);
         addTest("ledger_shutdown_partlyFilled", this::test_ledger_shutdown_partlyFilled);
-        addTest("ledger_versionGuard_noRows", this::test_ledger_versionGuard_noRows);
     }
 
     /**
@@ -912,17 +911,15 @@ public class ServerMarketTestSuite extends TestSuite {
     /** Rows captured by {@link #captureLedger()} instead of going to the BankSystem ledger. */
     private final List<TradeLogEntry> ledgerRows = new ArrayList<>();
 
-    /** Routes ledger rows into {@link #ledgerRows} and forces the version guard on. */
+    /** Routes ledger rows into {@link #ledgerRows} instead of the BankSystem ledger. */
     private void captureLedger() {
         ledgerRows.clear();
-        OrderLedger.setAvailableOverride(true);
         OrderLedger.Writer.testSink = ledgerRows::add;
     }
 
-    /** Restores the real ledger and version detection. */
+    /** Restores the real ledger. */
     private void releaseLedger() {
         OrderLedger.Writer.testSink = null;
-        OrderLedger.setAvailableOverride(null);
     }
 
     /** @return the captured rows of one regular order */
@@ -1196,28 +1193,6 @@ public class ServerMarketTestSuite extends TestSuite {
             if (!r.passed()) return r;
             StockMarketModBackend.flushLedgerOnShutdown(null);
             return assertEquals("second flush writes nothing", 0, rowsOf(partly).size());
-        } catch (Exception e) {
-            return fail("Exception: " + e);
-        } finally {
-            releaseLedger();
-            resetMarket(100, true);
-        }
-    }
-
-    /** With the ledger API unavailable (older BankSystem) closes and sweeps write nothing and do not throw. */
-    private TestResult test_ledger_versionGuard_noRows() {
-        try {
-            resetMarket(100, true);
-            captureLedger();
-            OrderLedger.setAvailableOverride(false);
-            Order order = restingSell(500);
-            order.edit(-200, 4000);
-            ((ServerMarket) serverMarket).logOpenOrdersToLedger(OrderLedger.PERIODIC);
-            TestResult r = assertTrue("cancel still works", cancel(order));
-            if (!r.passed()) return r;
-            r = assertEquals("no rows", 0, ledgerRows.size());
-            if (!r.passed()) return r;
-            return assertEquals("nothing marked as logged", 0L, order.getLoggedFilledVolume());
         } catch (Exception e) {
             return fail("Exception: " + e);
         } finally {

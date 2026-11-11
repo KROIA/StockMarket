@@ -52,11 +52,7 @@ public final class OrderOriginLog {
      */
     public static void open(Path databaseFolder) {
         close();
-        try {
-            live = create(databaseFolder.resolve(FILE_NAME));
-        } catch (LinkageError e) { // a BankSystem without the diagnostics writer or its schema constructor
-            StockMarketMod.LOGGER.warn("[OrderOriginLog] BankSystem has no DiagnosticsDatabase; order origins are not recorded", e);
-        }
+        live = create(databaseFolder.resolve(FILE_NAME));
     }
 
     /**

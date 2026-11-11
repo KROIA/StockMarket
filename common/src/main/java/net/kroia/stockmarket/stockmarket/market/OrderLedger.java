@@ -6,7 +6,6 @@ import net.kroia.banksystem.api.ledger.TradeLogEntry;
 import net.kroia.banksystem.api.ledger.TradeRowKind;
 import net.kroia.banksystem.api.ledger.TradeSide;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,11 +26,6 @@ import java.util.function.Consumer;
  * Bot orders and deltas of 0 write no row. Placement, lock and unlock write no row either.
  * <p>
  * Only the master calls this (the matching engine and the market manager exist only there).
- * <p>
- * <b>Version guard:</b> this class has no BankSystem ledger types in its fields or signatures; they
- * are touched only inside {@link Writer}. With a BankSystem that lacks the ledger API (pre 2.2.0)
- * the first call fails with a {@link LinkageError}, which switches logging off for the rest of the
- * JVM's life instead of crashing the tick.
  */
 public final class OrderLedger {
 
@@ -45,11 +39,6 @@ public final class OrderLedger {
     /** Interval of the {@link #PERIODIC} sweep: 10 minutes in server ticks. */
     public static final int SWEEP_INTERVAL_TICKS = 10 * 60 * 20;
 
-    /** False once a call failed because the BankSystem ledger API is missing. */
-    private static volatile boolean apiAvailable = true;
-    /** Test override for the version guard; null = use the real detection. */
-    private static volatile @Nullable Boolean availableOverride = null;
-
     private OrderLedger() {}
 
     /** @return the ledger ref of a regular order: {@code sm:order:<orderID>} */
@@ -62,24 +51,9 @@ public final class OrderLedger {
         return "sm:im:" + groupID;
     }
 
-    /** @return whether rows are written (false with a BankSystem without the ledger API) */
-    public static boolean isAvailable() {
-        Boolean o = availableOverride;
-        return o != null ? o : apiAvailable;
-    }
-
-    /**
-     * Test hook: forces the version guard result.
-     *
-     * @param available true/false to force, null to go back to the real detection
-     */
-    public static void setAvailableOverride(@Nullable Boolean available) {
-        availableOverride = available;
-    }
-
     /**
      * Writes one row with the fills of {@code order} since its last row, then marks them logged.
-     * No-op for bot orders, a delta of 0, or when the ledger API is unavailable.
+     * No-op for bot orders or a delta of 0.
      *
      * @param order    the player order (a regular order or one inter-market leg)
      * @param ref      ledger ref, see {@link #orderRef(long)} / {@link #interMarketRef(UUID)}
@@ -88,30 +62,20 @@ public final class OrderLedger {
      * @return true if a row was written
      */
     public static boolean logDelta(Order order, String ref, String rowKind, ItemID currency) {
-        if (order.isBotOrder() || !isAvailable())
+        if (order.isBotOrder())
             return false;
         long qty = Math.abs(order.getFilledVolume() - order.getLoggedFilledVolume());
         long money = Math.abs(order.getTransferredMoney() - order.getLoggedTransferredMoney());
         if (qty == 0 && money == 0)
             return false;
         long avgPrice = qty == 0 ? 0 : money * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / qty;
-        try {
-            Writer.write(order.getBankAccountNr(), order.getExecutorPlayerUUID(), order.isBuyOrder(), order.getItemID(),
-                    qty, currency, money, avgPrice, ref, rowKind);
-        } catch (LinkageError e) {
-            // Older BankSystem without the ledger API: switch off, keep trading.
-            apiAvailable = false;
-            StockMarketMod.LOGGER.warn("[OrderLedger] BankSystem has no trade ledger API (needs 2.2.0+), trade rows are not written: " + e);
-            return false;
-        }
+        Writer.write(order.getBankAccountNr(), order.getExecutorPlayerUUID(), order.isBuyOrder(), order.getItemID(),
+                qty, currency, money, avgPrice, ref, rowKind);
         order.markLedgerLogged();
         return true;
     }
 
-    /**
-     * The only place that touches BankSystem ledger types, so a missing API surfaces as a
-     * {@link LinkageError} at the call site in {@link #logDelta} instead of breaking class loading.
-     */
+    /** Builds the {@link TradeLogEntry} and hands it to the BankSystem ledger (or the test sink). */
     public static final class Writer {
         /** Test hook: when set, rows go here instead of the BankSystem ledger. */
         public static volatile @Nullable Consumer<TradeLogEntry> testSink = null;
