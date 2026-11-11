@@ -64,6 +64,31 @@ public class Orderbook implements ServerSaveable
     //{
     //    virtualOrderbook.setDefaultVolumeProvider(volumeProvider);
     //}
+    /**
+     * T-211: see {@link VirtualOrderbook#setDepthReady}.
+     * @param ready true when a volume distribution plugin drives the default provider
+     */
+    public void setVirtualDepthReady(boolean ready)
+    {
+        virtualOrderbook.setDepthReady(ready);
+    }
+
+    /**
+     * Trend accumulation: see {@link VirtualOrderbook#setDepthSideFactors}.
+     * @param bidFactor bid side recovery multiplier (1 = neutral)
+     * @param askFactor ask side recovery multiplier (1 = neutral)
+     */
+    public void setVirtualDepthSideFactors(float bidFactor, float askFactor)
+    {
+        virtualOrderbook.setDepthSideFactors(bidFactor, askFactor);
+    }
+
+    /** @return the virtual order book (tests only: depth memory setup and direct searches) */
+    public VirtualOrderbook test_getVirtualOrderbook()
+    {
+        return virtualOrderbook;
+    }
+
     public void resetVirtualVolumeDistribution()
     {
         virtualOrderbook.resetVolumeDistribution();
@@ -102,6 +127,19 @@ public class Orderbook implements ServerSaveable
     {
         this.currentMarketPrice = currentMarketPrice;
         virtualOrderbook.setCurrentMarketPrice(currentMarketPrice);
+    }
+    public void updateDynamicArrayOffset(long newMarketPrice)
+    {
+        virtualOrderbook.updateDynamicArrayOffset(newMarketPrice);
+    }
+
+    /**
+     * T-198: fades the virtual depth memory by one tick. See {@link VirtualOrderbook#fadeDepthMemory(double)}.
+     * @param dtSeconds elapsed time in seconds
+     */
+    public void fadeVirtualDepthMemory(double dtSeconds)
+    {
+        virtualOrderbook.fadeDepthMemory(dtSeconds);
     }
 
     public boolean putOrder(Order order)
@@ -223,6 +261,42 @@ public class Orderbook implements ServerSaveable
         return virtualOrderbook.roundConservative(getRawVirtualVolume(rawPrice));
     }
 
+    /**
+     * Exact search for the next level with virtual volume of one side.
+     * See {@link VirtualOrderbook#findVolume(long, long, boolean)}.
+     *
+     * @param fromRawPrice first level to check (inclusive)
+     * @param toRawPrice   last level to check (inclusive); the search walks toward it
+     * @param askSide      true for sell-side (negative) volume, false for buy-side (positive)
+     * @return the first matching level, or {@link VirtualOrderbook#NO_VOLUME}
+     */
+    public long findVirtualVolume(long fromRawPrice, long toRawPrice, boolean askSide)
+    {
+        return virtualOrderbook.findVolume(fromRawPrice, toRawPrice, askSide);
+    }
+
+    /**
+     * T-200: exact one-sided virtual volume a market order consumes walking from {@code fromRawPrice}
+     * to {@code toRawPrice}. Resting limit orders are not counted. See
+     * {@link VirtualOrderbook#sideVolume(long, long, boolean, long)}.
+     *
+     * @return summed absolute raw volume (&gt;= 0)
+     */
+    public long getRawVirtualSideVolume(long fromRawPrice, long toRawPrice, boolean askSide, long rawCap)
+    {
+        return virtualOrderbook.sideVolume(fromRawPrice, toRawPrice, askSide, rawCap);
+    }
+
+    /**
+     * @return true if the virtual book has default volume outside its array window, so a
+     *         search across a gap costs one provider call per level.
+     *         See {@link VirtualOrderbook#hasDefaultVolume()}.
+     */
+    public boolean hasDefaultVirtualVolume()
+    {
+        return virtualOrderbook.hasDefaultVolume();
+    }
+
 
     public long getRawVolume(long startPrice, long endPrice)
     {
@@ -279,6 +353,12 @@ public class Orderbook implements ServerSaveable
         long rawStartPrice = MarketManager.convertToRawAmountStatic(realStartPrice);
         long rawEndPrice = MarketManager.convertToRawAmountStatic(realEndPrice);
         return (float)MarketManager.convertToRealAmountStatic(getRawVolumeRounded(rawStartPrice, rawEndPrice));
+    }
+
+    /** T-209: raw virtual depth layout borders, see {@link VirtualOrderbook#getArrayBorders()}. */
+    public long[] getVirtualArrayBorders()
+    {
+        return virtualOrderbook.getArrayBorders();
     }
 
     public @NotNull Tuple<@NotNull Double,@NotNull  Double> getEditableRealPriceRange()

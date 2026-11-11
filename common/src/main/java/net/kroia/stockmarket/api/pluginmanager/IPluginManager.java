@@ -41,7 +41,18 @@ public interface IPluginManager {
     IAsyncPluginManager getAsync();
 
 
+    /**
+     * @apiNote
+     * Do not call this from client side!
+     * @return true on a slave server: plugins run only on the master
+     */
     boolean isSlave();
 
+    /**
+     * @apiNote
+     * Do not call this from client side!
+     * @return true on the master, and on a single server without the multi-server setup; always the opposite of
+     *         {@link #isSlave()}
+     */
     boolean isMaster();
 }

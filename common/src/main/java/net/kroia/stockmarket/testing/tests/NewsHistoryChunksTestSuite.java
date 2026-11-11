@@ -55,6 +55,11 @@ public class NewsHistoryChunksTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("rotation_after_chunk_size_records", this::test_rotationAfterChunkSizeRecords);
         addTest("cap_drops_oldest_chunk_atomically", this::test_capDropsOldestChunkAtomically);
