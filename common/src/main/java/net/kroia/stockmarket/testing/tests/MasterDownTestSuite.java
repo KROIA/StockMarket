@@ -115,9 +115,9 @@ public class MasterDownTestSuite extends TestSuite {
         BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false);
 
         TestResult r = assertEquals("useWithoutItem", InteractionResult.FAIL,
-                state.useWithoutItem(p.serverLevel(), p, hit));
+                state.useWithoutItem(p.level(), p, hit));
         if (!r.passed()) return r;
-        Object itemResult = state.useItemOn(new ItemStack(Items.STICK), p.serverLevel(), p, InteractionHand.MAIN_HAND, hit);
+        Object itemResult = state.useItemOn(new ItemStack(Items.STICK), p.level(), p, InteractionHand.MAIN_HAND, hit);
         r = assertEquals("useItemOn (item in hand)", ItemInteractionResult.FAIL, itemResult); // mc<=1.21.1
         //r = assertEquals("useItemOn (item in hand)", InteractionResult.FAIL, itemResult); // mc>=1.21.2
         if (!r.passed()) return r;
