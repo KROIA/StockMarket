@@ -1519,7 +1519,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     private static void showActionBar(Component message) {
         Minecraft.getInstance().execute(() -> {
             if (Minecraft.getInstance().player != null)
-                Minecraft.getInstance().player.displayClientMessage(message, true);
+                net.kroia.modutilities.PlayerCompat.sendMessage(Minecraft.getInstance().player, message, true);
         });
     }
 
@@ -1534,7 +1534,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     /** T-158: action-bar message telling the player the market is closed. Main thread only. */
     private void showMarketClosedMessage() {
         if (Minecraft.getInstance().player != null)
-            Minecraft.getInstance().player.displayClientMessage(
+            net.kroia.modutilities.PlayerCompat.sendMessage(Minecraft.getInstance().player,
                     Component.translatable("message.stockmarket.order_status.market_closed"), true);
     }
 
