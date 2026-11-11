@@ -43,6 +43,11 @@ public class NewsPictureClientCacheTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Queueing & batching
         addTest("invalid_hash_inputs_are_safe", this::test_invalidHashInputsAreSafe);

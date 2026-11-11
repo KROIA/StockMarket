@@ -67,6 +67,11 @@ public class PriceHistoryCacheTestSuite extends TestSuite
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests()
     {
         addTest("initial_load_populates_cache", this::test_initialLoadPopulatesCache);

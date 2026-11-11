@@ -29,7 +29,7 @@ public class DisplayChartScreen extends StockMarketGuiScreen {
     private DisplayCandlestickChart chart;
 
     public DisplayChartScreen(BlockPos controllerPos, ItemID itemID, ItemID secondItemID, long blockKey, CompoundTag initialViewport) {
-        super(Component.literal("Price Chart"));
+        super(Component.translatable("gui.stockmarket.display_config_screen.price_chart"));
         this.controllerPos = controllerPos;
         this.itemID = itemID;
         this.secondItemID = secondItemID;

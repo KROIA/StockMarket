@@ -5,7 +5,10 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
+import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.stockmarket.StockMarketMod;
@@ -35,6 +38,12 @@ public final class StockMarketFabric implements ModInitializer {
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(StockMarketModBackend::onServerStop);
+        // T-191: Fabric runs BankSystem's stop handler (which closes its database) before ours, so the
+        // SHUTDOWN ledger rows are written in a phase that runs before the default one.
+        //ResourceLocation ledgerFlushPhase = ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "ledger_flush"); // mc<=1.21.10
+        Identifier ledgerFlushPhase = Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "ledger_flush"); // mc>=1.21.11
+        ServerLifecycleEvents.SERVER_STOPPING.addPhaseOrdering(ledgerFlushPhase, Event.DEFAULT_PHASE);
+        ServerLifecycleEvents.SERVER_STOPPING.register(ledgerFlushPhase, StockMarketModBackend::flushLedgerOnShutdown);
 
 
         // Player Events

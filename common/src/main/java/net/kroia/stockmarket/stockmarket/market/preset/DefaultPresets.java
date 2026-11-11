@@ -32,11 +32,19 @@ public class DefaultPresets {
         "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black"
     };
 
+    /**
+     * Every abundance literal in this file is multiplied by this factor (applied in {@link #p} and
+     * {@link #fromStack}, the only places presets are built). Raised from 1 to 10 to deepen the
+     * default order books: abundance scales the default volume distribution, the default player
+     * max order size and the VolatilityPlugin flow capacity.
+     */
+    private static final float ABUNDANCE_SCALE = 10f;
+
     // ── shorthand helpers ──────────────────────────────────────────────
 
     /** Shorthand for a simple MarketPreset (no components). */
     private static MarketPreset p(String id, float price, float abundance) {
-        return new MarketPreset(id, price, abundance);
+        return new MarketPreset(id, price, abundance * ABUNDANCE_SCALE);
     }
 
     /** Generate colored variants by substituting {color} into the pattern. */
@@ -56,7 +64,7 @@ public class DefaultPresets {
         JsonObject serialized = MarketPreset.serializeItemStack(stack);
         String itemId = serialized.get("id").getAsString();
         JsonObject components = serialized.has("components") ? serialized.getAsJsonObject("components") : null;
-        return new MarketPreset(itemId, components, price, abundance);
+        return new MarketPreset(itemId, components, price, abundance * ABUNDANCE_SCALE);
     }
 
     /**
