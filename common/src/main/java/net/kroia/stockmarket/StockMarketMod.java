@@ -31,6 +31,8 @@ public final class StockMarketMod {
     private static StockMarketModBackend backend;
 
     public static void init() {
+        // Unconditional (idempotent): getAPI() may already have created the backend before init().
+        net.kroia.stockmarket.util.StockMarketPermissions.register();
         if(backend == null)
             backend = new StockMarketModBackend();
     }

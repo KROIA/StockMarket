@@ -11,6 +11,7 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.stockmarket.marketmanager.User;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.util.StockMarketPermissions;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.UUID;
@@ -34,6 +35,7 @@ public class UserTestSuite extends TestSuite {
         addTest("to_json_round_trip", this::test_toJson_roundTrip);
         addTest("save_load_preserves_preferences", this::test_save_load_preservesPreferences);
         addTest("create_with_changed_name_preserves_preferences", this::test_createWithChangedName_preservesPreferences);
+        addTest("permission_nodes_registered_with_level_2", this::test_permissionNodes_registeredWithLevel2);
     }
 
     /**
@@ -231,5 +233,18 @@ public class UserTestSuite extends TestSuite {
         r = assertFalse("favorites should not be empty", changed.getPreferences().getFavoriteMarketIDs().isEmpty());
         if (!r.passed()) return r;
         return pass("createWithChangedName preserves preferences");
+    }
+
+    /**
+     * Every admin permission node (T-168) is registered with op level 2, so behavior without a
+     * permission mod matches the old level checks. Registration runs in StockMarketMod.init().
+     */
+    private TestResult test_permissionNodes_registeredWithLevel2() {
+        java.util.Map<String, Integer> registered = net.kroia.modutilities.PermissionCompat.getRegisteredNodes();
+        for (String node : StockMarketPermissions.ALL_NODES) {
+            TestResult r = assertEquals("fallback level of " + node, 2, registered.get(node));
+            if (!r.passed()) return r;
+        }
+        return pass("All " + StockMarketPermissions.ALL_NODES.length + " permission nodes registered with level 2");
     }
 }

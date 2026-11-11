@@ -24,6 +24,16 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {
+    /**
+     * {@link #getTimeoutMs()} for requests whose master handler waits on the single-threaded database
+     * executor (price, order and transaction history). Such a read can queue behind other DB work and an
+     * unbounded history query also sorts in memory, so on a big server it can take longer than the 30 s
+     * ARRS default. A timed-out answer is dropped by the requester although the master did the work, and
+     * the client usually asks again, adding more load. 120 s keeps a slow read alive without leaving a
+     * lost one hanging for long.
+     */
+    public static final long DB_READ_TIMEOUT_MS = 120_000L;
+
     protected static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
@@ -106,14 +116,30 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
      * except the player who triggered the action. Used to notify other admins when
      * plugin settings are changed.
      *
+     * T-159: prefer the {@link Component} overload with a {@code Component.translatable(key, args)}
+     * so the text is resolved on each admin's client in their own language.
+     *
      * @param excludePlayer UUID of the player to exclude from the broadcast (the one who made the change), or null to send to all admins
      * @param message       the message text (will be prefixed with [StockMarket] and colored gold)
      */
     protected void broadcastToAdmins(@Nullable UUID excludePlayer, String message) {
+        broadcastToAdmins(excludePlayer, Component.literal(message));
+    }
+
+    /**
+     * Broadcasts a gold-colored system message to all online op-level-2 players except
+     * {@code excludePlayer}. The message is sent as a component, so translatable texts
+     * are resolved client-side (never on the server).
+     *
+     * @param excludePlayer UUID of the player to exclude (the one who made the change), or null to send to all admins
+     * @param message       message body, usually {@code Component.translatable(key, args)};
+     *                      prefixed with a literal "[StockMarket] " and colored gold
+     */
+    protected void broadcastToAdmins(@Nullable UUID excludePlayer, Component message) {
         MinecraftServer server = UtilitiesPlatform.getServer();
         if (server == null) return;
 
-        Component chatMessage = Component.literal("[StockMarket] " + message)
+        Component chatMessage = Component.literal("[StockMarket] ").append(message)
                 .withStyle(ChatFormatting.GOLD);
 
         List<ServerPlayer> players = server.getPlayerList().getPlayers();
@@ -122,8 +148,8 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
             if (excludePlayer != null && player.getUUID().equals(excludePlayer)) {
                 continue;
             }
-            // Only send to players with op level 2 (stockmarket admin permission)
-            if (PermissionCompat.hasPermission(player, 2)) {
+            // Only send to players with the notify node (op level 2 without a permission mod)
+            if (PermissionCompat.hasPermission(player, StockMarketPermissions.NOTIFY, StockMarketPermissions.FALLBACK_LEVEL)) {
                 player.sendSystemMessage(chatMessage);
             }
         }

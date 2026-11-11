@@ -17,6 +17,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class Order implements ServerSaveable
 {
@@ -27,10 +28,15 @@ public class Order implements ServerSaveable
         INTER_MARKET,
     }
 
-    //private static long orderIDCounter = System.currentTimeMillis();
+    /**
+     * T-191: source of persisted order IDs. Persisted by {@code ServerMarketManager} ("meta" list);
+     * see {@link #restoreOrderIdCounter(long)} for the crash-safe start value.
+     */
+    private static final AtomicLong NEXT_ORDER_ID = new AtomicLong(System.currentTimeMillis());
 
-
-    //long orderID;               // The ID for this individual order instance
+    long orderID;               // T-191: persisted monotonic ID of a player order, 0 = not assigned (bot orders, legacy orders until first use)
+    long loggedFilledVolume;    // T-191: filledVolume already written to the BankSystem ledger
+    long loggedTransferredMoney;// T-191: transferredMoney already written to the BankSystem ledger
     @NotNull ItemID itemID;     // The ID for which ServerMarket the item gets traded
 
     @Nullable UUID orderExecutor; // The players UUID who executed the order. If null -> bot order
@@ -95,6 +101,7 @@ public class Order implements ServerSaveable
             ByteBufCodecs.VAR_LONG.encode(buf, data.getFilledVolume());
             ByteBufCodecs.VAR_LONG.encode(buf, data.getTransferredMoney());
             ByteBufCodecs.VAR_LONG.encode(buf, data.getTime());
+            ByteBufCodecs.VAR_LONG.encode(buf, data.getOrderID());
         }
         @Override
         public @NotNull Order decode(RegistryFriendlyByteBuf buf) {
@@ -108,7 +115,9 @@ public class Order implements ServerSaveable
             long filledVolume = ByteBufCodecs.VAR_LONG.decode(buf);
             long transferredMoney = ByteBufCodecs.VAR_LONG.decode(buf);
             long time = ByteBufCodecs.VAR_LONG.decode(buf);
-            return new Order(/*orderID, */itemID, orderExecutor, bankAccountNr, type, volume, filledVolume, price, time, transferredMoney);
+            Order order = new Order(itemID, orderExecutor, bankAccountNr, type, volume, filledVolume, price, time, transferredMoney);
+            order.orderID = ByteBufCodecs.VAR_LONG.decode(buf);
+            return order;
         }
     };
    /* public record Data(ItemID itemID, UUID orderExecutor, int bankAccountNr, Type type, long volume, long price,
@@ -120,17 +129,16 @@ public class Order implements ServerSaveable
     // Player order
     public Order(@NotNull ItemID itemID, @NotNull Type type, long volume, long price, long time, @NotNull UUID orderExecutor, int bankAccountNr)
     {
-        this(/*orderIDCounter++, */itemID, orderExecutor, bankAccountNr, type, volume,0,price,time,0);
+        this(itemID, orderExecutor, bankAccountNr, type, volume,0,price,time,0);
     }
 
     // Bot order
     public Order(@NotNull ItemID itemID, @NotNull Type type, long volume, long price, long time) // Bot order
     {
-        this(/*orderIDCounter++,*/ itemID, null, 0, type, volume,0,price,time,0);
+        this(itemID, null, 0, type, volume,0,price,time,0);
     }
-    private Order(/*long orderID, */@NotNull ItemID itemID, @Nullable UUID orderExecutor, int bankAccountNr, Type type, long targetVolume, long filledVolume, long startPrice, long time, long transferredMoney )
+    private Order(@NotNull ItemID itemID, @Nullable UUID orderExecutor, int bankAccountNr, Type type, long targetVolume, long filledVolume, long startPrice, long time, long transferredMoney )
     {
-        //this.orderID = orderID;
         this.itemID = itemID;
         this.type = type;
         this.targetVolume = targetVolume;
@@ -169,14 +177,71 @@ public class Order implements ServerSaveable
         short itemID_raw = itemID.getShort();
         int typeValue = type.ordinal();
         long averageExecPrice = getAverageExecutionPrice();
-        OrderRecordStruct recordStruct = new OrderRecordStruct(/*orderID, */itemID_raw, bankAccountNr, orderExecutor, typeValue, filledVolume, averageExecPrice, time);
+        OrderRecordStruct recordStruct = new OrderRecordStruct(itemID_raw, bankAccountNr, orderExecutor, typeValue, filledVolume, averageExecPrice, time, null,
+                orderID == 0 ? null : orderID);
         return recordStruct;
     }
 
-    /*public long getOrderID()
+    /**
+     * T-191: the persisted order ID, used as ledger reference {@code sm:order:<id>} and stored in the
+     * OrderHistory {@code order_id} column.
+     *
+     * @return the ID, or 0 if none was assigned yet (bot orders, inter-market legs, legacy orders)
+     */
+    public long getOrderID()
     {
         return orderID;
-    }*/
+    }
+
+    /**
+     * T-191: gives this order the next ID from the global counter if it has none yet. Called when the
+     * master accepts a player order, and lazily for orders loaded from saves that predate order IDs.
+     *
+     * @return the (possibly new) order ID
+     */
+    public long assignOrderIdIfMissing()
+    {
+        if (orderID == 0)
+            orderID = NEXT_ORDER_ID.getAndIncrement();
+        return orderID;
+    }
+
+    /** @return the ID the next {@link #assignOrderIdIfMissing()} hands out (persisted by the market manager) */
+    public static long getNextOrderId()
+    {
+        return NEXT_ORDER_ID.get();
+    }
+
+    /**
+     * T-191: restores the ID counter on load. The start value is never below the current wall clock
+     * in ms, so IDs handed out after the last save stay unique even if the server crashed before
+     * saving the counter (as long as fewer than 1000 orders per second were placed on average).
+     *
+     * @param savedNextId the persisted counter value, 0 if none
+     */
+    public static void restoreOrderIdCounter(long savedNextId)
+    {
+        NEXT_ORDER_ID.set(Math.max(savedNextId, System.currentTimeMillis()));
+    }
+
+    /** @return filled volume already covered by ledger rows (T-191) */
+    public long getLoggedFilledVolume()
+    {
+        return loggedFilledVolume;
+    }
+
+    /** @return transferred money already covered by ledger rows (T-191) */
+    public long getLoggedTransferredMoney()
+    {
+        return loggedTransferredMoney;
+    }
+
+    /** T-191: marks the current fill state as written to the ledger. */
+    public void markLedgerLogged()
+    {
+        loggedFilledVolume = filledVolume;
+        loggedTransferredMoney = transferredMoney;
+    }
     public @NotNull ItemID getItemID()
     {
         return itemID;
@@ -316,6 +381,10 @@ public class Order implements ServerSaveable
         tag.putLong("StartPrice", startPrice);
         tag.putLong("Time", time);
         tag.putLong("TransferredMoney", transferredMoney);
+        // T-191 (absent in older saves -> 0: the ID is assigned on first use, the first ledger row covers all earlier fills)
+        tag.putLong("OrderID", orderID);
+        tag.putLong("LoggedFilledVolume", loggedFilledVolume);
+        tag.putLong("LoggedTransferredMoney", loggedTransferredMoney);
         return true;
     }
 
@@ -352,6 +421,9 @@ public class Order implements ServerSaveable
         startPrice = NbtCompat.getLong(tag, "StartPrice");
         time = NbtCompat.getLong(tag, "Time");
         transferredMoney = NbtCompat.getLong(tag, "TransferredMoney");
+        orderID = tag.contains("OrderID") ? NbtCompat.getLong(tag, "OrderID") : 0;
+        loggedFilledVolume = tag.contains("LoggedFilledVolume") ? NbtCompat.getLong(tag, "LoggedFilledVolume") : 0;
+        loggedTransferredMoney = tag.contains("LoggedTransferredMoney") ? NbtCompat.getLong(tag, "LoggedTransferredMoney") : 0;
         return true;
     }
 

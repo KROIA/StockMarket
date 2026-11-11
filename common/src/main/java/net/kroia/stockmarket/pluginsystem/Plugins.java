@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.pluginsystem;
 
 import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
+import net.kroia.stockmarket.pluginsystem.plugins.NetFlowPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.TargetPriceBot;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
@@ -14,10 +15,18 @@ import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
  */
 public class Plugins {
 
+    /** T-213: net-flow price model (equilibrium from the players' net item flow); runs before the VolatilityPlugin. */
+    public static final PluginRegistryObject NET_FLOW_PLUGIN = PluginRegistry.registerPlugin(
+            NetFlowPlugin.class.getName(),
+            "NetFlowPlugin",
+            "Moves the equilibrium price with the players' net item flow (selling lowers it, buying raises it).",
+            NetFlowPlugin::new
+    );
+
     public static final PluginRegistryObject VOLATILITY_PLUGIN = PluginRegistry.registerPlugin(
             VolatilityPlugin.class.getName(),
             "VolatilityPlugin",
-            "A plugin that adds random walk based volatility to the target price.",
+            "Adds a random walk around the equilibrium price (from the NetFlowPlugin, else the default price).",
             VolatilityPlugin::new
     );
 
@@ -53,6 +62,9 @@ public class Plugins {
         // Import is safe here because clientSetup() only runs on client
         TARGET_PRICE_BOT_PLUGIN.setGuiElementFactory(
                 net.kroia.stockmarket.pluginsystem.plugins.screen.TargetPriceBotGuiElement::new
+        );
+        NET_FLOW_PLUGIN.setGuiElementFactory(
+                net.kroia.stockmarket.pluginsystem.plugins.screen.NetFlowPluginGuiElement::new
         );
         VOLATILITY_PLUGIN.setGuiElementFactory(
                 net.kroia.stockmarket.pluginsystem.plugins.screen.VolatilityPluginGuiElement::new

@@ -7,7 +7,7 @@ public interface ISyncServerPluginManager {
 
     /**
      * Auto-subscribes a newly created market to all plugins that opt in,
-     * sorted by subscriptionOrder (0 = earliest, ties resolved by list order).
+     * in plugin list (execution) order.
      *
      * @param marketID the ID of the newly created market
      */

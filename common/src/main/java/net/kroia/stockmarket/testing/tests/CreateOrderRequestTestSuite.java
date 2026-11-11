@@ -1,22 +1,46 @@
 package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.api.ledger.LedgerActor;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.multi_server.IServerIdentity;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
+import net.kroia.modutilities.networking.multi_server.ServerRole;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.data.OrderOriginLog;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
+import net.kroia.stockmarket.networking.request.PlaceInterMarketOrderRequest;
+import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
+import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
+import org.jetbrains.annotations.Nullable;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 public class CreateOrderRequestTestSuite extends TestSuite {
 
@@ -68,11 +92,34 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         addTest("sell_locksItemVolume", this::test_sell_locksItemVolume);
         addTest("putOrderFails_unlocksMoneyBuy", this::test_putOrderFails_unlocksMoneyBuy);
 
+        // Issue #95: AsyncMarket PutOrder_1 runs the same check and lock as this request
+        addTest("asyncPutOrder_locksLikeCreateOrder", this::test_asyncPutOrder_locksLikeCreateOrder);
+        addTest("asyncPutOrder_uncheckedOrdersRejected", this::test_asyncPutOrder_uncheckedOrdersRejected);
+
+        // T-215: the master records each player order's origin server in stockmarket_diagnostics.db
+        addTest("orderOrigin_columnsAndFirstRowWins", this::test_orderOrigin_columnsAndFirstRowWins);
+        addTest("orderOrigin_createOrderWritesRow", this::test_orderOrigin_createOrderWritesRow);
+        addTest("orderOrigin_interMarketWritesRow", this::test_orderOrigin_interMarketWritesRow);
+
         // Fix 3 — market orders that cannot match must cancel the remainder + refund.
         addTest("marketSell_noLiquidity_unlocksItems", this::test_marketSell_noLiquidity_unlocksItems);
         addTest("marketBuy_noLiquidity_unlocksMoney", this::test_marketBuy_noLiquidity_unlocksMoney);
         addTest("marketSell_partialFill_unlocksRemainderItems", this::test_marketSell_partialFill_unlocksRemainderItems);
         addTest("marketBuy_partialFill_unlocksRemainderMoney", this::test_marketBuy_partialFill_unlocksRemainderMoney);
+
+        // T-166: max order size + global per-player trade cooldown
+        addTest("maxOrder_oversizeRejected", this::test_maxOrder_oversizeRejected);
+        addTest("maxOrder_atLimitAccepted", this::test_maxOrder_atLimitAccepted);
+        addTest("maxOrder_zeroUnlimited", this::test_maxOrder_zeroUnlimited);
+        addTest("cooldown_rejectsSecondOrder", this::test_cooldown_rejectsSecondOrder);
+        addTest("cooldown_rejectedDoesNotRestart", this::test_cooldown_rejectedDoesNotRestart);
+        addTest("cooldown_zeroOff", this::test_cooldown_zeroOff);
+        addTest("move_afterLimitLowered_orderSurvives", this::test_move_afterLimitLowered_orderSurvives);
+
+        // T-195: BankSystem account freeze blocks trading and cancels open orders
+        addTest("freeze_rejectsPlacement", this::test_freeze_rejectsPlacement);
+        addTest("freeze_unfreezeAllowsTradingAgain", this::test_freeze_unfreezeAllowsTradingAgain);
+        addTest("freeze_cancelsOpenOrdersAndUnlocks", this::test_freeze_cancelsOpenOrdersAndUnlocks);
     }
 
     /**
@@ -91,7 +138,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         // Also update settings for consistency (the source-gate is what makes the tests
         // deterministic, but keeping settings in sync avoids surprising other code).
         serverMarket.getSettings().virtualOrderbookEnabled = false;
-        serverMarket.getSettings().marketOpen = true;
+        serverMarket.getSettings().maintenance = false;
         serverMarket.test_setCurrentMarketPrice(100);
         serverMarket.test_clearOrderbook();
         serverMarket.test_clearIncomingOrderBuffers();
@@ -710,9 +757,9 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
     private TestResult test_putOrderFails_unlocksMoneyBuy() {
         try {
-            // Close the market so putOrder returns false
-            boolean wasOpen = serverMarket.isMarketOpen();
-            serverMarket.setMarketOpen(false);
+            // Put the market under maintenance so putOrder returns false
+            boolean wasMaintenance = serverMarket.isUnderMaintenance();
+            serverMarket.setMaintenance(true);
 
             UUID player = UUID.randomUUID();
             registerAndAddUser(player, "PutOrderFailUser");
@@ -730,7 +777,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
             long balanceAfter = bankAccount.getBank(moneyID).getTotalBalance();
 
-            serverMarket.setMarketOpen(wasOpen);
+            serverMarket.setMaintenance(wasMaintenance);
 
             // Balance should be restored if putOrder failed
             TestResult r = assertEquals("Balance should be restored after failed putOrder",
@@ -740,5 +787,571 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }
+    }
+
+    // ── Issue #95: AsyncMarket PutOrder_1 ────────────────────────────────────
+
+    /**
+     * Sends {@code order} through the master handler of AsyncMarket {@code PutOrder_1}, as a server-side
+     * call with no player attached (what a slave's {@code putOrderAsync} arrives as).
+     *
+     * @param order the order to place
+     * @return the handler's answer: true if the order was placed
+     */
+    private boolean asyncPutOrder(Order order) {
+        AsyncMarket.OutputData out = AsyncMarket.Request.instance.handleOnMasterServer(
+                AsyncMarket.InputData.of(AsyncMarket.FunctionType.PutOrder_1, itemID, order), "", null).join();
+        return Boolean.TRUE.equals(out.decodeResult());
+    }
+
+    /** @return {@code real} in raw bank units */
+    private long raw(double real) {
+        return backend.BANK_SYSTEM_API.getServerBankManager().getSync().convertToRawAmount(real);
+    }
+
+    /** A PutOrder_1 buy and sell lock exactly what the same CreateOrderRequest locks. */
+    private TestResult test_asyncPutOrder_locksLikeCreateOrder() {
+        return withLimits(0, 0, () -> { // no cooldown: each player places two orders
+            UUID asyncPlayer = UUID.randomUUID();
+            UUID requestPlayer = UUID.randomUUID();
+            IServerBankAccount asyncAcc = freshAccount("AsyncPut", 100000, 1000, asyncPlayer);
+            IServerBankAccount requestAcc = freshAccount("AsyncPutRef", 100000, 1000, requestPlayer);
+            long now = System.currentTimeMillis();
+
+            TestResult r = assertTrue("async buy placed", asyncPutOrder(new Order(itemID, Order.Type.LIMIT,
+                    raw(5.0), raw(10.0), now, asyncPlayer, asyncAcc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertTrue("async sell placed", asyncPutOrder(new Order(itemID, Order.Type.LIMIT,
+                    raw(-3.0), raw(500.0), now, asyncPlayer, asyncAcc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertEquals("reference buy", CreateOrderRequest.Status.CREATED, executeRequest(new CreateOrderRequest.InputData(
+                    itemID, requestAcc.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0), requestPlayer).status);
+            if (!r.passed()) return r;
+            r = assertEquals("reference sell", CreateOrderRequest.Status.CREATED, executeRequest(new CreateOrderRequest.InputData(
+                    itemID, requestAcc.getAccountNumber(), Order.Type.LIMIT, -3.0, 500.0), requestPlayer).status);
+            if (!r.passed()) return r;
+
+            r = assertTrue("money is locked", asyncAcc.getBank(moneyID).getBalance() < 100000);
+            if (!r.passed()) return r;
+            r = assertEquals("same money lock", requestAcc.getBank(moneyID).getBalance(), asyncAcc.getBank(moneyID).getBalance());
+            if (!r.passed()) return r;
+            r = assertEquals("same item lock", requestAcc.getBank(itemID).getBalance(), asyncAcc.getBank(itemID).getBalance());
+            if (!r.passed()) return r;
+            return pass("PutOrder_1 locks like CreateOrderRequest");
+        });
+    }
+
+    /** Non-member, too little money, bot order and wrong market are refused by PutOrder_1 and lock nothing. */
+    private TestResult test_asyncPutOrder_uncheckedOrdersRejected() {
+        return withLimits(0, 0, () -> {
+            UUID member = UUID.randomUUID();
+            UUID stranger = UUID.randomUUID();
+            registerAndAddUser(stranger, "AsyncPutStranger");
+            IServerBankAccount acc = freshAccount("AsyncPutReject", 100, 0, member);
+            long now = System.currentTimeMillis();
+
+            TestResult r = assertFalse("non-member refused", asyncPutOrder(new Order(itemID, Order.Type.LIMIT,
+                    raw(1.0), raw(0.5), now, stranger, acc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertFalse("not enough money refused", asyncPutOrder(new Order(itemID, Order.Type.LIMIT,
+                    raw(5.0), raw(10.0), now, member, acc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertFalse("sell without items refused", asyncPutOrder(new Order(itemID, Order.Type.LIMIT,
+                    raw(-1.0), raw(10.0), now, member, acc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertFalse("bot order refused", asyncPutOrder(new Order(itemID, Order.Type.LIMIT, raw(1.0), raw(0.5), now)));
+            if (!r.passed()) return r;
+            r = assertFalse("order for another market refused", asyncPutOrder(new Order(moneyID, Order.Type.LIMIT,
+                    raw(1.0), raw(0.5), now, member, acc.getAccountNumber())));
+            if (!r.passed()) return r;
+            r = assertEquals("no money locked", acc.getBank(moneyID).getTotalBalance(), acc.getBank(moneyID).getBalance());
+            if (!r.passed()) return r;
+            return pass("Unchecked PutOrder_1 orders are refused");
+        });
+    }
+
+    // ── T-215: OrderOrigin rows in stockmarket_diagnostics.db ────────────────
+
+    /**
+     * The file holds only Meta and OrderOrigin (no BankSystem tables); OrderOrigin has exactly ref, origin_server_uid,
+     * origin_name; master rows get the own uid, slave rows the slave's.
+     */
+    private TestResult test_orderOrigin_columnsAndFirstRowWins() {
+        Path dir = null;
+        try {
+            dir = Files.createTempDirectory("sm-order-origin-test");
+            Path file = dir.resolve(OrderOriginLog.FILE_NAME);
+            UUID self = UUID.randomUUID();
+            UUID slave = UUID.randomUUID();
+            IServerIdentity identity = identity(self, "known-slave", slave);
+            DiagnosticsDatabase db = OrderOriginLog.create(file);
+            OrderOriginLog.record(db, "sm:order:1", "", identity);
+            OrderOriginLog.record(db, "sm:order:2", "known-slave", identity);
+            OrderOriginLog.record(db, "sm:order:3", "unknown-slave", identity);
+            OrderOriginLog.record(db, "sm:order:1", "known-slave", identity); // same ref again: ignored
+            db.flush().orTimeout(10, TimeUnit.SECONDS).join();
+            db.close();
+
+            List<String> columns = new ArrayList<>();
+            try (Connection c = DiagnosticsDatabase.connect(file); Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("PRAGMA table_info(OrderOrigin)")) {
+                while (rs.next()) columns.add(rs.getString("name"));
+            }
+            TestResult r = assertEquals("columns", List.of("ref", "origin_server_uid", "origin_name"), columns);
+            if (!r.passed()) return r;
+            List<String> tables = new ArrayList<>(); // no TransferJournal / NoteFlow from BankSystem's schema
+            try (Connection c = DiagnosticsDatabase.connect(file); Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")) {
+                while (rs.next()) tables.add(rs.getString(1));
+            }
+            r = assertEquals("tables", List.of("Meta", "OrderOrigin"), tables);
+            if (!r.passed()) return r;
+            r = assertEquals("master row", self + "|", originRow(file, "sm:order:1"));
+            if (!r.passed()) return r;
+            r = assertEquals("slave row", slave + "|known-slave", originRow(file, "sm:order:2"));
+            if (!r.passed()) return r;
+            r = assertEquals("unknown slave row", "null|unknown-slave", originRow(file, "sm:order:3"));
+            if (!r.passed()) return r;
+            return pass("Meta + OrderOrigin only, 3 columns, uid per origin, first row of a ref wins");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    /** A master-local and a slave-forwarded order each get a row under the order's ledger ref. */
+    private TestResult test_orderOrigin_createOrderWritesRow() {
+        DiagnosticsDatabase live = OrderOriginLog.live();
+        if (live == null) return fail("no live OrderOriginLog on the master");
+        return withLimits(0, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("OrderOrigin", 100000, 0, player);
+            CreateOrderRequest.InputData buy = new CreateOrderRequest.InputData(itemID, acc.getAccountNumber(), Order.Type.LIMIT, 1.0, 1.0);
+            CreateOrderRequest.OutputData local = executeRequest(buy, player);
+            CreateOrderRequest.OutputData forwarded = backend.NETWORKING.CREATE_ORDER_REQUEST.placeOrder(buy, player, "audit-test-slave").join();
+            TestResult r = assertEquals("local order placed", CreateOrderRequest.Status.CREATED, local.status);
+            if (!r.passed()) return r;
+            r = assertEquals("forwarded order placed", CreateOrderRequest.Status.CREATED, forwarded.status);
+            if (!r.passed()) return r;
+            awaitFlush(live);
+            IServerIdentity id = MultiServerManager.getIdentity();
+            r = assertEquals("master-local row", (id == null ? "null" : id.serverUid().toString()) + "|",
+                    originRow(live.getFile(), OrderLedger.orderRef(local.orderEcho.getOrderID())));
+            if (!r.passed()) return r;
+            r = assertEquals("slave row", "null|audit-test-slave",
+                    originRow(live.getFile(), OrderLedger.orderRef(forwarded.orderEcho.getOrderID())));
+            if (!r.passed()) return r;
+            return pass("both orders recorded with their origin");
+        });
+    }
+
+    /** An inter-market order gets one row under its group's ledger ref. */
+    private TestResult test_orderOrigin_interMarketWritesRow() {
+        DiagnosticsDatabase live = OrderOriginLog.live();
+        if (live == null) return fail("no live OrderOriginLog on the master");
+        return withLimits(0, 0, () -> {
+            IServerMarket want = fixture.createMarket("origin_want");
+            want.test_setCurrentMarketPrice(100);
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("OrderOriginIM", 0, 1000, player);
+            try {
+                long before = originCount(live.getFile(), "sm:im:%");
+                // limit of 1 raw have per want: far below the current rate, so the order only rests
+                PlaceInterMarketOrderRequest.OutputData out = new PlaceInterMarketOrderRequest().handleOnMasterServer(
+                        new PlaceInterMarketOrderRequest.InputData(itemID, want.getItemID(), acc.getAccountNumber(), 1.0, 1L, 0),
+                        "", player).join();
+                TestResult r = assertTrue("inter-market order placed: " + out.errorMessage, out.success);
+                if (!r.passed()) return r;
+                awaitFlush(live);
+                r = assertEquals("one new group row", before + 1, originCount(live.getFile(), "sm:im:%"));
+                if (!r.passed()) return r;
+                return pass("inter-market order recorded under its group ref");
+            } finally { // the limit order rests; drop it before the fixture removes the market
+                ((ServerMarketManager) backend.MARKET_MANAGER.getSync()).cancelInterMarketOrdersForMarket(want.getItemID());
+            }
+        });
+    }
+
+    /**
+     * Waits up to 10 s for every queued write of {@code db} to be committed. On timeout the exception carries the
+     * stack of each writer thread, so a stalled writer shows where it hangs.
+     *
+     * @param db the writer to flush
+     */
+    private static void awaitFlush(DiagnosticsDatabase db) {
+        try {
+            db.flush().get(10, TimeUnit.SECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            StringBuilder sb = new StringBuilder("flush timed out; writer threads:");
+            Thread.getAllStackTraces().forEach((t, stack) -> {
+                if (!t.getName().equals(OrderOriginLog.THREAD_NAME)) return;
+                sb.append("\n\"").append(t.getName()).append("\" ").append(t.getState());
+                for (StackTraceElement el : stack) sb.append("\n    at ").append(el);
+            });
+            throw new IllegalStateException(sb.toString(), e);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** @return {@code "<origin_server_uid>|<origin_name>"} of the ref's OrderOrigin row, or null if there is none */
+    private static @Nullable String originRow(Path file, String ref) {
+        try (Connection c = DiagnosticsDatabase.connect(file);
+             PreparedStatement ps = c.prepareStatement("SELECT origin_server_uid, origin_name FROM OrderOrigin WHERE ref = ?")) {
+            ps.setString(1, ref);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) + "|" + rs.getString(2) : null;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** @return number of OrderOrigin rows whose ref matches the LIKE pattern; 0 if the file or table does not exist yet */
+    private static long originCount(Path file, String refPattern) {
+        if (!Files.exists(file)) return 0;
+        try (Connection c = DiagnosticsDatabase.connect(file); Statement st = c.createStatement();
+             ResultSet t = st.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE name = 'OrderOrigin'")) {
+            if (!t.next() || t.getLong(1) == 0) return 0;
+            try (PreparedStatement ps = c.prepareStatement("SELECT COUNT(*) FROM OrderOrigin WHERE ref LIKE ?")) {
+                ps.setString(1, refPattern);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? rs.getLong(1) : 0;
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** A master identity that knows exactly one slave. */
+    private static IServerIdentity identity(UUID self, String slaveName, UUID slaveUid) {
+        return new IServerIdentity() {
+            @Override public UUID serverUid() { return self; }
+            @Override public ServerRole role() { return ServerRole.MASTER; }
+            @Override public @Nullable String slaveId() { return null; }
+            @Override public @Nullable UUID masterUid() { return null; }
+            @Override public @Nullable UUID slaveUid(String slaveId) { return slaveName.equals(slaveId) ? slaveUid : null; }
+        };
+    }
+
+    private static void deleteTree(@Nullable Path dir) {
+        if (dir == null) return;
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+        } catch (Exception ignored) {
+            // best effort
+        }
+    }
+
+    // ── T-166: max order size + trade cooldown ───────────────────────────────
+
+    /**
+     * Runs a test body with the trade cooldown set to {@code cooldownMs} and the shared
+     * market's maxOrderVolume set to {@code maxOrder}; both are restored afterwards.
+     */
+    private TestResult withLimits(long cooldownMs, long maxOrder, java.util.function.Supplier<TestResult> body) {
+        Long prevCooldown = backend.SERVER_SETTINGS.MARKET.TRADE_COOLDOWN_MS.get();
+        long prevMax = serverMarket.getSettings().maxOrderVolume;
+        try {
+            backend.SERVER_SETTINGS.MARKET.TRADE_COOLDOWN_MS.set(cooldownMs);
+            serverMarket.getSettings().maxOrderVolume = maxOrder;
+            return body.get();
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            backend.SERVER_SETTINGS.MARKET.TRADE_COOLDOWN_MS.set(prevCooldown);
+            serverMarket.getSettings().maxOrderVolume = prevMax;
+            serverMarket.test_clearOrderbook();
+            serverMarket.test_clearIncomingOrderBuffers();
+        }
+    }
+
+    /** Places a small resting buy limit order for the player (accepted unless a limit hits). */
+    private CreateOrderRequest.OutputData smallBuy(IServerBankAccount acc, UUID player) {
+        return executeRequest(new CreateOrderRequest.InputData(
+                itemID, acc.getAccountNumber(), Order.Type.LIMIT, 1.0, 1.0), player);
+    }
+
+    /** Buy and sell orders above maxOrderVolume are rejected before any funds are locked. */
+    private TestResult test_maxOrder_oversizeRejected() {
+        return withLimits(0, 10, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("MaxOrderOversize", 1_000_000_000_000L, 1_000_000_000L, player);
+            long moneyBefore = acc.getBank(moneyID).getBalance();
+            CreateOrderRequest.OutputData buy = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, 11.0, 1.0), player);
+            TestResult r = assertEquals("buy 11 > 10 rejected", CreateOrderRequest.Status.ORDER_TOO_LARGE, buy.status);
+            if (!r.passed()) return r;
+            r = assertEquals("detail carries the limit", 10L, buy.detail);
+            if (!r.passed()) return r;
+            CreateOrderRequest.OutputData sell = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.MARKET, -11.0, 0.0), player);
+            r = assertEquals("sell 11 > 10 rejected", CreateOrderRequest.Status.ORDER_TOO_LARGE, sell.status);
+            if (!r.passed()) return r;
+            r = assertEquals("no money locked", moneyBefore, acc.getBank(moneyID).getBalance());
+            if (!r.passed()) return r;
+            return pass("Oversize orders rejected with ORDER_TOO_LARGE");
+        });
+    }
+
+    /** An order exactly at maxOrderVolume is accepted. */
+    private TestResult test_maxOrder_atLimitAccepted() {
+        return withLimits(0, 10, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("MaxOrderAtLimit", 1_000_000_000_000L, 0, player);
+            CreateOrderRequest.OutputData result = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, 10.0, 1.0), player);
+            return assertEquals("volume == limit accepted", CreateOrderRequest.Status.CREATED, result.status);
+        });
+    }
+
+    /** maxOrderVolume 0 means unlimited. */
+    private TestResult test_maxOrder_zeroUnlimited() {
+        return withLimits(0, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("MaxOrderUnlimited", 1_000_000_000_000L, 0, player);
+            CreateOrderRequest.OutputData result = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, 100_000.0, 1.0), player);
+            return assertEquals("huge order accepted with limit 0", CreateOrderRequest.Status.CREATED, result.status);
+        });
+    }
+
+    /** A second order of the same player inside the cooldown window is rejected. */
+    private TestResult test_cooldown_rejectsSecondOrder() {
+        return withLimits(60_000, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("CooldownSecond", 1_000_000_000_000L, 0, player);
+            TestResult r = assertEquals("first order accepted", CreateOrderRequest.Status.CREATED, smallBuy(acc, player).status);
+            if (!r.passed()) return r;
+            CreateOrderRequest.OutputData second = smallBuy(acc, player);
+            r = assertEquals("second order rejected", CreateOrderRequest.Status.TRADING_TOO_FAST, second.status);
+            if (!r.passed()) return r;
+            r = assertTrue("detail = remaining ms in (0, 60000]", second.detail > 0 && second.detail <= 60_000);
+            if (!r.passed()) return r;
+            UUID other = UUID.randomUUID();
+            IServerBankAccount otherAcc = freshAccount("CooldownOther", 1_000_000_000_000L, 0, other);
+            r = assertEquals("other player is not blocked", CreateOrderRequest.Status.CREATED, smallBuy(otherAcc, other).status);
+            if (!r.passed()) return r;
+            return pass("Cooldown rejects the second order of the same player only");
+        });
+    }
+
+    /** A rejected order does not restart the cooldown: the remaining time keeps shrinking. */
+    private TestResult test_cooldown_rejectedDoesNotRestart() {
+        return withLimits(60_000, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("CooldownNoRestart", 1_000_000_000_000L, 0, player);
+            TestResult r = assertEquals("first order accepted", CreateOrderRequest.Status.CREATED, smallBuy(acc, player).status);
+            if (!r.passed()) return r;
+            try { Thread.sleep(50); } catch (InterruptedException ignored) {}
+            CreateOrderRequest.OutputData rejected1 = smallBuy(acc, player);
+            CreateOrderRequest.OutputData rejected2 = smallBuy(acc, player);
+            r = assertEquals("rejected 1", CreateOrderRequest.Status.TRADING_TOO_FAST, rejected1.status);
+            if (!r.passed()) return r;
+            r = assertEquals("rejected 2", CreateOrderRequest.Status.TRADING_TOO_FAST, rejected2.status);
+            if (!r.passed()) return r;
+            // A restart by rejected1 would put rejected2 back at ~60000 ms (> rejected1's ~59950).
+            r = assertTrue("remaining did not grow (" + rejected1.detail + " -> " + rejected2.detail + ")",
+                    rejected2.detail <= rejected1.detail && rejected1.detail < 60_000);
+            if (!r.passed()) return r;
+            return pass("Rejected orders do not restart the cooldown");
+        });
+    }
+
+    /** Cooldown 0 disables the check. */
+    private TestResult test_cooldown_zeroOff() {
+        return withLimits(0, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("CooldownOff", 1_000_000_000_000L, 0, player);
+            for (int i = 0; i < 3; i++) {
+                TestResult r = assertEquals("order " + i + " accepted", CreateOrderRequest.Status.CREATED, smallBuy(acc, player).status);
+                if (!r.passed()) return r;
+            }
+            return pass("Cooldown 0 lets back-to-back orders through");
+        });
+    }
+
+    /**
+     * A chart move (cancel + re-create) of an order larger than a since-lowered limit, inside the
+     * cooldown, is accepted via the server-granted move credit; the credit only covers the cancelled
+     * volume, is used up by one order and cannot be forged without a real cancel.
+     */
+    private TestResult test_move_afterLimitLowered_orderSurvives() {
+        return withLimits(60_000, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("MoveCredit", 1_000_000_000_000L, 1_000_000_000_000L, player);
+            // Resting sell limit far above the market, 20 items, placed while unlimited.
+            CreateOrderRequest.OutputData placed = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, -20.0, 100_000.0), player);
+            TestResult r = assertEquals("original order accepted", CreateOrderRequest.Status.CREATED, placed.status);
+            if (!r.passed()) return r;
+            serverMarket.update(); // move it from the input buffer into the book
+            serverMarket.getSettings().maxOrderVolume = 10; // admin lowers the limit
+
+            // No cancel yet -> no credit: a "move-like" order is limited normally (cannot be forged).
+            CreateOrderRequest.OutputData forged = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, -20.0, 99_000.0), player);
+            r = assertEquals("no credit without a cancel", CreateOrderRequest.Status.ORDER_TOO_LARGE, forged.status);
+            if (!r.passed()) return r;
+
+            Order o = placed.orderEcho;
+            boolean cancelled = new net.kroia.stockmarket.networking.request.CancelOrderRequest().handleOnMasterServer(
+                    new net.kroia.stockmarket.networking.request.CancelOrderRequest.InputData(
+                            itemID, o.getTime(), o.getType().ordinal(), o.getStartPrice(), o.getTargetVolume()),
+                    "", player).join();
+            r = assertTrue("cancel succeeds", cancelled);
+            if (!r.passed()) return r;
+
+            CreateOrderRequest.OutputData bigger = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, -21.0, 99_000.0), player);
+            r = assertEquals("credit does not cover more volume", CreateOrderRequest.Status.ORDER_TOO_LARGE, bigger.status);
+            if (!r.passed()) return r;
+            CreateOrderRequest.OutputData moved = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, -20.0, 99_000.0), player);
+            r = assertEquals("moved order accepted despite limit 10 + cooldown", CreateOrderRequest.Status.CREATED, moved.status);
+            if (!r.passed()) return r;
+            CreateOrderRequest.OutputData again = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, -20.0, 99_000.0), player);
+            r = assertEquals("credit is used up", CreateOrderRequest.Status.ORDER_TOO_LARGE, again.status);
+            if (!r.passed()) return r;
+            return pass("Moving an order is not blocked by a lowered limit; the exemption is server-verified");
+        });
+    }
+
+    // ── T-195: account freeze ────────────────────────────────────────────────
+
+    /** Freezes or unfreezes an account through BankSystem; a real change fires the freeze event. */
+    private void setFrozen(IServerBankAccount acc, boolean frozen) {
+        backend.BANK_SYSTEM_API.getServerBankManager().getSync()
+                .setAccountFrozen(acc.getAccountNumber(), frozen, LedgerActor.system());
+    }
+
+    /** Places a resting inter-market limit order (have = shared market item, far-off rate limit). */
+    private PlaceInterMarketOrderRequest.OutputData restingInterMarket(IServerMarket want, IServerBankAccount acc, UUID player) {
+        return new PlaceInterMarketOrderRequest().handleOnMasterServer(
+                new PlaceInterMarketOrderRequest.InputData(itemID, want.getItemID(), acc.getAccountNumber(), 1.0, 1L, 0),
+                "", player).join();
+    }
+
+    /**
+     * A frozen account cannot place a limit, market, slave-forwarded or inter-market order,
+     * and nothing gets locked.
+     */
+    private TestResult test_freeze_rejectsPlacement() {
+        return withLimits(0, 0, () -> {
+            IServerMarket want = fixture.createMarket("freeze_want");
+            want.test_setCurrentMarketPrice(100);
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("FreezeReject", 1_000_000_000L, 1_000_000L, player);
+            setFrozen(acc, true);
+            try {
+                TestResult r = assertEquals("limit buy rejected", CreateOrderRequest.Status.ACCOUNT_FROZEN, smallBuy(acc, player).status);
+                if (!r.passed()) return r;
+                CreateOrderRequest.OutputData sell = executeRequest(new CreateOrderRequest.InputData(
+                        itemID, acc.getAccountNumber(), Order.Type.MARKET, -1.0, 0.0), player);
+                r = assertEquals("market sell rejected", CreateOrderRequest.Status.ACCOUNT_FROZEN, sell.status);
+                if (!r.passed()) return r;
+                // Slave-forwarded order: the master's placeOrder decides, whatever the slave thinks.
+                CreateOrderRequest.OutputData forwarded = backend.NETWORKING.CREATE_ORDER_REQUEST.placeOrder(
+                        new CreateOrderRequest.InputData(itemID, acc.getAccountNumber(), Order.Type.LIMIT, 1.0, 1.0),
+                        player, "audit-test-slave").join();
+                r = assertEquals("slave-forwarded order rejected", CreateOrderRequest.Status.ACCOUNT_FROZEN, forwarded.status);
+                if (!r.passed()) return r;
+                PlaceInterMarketOrderRequest.OutputData im = restingInterMarket(want, acc, player);
+                r = assertTrue("inter-market rejected: " + im.errorMessage, !im.success && "ACCOUNT_FROZEN".equals(im.errorMessage));
+                if (!r.passed()) return r;
+                r = assertEquals("no money locked", 0L, acc.getBank(moneyID).getLockedBalance());
+                if (!r.passed()) return r;
+                r = assertEquals("no items locked", 0L, acc.getBank(itemID).getLockedBalance());
+                if (!r.passed()) return r;
+                return pass("Frozen account: all placement paths rejected with ACCOUNT_FROZEN");
+            } finally {
+                setFrozen(acc, false);
+            }
+        });
+    }
+
+    /** After an unfreeze the same account trades normally again. */
+    private TestResult test_freeze_unfreezeAllowsTradingAgain() {
+        return withLimits(0, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("FreezeUnfreeze", 1_000_000_000L, 0, player);
+            setFrozen(acc, true);
+            TestResult r = assertEquals("rejected while frozen", CreateOrderRequest.Status.ACCOUNT_FROZEN, smallBuy(acc, player).status);
+            if (!r.passed()) return r;
+            setFrozen(acc, false);
+            return assertEquals("accepted after unfreeze", CreateOrderRequest.Status.CREATED, smallBuy(acc, player).status);
+        });
+    }
+
+    /**
+     * Freezing cancels the account's open orders in every market through the normal cancel path:
+     * a resting limit order in the book, a buffered one, one on a second market and a pending
+     * inter-market order. All locked money and items are released; another account's order stays.
+     */
+    private TestResult test_freeze_cancelsOpenOrdersAndUnlocks() {
+        return withLimits(0, 0, () -> {
+            IServerMarket want = fixture.createMarket("freeze_cancel_want");
+            want.test_setCurrentMarketPrice(100);
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("FreezeCancel", 1_000_000_000L, 1_000_000L, player);
+            acc.createBank(want.getItemID(), 0);
+            UUID other = UUID.randomUUID();
+            IServerBankAccount otherAcc = freshAccount("FreezeCancelOther", 1_000_000_000L, 0, other);
+            ServerMarketManager manager = backend.MARKET_MANAGER.getServerMarketManager();
+            try {
+                TestResult r = assertEquals("book buy placed", CreateOrderRequest.Status.CREATED, smallBuy(acc, player).status);
+                if (!r.passed()) return r;
+                r = assertEquals("other account's buy placed", CreateOrderRequest.Status.CREATED, smallBuy(otherAcc, other).status);
+                if (!r.passed()) return r;
+                serverMarket.update(); // both buys move into the book
+                // Buffered sell far above the market (not yet matched) and a buy on the second market.
+                r = assertEquals("buffered sell placed", CreateOrderRequest.Status.CREATED, executeRequest(new CreateOrderRequest.InputData(
+                        itemID, acc.getAccountNumber(), Order.Type.LIMIT, -2.0, 100_000.0), player).status);
+                if (!r.passed()) return r;
+                r = assertEquals("second-market buy placed", CreateOrderRequest.Status.CREATED, executeRequest(new CreateOrderRequest.InputData(
+                        want.getItemID(), acc.getAccountNumber(), Order.Type.LIMIT, 1.0, 1.0), player).status);
+                if (!r.passed()) return r;
+                PlaceInterMarketOrderRequest.OutputData im = restingInterMarket(want, acc, player);
+                r = assertTrue("inter-market order placed: " + im.errorMessage, im.success);
+                if (!r.passed()) return r;
+                r = assertTrue("money locked before freeze", acc.getBank(moneyID).getLockedBalance() > 0);
+                if (!r.passed()) return r;
+                r = assertTrue("items locked before freeze", acc.getBank(itemID).getLockedBalance() > 0);
+                if (!r.passed()) return r;
+
+                setFrozen(acc, true); // fires the event -> cancelOrdersOfBankAccount on the master
+
+                for (IServerMarket m : List.of(serverMarket, want)) {
+                    for (Order o : m.getLimitOrders()) {
+                        r = assertTrue("no resting order of the frozen account", o.getBankAccountNr() != acc.getAccountNumber());
+                        if (!r.passed()) return r;
+                    }
+                }
+                r = assertTrue("no pending inter-market order", manager.getPendingInterMarketOrdersForPlayer(player).isEmpty());
+                if (!r.passed()) return r;
+                r = assertEquals("money unlocked", 0L, acc.getBank(moneyID).getLockedBalance());
+                if (!r.passed()) return r;
+                r = assertEquals("items unlocked", 0L, acc.getBank(itemID).getLockedBalance());
+                if (!r.passed()) return r;
+                serverMarket.update(); // the cancelled buffered sell must not reach the book
+                boolean otherStill = false;
+                for (Order o : serverMarket.getLimitOrders()) {
+                    r = assertTrue("buffered sell not booked", o.getBankAccountNr() != acc.getAccountNumber());
+                    if (!r.passed()) return r;
+                    otherStill |= o.getBankAccountNr() == otherAcc.getAccountNumber();
+                }
+                r = assertTrue("other account's order untouched", otherStill);
+                if (!r.passed()) return r;
+                return pass("Freeze cancelled book, buffered, second-market and inter-market orders; all funds unlocked");
+            } finally {
+                setFrozen(acc, false);
+                want.test_clearOrderbook();
+                want.test_clearIncomingOrderBuffers();
+                manager.cancelInterMarketOrdersForMarket(want.getItemID());
+            }
+        });
     }
 }
