@@ -6,7 +6,11 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.villagertrading.MoneyPayment;
 import net.kroia.stockmarket.villagertrading.VillagerTradePriceTable;
 import net.kroia.stockmarket.villagertrading.VillagerTradeRewriter;
 import net.kroia.stockmarket.villagertrading.VillagerTradeData;
@@ -33,6 +37,8 @@ import java.util.function.ToLongFunction;
  * {@link VillagerTradeRewriter#classify},
  * {@link VillagerTradeRewriter#tableLookup}) using synthetic
  * {@link MerchantOffers} and price tables — no live villager entity needed.
+ * The T-243 tests cover preset prices and check that a converted villager
+ * trade leaves a (scratch) market untouched.
  */
 public class VillagerTradeRewriteTestSuite extends TestSuite {
 
@@ -67,6 +73,21 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         addTest("emerald_replace_no_emerald_market_unchanged", this::test_emerald_replace_no_emerald_market_unchanged);
         addTest("emerald_replace_listed_item_uses_market", this::test_emerald_replace_listed_item_uses_market);
         addTest("emerald_replace_toggle_off_restores", this::test_emerald_replace_toggle_off_restores);
+        addTest("preset_prices_price_unlisted_item", this::test_preset_prices_price_unlisted_item);
+        addTest("preset_prices_missing_preset_stays_emerald", this::test_preset_prices_missing_preset_stays_emerald);
+        addTest("converted_trade_no_market_impact", this::test_converted_trade_no_market_impact);
+    }
+
+    /** Master backend for the market-impact test (static injection, see DevBootstrap). */
+    private static StockMarketModBackend.ServerInstances backend;
+
+    /**
+     * Injects the master server instances.
+     *
+     * @param b the master's server instances
+     */
+    public static void setBackend(StockMarketModBackend.ServerInstances b) {
+        backend = b;
     }
 
     // ========================================================================
@@ -80,7 +101,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private static VillagerTradePriceTable table(long version, boolean enabled, ItemStack currency,
                                                  Map<Short, Long> prices) {
         return new VillagerTradePriceTable(version, enabled, currency,
-                BUY_MARGIN, SELL_MARGIN, false, prices);
+                BUY_MARGIN, SELL_MARGIN, false, prices, false, Map.of());
     }
 
     private static VillagerTradePriceTable moneyTable(long version) {
@@ -90,7 +111,13 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     /** Enabled money table with the given REPLACE_EMERALDS_FOR_UNLISTED flag. */
     private static VillagerTradePriceTable emeraldReplaceTable(long version, boolean replace) {
         return new VillagerTradePriceTable(version, true, moneyCurrency(),
-                BUY_MARGIN, SELL_MARGIN, replace, Map.of());
+                BUY_MARGIN, SELL_MARGIN, replace, Map.of(), false, Map.of());
+    }
+
+    /** Enabled money table with emerald replacement and preset prices on, using the given preset map. */
+    private static VillagerTradePriceTable presetTable(long version, Map<Short, Long> presetPrices) {
+        return new VillagerTradePriceTable(version, true, moneyCurrency(),
+                BUY_MARGIN, SELL_MARGIN, true, Map.of(), true, presetPrices);
     }
 
     /** Emerald market only (100 raw per emerald) — iron and coal are unlisted. */
@@ -636,7 +663,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         return pass("Option off keeps unlisted offers in emerald form");
     }
 
-    /** Option on + emerald market: unlisted offers convert with margins applied. */
+    /** Option on + emerald market: unlisted offers convert without margins (T-243). */
     private TestResult test_emerald_replace_converts_unlisted() {
         MerchantOffers offers = new MerchantOffers();
         offers.add(sellIronOffer());
@@ -651,19 +678,20 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         MerchantOffer sell = offers.get(0);
         r = assertTrue("Sell cost is currency", isMoney(sell.getBaseCostA()));
         if (!r.passed()) return r;
-        // 5 emeralds × 100 raw × sell margin 1.2 = 600 raw
-        r = assertEquals("Sell cost = emeralds × emerald price × sell margin (600 raw)",
-                600L, rawValue(sell.getBaseCostA(), sell.getCostB()));
+        // 5 emeralds × 100 raw = 500 raw, no sell margin
+        r = assertEquals("Sell cost = emeralds × emerald price, no margin (500 raw)",
+                500L, rawValue(sell.getBaseCostA(), sell.getCostB()));
         if (!r.passed()) return r;
-        r = assertEquals("Converted sell offer neutralizes discounts", 0.0f, sell.getPriceMultiplier());
+        r = assertEquals("Converted sell offer keeps its priceMultiplier (discounts capped later)",
+                0.05f, sell.getPriceMultiplier());
         if (!r.passed()) return r;
 
         MerchantOffer buy = offers.get(1);
         r = assertTrue("Buy result is currency", isMoney(buy.getResult()));
         if (!r.passed()) return r;
-        // 1 emerald × 100 raw × buy margin 0.8 = 80 raw
-        r = assertEquals("Payout = emeralds × emerald price × buy margin (80 raw)",
-                80L, rawValue(buy.getResult()));
+        // 1 emerald × 100 raw = 100 raw, no buy margin
+        r = assertEquals("Payout = emeralds × emerald price, no margin (100 raw)",
+                100L, rawValue(buy.getResult()));
         if (!r.passed()) return r;
         r = assertEquals("Converted buy offer keeps its priceMultiplier", 0.05f, buy.getPriceMultiplier());
         if (!r.passed()) return r;
@@ -671,7 +699,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
                 entry.get(0).isRewritten() && entry.get(1).isRewritten());
         if (!r.passed()) return r;
 
-        return pass("Unlisted offers converted via the emerald market with margins");
+        return pass("Unlisted offers converted via the emerald market without margins");
     }
 
     /** Option on but no emerald market: unlisted offers stay emerald. */
@@ -702,7 +730,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
 
         VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(1L, true), ironAndEmerald, null);
 
-        // iron 200 raw × 1.2 = 240 raw (the emerald path would give 600 raw)
+        // iron 200 raw × 1.2 = 240 raw (the emerald path would give 500 raw)
         TestResult r = assertEquals("Listed item priced from its own market (240 raw)",
                 240L, rawValue(offers.get(0).getBaseCostA(), offers.get(0).getCostB()));
         if (!r.passed()) return r;
@@ -743,5 +771,115 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         if (!r.passed()) return r;
 
         return pass("Emerald-converted offers restore on option-off and on full restore");
+    }
+
+    // ========================================================================
+    // USE_PRESET_PRICES_FOR_VILLAGERS (T-243)
+    // ========================================================================
+
+    /**
+     * Preset prices on: an unlisted item is priced from its rounded preset price,
+     * even though an emerald market exists and the item has no market.
+     */
+    private TestResult test_preset_prices_price_unlisted_item() {
+        ItemID ironID = ItemID.getOrRegisterFromItemStackServerSide_direct(new ItemStack(Items.IRON_INGOT));
+        TestResult r = assertTrue("Iron ItemID must be registered", ironID.isValid());
+        if (!r.passed()) return r;
+        Map<Short, Long> presets = new HashMap<>();
+        presets.put(ironID.getShort(), 257L); // preset 2.57 → rounded 2.60
+
+        MerchantOffers offers = new MerchantOffers();
+        offers.add(sellIronOffer()); // 5 emeralds → 1 iron
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, presetTable(1L, presets), emeraldOnlyLookup(), null);
+
+        r = assertTrue("Unlisted iron offer must be converted", changed);
+        if (!r.passed()) return r;
+        MerchantOffer sell = offers.get(0);
+        r = assertTrue("Sell cost is currency", isMoney(sell.getBaseCostA()));
+        if (!r.passed()) return r;
+        // 1 iron × rounded preset 260 raw; the emerald path would give 500 raw
+        r = assertEquals("Sell cost = rounded preset price, no margin (260 raw)",
+                260L, rawValue(sell.getBaseCostA(), sell.getCostB()));
+        if (!r.passed()) return r;
+
+        return pass("Preset prices price unlisted items instead of the emerald price");
+    }
+
+    /**
+     * Preset prices on: an item without a preset price keeps its emerald trade,
+     * even though an emerald market exists (no fallback to the emerald price).
+     */
+    private TestResult test_preset_prices_missing_preset_stays_emerald() {
+        MerchantOffers offers = new MerchantOffers();
+        MerchantOffer sell = sellIronOffer();
+        MerchantOffer buy = buyCoalOffer();
+        offers.add(sell);
+        offers.add(buy);
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        // Empty preset map: neither iron nor coal has a preset price.
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, presetTable(1L, Map.of()), emeraldOnlyLookup(), null);
+
+        TestResult r = assertFalse("Nothing converted without preset prices", changed);
+        if (!r.passed()) return r;
+        r = assertTrue("Sell offer untouched (emerald)", offers.get(0) == sell);
+        if (!r.passed()) return r;
+        r = assertTrue("Buy offer untouched (emerald)", offers.get(1) == buy);
+        if (!r.passed()) return r;
+
+        return pass("Items without a preset price stay in emeralds");
+    }
+
+    /**
+     * Villagers have no market impact: converting offers and paying a converted
+     * offer must not place orders, change the net player flow or move the price
+     * of the market used as reference (a scratch market stands in for the
+     * emerald market).
+     */
+    private TestResult test_converted_trade_no_market_impact() {
+        if (backend == null) {
+            return fail("VillagerTradeRewriteTestSuite requires the master backend");
+        }
+        TestFixture fixture = new TestFixture("VillagerTradeRewrite");
+        fixture.setBackend(backend);
+        try {
+            IServerMarket market = fixture.createMarket("emerald_standin");
+            long priceBefore = market.getCurrentMarketPrice();
+            long flowBefore = market.getNetPlayerItemFlow();
+            int ordersBefore = market.getLimitOrders().size();
+            TestResult r = assertTrue("Scratch market has a price", priceBefore > 0);
+            if (!r.passed()) return r;
+
+            ToLongFunction<ItemStack> lookup = stack -> stack.is(Items.EMERALD) ? market.getCurrentMarketPrice() : 0L;
+            MerchantOffers offers = new MerchantOffers();
+            offers.add(sellIronOffer());
+            offers.add(buyCoalOffer());
+            VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+            VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(1L, true), lookup, null);
+
+            // Pay the converted sell offer the way the trade menu does.
+            MerchantOffer sell = offers.get(0);
+            r = assertTrue("Sell offer converted to money", isMoney(sell.getBaseCostA()));
+            if (!r.passed()) return r;
+            ItemStack payment = sell.getCostA().copy();
+            r = assertTrue("Payment satisfies the offer", MoneyPayment.satisfied(sell, payment, ItemStack.EMPTY));
+            if (!r.passed()) return r;
+            MoneyPayment.consume(sell, payment, ItemStack.EMPTY);
+
+            r = assertEquals("No orders placed", ordersBefore, market.getLimitOrders().size());
+            if (!r.passed()) return r;
+            r = assertEquals("Net player flow unchanged", flowBefore, market.getNetPlayerItemFlow());
+            if (!r.passed()) return r;
+            r = assertEquals("Market price unchanged", priceBefore, market.getCurrentMarketPrice());
+            if (!r.passed()) return r;
+
+            return pass("Converted villager trades leave the market untouched");
+        } finally {
+            fixture.cleanup();
+        }
     }
 }

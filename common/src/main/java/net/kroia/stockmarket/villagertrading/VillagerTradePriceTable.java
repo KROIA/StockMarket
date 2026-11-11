@@ -16,7 +16,9 @@ import java.util.Map;
  * traded item has no market keep (or return to) their vanilla emerald form.
  * With {@code replaceEmeraldsForUnlisted} set, such offers are instead valued
  * through the emerald market (the emerald's price is simply its entry in the
- * price map, so no separate conversion rate is carried).
+ * price map, so no separate conversion rate is carried), or — with
+ * {@code usePresetPrices} also set — through the default prices of the market
+ * presets ({@code presetPricesRawByItemIdShort}), even for items without a market.
  * <p>
  * The master server computes instances of this table from its live markets and
  * settings ({@link VillagerTradeManager#recomputeTable()}) and broadcasts them
@@ -42,6 +44,12 @@ import java.util.Map;
  *                              {@code VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED})
  * @param pricesRawByItemIdShort current market price (raw) per ItemID short; only markets
  *                              with a price &gt; 0 are included
+ * @param usePresetPrices       whether converted (unlisted) offers are priced from the preset
+ *                              default prices instead of the emerald market (setting
+ *                              {@code VillagerTrading.USE_PRESET_PRICES_FOR_VILLAGERS}); only
+ *                              {@code true} while {@code replaceEmeraldsForUnlisted} is on
+ * @param presetPricesRawByItemIdShort preset default price (raw) per ItemID short; filled by the
+ *                              master only while {@code usePresetPrices} is on, empty otherwise
  */
 public record VillagerTradePriceTable(
         long version,
@@ -50,13 +58,16 @@ public record VillagerTradePriceTable(
         float buyMargin,
         float sellMargin,
         boolean replaceEmeraldsForUnlisted,
-        Map<Short, Long> pricesRawByItemIdShort)
+        Map<Short, Long> pricesRawByItemIdShort,
+        boolean usePresetPrices,
+        Map<Short, Long> presetPricesRawByItemIdShort)
 {
     public VillagerTradePriceTable {
         // Defensive copy → the record is truly immutable and safe to share across
         // threads (the slave receives it on a network thread and swaps it into a
         // volatile field read by the server main thread).
         pricesRawByItemIdShort = Map.copyOf(pricesRawByItemIdShort);
+        presetPricesRawByItemIdShort = Map.copyOf(presetPricesRawByItemIdShort);
     }
 
     /**
@@ -67,6 +78,18 @@ public record VillagerTradePriceTable(
      */
     public long getPriceRaw(short itemIdShort) {
         Long price = pricesRawByItemIdShort.get(itemIdShort);
+        return price != null ? price : 0L;
+    }
+
+    /**
+     * Returns the preset default price (raw units) for the given ItemID short.
+     *
+     * @param itemIdShort the BankSystem ItemID short of the item
+     * @return the raw preset default price, or {@code 0} if the item has no preset
+     *         (or preset prices are not in use)
+     */
+    public long getPresetPriceRaw(short itemIdShort) {
+        Long price = presetPricesRawByItemIdShort.get(itemIdShort);
         return price != null ? price : 0L;
     }
 
@@ -84,11 +107,9 @@ public record VillagerTradePriceTable(
                 buf.writeFloat(table.buyMargin);
                 buf.writeFloat(table.sellMargin);
                 buf.writeBoolean(table.replaceEmeraldsForUnlisted);
-                buf.writeVarInt(table.pricesRawByItemIdShort.size());
-                for (Map.Entry<Short, Long> entry : table.pricesRawByItemIdShort.entrySet()) {
-                    buf.writeShort(entry.getKey());
-                    buf.writeLong(entry.getValue());
-                }
+                writePriceMap(buf, table.pricesRawByItemIdShort);
+                buf.writeBoolean(table.usePresetPrices);
+                writePriceMap(buf, table.presetPricesRawByItemIdShort);
             },
             buf -> {
                 long version = buf.readLong();
@@ -97,15 +118,31 @@ public record VillagerTradePriceTable(
                 float buyMargin = buf.readFloat();
                 float sellMargin = buf.readFloat();
                 boolean replaceEmeraldsForUnlisted = buf.readBoolean();
-                int size = buf.readVarInt();
-                Map<Short, Long> prices = new HashMap<>(size);
-                for (int i = 0; i < size; i++) {
-                    short key = buf.readShort();
-                    long value = buf.readLong();
-                    prices.put(key, value);
-                }
+                Map<Short, Long> prices = readPriceMap(buf);
+                boolean usePresetPrices = buf.readBoolean();
+                Map<Short, Long> presetPrices = readPriceMap(buf);
                 return new VillagerTradePriceTable(version, enabled, currency, buyMargin, sellMargin,
-                        replaceEmeraldsForUnlisted, prices);
+                        replaceEmeraldsForUnlisted, prices, usePresetPrices, presetPrices);
             }
     );
+
+    /** Writes an ItemID-short → raw price map (size, then key/value pairs). */
+    private static void writePriceMap(RegistryFriendlyByteBuf buf, Map<Short, Long> map) {
+        buf.writeVarInt(map.size());
+        for (Map.Entry<Short, Long> entry : map.entrySet()) {
+            buf.writeShort(entry.getKey());
+            buf.writeLong(entry.getValue());
+        }
+    }
+
+    /** Reads a map written by {@link #writePriceMap}. */
+    private static Map<Short, Long> readPriceMap(RegistryFriendlyByteBuf buf) {
+        int size = buf.readVarInt();
+        Map<Short, Long> map = new HashMap<>(size);
+        for (int i = 0; i < size; i++) {
+            short key = buf.readShort();
+            map.put(key, buf.readLong());
+        }
+        return map;
+    }
 }

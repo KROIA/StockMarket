@@ -277,7 +277,8 @@ public class StockMarketModSettings extends ModSettings {
      * of such a trade are converted to the configured trading currency
      * ({@link Market#CURRENCY}) and priced from the market. Offers for items
      * <b>without</b> a market keep their vanilla emerald form, unless
-     * {@link #REPLACE_EMERALDS_FOR_UNLISTED} converts them via the emerald market.
+     * {@link #REPLACE_EMERALDS_FOR_UNLISTED} converts them via the emerald market
+     * (or the preset prices, {@link #USE_PRESET_PRICES_FOR_VILLAGERS}).
      * <p>
      * These settings are only read on the <b>master</b> server (slave servers never
      * load {@code settings.json}); the master broadcasts the resulting price table
@@ -311,13 +312,26 @@ public class StockMarketModSettings extends ModSettings {
         /**
          * When {@code true}, emerald offers whose traded item has <b>no</b> market are
          * converted to the trading currency as well, valued at
-         * {@code emerald count × emerald market price} (× buy/sell margin). Only takes
-         * effect while an emerald market exists; otherwise such offers keep their
-         * vanilla emerald form. Offers whose item is listed always use the item's own
-         * market price. Read live on every table recompute (not restart-required) and
-         * carried to slaves inside the price table. Disabled by default.
+         * {@code emerald count × emerald market price}, with the emerald price rounded to
+         * two significant digits and no buy/sell margin. Only takes effect while an
+         * emerald market exists (or {@link #USE_PRESET_PRICES_FOR_VILLAGERS} is on);
+         * otherwise such offers keep their vanilla emerald form. Offers whose item is
+         * listed always use the item's own market price. Read live on every table
+         * recompute (not restart-required) and carried to slaves inside the price table.
+         * Disabled by default.
          */
         public final Setting<Boolean> REPLACE_EMERALDS_FOR_UNLISTED = registerSetting("REPLACE_EMERALDS_FOR_UNLISTED", false, Boolean.class);
+
+        /**
+         * Only used while {@link #REPLACE_EMERALDS_FOR_UNLISTED} is on. When {@code true},
+         * converted offers are priced from the traded item's default price in the market
+         * presets (even when no market exists for it) instead of
+         * {@code emerald count × emerald price}; same rounding, no margin. An item without
+         * a preset price keeps its emerald trade (never falls back to the emerald price).
+         * Read live on every table recompute (not restart-required); the master sends the
+         * preset prices to slaves inside the price table. Disabled by default.
+         */
+        public final Setting<Boolean> USE_PRESET_PRICES_FOR_VILLAGERS = registerSetting("USE_PRESET_PRICES_FOR_VILLAGERS", false, Boolean.class);
 
         public VillagerTrading() { super("VillagerTrading"); }
     }

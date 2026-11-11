@@ -10,6 +10,7 @@ import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.component.TypedDataComponent;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.npc.AbstractVillager; // mc<=1.21.10
@@ -30,9 +31,15 @@ import java.util.function.ToLongFunction;
  * the configured stock-market trading currency — but <b>only</b> for offers
  * whose traded item is listed on the stock market. Unlisted items keep their
  * vanilla emerald trades, unless {@code VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED}
- * is on and an emerald market exists — then their emerald amount is converted
- * at the emerald market price. Offers are restored to emerald form when their
- * pricing basis disappears or the feature/option is disabled.
+ * is on — then they are converted without margins at the rounded emerald
+ * market price, or at the rounded preset default price with
+ * {@code USE_PRESET_PRICES_FOR_VILLAGERS} (see {@link #convertedPriceRaw}).
+ * Offers are restored to emerald form when their pricing basis disappears or
+ * the feature/option is disabled. Discounts on rewritten offers are capped at
+ * {@link #MAX_DISCOUNT_PERCENT} ({@link #capDiscounts}).
+ * <p>
+ * Villager trades never touch the stock market: the rewriter only reads
+ * prices, it places no orders and changes no net flow, order book or ledger.
  * <p>
  * Registered once on Architectury's {@code InteractionEvent.INTERACT_ENTITY},
  * which fires server-side in the interaction packet handler <i>before</i>
@@ -193,8 +200,8 @@ public final class VillagerTradeRewriter {
      *   <li>traded item has a market price → rewrite to currency form
      *       (also covers the market-created-later transition);</li>
      *   <li>traded item has no market price but the emerald-replacement option
-     *       is on and an emerald market exists → rewrite to currency form at
-     *       {@code emerald count × emerald price};</li>
+     *       is on → rewrite to currency form at the rounded emerald price or
+     *       preset price, without margins ({@link #convertedPriceRaw});</li>
      *   <li>otherwise → the offer stays in (or is <b>restored</b> to) its
      *       original emerald form. The snapshot is kept, so a later re-listing
      *       (or re-enabled option) converts the offer again.</li>
@@ -338,20 +345,19 @@ public final class VillagerTradeRewriter {
      * <b>only</b> when the traded item is listed on the stock market: a
      * villager-sells offer requires a market price for the result item; a
      * villager-buys offer requires a market price for <b>every</b> item cost.
-     * Unlisted offers fall back to {@code emerald count × emerald market price}
-     * when {@link VillagerTradePriceTable#replaceEmeraldsForUnlisted()} is set
-     * and an emerald market exists; otherwise they return {@code null} and keep
-     * their vanilla emerald form. Margins, priceMultiplier and demand handling
-     * are identical for both pricing bases. All math in raw units.
+     * Unlisted offers are converted when
+     * {@link VillagerTradePriceTable#replaceEmeraldsForUnlisted()} is set, at the
+     * price of {@link #convertedPriceRaw} (no margins); otherwise they return
+     * {@code null} and keep their vanilla emerald form. All math in raw units.
      * <p>
-     * Demand/discount semantics: when the <b>cost</b> side becomes currency
-     * (villager sells) the new offer uses {@code priceMultiplier = 0}, which
-     * neutralizes both demand scaling and gossip/Hero-of-the-Village discounts
-     * (both derive from {@code getPriceMultiplier()} in
-     * {@code Villager.updateSpecialPrices()}, which runs after this rewrite) —
-     * reputation must not grind the price below the sell margin. When the cost
-     * side stays an item (villager buys), the original multiplier and the live
-     * demand are preserved so discounts only reduce the item count handed over.
+     * Demand/discount semantics: a listed villager-sells offer uses
+     * {@code priceMultiplier = 0}, which removes demand scaling and reputation
+     * discounts (Hero of the Village still applies, it does not depend on the
+     * multiplier). Converted villager-sells offers and all villager-buys offers
+     * keep the original multiplier and the live demand, so vanilla discounts
+     * apply. For every rewritten offer the total discount is capped at
+     * {@link #MAX_DISCOUNT_PERCENT} by {@link #capDiscounts}, which runs after
+     * {@code Villager.updateSpecialPrices()}.
      * <p>
      * {@code uses} and {@code demand} are copied from the <b>live</b> offer so
      * partially used offers stay partially used; {@code maxUses}/{@code xp} come
@@ -381,9 +387,10 @@ public final class VillagerTradeRewriter {
 
     /**
      * Villager sells an item for emeralds → the emerald cost slots become
-     * currency. Priced from the sold item's market; without one, from the
-     * emerald cost × emerald market price if the replacement option is on.
-     * Otherwise returns {@code null} and the offer keeps its vanilla emerald form.
+     * currency. Priced from the sold item's market (with the sell margin);
+     * without one, converted by {@link #convertedPriceRaw} if the replacement
+     * option is on. Otherwise returns {@code null} and the offer keeps its
+     * vanilla emerald form.
      */
     private static @Nullable RewriteResult rewriteSellOffer(MerchantOffer original, MerchantOffer live,
                                                             VillagerTradePriceTable table,
@@ -399,19 +406,24 @@ public final class VillagerTradeRewriter {
         // priced from its own market. Unlisted items stay on their vanilla
         // emerald pricing — unless the emerald-replacement option converts the
         // emerald cost via the emerald market.
-        long basisRaw;
+        long moneyRaw;
+        float priceMultiplier;
         long resultPriceRaw = priceLookup.applyAsLong(result);
         if (resultPriceRaw > 0) {
-            basisRaw = resultPriceRaw * result.getCount();
+            // Listed item: market price x sell margin; multiplier 0 (no demand/reputation).
+            moneyRaw = Math.max(1, Math.round(resultPriceRaw * result.getCount() * (double) table.sellMargin()));
+            priceMultiplier = 0.0f;
         } else {
-            long emeraldRaw = emeraldPriceRaw(table, priceLookup);
-            if (emeraldRaw <= 0) {
+            // Converted (unlisted) item: rounded reference price, no margin.
+            int emeralds = (costAEmerald ? costA.count() : 0) + (costBEmerald ? costB.get().count() : 0);
+            moneyRaw = convertedPriceRaw(table, priceLookup, emeralds, result);
+            if (moneyRaw <= 0) {
                 return null;
             }
-            int emeralds = (costAEmerald ? costA.count() : 0) + (costBEmerald ? costB.get().count() : 0);
-            basisRaw = emeraldRaw * emeralds;
+            // Original multiplier: vanilla demand and reputation discounts apply,
+            // the total discount is capped by capDiscount().
+            priceMultiplier = original.getPriceMultiplier();
         }
-        long moneyRaw = Math.max(1, Math.round(basisRaw * (double) table.sellMargin()));
 
         // Currency may only occupy cost slots not held by a non-emerald item
         // (treasure map's compass / enchanted book's book stay put).
@@ -438,19 +450,17 @@ public final class VillagerTradeRewriter {
             newCostB = Optional.of(toItemCost(fit.stacks().get(0)));
         }
 
-        // priceMultiplier = 0: money-cost offers are immune to demand and
-        // reputation discounts (see method javadoc).
         MerchantOffer offer = new MerchantOffer(newCostA, newCostB, result.copy(),
-                live.getUses(), original.getMaxUses(), original.getXp(), 0.0f, live.getDemand());
+                live.getUses(), original.getMaxUses(), original.getXp(), priceMultiplier, live.getDemand());
         return new RewriteResult(offer, fit.clamped());
     }
 
     /**
      * Villager buys items for emeralds → the emerald result stack becomes
      * currency. Priced from the item markets when <b>every</b> item cost has a
-     * market price; otherwise from the emerald payout × emerald market price if
-     * the replacement option is on. Otherwise returns {@code null} and the
-     * offer keeps its vanilla emerald form.
+     * market price (with the buy margin); otherwise converted by
+     * {@link #convertedPriceRaw} if the replacement option is on. Otherwise
+     * returns {@code null} and the offer keeps its vanilla emerald form.
      */
     private static @Nullable RewriteResult rewriteBuyOffer(MerchantOffer original, MerchantOffer live,
                                                            VillagerTradePriceTable table,
@@ -462,19 +472,23 @@ public final class VillagerTradeRewriter {
         // a single unlisted ingredient keeps the whole offer on its vanilla
         // emerald pricing, unless the emerald-replacement option converts the
         // emerald payout via the emerald market.
-        long basisRaw;
+        long moneyRaw;
         long priceA = priceLookup.applyAsLong(costA.itemStack());
         long priceB = costB.isPresent() ? priceLookup.applyAsLong(costB.get().itemStack()) : 0L;
         if (priceA > 0 && (costB.isEmpty() || priceB > 0)) {
-            basisRaw = priceA * costA.count() + (costB.isPresent() ? priceB * costB.get().count() : 0L);
+            // Listed items: market prices x buy margin.
+            long basisRaw = priceA * costA.count() + (costB.isPresent() ? priceB * costB.get().count() : 0L);
+            moneyRaw = Math.max(1, Math.round(basisRaw * (double) table.buyMargin()));
         } else {
-            long emeraldRaw = emeraldPriceRaw(table, priceLookup);
-            if (emeraldRaw <= 0) {
+            // Converted (unlisted) offer: rounded reference price(s), no margin.
+            ItemStack[] costs = costB.isPresent()
+                    ? new ItemStack[]{costA.itemStack(), costB.get().itemStack()}
+                    : new ItemStack[]{costA.itemStack()};
+            moneyRaw = convertedPriceRaw(table, priceLookup, original.getResult().getCount(), costs);
+            if (moneyRaw <= 0) {
                 return null;
             }
-            basisRaw = emeraldRaw * original.getResult().getCount();
         }
-        long moneyRaw = Math.max(1, Math.round(basisRaw * (double) table.buyMargin()));
 
         // The payout must fit into the single result stack.
         CurrencyFitter.FitResult fit = CurrencyFitter.fit(moneyRaw, 1, table.currency());
@@ -491,16 +505,132 @@ public final class VillagerTradeRewriter {
     }
 
     /**
-     * Price of one emerald (raw units) used to convert offers whose traded item
-     * has no market ({@code VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED}).
+     * Money price (raw units) of a converted offer, i.e. an offer whose traded
+     * item has no market ({@code VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED}).
+     * No buy/sell margin is applied (the market spread does not concern villagers).
+     * <ul>
+     *   <li>Preset prices on ({@link VillagerTradePriceTable#usePresetPrices()}):
+     *       sum over {@code items} of {@code rounded preset price × count}. If any
+     *       item has no preset price the offer is not converted; there is
+     *       deliberately no fallback to the emerald price.</li>
+     *   <li>Otherwise: {@code emeralds × rounded emerald market price}; not
+     *       converted without an emerald market.</li>
+     * </ul>
      *
-     * @param table       the current price table (carries the option flag)
+     * @param table       the current price table (option flags, preset prices)
      * @param priceLookup resolves an ItemStack to its raw market price (0 = no market)
-     * @return the emerald market price, or {@code 0} when the option is off or
-     *         no emerald market exists (offer then keeps its emerald form)
+     * @param emeralds    emerald count of the offer's emerald side
+     * @param items       the traded item stacks (with counts) valued by the preset prices
+     * @return the raw money price (&ge; 1), or {@code 0} when the offer keeps its emerald form
      */
-    private static long emeraldPriceRaw(VillagerTradePriceTable table, ToLongFunction<ItemStack> priceLookup) {
-        return table.replaceEmeraldsForUnlisted() ? priceLookup.applyAsLong(new ItemStack(Items.EMERALD)) : 0L;
+    private static long convertedPriceRaw(VillagerTradePriceTable table, ToLongFunction<ItemStack> priceLookup,
+                                          int emeralds, ItemStack... items) {
+        if (!table.replaceEmeraldsForUnlisted()) {
+            return 0L;
+        }
+        if (table.usePresetPrices()) {
+            ToLongFunction<ItemStack> presetLookup = presetLookup(table);
+            long total = 0L;
+            for (ItemStack item : items) {
+                long presetRaw = presetLookup.applyAsLong(item);
+                if (presetRaw <= 0) {
+                    return 0L; // no preset price: the trade stays in emeralds
+                }
+                total += roundReferencePriceRaw(presetRaw) * item.getCount();
+            }
+            return total;
+        }
+        long emeraldRaw = priceLookup.applyAsLong(new ItemStack(Items.EMERALD));
+        if (emeraldRaw <= 0) {
+            return 0L; // no emerald market: the trade stays in emeralds
+        }
+        return roundReferencePriceRaw(emeraldRaw) * emeralds;
+    }
+
+    /**
+     * Rounds a reference price to two significant digits (half up), so converted
+     * villager offers do not change with every small market move. Works on raw
+     * units (100 raw = 1.00): 1234.00 → 1200.00, 87.00 → 87.00, 0.54 → 0.54
+     * (raw values below 100 have at most two digits and stay as they are; a
+     * display price like 0.537 does not exist in raw units).
+     * Never returns 0: the result is at least 1 raw, the smallest money unit.
+     *
+     * @param raw the reference price in raw units
+     * @return the rounded price in raw units, at least 1
+     */
+    public static long roundReferencePriceRaw(long raw) {
+        if (raw < 100) {
+            return Math.max(1L, raw);
+        }
+        long factor = 1L;
+        while (raw / factor >= 100) {
+            factor *= 10;
+        }
+        return (raw + factor / 2) / factor * factor;
+    }
+
+    /**
+     * Largest total discount (reputation, Hero of the Village, cured zombie)
+     * allowed on a rewritten offer, in percent of its undiscounted cost count.
+     */
+    public static final int MAX_DISCOUNT_PERCENT = 20;
+
+    /**
+     * Caps the discount vanilla gave an offer. Vanilla charges
+     * {@code base + demandBonus + specialPriceDiff} items for the first cost
+     * ({@code MerchantOffer.getModifiedCostCount}), where
+     * {@code demandBonus = max(0, floor(base × demand × priceMultiplier))}.
+     * {@code Villager.updateSpecialPrices} lowers {@code specialPriceDiff} by
+     * {@code floor(reputation × priceMultiplier)} (gossip, including cured
+     * zombies) and by the Hero of the Village effect
+     * ({@code max(1, floor((0.3 + 0.0625 × amplifier) × base))}, independent of
+     * the multiplier). This raises {@code specialPriceDiff} to at least
+     * {@code -floor((base + demandBonus) × MAX_DISCOUNT_PERCENT / 100)}.
+     * A positive {@code specialPriceDiff} (bad reputation) is left alone.
+     * <p>
+     * The cap is in whole cost items, so a cost of fewer than five items (e.g.
+     * one money note) gets no discount at all.
+     *
+     * @param offer the offer, after {@code updateSpecialPrices} (mutated in place)
+     */
+    public static void capDiscount(MerchantOffer offer) {
+        int base = offer.getBaseCostA().getCount();
+        int demandBonus = Math.max(0, Mth.floor((float) (base * offer.getDemand()) * offer.getPriceMultiplier()));
+        int maxDiscount = (base + demandBonus) * MAX_DISCOUNT_PERCENT / 100;
+        if (offer.getSpecialPriceDiff() < -maxDiscount) {
+            offer.setSpecialPriceDiff(-maxDiscount);
+        }
+    }
+
+    /**
+     * Applies {@link #capDiscount} to every offer of the villager that this
+     * rewriter converted to currency form (sidecar flag {@code rewritten}).
+     * Called by {@code VillagerMixin} at the end of
+     * {@code Villager.updateSpecialPrices}, right after vanilla applied the
+     * discounts for the player opening the trade menu. Offers still in emerald
+     * form keep their full vanilla discounts.
+     *
+     * @param villager the villager whose trade menu is opening (server side)
+     */
+    public static void capDiscounts(AbstractVillager villager) {
+        StockMarketModBackend.ServerInstances backend = BACKEND;
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (backend == null || backend.VILLAGER_TRADE_MANAGER == null || server == null) {
+            return;
+        }
+        VillagerTradeData.VillagerEntry entry =
+                backend.VILLAGER_TRADE_MANAGER.getSavedData(server).getEntry(villager.getUUID());
+        if (entry == null) {
+            return;
+        }
+        MerchantOffers offers = villager.getOffers();
+        int count = Math.min(offers.size(), entry.size());
+        for (int i = 0; i < count; i++) {
+            VillagerTradeData.OriginalOffer original = entry.get(i);
+            if (!original.isPassthrough() && original.isRewritten()) {
+                capDiscount(offers.get(i));
+            }
+        }
     }
 
     /**
@@ -526,16 +656,37 @@ public final class VillagerTradeRewriter {
      * @return a lookup returning the raw price, or 0 when the item has no market
      */
     public static ToLongFunction<ItemStack> tableLookup(VillagerTradePriceTable table) {
-        return stack -> {
-            if (stack == null || stack.isEmpty()) {
-                return 0L;
-            }
-            ItemID itemID = ItemIDManager.getItemID(stack);
-            if (!itemID.isValid()) {
-                return 0L;
-            }
-            return table.getPriceRaw(itemID.getShort());
-        };
+        return stack -> priceById(stack, table::getPriceRaw);
+    }
+
+    /**
+     * Preset price lookup: like {@link #tableLookup}, but reads the preset
+     * default prices the master put into the table
+     * ({@link VillagerTradePriceTable#getPresetPriceRaw}).
+     *
+     * @param table the current price table
+     * @return a lookup returning the raw preset price, or 0 when the item has no preset
+     */
+    public static ToLongFunction<ItemStack> presetLookup(VillagerTradePriceTable table) {
+        return stack -> priceById(stack, table::getPresetPriceRaw);
+    }
+
+    /** Resolves a stack's ItemID short and looks its price up; 0 for empty or unknown stacks. */
+    private static long priceById(@Nullable ItemStack stack, ShortPriceLookup byIdShort) {
+        if (stack == null || stack.isEmpty()) {
+            return 0L;
+        }
+        ItemID itemID = ItemIDManager.getItemID(stack);
+        if (!itemID.isValid()) {
+            return 0L;
+        }
+        return byIdShort.priceRaw(itemID.getShort());
+    }
+
+    /** A price map lookup by ItemID short (the table's getters). */
+    @FunctionalInterface
+    private interface ShortPriceLookup {
+        long priceRaw(short itemIdShort);
     }
 
     /** Count-insensitive, component-sensitive comparison against the currency template. */

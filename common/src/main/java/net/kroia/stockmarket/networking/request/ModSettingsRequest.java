@@ -288,6 +288,11 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   in the table's price map. Toggling it bumps the table version, so
         //   every server re-evaluates (converts or restores) its villagers on
         //   the next interaction — no extra propagation needed.
+        //   USE_PRESET_PRICES_FOR_VILLAGERS (T-243) is handled the same way: it
+        //   rides inside the table as usePresetPrices, together with the preset
+        //   default prices the master resolved (presetPricesRawByItemIdShort) —
+        //   slaves have no preset files of their own. The immediate
+        //   recompute + broadcast below covers it; no extra propagation needed.
         // * Utilities (autosave, logging) and ServerMarket (orderbook size, currency,
         //   candle time) are consumed ONLY on the master (slaves have no DataManager,
         //   no ServerMarketManager and no master-side logger settings) — no

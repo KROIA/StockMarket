@@ -29,7 +29,9 @@ import java.util.function.ToLongFunction;
  * Tests for the pure villager-trade pricing logic: {@link CurrencyFitter}
  * (generic-item path and BankSystem money-denomination path), margin
  * application and the market-listing requirement in
- * {@link VillagerTradeRewriter#rewriteOffer}, and the
+ * {@link VillagerTradeRewriter#rewriteOffer}, the margin-free and rounded
+ * pricing of converted (unlisted) offers, the discount cap
+ * ({@link VillagerTradeRewriter#capDiscount}), and the
  * {@link VillagerTradePriceTable} stream-codec round-trip.
  * <p>
  * Runs on both master and slave (no Minecraft server context required — only
@@ -58,7 +60,11 @@ public class VillagerTradePricingTestSuite extends TestSuite {
         addTest("no_market_offer_not_rewritten", this::test_no_market_offer_not_rewritten);
         addTest("sell_margin_item_basis", this::test_sell_margin_item_basis);
         addTest("buy_margin_applied", this::test_buy_margin_applied);
-        addTest("emerald_replacement_margins_applied", this::test_emerald_replacement_margins_applied);
+        addTest("emerald_replacement_no_margins", this::test_emerald_replacement_no_margins);
+        addTest("emerald_replacement_rounds_reference_price", this::test_emerald_replacement_rounds_reference_price);
+        addTest("round_reference_price_two_digits", this::test_round_reference_price_two_digits);
+        addTest("discount_cap_limits_reputation", this::test_discount_cap_limits_reputation);
+        addTest("discount_cap_keeps_small_and_negative", this::test_discount_cap_keeps_small_and_negative);
         addTest("price_table_stream_codec_roundtrip", this::test_price_table_stream_codec_roundtrip);
     }
 
@@ -79,7 +85,8 @@ public class VillagerTradePricingTestSuite extends TestSuite {
     /** Builds an enabled price table with the given currency, margins and prices. */
     private static VillagerTradePriceTable table(ItemStack currency, float buyMargin, float sellMargin,
                                                  Map<Short, Long> prices) {
-        return new VillagerTradePriceTable(1L, true, currency, buyMargin, sellMargin, false, prices);
+        return new VillagerTradePriceTable(1L, true, currency, buyMargin, sellMargin, false, prices,
+                false, Map.of());
     }
 
     private static ItemStack moneyCurrency() {
@@ -437,53 +444,161 @@ public class VillagerTradePricingTestSuite extends TestSuite {
         return pass("Buy rewrite applies the buy margin and preserves the item-cost side");
     }
 
+    /** Enabled money table with the emerald replacement on (margins 0.8 / 1.2, preset prices off). */
+    private static VillagerTradePriceTable emeraldReplaceTable() {
+        return new VillagerTradePriceTable(1L, true, moneyCurrency(), 0.8f, 1.2f, true, Map.of(),
+                false, Map.of());
+    }
+
     /**
-     * REPLACE_EMERALDS_FOR_UNLISTED: unlisted offers are priced as
-     * emerald count × emerald market price (100 raw) × margin, with the same
-     * slot / priceMultiplier handling as market-priced offers.
+     * REPLACE_EMERALDS_FOR_UNLISTED (T-243): unlisted offers are priced as
+     * emerald count × emerald market price (100 raw) with NO buy/sell margin.
+     * Sell offers keep their original priceMultiplier so vanilla discounts
+     * apply (capped later by capDiscount); item cost slots stay put.
      */
-    private TestResult test_emerald_replacement_margins_applied() {
-        VillagerTradePriceTable table = new VillagerTradePriceTable(1L, true, moneyCurrency(),
-                0.8f, 1.2f, true, Map.of());
+    private TestResult test_emerald_replacement_no_margins() {
         // Only emerald and coal have markets.
         ToLongFunction<ItemStack> lookup = stack -> stack.is(Items.EMERALD) ? 100L
                 : stack.is(Items.COAL) ? 100L : 0L;
 
         // Villager sells: 10 emeralds + book → unlisted enchanted book.
-        // 10 × 100 raw × 1.2 = 1200 raw; the book slot stays put.
+        // 10 × 100 raw = 1000 raw (the sell margin 1.2 would give 1200).
         MerchantOffer sell = new MerchantOffer(new ItemCost(Items.EMERALD, 10),
                 Optional.of(new ItemCost(Items.BOOK, 1)),
                 new ItemStack(Items.ENCHANTED_BOOK), 0, 12, 5, 0.2f, 0);
         VillagerTradeRewriter.RewriteResult sellResult =
-                VillagerTradeRewriter.rewriteOffer(sell, sell, table, lookup);
+                VillagerTradeRewriter.rewriteOffer(sell, sell, emeraldReplaceTable(), lookup);
         TestResult r = assertNotNull("Unlisted sell offer must be converted via the emerald market", sellResult);
         if (!r.passed()) return r;
-        r = assertEquals("Cost = emeralds × emerald price × sell margin (1200 raw)",
-                1200L, totalRawValue(List.of(sellResult.offer().getBaseCostA())));
+        r = assertEquals("Cost = emeralds × emerald price, no margin (1000 raw)",
+                1000L, totalRawValue(List.of(sellResult.offer().getBaseCostA())));
         if (!r.passed()) return r;
         r = assertEquals("Book cost slot preserved", Items.BOOK, sellResult.offer().getCostB().getItem());
         if (!r.passed()) return r;
-        r = assertEquals("Money-cost offers neutralize demand/discounts (multiplier 0)",
-                0.0f, sellResult.offer().getPriceMultiplier());
+        r = assertEquals("Converted sell offer keeps the original priceMultiplier",
+                0.2f, sellResult.offer().getPriceMultiplier());
         if (!r.passed()) return r;
 
         // Villager buys: 15 coal + 2 sticks (sticks unlisted) → 2 emeralds.
-        // 2 × 100 raw × 0.8 = 160 raw; item costs and multiplier preserved.
+        // 2 × 100 raw = 200 raw (the buy margin 0.8 would give 160).
         MerchantOffer buy = new MerchantOffer(new ItemCost(Items.COAL, 15),
                 Optional.of(new ItemCost(Items.STICK, 2)),
                 new ItemStack(Items.EMERALD, 2), 0, 16, 2, 0.05f, 0);
         VillagerTradeRewriter.RewriteResult buyResult =
-                VillagerTradeRewriter.rewriteOffer(buy, buy, table, lookup);
+                VillagerTradeRewriter.rewriteOffer(buy, buy, emeraldReplaceTable(), lookup);
         r = assertNotNull("Buy offer with an unlisted cost must be converted via the emerald market", buyResult);
         if (!r.passed()) return r;
-        r = assertEquals("Payout = emeralds × emerald price × buy margin (160 raw)",
-                160L, totalRawValue(List.of(buyResult.offer().getResult())));
+        r = assertEquals("Payout = emeralds × emerald price, no margin (200 raw)",
+                200L, totalRawValue(List.of(buyResult.offer().getResult())));
         if (!r.passed()) return r;
         r = assertEquals("Buy offers keep the original priceMultiplier",
                 0.05f, buyResult.offer().getPriceMultiplier());
         if (!r.passed()) return r;
 
-        return pass("Emerald replacement applies buy/sell margins like the market-priced path");
+        return pass("Emerald replacement converts without buy/sell margins");
+    }
+
+    /** The emerald price is rounded to 2 significant digits before it is multiplied. */
+    private TestResult test_emerald_replacement_rounds_reference_price() {
+        // Emerald market at 12.34 (1234 raw) → reference 12.00 (1200 raw).
+        ToLongFunction<ItemStack> lookup = stack -> stack.is(Items.EMERALD) ? 1234L : 0L;
+        MerchantOffer sell = new MerchantOffer(new ItemCost(Items.EMERALD, 3), Optional.empty(),
+                new ItemStack(Items.IRON_INGOT), 0, 16, 2, 0.05f, 0);
+        VillagerTradeRewriter.RewriteResult result =
+                VillagerTradeRewriter.rewriteOffer(sell, sell, emeraldReplaceTable(), lookup);
+        TestResult r = assertNotNull("Unlisted sell offer must be converted", result);
+        if (!r.passed()) return r;
+        r = assertEquals("Cost = 3 × rounded emerald price 1200 raw = 3600 raw",
+                3600L, totalRawValue(List.of(result.offer().getBaseCostA())));
+        if (!r.passed()) return r;
+
+        // A market move inside the rounding step does not change the offer.
+        ToLongFunction<ItemStack> moved = stack -> stack.is(Items.EMERALD) ? 1249L : 0L;
+        VillagerTradeRewriter.RewriteResult same =
+                VillagerTradeRewriter.rewriteOffer(sell, sell, emeraldReplaceTable(), moved);
+        r = assertEquals("1249 raw rounds to the same 1200 raw reference",
+                3600L, totalRawValue(List.of(same.offer().getBaseCostA())));
+        if (!r.passed()) return r;
+
+        return pass("Converted offers use the rounded emerald price");
+    }
+
+    /** {@link VillagerTradeRewriter#roundReferencePriceRaw}: 2 significant digits, never 0. */
+    private TestResult test_round_reference_price_two_digits() {
+        long[][] cases = {
+                {123400L, 120000L}, // 1234.00 → 1200.00
+                {8700L, 8700L},     // 87.00 → 87.00
+                {54L, 54L},         // 0.54 → 0.54 (0.537 has no raw representation)
+                {1234L, 1200L},     // 12.34 → 12.00
+                {125L, 130L},       // 1.25 → 1.30 (half up)
+                {9960L, 10000L},    // 99.60 → 100.00 (carry into a new digit)
+                {100L, 100L},
+                {99L, 99L},
+                {7L, 7L},
+                {1L, 1L},
+                {0L, 1L},           // never round to 0
+        };
+        for (long[] c : cases) {
+            TestResult r = assertEquals("round(" + c[0] + ")", c[1], VillagerTradeRewriter.roundReferencePriceRaw(c[0]));
+            if (!r.passed()) return r;
+        }
+        return pass("Reference prices round to 2 significant digits, minimum 1 raw");
+    }
+
+    /**
+     * Reputation / Hero of the Village discounts are capped at 20 % of the
+     * undiscounted cost count (base + demand bonus).
+     */
+    private TestResult test_discount_cap_limits_reputation() {
+        // 20 money items, multiplier 0.05, no demand: a 10-item discount (50 %) is cut to 4 (20 %).
+        MerchantOffer offer = new MerchantOffer(new ItemCost(BankSystemItems.MONEY.get(), 20), Optional.empty(),
+                new ItemStack(Items.IRON_INGOT), 0, 16, 2, 0.05f, 0);
+        offer.addToSpecialPriceDiff(-10);
+        VillagerTradeRewriter.capDiscount(offer);
+        TestResult r = assertEquals("specialPriceDiff capped at -4", -4, offer.getSpecialPriceDiff());
+        if (!r.passed()) return r;
+        r = assertEquals("Charged count = 16 of 20", 16, offer.getCostA().getCount());
+        if (!r.passed()) return r;
+
+        // With demand: base 20, demand 10, multiplier 0.05 → bonus floor(20×10×0.05) = 10,
+        // undiscounted 30 → max discount 6.
+        MerchantOffer demanded = new MerchantOffer(new ItemCost(BankSystemItems.MONEY.get(), 20), Optional.empty(),
+                new ItemStack(Items.IRON_INGOT), 0, 16, 2, 0.05f, 10);
+        demanded.addToSpecialPriceDiff(-20);
+        VillagerTradeRewriter.capDiscount(demanded);
+        r = assertEquals("Cap includes the demand bonus (-6)", -6, demanded.getSpecialPriceDiff());
+        if (!r.passed()) return r;
+        r = assertEquals("Charged count = 24 of 30", 24, demanded.getCostA().getCount());
+        if (!r.passed()) return r;
+
+        return pass("Discounts are capped at " + VillagerTradeRewriter.MAX_DISCOUNT_PERCENT + " %");
+    }
+
+    /** Discounts within the cap, price increases and tiny costs are left alone. */
+    private TestResult test_discount_cap_keeps_small_and_negative() {
+        MerchantOffer small = new MerchantOffer(new ItemCost(BankSystemItems.MONEY.get(), 20), Optional.empty(),
+                new ItemStack(Items.IRON_INGOT), 0, 16, 2, 0.05f, 0);
+        small.addToSpecialPriceDiff(-3);
+        VillagerTradeRewriter.capDiscount(small);
+        TestResult r = assertEquals("A 15 % discount stays", -3, small.getSpecialPriceDiff());
+        if (!r.passed()) return r;
+
+        MerchantOffer worse = new MerchantOffer(new ItemCost(BankSystemItems.MONEY.get(), 20), Optional.empty(),
+                new ItemStack(Items.IRON_INGOT), 0, 16, 2, 0.05f, 0);
+        worse.addToSpecialPriceDiff(5);
+        VillagerTradeRewriter.capDiscount(worse);
+        r = assertEquals("A price increase (bad reputation) stays", 5, worse.getSpecialPriceDiff());
+        if (!r.passed()) return r;
+
+        // One money note: 20 % of 1 item rounds down to 0 → no discount at all (Hero gives at least 1).
+        MerchantOffer note = new MerchantOffer(new ItemCost(BankSystemItems.MONEY.get(), 1), Optional.empty(),
+                new ItemStack(Items.IRON_INGOT), 0, 16, 2, 0.0f, 0);
+        note.addToSpecialPriceDiff(-1);
+        VillagerTradeRewriter.capDiscount(note);
+        r = assertEquals("A 1-item cost gets no discount", 0, note.getSpecialPriceDiff());
+        if (!r.passed()) return r;
+
+        return pass("capDiscount only raises discounts above the cap");
     }
 
     // ========================================================================
@@ -499,8 +614,10 @@ public class VillagerTradePricingTestSuite extends TestSuite {
         Map<Short, Long> prices = new HashMap<>();
         prices.put((short) 12, 3456L);
         prices.put((short) 99, 100L);
+        Map<Short, Long> presetPrices = new HashMap<>();
+        presetPrices.put((short) 7, 2500L);
         VillagerTradePriceTable original = new VillagerTradePriceTable(
-                42L, true, moneyCurrency(), 0.75f, 1.25f, true, prices);
+                42L, true, moneyCurrency(), 0.75f, 1.25f, true, prices, true, presetPrices);
 
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
         VillagerTradePriceTable.STREAM_CODEC.encode(buf, original);
@@ -521,6 +638,11 @@ public class VillagerTradePricingTestSuite extends TestSuite {
                 original.replaceEmeraldsForUnlisted(), decoded.replaceEmeraldsForUnlisted());
         if (!r.passed()) return r;
         r = assertEquals("price map survives", original.pricesRawByItemIdShort(), decoded.pricesRawByItemIdShort());
+        if (!r.passed()) return r;
+        r = assertEquals("usePresetPrices survives", original.usePresetPrices(), decoded.usePresetPrices());
+        if (!r.passed()) return r;
+        r = assertEquals("preset price map survives",
+                original.presetPricesRawByItemIdShort(), decoded.presetPricesRawByItemIdShort());
         if (!r.passed()) return r;
 
         return pass("VillagerTradePriceTable STREAM_CODEC round-trips all fields");

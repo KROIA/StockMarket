@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.villagertrading;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.NbtCompat;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.stockmarket.StockMarketMod;
@@ -9,6 +10,9 @@ import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import net.kroia.stockmarket.data.DataManager;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.networking.packet.VillagerTradePriceTablePacket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
@@ -151,9 +155,53 @@ public class VillagerTradeManager {
             prices.put(marketID.getShort(), priceRaw);
         }
 
+        // Preset prices only matter while the emerald replacement is on; the map
+        // stays empty otherwise so the slave broadcast does not carry it needlessly.
+        boolean replaceEmeralds = settings.REPLACE_EMERALDS_FOR_UNLISTED.get();
+        boolean usePresetPrices = replaceEmeralds && settings.USE_PRESET_PRICES_FOR_VILLAGERS.get();
+        Map<Short, Long> presetPrices = usePresetPrices ? presetPricesRaw() : Map.of();
+
         this.table = new VillagerTradePriceTable(System.currentTimeMillis(), enabled, currency,
                 settings.VILLAGER_BUY_MARGIN.get(), settings.VILLAGER_SELL_MARGIN.get(),
-                settings.REPLACE_EMERALDS_FOR_UNLISTED.get(), prices);
+                replaceEmeralds, prices, usePresetPrices, presetPrices);
+    }
+
+    /**
+     * Master side: collects the default price of every market preset, keyed by
+     * the preset item's ItemID short, for {@code USE_PRESET_PRICES_FOR_VILLAGERS}.
+     * Uses the ItemID registered at startup ({@code preRegisterPresetItemStacks});
+     * presets added later are resolved by lookup only (never registered here).
+     * Presets whose item has no ItemID are skipped, so their trades stay in
+     * emeralds. When several presets share an item, the first one wins, like
+     * {@code MarketPresetManager.getPreset}.
+     *
+     * @return raw preset price per ItemID short (only prices &gt; 0)
+     */
+    private Map<Short, Long> presetPricesRaw() {
+        Map<Short, Long> presetPrices = new HashMap<>();
+        if (backend.PRESET_MANAGER == null) {
+            return presetPrices;
+        }
+        for (MarketPresetCategory category : backend.PRESET_MANAGER.getCategories()) {
+            for (MarketPreset preset : category.getPresets()) {
+                short idShort;
+                if (preset.hasRegisteredItemID()) {
+                    idShort = preset.getRegisteredItemIDShort();
+                } else {
+                    ItemStack stack = preset.toItemStack();
+                    ItemID id = stack.isEmpty() ? null : ItemIDManager.getItemID(stack);
+                    if (id == null || !id.isValid()) {
+                        continue;
+                    }
+                    idShort = id.getShort();
+                }
+                long priceRaw = MarketManager.convertToRawAmountStatic(preset.getDefaultPrice());
+                if (priceRaw > 0) {
+                    presetPrices.putIfAbsent(idShort, priceRaw);
+                }
+            }
+        }
+        return presetPrices;
     }
 
     /**

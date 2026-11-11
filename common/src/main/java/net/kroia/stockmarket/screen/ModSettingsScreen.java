@@ -199,6 +199,13 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
     private final Button reloadButton;
     /** T-219: turns orange while any field differs from {@link #savedEditorValues}. */
     private final ApplyButton applyButton;
+    /** T-243: check box of VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED; drives {@link #usePresetPricesCheckBox}. */
+    private CheckBox replaceEmeraldsCheckBox = null;
+    /**
+     * T-243: check box of VillagerTrading.USE_PRESET_PRICES_FOR_VILLAGERS; greyed out (not editable)
+     * while the emerald replacement is off, because the server only uses it then.
+     */
+    private CheckBox usePresetPricesCheckBox = null;
 
     /**
      * Creates the screen and immediately fetches the current settings from the master.
@@ -425,6 +432,11 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
                 // cursor's TOP-RIGHT so they extend left and stay inside the window.
                 checkBox.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
                 addChild(checkBox);
+                // T-243: remember the two dependent villager check boxes (see tick()).
+                if (setting == workingCopy.VILLAGER_TRADING.REPLACE_EMERALDS_FOR_UNLISTED)
+                    replaceEmeraldsCheckBox = checkBox;
+                else if (setting == workingCopy.VILLAGER_TRADING.USE_PRESET_PRICES_FOR_VILLAGERS)
+                    usePresetPricesCheckBox = checkBox;
                 bindings.add(new FieldBinding() {
                     @Override public void loadFromSetting() {
                         checkBox.setChecked(Boolean.TRUE.equals(boolSetting.get()));
@@ -716,6 +728,10 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
     public void tick() {
         super.tick();
         applyButton.setUnsaved(hasUnsavedChanges());
+        // T-243: "use preset prices" only applies while the emerald replacement is on. Greyed out
+        // otherwise; its value is kept and the tooltip still explains it.
+        if (replaceEmeraldsCheckBox != null && usePresetPricesCheckBox != null)
+            usePresetPricesCheckBox.setInteractive(replaceEmeraldsCheckBox.isChecked());
     }
 
     /**

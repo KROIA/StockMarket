@@ -149,8 +149,8 @@ public final class MoneyPayment {
      * Total raw money price of an offer — the sum over its money cost sides.
      * <p>
      * The costA side mirrors vanilla by using {@code getCostA().getCount()}
-     * (the demand/gossip-modified count; T-064 money offers have
-     * {@code priceMultiplier = 0}, so modified = base). The costB side uses the
+     * (the demand/gossip-modified count, so villager discounts, capped by
+     * {@code VillagerTradeRewriter.capDiscounts}, lower the price). The costB side uses the
      * raw {@code count()} exactly like vanilla {@code satisfiedBy}. Item
      * (non-money) cost sides contribute nothing — they are matched vanilla-style.
      *
