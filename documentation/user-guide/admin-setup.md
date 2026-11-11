@@ -105,16 +105,18 @@ For new servers, start with **Use Case 1** across the board. Once you have a sta
 
 ## Permissions (LuckPerms)
 
-StockMarket admin commands and functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player or group. Without a permission mod, or when the permission mod leaves a node unset, each node requires operator level 2 (same as before).
+StockMarket admin commands and functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player or group. Without a permission mod, or when the permission mod leaves a node unset, each node requires operator level 2, except the nodes marked *admin mode* below.
+
+The commands marked *admin mode* are for StockMarket admins (`/stockmarket op`), not for server operators: every player sees them, and they only run for a player with StockMarket admin mode, whether the player is an operator or not. Others get the "admin only" message. Their nodes are open to every player by default, so a permission mod can only take them away: set the node to `false` to hide the command, even from a StockMarket admin. From the console and from command blocks these commands need operator level 2, as before.
 
 | Node | Grants |
 |------|--------|
 | `stockmarket.admin.command.op` | `/stockmarket op` and `/stockmarket deop` (StockMarket admin mode of a player) |
-| `stockmarket.admin.command.manage` | `/stockmarket manage` (the player must also have StockMarket admin mode) |
-| `stockmarket.admin.command.preset` | `/stockmarket preset ...` |
-| `stockmarket.admin.command.news` | `/stockmarket news ...` |
+| `stockmarket.admin.command.manage` | `/stockmarket manage` (*admin mode*) |
+| `stockmarket.admin.command.preset` | `/stockmarket preset ...` (*admin mode*) |
+| `stockmarket.admin.command.news` | `/stockmarket news ...` admin subcommands (*admin mode*) |
 | `stockmarket.admin.command.backup` | `/stockmarket backup ...` |
-| `stockmarket.admin.command.market` | `/stockmarket open <market>`, `/stockmarket close <market>` and `/stockmarket <market> remove` |
+| `stockmarket.admin.command.market` | `/stockmarket open <market>`, `/stockmarket close <market>` and `/stockmarket <market> remove` (*admin mode*) |
 | `stockmarket.admin.command.exportrecipes` | `/stockmarket exportrecipes` (dev builds only) |
 | `stockmarket.admin.command.devtest` | `/stockmarket devTestScreen` (dev builds only) |
 | `modutilities.command.discord` | `/stockmarket discord status` and `/stockmarket discord reload` (a ModUtilities node, also used by `/modutilities discord` and `/banksystem discord`; without a permission mod it requires operator level 3) |
@@ -131,7 +133,7 @@ The wildcard is resolved by LuckPerms itself (its `apply-wildcards` option, on b
 
 Notes:
 
-* The management GUI and the other in-game admin functions are gated by **StockMarket admin mode** (`/stockmarket op`), not by a node. The node `stockmarket.admin.command.op` controls who may switch admin mode on or off. Admin mode is stored on the master server, so it also works for players on slave servers.
+* The management GUI, the *admin mode* commands and the other in-game admin functions are gated by **StockMarket admin mode** (`/stockmarket op`), not by operator level. The node `stockmarket.admin.command.op` (operator level 2) controls who may switch admin mode on or off. Admin mode is stored on the master server, so it also works for players on slave servers.
 * Nodes are only checked for players online on the server that runs the check. The console and command blocks always use operator level 2.
 * Command nodes are checked when a player's command list is sent. After changing a node for an online player, they may need to rejoin before the command shows up or disappears.
 

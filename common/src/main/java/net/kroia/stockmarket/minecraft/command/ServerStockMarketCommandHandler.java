@@ -28,19 +28,6 @@ public class ServerStockMarketCommandHandler implements IServerStockMarketComman
     // === IAsyncStockMarketCommandHandler (GUI commands) ===
 
     @Override
-    public CompletableFuture<Boolean> stockmarket_manage_async(@NotNull UUID executor) {
-        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
-        if (player == null) return CompletableFuture.completedFuture(false);
-        if (BACKEND_INSTANCES.MARKET_MANAGER.getSync().isStockmarketAdmin(executor)) {
-            OpenUIPacket.sendToClient(player, OpenUIPacket.GUIType.MANAGEMENT);
-            return CompletableFuture.completedFuture(true);
-        } else {
-            player.sendSystemMessage(Component.translatable("message.stockmarket.command_admin_only"));
-            return CompletableFuture.completedFuture(false);
-        }
-    }
-
-    @Override
     public CompletableFuture<Boolean> stockmarket_devTestScreen_async(@NotNull UUID executor) {
         ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
         if (player != null) {
@@ -52,18 +39,39 @@ public class ServerStockMarketCommandHandler implements IServerStockMarketComman
 
     // === IServerStockMarketCommandHandler (master-only commands) ===
 
+    /** SM-264: targets the executor's own UUID; no name lookup, which could hit another user with the same name. */
     @Override
     public boolean stockmarket_setStockmarketAdminMode(@NotNull UUID executor, boolean isAdmin) {
-        return stockmarket_setStockmarketAdminMode_user(executor, tryGetPlayerName(executor), isAdmin);
+        return setAdminMode(executor, executor, tryGetPlayerName(executor), isAdmin);
     }
 
+    /**
+     * SM-264: resolves {@code userName} via {@code getPlayerUUID} (online player first, then the stored users) and
+     * refuses with {@code message.stockmarket.command_player_name_ambiguous} if several stored users share the name.
+     */
     @Override
     public boolean stockmarket_setStockmarketAdminMode_user(@NotNull UUID executor, String userName, boolean isAdmin) {
         @Nullable UUID playerUUID = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getPlayerUUID(userName);
         if (playerUUID == null) {
-            sendMessage(executor, Component.translatable("message.stockmarket.command_player_not_found", userName));
+            boolean ambiguous = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager().isUserNameAmbiguous(userName);
+            sendMessage(executor, Component.translatable(ambiguous
+                    ? "message.stockmarket.command_player_name_ambiguous"
+                    : "message.stockmarket.command_player_not_found", userName));
             return false;
         }
+        return setAdminMode(executor, playerUUID, userName, isAdmin);
+    }
+
+    /**
+     * Sets the admin flag of an already resolved user, tells executor and target, and mirrors it to LuckPerms.
+     *
+     * @param executor   the player who ran the command
+     * @param playerUUID the target user's UUID
+     * @param userName   the target's name, for the messages and LuckPerms
+     * @param isAdmin    the new flag
+     * @return true if the user exists and the flag was set
+     */
+    private static boolean setAdminMode(UUID executor, UUID playerUUID, String userName, boolean isAdmin) {
         if (BACKEND_INSTANCES.MARKET_MANAGER.getSync().setStockmarketAdminMode(playerUUID, isAdmin)) {
             Component msg = Component.translatable(isAdmin
                     ? "message.stockmarket.command_admin_mode_enabled"
@@ -75,6 +83,7 @@ public class ServerStockMarketCommandHandler implements IServerStockMarketComman
             net.kroia.stockmarket.util.AdminFlagSync.pushToLuckPerms(executor, playerUUID, userName, isAdmin);
             return true;
         }
+        sendMessage(executor, Component.translatable("message.stockmarket.command_player_not_found", userName));
         return false;
     }
 

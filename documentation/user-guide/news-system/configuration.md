@@ -212,7 +212,7 @@ Definitions are validated on every load (`/stockmarket news reload` or server st
 
 ## Admin Commands
 
-All news commands live under `/stockmarket news`. The subcommands require operator permission level 2 **and** StockMarket admin status (`/stockmarket op`), same as the other management commands. They work identically on master and slave servers -- slave-issued commands are routed to the master automatically (tab completion of event ids is only available on the master; `stop` still suggests `all` on slaves).
+All news commands live under `/stockmarket news`. The subcommands require StockMarket admin status (`/stockmarket op`), same as the other management commands; operator level is not needed (from the console: operator level 2). See [Permissions](../admin-setup.md#permissions-luckperms). They work identically on master and slave servers -- slave-issued commands are routed to the master automatically (tab completion of event ids is only available on the master; `stop` still suggests `all` on slaves).
 
 | Command | Description | Admin only |
 |---------|-------------|------------|

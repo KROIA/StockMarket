@@ -29,6 +29,7 @@ import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -415,14 +416,40 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             user = new User(playerUUID, playerName);
             userMap.put(playerUUID, user);
             net.kroia.stockmarket.util.AdminFlagSync.onUserAdded(playerUUID); // LuckPerms grant of a new user
-            return;
         }
-        if(!user.getName().equals(playerName))
+        else if(!user.getName().equals(playerName))
         {
             // Use createWithChangedName to preserve admin status and preferences
             user = User.createWithChangedName(user, playerName);
             userMap.put(playerUUID, user);
         }
+        markOtherUsersNamedStale(playerUUID, playerName);
+    }
+
+    /**
+     * SM-264: when a player joins with a name another stored user (different UUID) still holds, e.g. after a server
+     * switched between online and offline mode, the other record is renamed to {@code "<name> (old <uuid prefix>)"}
+     * so that name lookups ({@link #getPlayerUUID}) resolve to the player who is actually playing. Only the name
+     * changes: admin flag, preferences and all other data of the old record stay as they are, and the old record
+     * gets its name back if its UUID ever joins again.
+     *
+     * @param currentUUID the UUID that just joined with {@code playerName}
+     * @param playerName  the joining player's name
+     */
+    private void markOtherUsersNamedStale(UUID currentUUID, String playerName) {
+        for (User other : java.util.List.copyOf(userMap.values())) {
+            if (!other.getUUID().equals(currentUUID) && other.getName().equals(playerName))
+                userMap.put(other.getUUID(), User.createWithChangedName(other, staleName(playerName, other.getUUID())));
+        }
+    }
+
+    /**
+     * @param name the name the stale record held
+     * @param uuid the stale record's UUID
+     * @return the stale name; contains a space, so it can never be a real player name
+     */
+    public static String staleName(String name, UUID uuid) {
+        return name + " (old " + uuid.toString().substring(0, 8) + ")";
     }
     /**
      * Removes a StockMarket user (admin flag and preferences). Used by test cleanup to drop fake users again;
@@ -468,17 +495,40 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
 
 
+    /**
+     * SM-264: resolves a name to a StockMarket user. A player online on this server wins; otherwise the stored users
+     * are searched. If several stored users hold the name (see {@link #isUserNameAmbiguous}), this returns null
+     * instead of guessing.
+     */
     @Override
     public @Nullable UUID getPlayerUUID(String playerName)
     {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        ServerPlayer online = server == null ? null : server.getPlayerList().getPlayerByName(playerName);
+        if (online != null && userMap.containsKey(online.getUUID()))
+            return online.getUUID();
+        UUID found = null;
         for(User user : userMap.values())
         {
             if(user.getName().equals(playerName))
             {
-                return user.getUUID();
+                if (found != null)
+                    return null; // ambiguous
+                found = user.getUUID();
             }
         }
-        return null;
+        return found;
+    }
+
+    /**
+     * SM-264: tells "unknown name" apart from "several stored users share the name" after
+     * {@link #getPlayerUUID} returned null.
+     *
+     * @param playerName the exact stored name
+     * @return true if more than one stored user holds this name
+     */
+    public boolean isUserNameAmbiguous(String playerName) {
+        return userMap.values().stream().filter(u -> u.getName().equals(playerName)).count() > 1;
     }
 
 

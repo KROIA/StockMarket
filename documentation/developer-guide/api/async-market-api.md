@@ -388,7 +388,7 @@ Server side, `ISyncServerPluginManager` offers `autoSubscribeNewMarket(ItemID)` 
 
 | Interface | Methods | Runs on |
 |---|---|---|
-| `IAsyncStockMarketCommandHandler` | `stockmarket_manage_async(UUID executor)`, `stockmarket_devTestScreen_async(UUID executor)` (dev builds) | Master and slave |
+| `IAsyncStockMarketCommandHandler` | `stockmarket_devTestScreen_async(UUID executor)` (dev builds) | Master and slave |
 | `IServerStockMarketCommandHandler` | `stockmarket_setStockmarketAdminMode(UUID executor, boolean)`, `stockmarket_setStockmarketAdminMode_user(UUID executor, String userName, boolean)` | Master only |
 
 These back the commands in the [README](../../../README.md#commands); they are not meant to

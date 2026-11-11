@@ -473,6 +473,7 @@
   "gui.stockmarket.display_config_screen.no_pair": "Kei Paar (Item/Gäld-Modus)",
   "gui.stockmarket.display_config_screen.no_markets": "Kei Märt verfüegbar",
   "message.stockmarket.command_admin_only": "Dä Befehl isch nur für StockMarket-Admins!",
+  "message.stockmarket.command_player_name_ambiguous": "Mehreri StockMarket-Benutzer heissed %s (alti Iiträg nach emne UUID-Wächsel). Lah de Spieler eimal biträte und füehr de Befehl denn nomal us.",
   "message.stockmarket.command_player_not_found": "Kei UUID für Spieler gfunde: %s",
   "message.stockmarket.command_admin_mode_enabled": "StockMarket-Adminmodus II für Spieler: %s",
   "message.stockmarket.command_admin_mode_disabled": "StockMarket-Adminmodus US für Spieler: %s",

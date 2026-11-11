@@ -208,31 +208,6 @@ public class AsyncStockMarketCommandHandler implements IAsyncStockMarketCommandH
     // === IAsyncStockMarketCommandHandler implementation ===
 
     @Override
-    public CompletableFuture<Boolean> stockmarket_manage_async(@NotNull UUID executor) {
-        if (!MultiServerUtils.checkConnectionToMaster(executor))
-            return CompletableFuture.completedFuture(false);
-        // T-238: handle, not thenAccept, so the returned future also completes when the admin check got no
-        // answer (T-227 request failure). The check is a read: nothing to undo, nothing is resent.
-        return SM_BACKEND.MARKET_MANAGER.getAsync().isStockmarketAdminAsync(executor).handleAsync((isAdmin, failure) -> {
-            ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
-            if (failure != null) {
-                error("Admin check for /stockmarket manage failed", failure);
-                if (player != null)
-                    player.sendSystemMessage(Component.translatable("message.stockmarket.command_async_failed", player.getName().getString()));
-                return false;
-            }
-            if (player == null)
-                return false; // logged off while waiting for the master
-            if (Boolean.TRUE.equals(isAdmin)) {
-                OpenUIPacket.sendToClient(player, OpenUIPacket.GUIType.MANAGEMENT);
-                return true;
-            }
-            player.sendSystemMessage(Component.translatable("message.stockmarket.command_admin_only"));
-            return false;
-        });
-    }
-
-    @Override
     public CompletableFuture<Boolean> stockmarket_devTestScreen_async(@NotNull UUID executor) {
         ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
         if (player != null) {

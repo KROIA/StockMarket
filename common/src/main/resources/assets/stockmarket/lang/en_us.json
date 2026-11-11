@@ -473,6 +473,7 @@
   "gui.stockmarket.display_config_screen.no_pair": "No pair (Item/Money mode)",
   "gui.stockmarket.display_config_screen.no_markets": "No markets available",
   "message.stockmarket.command_admin_only": "This command is only for StockMarket admins!",
+  "message.stockmarket.command_player_name_ambiguous": "Several StockMarket users are named %s (old records from a UUID change). Ask the player to join once, then run the command again.",
   "message.stockmarket.command_player_not_found": "No UUID found for player: %s",
   "message.stockmarket.command_admin_mode_enabled": "StockMarket admin mode ON for player: %s",
   "message.stockmarket.command_admin_mode_disabled": "StockMarket admin mode OFF for player: %s",

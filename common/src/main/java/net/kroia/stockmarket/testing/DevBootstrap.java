@@ -59,6 +59,7 @@ public final class DevBootstrap {
             PumpDumpDetectorTestSuite.setBackend(instances); // T-192
             AdminFlagSyncLuckPermsTests.setBackend(instances);
             StockMarketLuckPermsRemovedTests.setBackend(instances);
+            UserTestSuite.setBackend(instances); // SM-266 admin command gate
         }
     }
 }

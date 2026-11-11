@@ -93,7 +93,7 @@ The open-orders list stays usable, so pending orders can still be cancelled. In 
 
 ## Commands
 
-Permission level 2 (operator).
+StockMarket admin mode (`/stockmarket op`) required; operator level is not needed. From the console: operator level 2.
 
 | Command | Effect |
 |---|---|

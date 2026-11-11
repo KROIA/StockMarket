@@ -8,6 +8,7 @@
   "gui.stockmarket.trade_screen.title": "交易",
   "gui.stockmarket.trade_screen.select_market": "选择市场",
   "gui.stockmarket.trade_screen.market_closed": "市场已休市",
+  "message.stockmarket.command_player_name_ambiguous": "有多个名为 %s 的 StockMarket 用户（UUID 变更后留下的旧记录）。请让该玩家加入一次后再执行此命令。",
   "message.stockmarket.command_market_removed": "市场 '%s' 已从股票市场中移除",
   "message.stockmarket.slave_not_connected": "[StockMarket] 这是一个从服务器，且未连接到 StockMarket 主服务器！",
   "message.stockmarket.still_admin_via_luckperms_group": "%s 仍通过 LuckPerms 权限组拥有 StockMarket 管理员身份，因此管理员标记保持开启。要取消其管理员身份，请移除权限组中的 stockmarket.admin。",

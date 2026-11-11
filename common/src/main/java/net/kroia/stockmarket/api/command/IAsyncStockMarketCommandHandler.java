@@ -13,17 +13,6 @@ import java.util.concurrent.CompletableFuture;
 public interface IAsyncStockMarketCommandHandler {
 
     /**
-     * {@code /stockmarket manage}: opens the Management screen for the executor if they have StockMarket admin
-     * mode, otherwise sends them the "admin only" message. On a slave the admin check is a request to the master.
-     *
-     * @param executor the player who ran the command
-     * @return future resolving to {@code true} if the screen was opened; {@code false} if the executor is not an
-     *         admin, is offline, or the slave has no master connection or got no answer to the admin check (the
-     *         player is told)
-     */
-    CompletableFuture<Boolean> stockmarket_manage_async(@NotNull UUID executor);
-
-    /**
      * {@code /stockmarket devTestScreen} (dev builds only): opens the development test screen for the executor.
      *
      * @param executor the player who ran the command

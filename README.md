@@ -360,7 +360,7 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 | /stockmarket alerts on\|off | Turn trading alert chat messages on or off for yourself (master only, saved) — see [Trading alerts](documentation/user-guide/admin-setup.md#turning-chat-alerts-off) | :heavy_check_mark: |
 | /stockmarket discord status\|reload | Show or reload the Discord webhook routing — see [Discord feed](documentation/user-guide/admin-setup.md#discord-feed) | :heavy_check_mark: (op level 3) |
 
-`/stockmarket op`, `deop`, `preset add`, `alerts` and `backup` only work on the master server. Each admin command has its own permission node — see [Permissions (LuckPerms)](documentation/user-guide/admin-setup.md#permissions-luckperms).
+`/stockmarket manage`, `preset`, the `news` admin subcommands, `open`, `close` and `<market> remove` need StockMarket admin mode (see below), not operator level. `/stockmarket op`, `deop`, `preset add`, `alerts` and `backup` only work on the master server. Each admin command has its own permission node — see [Permissions (LuckPerms)](documentation/user-guide/admin-setup.md#permissions-luckperms).
 
 
 

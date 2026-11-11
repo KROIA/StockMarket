@@ -83,7 +83,8 @@ public interface ISyncServerMarketManager {
      * Looks up a StockMarket user by name (also offline players who joined before).
      *
      * @param playerName the exact stored name
-     * @return the user's UUID, or {@code null} if no user has that name
+     * @return the user's UUID (a player online on this server wins), or {@code null} if no user or several stored
+     *         users have that name
      */
     @Nullable UUID getPlayerUUID(String playerName);
 

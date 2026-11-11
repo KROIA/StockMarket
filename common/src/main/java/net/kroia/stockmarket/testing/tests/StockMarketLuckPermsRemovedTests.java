@@ -169,10 +169,11 @@ public class StockMarketLuckPermsRemovedTests extends TestSuite {
         if (p == null)
             return pass("flag fallback ok (no online player, node checks not compared)");
         for (String node : StockMarketPermissions.ALL_NODES) {
-            boolean expected = PermissionCompat.hasPermission(p, StockMarketPermissions.FALLBACK_LEVEL);
-            if (expected != PermissionCompat.hasPermission(p, node, StockMarketPermissions.FALLBACK_LEVEL))
+            int level = StockMarketPermissions.fallbackLevel(node); // SM-266: flag-gated nodes fall back to level 0
+            boolean expected = PermissionCompat.hasPermission(p, level);
+            if (expected != PermissionCompat.hasPermission(p, node, level))
                 return TestResult.fail("", node + " equals the op-level check", String.valueOf(expected), String.valueOf(!expected));
-            if (expected != PermissionCompat.hasPermission(p.createCommandSourceStack(), node, StockMarketPermissions.FALLBACK_LEVEL))
+            if (expected != PermissionCompat.hasPermission(p.createCommandSourceStack(), node, level))
                 return TestResult.fail("", node + " (source) equals the op-level check", String.valueOf(expected), String.valueOf(!expected));
         }
         return pass("flag and op-level fallback ok");

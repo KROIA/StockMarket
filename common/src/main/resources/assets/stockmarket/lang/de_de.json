@@ -473,6 +473,7 @@
   "gui.stockmarket.display_config_screen.no_pair": "Kein Paar (Item/Geld-Modus)",
   "gui.stockmarket.display_config_screen.no_markets": "Keine Märkte verfügbar",
   "message.stockmarket.command_admin_only": "Dieser Befehl ist nur für StockMarket-Admins!",
+  "message.stockmarket.command_player_name_ambiguous": "Mehrere StockMarket-Benutzer heißen %s (alte Einträge nach einem UUID-Wechsel). Lass den Spieler einmal beitreten und führe den Befehl dann erneut aus.",
   "message.stockmarket.command_player_not_found": "Keine UUID für Spieler gefunden: %s",
   "message.stockmarket.command_admin_mode_enabled": "StockMarket-Adminmodus AN für Spieler: %s",
   "message.stockmarket.command_admin_mode_disabled": "StockMarket-Adminmodus AUS für Spieler: %s",
