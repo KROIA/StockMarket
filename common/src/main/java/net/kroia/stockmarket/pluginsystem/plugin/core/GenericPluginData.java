@@ -25,7 +25,6 @@ public class GenericPluginData {
             ByteBufCodecs.BOOL.encode(buf, data.loggerEnabled);
             ByteBufCodecs.BOOL.encode(buf, data.enabled);
             ByteBufCodecs.BOOL.encode(buf, data.autoSubscribeNewMarkets);
-            ByteBufCodecs.VAR_INT.encode(buf, data.subscriptionOrder);
         }
         @Override
         public @NotNull GenericPluginData decode(RegistryFriendlyByteBuf buf) {
@@ -36,10 +35,9 @@ public class GenericPluginData {
             boolean loggerEnabled = ByteBufCodecs.BOOL.decode(buf);
             boolean enabled = ByteBufCodecs.BOOL.decode(buf);
             boolean autoSubscribeNewMarkets = ByteBufCodecs.BOOL.decode(buf);
-            int subscriptionOrder = ByteBufCodecs.VAR_INT.decode(buf);
             return new GenericPluginData(pluginTypeID, instanceID,
                     name, description, loggerEnabled, enabled,
-                    autoSubscribeNewMarkets, subscriptionOrder);
+                    autoSubscribeNewMarkets);
         }
     };
 
@@ -50,12 +48,11 @@ public class GenericPluginData {
     private boolean loggerEnabled;
     private boolean enabled;
     private boolean autoSubscribeNewMarkets = true;
-    private int subscriptionOrder = 0;
 
 
     private GenericPluginData(String pluginTypeID, UUID instanceID, String name,
                               String description, boolean loggerEnabled, boolean enabled,
-                              boolean autoSubscribeNewMarkets, int subscriptionOrder)
+                              boolean autoSubscribeNewMarkets)
     {
         this.pluginTypeID = pluginTypeID;
         this.instanceID = instanceID;
@@ -64,7 +61,6 @@ public class GenericPluginData {
         this.loggerEnabled = loggerEnabled;
         this.enabled = enabled;
         this.autoSubscribeNewMarkets = autoSubscribeNewMarkets;
-        this.subscriptionOrder = subscriptionOrder;
     }
     public GenericPluginData(UUID instanceID)
     {
@@ -119,15 +115,6 @@ public class GenericPluginData {
         return autoSubscribeNewMarkets;
     }
 
-    public void setSubscriptionOrder(int order)
-    {
-        this.subscriptionOrder = order;
-    }
-    public int getSubscriptionOrder()
-    {
-        return subscriptionOrder;
-    }
-
     public void setInstanceID(UUID id) {
         this.instanceID = id;
     }
@@ -169,7 +156,6 @@ public class GenericPluginData {
         tag.putBoolean("loggerEnabled", loggerEnabled);
         tag.putBoolean("enabled", enabled);
         tag.putBoolean("autoSubscribeNewMarkets", autoSubscribeNewMarkets);
-        tag.putInt("subscriptionOrder", subscriptionOrder);
         return true;
     }
 
@@ -191,7 +177,7 @@ public class GenericPluginData {
         if (tag.contains("loggerEnabled")) loggerEnabled = NbtCompat.getBoolean(tag, "loggerEnabled");
         if (tag.contains("enabled")) enabled = NbtCompat.getBoolean(tag, "enabled");
         if (tag.contains("autoSubscribeNewMarkets")) autoSubscribeNewMarkets = NbtCompat.getBoolean(tag, "autoSubscribeNewMarkets");
-        if (tag.contains("subscriptionOrder")) subscriptionOrder = NbtCompat.getInt(tag, "subscriptionOrder");
+        // Legacy "subscriptionOrder" key (removed setting) is ignored if present in old saves.
         return true;
     }
 }

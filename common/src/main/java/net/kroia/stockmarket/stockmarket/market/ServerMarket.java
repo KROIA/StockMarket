@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.stockmarket.market;
 
 import net.kroia.modutilities.NbtCompat;
+import net.kroia.modutilities.UtilitiesPlatform;
 
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.BankStatus;
@@ -10,18 +11,28 @@ import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
+import net.kroia.stockmarket.util.ProfitAlerts;
+import net.kroia.stockmarket.util.PumpDumpDetector;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
 import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.PriorityQueue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -42,11 +53,32 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final MatchingEngine matchingEngine;
     private long currentMarketPrice;
     private long netPlayerItemFlow = 0;
+    /**
+     * #89: exponentially faded copy of {@link #netPlayerItemFlow} (raw units). Gets the same
+     * per-fill deltas, but decays towards 0 every tick with the half-life
+     * {@code MARKET.NET_FLOW_HALF_LIFE_MINUTES}, so a one-off burst of buys/sells fades out while
+     * sustained demand keeps it up. This is the value the price plugins read. Persisted.
+     */
+    private double fadedNetPlayerItemFlow = 0;
+    /** Duration of one server tick in seconds; the faded flow decays per {@link #update()} call. */
+    public static final double TICK_SECONDS = 0.05;
 
     private MarketSettings settings;
 
-    // Callback fired when this market closes, used by ServerMarketManager to cancel inter-market orders
-    private @Nullable Consumer<ItemID> marketClosedCallback;
+    // Callback fired when this market enters maintenance, used by ServerMarketManager to cancel inter-market orders
+    private @Nullable Consumer<ItemID> marketMaintenanceCallback;
+
+    // ---- Trading hours (T-158) ----
+    // Runtime "inside trading hours" flag. When false: putOrder rejects ALL orders (player, bot,
+    // inter-market) and update() skips matching, so the price stays static. Pending/resting orders
+    // are never cancelled by a scheduled close and cancelOrder stays allowed.
+    // Recomputed at the end of every ServerMarketManager.update() via updateTradingHours().
+    private boolean tradingOpen = true;
+    // Manual open/close override set by command. null = follow the schedule. Persisted.
+    // Cleared automatically on the next scheduled transition.
+    private @Nullable Boolean tradingOverride = null;
+    // Schedule result of the last evaluation; used to detect scheduled transitions. Persisted.
+    private boolean lastScheduledOpen = true;
 
     /**
      * Input: Real price
@@ -55,10 +87,15 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private @Nullable Function<Double, Float> defaultVolumeProviderFunction;
 
     private long candleStartTime = System.currentTimeMillis();
+    /** T-218: master overworld day time at candle start, stored with every candle in both timebases. */
+    private long candleStartGameTime = ServerMarketManager.overworldDayTime(UtilitiesPlatform.getServer());
     private long candleOpenPrice;
     private long candleHighPrice;
     private long candleLowPrice;
-    private float candleTradedVolume = 0;
+    // T-175: accumulated in RAW units as long so small fills still count after a huge one
+    // (a float sum stops changing once it exceeds ~2^24 times the fill). Widened to float only
+    // at the API/storage boundary (MarketPriceStruct, getCurrentCandleTradedVolume()).
+    private long candleTradedVolume = 0;
 
     /**
      * Temporary order buffers for collecting order async and only process the order on update
@@ -68,17 +105,21 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final PriorityQueue<Order> sellMarketOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
     private final PriorityQueue<Order> buyLimitOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
     private final PriorityQueue<Order> sellLimitOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
+    /** T-192: finished player MARKET buys of the current matching pass, for the pump check after it. */
+    private final List<Order> pumpCandidates = new ArrayList<>();
 
 
     public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice, float naturalAbundance)
     {
-        this.settings = new MarketSettings(true, defaultPrice, naturalAbundance);
+        this.settings = new MarketSettings(false, defaultPrice, naturalAbundance);
         this.defaultVolumeProviderFunction =  volumeProvider;
         this.itemID = itemID;
         this.orderbook = new Orderbook(itemID,
                                         this::onOrderConsumed,
                                         this::onOrderCanceled,
                                         this::defaultVolumeProvider);
+        // T-211: the depth memory is initialised from a plugin's depth model, never from the fallback
+        this.orderbook.setVirtualDepthReady(volumeProvider != null);
         this.matchingEngine = new MatchingEngine(this.itemID, this.orderbook,
                 buyMarketOrders_inputBuffer,
                 sellMarketOrders_inputBuffer,
@@ -99,6 +140,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public ServerMarket(ItemID itemID)
     {
         this(itemID, null, 1000, 10f);
+    }
+
+    /** @return the market's virtual order book (tests only) */
+    public net.kroia.stockmarket.stockmarket.market.core.VirtualOrderbook test_getVirtualOrderbook()
+    {
+        return orderbook.test_getVirtualOrderbook();
     }
 
     @Override
@@ -157,6 +204,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public void test_setDefaultVolumeProviderFunction(Function<Double, Float> defaultVolumeProviderFunction)
     {
         this.defaultVolumeProviderFunction = defaultVolumeProviderFunction;
+        // T-211: a plugin provider initialises the pending depth memory once; the fallback forgets it
+        this.orderbook.setVirtualDepthReady(defaultVolumeProviderFunction != null);
     }
     @Override
     public void test_resetVirtualOrderBookVolume()
@@ -165,11 +214,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
     /**
-     * Sets a callback that fires when this market closes (setMarketOpen(false)).
+     * Sets a callback that fires when this market enters maintenance ({@code setMaintenance(true)}).
      * Used by ServerMarketManager to cancel inter-market orders referencing this market.
+     *
+     * @param callback receives the ItemID of the market entering maintenance, or {@code null} to clear
      */
-    public void setMarketClosedCallback(@Nullable Consumer<ItemID> callback) {
-        this.marketClosedCallback = callback;
+    public void setMarketMaintenanceCallback(@Nullable Consumer<ItemID> callback) {
+        this.marketMaintenanceCallback = callback;
     }
 
 
@@ -178,6 +229,16 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public ItemID getItemID()
     {
         return itemID;
+    }
+    /**
+     * {@inheritDoc}
+     * <p>{@link MarketSettings#maxOrderVolume} is already stored in real items, so it is returned
+     * as-is (no raw-to-real conversion, that would divide it by the item fraction scale factor).
+     */
+    @Override
+    public double getMaxRealOrderVolume()
+    {
+        return settings.maxOrderVolume;
     }
     @Override
     public ItemID getItemIDAsync() {
@@ -240,6 +301,15 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
 
+    /**
+     * T-209: raw border prices of the virtual depth layout (linear window, re-centre band, log grid edges,
+     * ask ceiling), indexed by the {@code VirtualOrderbook.BORDER_*} constants. Display only.
+     */
+    public long[] getVirtualArrayBorders()
+    {
+        return orderbook.getVirtualArrayBorders();
+    }
+
     @Override
     public long getRawVolume(long startPrice, long endPrice)
     {
@@ -292,10 +362,16 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         if(order.isFilled())
             return false;
-        if(!settings.marketOpen && order.isPlayerOrder())
+        if(settings.maintenance && order.isPlayerOrder())
+            return false;
+        // Outside trading hours (or closed by override) no new orders of any kind are accepted.
+        if(!tradingOpen)
             return false;
         if(!order.getItemID().equals(itemID))
             return false; // Wrong stockmarket for this order
+        // T-191: accepted player orders get their persisted ID (inter-market legs use the group ID as ledger ref)
+        if(order.isPlayerOrder() && order.getType() != Order.Type.INTER_MARKET)
+            order.assignOrderIdIfMissing();
         if(order.isBuyOrder())
         {
             if(order.isMarketOrder() || order.getType() == Order.Type.INTER_MARKET)
@@ -337,6 +413,43 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             }
         }
         return false;
+    }
+
+    /**
+     * T-195: cancels every open player order of one bank account in this market, through the same
+     * bookkeeping as a player cancel ({@link #onOrderCanceled(Order)}: unlocks the reserved money or
+     * items, writes the CLOSE ledger row and the order history record). Covers the resting limit
+     * orders and the orders still buffered for this tick's matching. Inter-market legs are skipped;
+     * their parent order is cancelled by {@code ServerMarketManager.cancelOrdersOfBankAccount}.
+     *
+     * @param bankAccountNr the bank account whose orders are cancelled
+     * @return the number of cancelled orders
+     */
+    public int cancelOrdersOfBankAccount(int bankAccountNr)
+    {
+        int count = 0;
+        for (Order order : getLimitOrders()) // copy, safe to remove while iterating
+        {
+            if (order.isBotOrder() || order.getBankAccountNr() != bankAccountNr) continue;
+            orderbook.removeOrder(order);
+            onOrderCanceled(order);
+            count++;
+        }
+        for (PriorityQueue<Order> buffer : List.of(buyMarketOrders_inputBuffer, sellMarketOrders_inputBuffer,
+                buyLimitOrders_inputBuffer, sellLimitOrders_inputBuffer))
+        {
+            List<Order> matches = new ArrayList<>();
+            for (Order order : buffer)
+                if (order.isPlayerOrder() && order.getType() != Order.Type.INTER_MARKET && order.getBankAccountNr() == bankAccountNr)
+                    matches.add(order);
+            for (Order order : matches)
+            {
+                buffer.remove(order);
+                onOrderCanceled(order);
+                count++;
+            }
+        }
+        return count;
     }
 
     public PriorityQueue<Order> getIncomingBuyMarketOrders()
@@ -382,13 +495,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
     @Override
-    public boolean isMarketOpen()
+    public boolean isUnderMaintenance()
     {
-        return settings.marketOpen;
+        return settings.maintenance;
     }
     @Override
-    public CompletableFuture<Boolean> isMarketOpenAsync() {
-        return CompletableFuture.completedFuture(settings.marketOpen);
+    public CompletableFuture<Boolean> isUnderMaintenanceAsync() {
+        return CompletableFuture.completedFuture(settings.maintenance);
     }
 
 
@@ -396,13 +509,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
     @Override
-    public boolean setMarketOpen(boolean marketOpen)
+    public boolean setMaintenance(boolean maintenance)
     {
-        this.settings.marketOpen = marketOpen;
-        if (!marketOpen) {
+        this.settings.maintenance = maintenance;
+        if (maintenance) {
             cancelAllPlayerOrders();
-            if (marketClosedCallback != null) {
-                marketClosedCallback.accept(itemID);
+            if (marketMaintenanceCallback != null) {
+                marketMaintenanceCallback.accept(itemID);
             }
         }
         return true;
@@ -420,12 +533,83 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             cancelledCount++;
         }
         if (cancelledCount > 0) {
-            info("Market closed: cancelled " + cancelledCount + " player order(s)");
+            info("Maintenance enabled: cancelled " + cancelledCount + " player order(s)");
         }
     }
     @Override
-    public CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen) {
-        return CompletableFuture.completedFuture(setMarketOpen(marketOpen));
+    public CompletableFuture<Boolean> setMaintenanceAsync(boolean maintenance) {
+        return CompletableFuture.completedFuture(setMaintenance(maintenance));
+    }
+
+    @Override
+    public boolean isTradingOpen()
+    {
+        return tradingOpen;
+    }
+
+    @Override
+    public boolean setTradingHours(int openMinute, int closeMinute)
+    {
+        applyTradingWindow(openMinute, closeMinute);
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> setTradingHoursAsync(int openMinute, int closeMinute)
+    {
+        return CompletableFuture.completedFuture(setTradingHours(openMinute, closeMinute));
+    }
+
+    @Override
+    public boolean setTradingOverride(boolean open)
+    {
+        // Only stored here; applied by the next updateTradingHours() call at the end of the tick
+        // so the state never flips while order buffers are being processed.
+        tradingOverride = open;
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> setTradingOverrideAsync(boolean open)
+    {
+        return CompletableFuture.completedFuture(setTradingOverride(open));
+    }
+
+    /**
+     * @return the active manual override ({@code true} = forced open, {@code false} = forced closed),
+     *         or {@code null} when the market follows its schedule
+     */
+    public @Nullable Boolean getTradingOverride()
+    {
+        return tradingOverride;
+    }
+
+    @Override
+    public void updateTradingHours(int minuteOfDay)
+    {
+        boolean scheduled = settings.isWithinTradingHours(minuteOfDay);
+        // A scheduled transition (also caused by a window edit or a clock-source switch that
+        // flips the result) ends any manual override.
+        if (scheduled != lastScheduledOpen) {
+            lastScheduledOpen = scheduled;
+            tradingOverride = null;
+        }
+        tradingOpen = tradingOverride != null ? tradingOverride : scheduled;
+    }
+
+    /**
+     * Clamps the window to [0, 1440] and normalizes every "whole day" form (open == close,
+     * open 24:00) to 00:00-24:00. The open state itself is re-evaluated on the next tick.
+     */
+    private void applyTradingWindow(int openMinute, int closeMinute)
+    {
+        int open = Math.max(0, Math.min(1440, openMinute));
+        int close = Math.max(0, Math.min(1440, closeMinute));
+        if (open == 1440) open = 0;
+        if (open == close || (open == 0 && close == 1440)) {
+            open = 0;
+            close = 1440;
+        }
+        settings.tradingOpenMinute = open;
+        settings.tradingCloseMinute = close;
     }
 
 
@@ -436,7 +620,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public MarketPriceStruct getCurrentMarketPriceStruct()
     {
-        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime, candleTradedVolume);
+        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime, candleTradedVolume, candleStartGameTime);
     }
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAsync() {
@@ -450,8 +634,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public MarketPriceStruct getCurrentMarketPriceStructAndReset()
     {
-        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime, candleTradedVolume);
+        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime, candleTradedVolume, candleStartGameTime);
         candleStartTime =  System.currentTimeMillis();
+        candleStartGameTime = ServerMarketManager.overworldDayTime(UtilitiesPlatform.getServer());
         candleOpenPrice = this.currentMarketPrice;
         candleHighPrice = this.currentMarketPrice;
         candleLowPrice = this.currentMarketPrice;
@@ -468,13 +653,43 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public MarketSettings getSettings()
     {
         settings.netPlayerItemFlow = netPlayerItemFlow;
+        settings.fadedNetPlayerItemFlow = Math.round(fadedNetPlayerItemFlow);
         return settings;
     }
 
     @Override
     public long getNetPlayerItemFlow() { return netPlayerItemFlow; }
     @Override
-    public void resetNetPlayerItemFlow() { netPlayerItemFlow = 0; }
+    public void resetNetPlayerItemFlow() { netPlayerItemFlow = 0; fadedNetPlayerItemFlow = 0; }
+    @Override
+    public void setNetPlayerItemFlow(long netPlayerItemFlow) { this.netPlayerItemFlow = netPlayerItemFlow; }
+    @Override
+    public double getFadedNetPlayerItemFlow() { return fadedNetPlayerItemFlow; }
+    @Override
+    public void setFadedNetPlayerItemFlow(double fadedNetPlayerItemFlow) { this.fadedNetPlayerItemFlow = fadedNetPlayerItemFlow; }
+
+    /**
+     * Exponential decay of a value over {@code dtSeconds}: {@code value * 2^(-dt / halfLife)}.
+     * Pure function, so the decay math can be tested in isolation.
+     *
+     * @param value           the value to fade
+     * @param halfLifeSeconds time after which the value has halved; &lt;= 0 (or NaN) = no fading
+     * @param dtSeconds       elapsed time in seconds
+     * @return the faded value
+     */
+    public static double fade(double value, double halfLifeSeconds, double dtSeconds)
+    {
+        if (!(halfLifeSeconds > 0) || value == 0) return value;
+        return value * Math.pow(2.0, -dtSeconds / halfLifeSeconds);
+    }
+
+    /** @return the configured net flow half-life in seconds, 0 = no fading (also before the settings exist). */
+    public static double netFlowHalfLifeSeconds()
+    {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null) return 0;
+        Float minutes = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.get();
+        return minutes == null ? 0 : minutes * 60.0;
+    }
     @Override
     public CompletableFuture<Boolean> resetNetPlayerItemFlowAsync()
     {
@@ -555,7 +770,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         boolean wasEnabled = this.settings.virtualOrderbookEnabled;
         boolean willBeEnabled = settings.virtualOrderbookEnabled;
 
-        this.settings.marketOpen = settings.marketOpen;
+        // Entering maintenance via the settings panel must have the same side effects as
+        // setMaintenance(true) (cancel + refund player orders, cancel inter-market orders);
+        // otherwise only the flag would flip and open player orders would stay in the book.
+        if (settings.maintenance && !this.settings.maintenance)
+            setMaintenance(true);
+        else
+            this.settings.maintenance = settings.maintenance;
         this.settings.defaultPrice = settings.defaultPrice;
         this.settings.naturalAbundance = settings.naturalAbundance;
         this.settings.virtualOrderbookEnabled = settings.virtualOrderbookEnabled;
@@ -568,6 +789,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         // VO reads return 0 and drops all writes.
         orderbook.setVirtualDisabled(!willBeEnabled);
         this.settings.ignorePluginAutosubscribe = settings.ignorePluginAutosubscribe;
+        this.settings.maxOrderVolume = Math.max(0, settings.maxOrderVolume); // 0 = unlimited
+        applyTradingWindow(settings.tradingOpenMinute, settings.tradingCloseMinute);
         // netPlayerItemFlow is intentionally not copied from client settings
 
         // Transition-zero on enable→disable: task 4 requires that the VO stays empty
@@ -610,9 +833,20 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public void update()
     {
+        // #89: tick-time decay of the faded net flow (runs while closed too: no fills, still fades).
+        fadedNetPlayerItemFlow = fade(fadedNetPlayerItemFlow, netFlowHalfLifeSeconds(), TICK_SECONDS);
+        // T-198: consumed virtual depth outside the array window recovers on tick time (also while closed).
+        orderbook.fadeVirtualDepthMemory(TICK_SECONDS);
+        // Closed (outside trading hours / override): no matching, price stays static. Buffered
+        // orders stay buffered; putOrder already rejects new ones while closed.
+        if (!tradingOpen)
+            return;
         orderbook.setCurrentMarketPrice(currentMarketPrice);
 
+        long priceBeforeMatching = currentMarketPrice; // T-192 pump check
+        pumpCandidates.clear();
         matchingEngine.update(currentMarketPrice);
+        checkPumps(priceBeforeMatching);
         candleTradedVolume += matchingEngine.getLastTradedVolume();
         trackPlayerNetFlow(matchingEngine.getLastPlayerFilledVolume());
 
@@ -628,7 +862,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private void onOrderConsumed(Order order)
     {
         unlockRemainingFunds(order);
+        logLedgerClose(order);
         saveOrderRecord(order);
+        trackRealizedProfit(order);
     }
 
     /**
@@ -653,7 +889,125 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private void onOrderCanceled(Order order)
     {
         unlockRemainingFunds(order);
+        logLedgerClose(order);
         saveOrderRecord(order);
+        trackRealizedProfit(order);
+        notifyMarketOrderNotFullyFilled(order);
+    }
+
+    /**
+     * #89: feeds a finished player order's net money (all fills of the order, sell proceeds
+     * positive, buy costs negative) into the per-player profit alert. Inter-market legs count too,
+     * so a pair trade nets out to its real money result. Also feeds the T-192 pump-and-dump detector.
+     *
+     * @param order the consumed or canceled order (fill state is final)
+     */
+    private void trackRealizedProfit(Order order)
+    {
+        if (order.isBotOrder() || order.getFilledVolume() == 0 || order.getExecutorPlayerUUID() == null)
+            return;
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        StockMarketModSettings.Market s = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET;
+        // T-192: pump-and-dump detector (observes only). Market buys wait for the end of the matching pass.
+        if (order.isMarketOrder() && order.isBuyOrder())
+            pumpCandidates.add(order);
+        PumpDumpDetector.onOrderFinished(itemID, order, s);
+        Float threshold = s.PROFIT_ALERT_THRESHOLD.get();
+        Long window = s.PROFIT_ALERT_WINDOW_MINUTES.get();
+        if (threshold == null || threshold <= 0 || window == null)
+            return;
+        ProfitAlerts.onOrderFinished(order.getExecutorPlayerUUID(),
+                MarketManager.convertToRealAmountStatic(order.getTransferredMoney()), threshold, window);
+    }
+
+    /**
+     * T-192: runs the pump check for the player market buys of the matching pass that just ended. The
+     * market price is final for this tick here ({@code onPriceChanged} ran at the end of the pass).
+     * <p>
+     * ponytail: the price move is per tick, not per order, so several buys in one tick share it; the
+     * own-sell-above condition keeps that from flagging bystanders.
+     *
+     * @param priceBeforeMatching the market price before the pass
+     */
+    private void checkPumps(long priceBeforeMatching)
+    {
+        if (pumpCandidates.isEmpty() || BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        PumpDumpDetector.checkPumps(itemID, pumpCandidates, priceBeforeMatching, currentMarketPrice,
+                orderbook.getSellLimitOrders(), BACKEND_INSTANCES.SERVER_SETTINGS.MARKET);
+        pumpCandidates.clear();
+    }
+
+    /**
+     * T-173: tells the owner of a player MARKET order that it was only partly filled. The
+     * matching engine cancels (and refunds) whatever a market order could not fill in its
+     * one pass: virtual-book walk limit, price floor 0, buyer out of money, empty book.
+     * {@code CreateOrderRequest} already answered "created" at placement (matching runs later
+     * in the tick), so without this the player only saw a plain success.
+     * <p>Sent as a translatable chat message (resolved client-side). Only reaches players
+     * online on this (master) server; players on a slave server get no message.</p>
+     *
+     * @param order the canceled order (fill state is final at this point)
+     */
+    private void notifyMarketOrderNotFullyFilled(Order order)
+    {
+        if (!order.isMarketOrder() || order.isBotOrder() || order.isFilled())
+            return;
+        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(order.getExecutorPlayerUUID());
+        if (player == null)
+            return;
+        double sf = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        player.sendSystemMessage(Component.translatable("message.stockmarket.order_status.market_order_partially_filled",
+                String.format(Locale.ROOT, "%.2f", Math.abs(order.getFilledVolume()) / sf),
+                String.format(Locale.ROOT, "%.2f", Math.abs(order.getTargetVolume()) / sf),
+                itemID.getStack().getHoverName()));
+    }
+
+    /**
+     * T-191: writes the CLOSE ledger row (fills not yet covered by earlier rows) of a finished player
+     * order. Inter-market legs are skipped: the market manager logs them under the group ref.
+     * Also gives orders from older saves their ID, so the OrderHistory row carries it.
+     *
+     * @param order the consumed or canceled order (fill state is final)
+     */
+    private void logLedgerClose(Order order)
+    {
+        if (order.isBotOrder() || order.getType() == Order.Type.INTER_MARKET) return;
+        order.assignOrderIdIfMissing();
+        ItemID currency = ledgerCurrency();
+        if (currency != null)
+            OrderLedger.logDelta(order, OrderLedger.orderRef(order.getOrderID()), OrderLedger.CLOSE, currency);
+    }
+
+    /**
+     * T-191: writes a {@link OrderLedger#PERIODIC} or {@link OrderLedger#SHUTDOWN} row for every resting
+     * player order of this market whose fill state changed since its last row.
+     *
+     * @param rowKind {@link OrderLedger#PERIODIC} or {@link OrderLedger#SHUTDOWN}
+     * @return the number of rows written
+     */
+    public int logOpenOrdersToLedger(String rowKind)
+    {
+        ItemID currency = ledgerCurrency();
+        if (currency == null) return 0;
+        int rows = 0;
+        for (Order order : orderbook.getLimitOrders())
+        {
+            if (order.isBotOrder() || order.getType() == Order.Type.INTER_MARKET) continue;
+            order.assignOrderIdIfMissing();
+            if (OrderLedger.logDelta(order, OrderLedger.orderRef(order.getOrderID()), rowKind, currency))
+                rows++;
+        }
+        return rows;
+    }
+
+    /** @return the trading currency for ledger rows, or null if the market manager is not available */
+    private static @Nullable ItemID ledgerCurrency()
+    {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.MARKET_MANAGER == null || BACKEND_INSTANCES.MARKET_MANAGER.getSync() == null)
+            return null;
+        return BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID();
     }
 
     /**
@@ -666,9 +1020,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         if (order.isBotOrder()) return; // skip bot orders (no player executor)
         if (order.getFilledVolume() == 0) return; // skip orders with no fills (e.g. cancelled before any execution)
         if (order.getType() == Order.Type.INTER_MARKET) return; // saved by InterMarketExecutor with groupID
-        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
 
         OrderRecordStruct record = order.getHistoricalRecord();
+        StockMarketDiscord.postOrder(record); // T-217: one market-buy/-sell per finished player order (master, if enabled)
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
         BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(record);
     }
 
@@ -681,6 +1036,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void trackPlayerNetFlow(long filledVolume) {
         netPlayerItemFlow -= filledVolume;
+        fadedNetPlayerItemFlow -= filledVolume;
     }
 
     /**
@@ -745,6 +1101,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void unlockRemainingFunds(Order order) {
         if (order.isBotOrder()) return; // bot orders have no bank reservations
+        // #93: INTER_MARKET legs hold no reservation of their own; the inter-market executor
+        // owns the parent order's locks and releases them itself. Unlocking here would free
+        // the reservations of the player's other orders (or the parent's items twice).
+        if (order.getType() == Order.Type.INTER_MARKET) return;
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.BANK_SYSTEM_API == null) return;
 
         IServerBankAccount bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API
@@ -831,12 +1191,21 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         tag.putLong("defaultPrice", settings.defaultPrice);
         tag.putFloat("naturalAbundance", settings.naturalAbundance);
         tag.putLong("netPlayerItemFlow", netPlayerItemFlow);
+        tag.putDouble("fadedNetPlayerItemFlow", fadedNetPlayerItemFlow);
         // Persist the new preset-derived flags so restarts keep the admin's intent.
         // Reads on the load side are guarded with contains() so old NBT still loads
         // with the field defaults (true / false / false respectively).
         tag.putBoolean("virtualOrderbookEnabled", settings.virtualOrderbookEnabled);
         tag.putBoolean("virtualOrderbookCleared", settings.virtualOrderbookCleared);
         tag.putBoolean("ignorePluginAutosubscribe", settings.ignorePluginAutosubscribe);
+        // Persist the admin/integration maintenance flag so it survives restarts (missing on old NBT -> not under maintenance).
+        tag.putBoolean("maintenance", settings.maintenance);
+        // Trading hours. Override stored as byte: -1 = none, 0 = forced closed, 1 = forced open.
+        tag.putInt("tradingOpenMinute", settings.tradingOpenMinute);
+        tag.putInt("tradingCloseMinute", settings.tradingCloseMinute);
+        tag.putLong("maxOrderVolume", settings.maxOrderVolume);
+        tag.putByte("tradingOverride", tradingOverride == null ? (byte) -1 : (byte) (tradingOverride ? 1 : 0));
+        tag.putBoolean("lastScheduledOpen", lastScheduledOpen);
 
         return success;
     }
@@ -872,6 +1241,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         {
             netPlayerItemFlow = NbtCompat.getLong(tag, "netPlayerItemFlow");
         }
+        // #89: saves without the faded value start it at the real flow (what the plugins read until now).
+        fadedNetPlayerItemFlow = tag.contains("fadedNetPlayerItemFlow")
+                ? NbtCompat.getDouble(tag, "fadedNetPlayerItemFlow") : netPlayerItemFlow;
         if(tag.contains("virtualOrderbookEnabled"))
         {
             settings.virtualOrderbookEnabled = NbtCompat.getBoolean(tag, "virtualOrderbookEnabled");
@@ -884,6 +1256,22 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         {
             settings.ignorePluginAutosubscribe = NbtCompat.getBoolean(tag, "ignorePluginAutosubscribe");
         }
+        // Max order volume: old saves without the key derive it from the (just loaded) abundance,
+        // so live servers get the protection on upgrade. A stored 0 stays 0 (unlimited).
+        settings.maxOrderVolume = tag.contains("maxOrderVolume")
+                ? NbtCompat.getLong(tag, "maxOrderVolume")
+                : MarketSettings.defaultMaxOrderVolume(settings.naturalAbundance);
+        // Restore the maintenance flag only — do NOT call setMaintenance(): player orders were already
+        // cancelled when maintenance was enabled, so the side effects must not re-run on load.
+        settings.maintenance = tag.contains("maintenance") && NbtCompat.getBoolean(tag, "maintenance");
+        // Trading hours: missing keys (old saves) -> always open, no override.
+        applyTradingWindow(
+                tag.contains("tradingOpenMinute") ? NbtCompat.getInt(tag, "tradingOpenMinute") : 0,
+                tag.contains("tradingCloseMinute") ? NbtCompat.getInt(tag, "tradingCloseMinute") : 1440);
+        byte override = tag.contains("tradingOverride") ? NbtCompat.getByte(tag, "tradingOverride") : -1;
+        tradingOverride = override < 0 ? null : override == 1;
+        lastScheduledOpen = !tag.contains("lastScheduledOpen") || NbtCompat.getBoolean(tag, "lastScheduledOpen");
+        tradingOpen = tradingOverride != null ? tradingOverride : lastScheduledOpen;
         // Sync the runtime flags on the VirtualOrderbook with the loaded persisted state.
         // These flags live in memory only on VirtualOrderbook — the settings are the
         // source of truth across restarts.
@@ -896,6 +1284,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         candleLowPrice = currentMarketPrice;
         candleTradedVolume = 0;
         candleStartTime = System.currentTimeMillis();
+        candleStartGameTime = ServerMarketManager.overworldDayTime(UtilitiesPlatform.getServer());
 
         return success;
     }

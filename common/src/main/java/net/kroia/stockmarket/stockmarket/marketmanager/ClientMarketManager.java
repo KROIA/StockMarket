@@ -9,6 +9,7 @@ import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.market.CrossRateMarket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
+import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketClientHooks;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.player.LocalPlayer;
@@ -17,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 public class ClientMarketManager implements IClientMarketManager
 {
@@ -26,6 +28,8 @@ public class ClientMarketManager implements IClientMarketManager
         ClientMarket.setBackend(backend);
     }
     private final IAsyncMarketManager asyncMarketManager;
+    /** Reads BankSystem's item fraction scale factor; the client bank manager in production, a fake in tests. */
+    private final Supplier<CompletableFuture<Integer>> factorRead;
 
     private final Map<ItemID, ClientMarket> clientMarkets = new HashMap<>();
 
@@ -37,7 +41,27 @@ public class ClientMarketManager implements IClientMarketManager
 
     public ClientMarketManager()
     {
-        asyncMarketManager = AsyncMarketManager.createClientManager();
+        this(AsyncMarketManager.createClientManager(),
+                () -> BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync());
+    }
+    private ClientMarketManager(IAsyncMarketManager asyncMarketManager, Supplier<CompletableFuture<Integer>> factorRead)
+    {
+        this.asyncMarketManager = asyncMarketManager;
+        this.factorRead = factorRead;
+    }
+
+    /**
+     * Test seam (T-233): a manager that talks to {@code asyncMarketManager} and reads the item fraction scale
+     * factor from {@code factorRead} instead of the network and BankSystem.
+     *
+     * @param asyncMarketManager replaces the client's market manager (see {@link AsyncMarketManager#createForTesting})
+     * @param factorRead         replaces BankSystem's item fraction scale factor read
+     * @return the manager
+     */
+    public static ClientMarketManager createForTesting(IAsyncMarketManager asyncMarketManager,
+                                                       Supplier<CompletableFuture<Integer>> factorRead)
+    {
+        return new ClientMarketManager(asyncMarketManager, factorRead);
     }
 
 
@@ -56,19 +80,15 @@ public class ClientMarketManager implements IClientMarketManager
         }
     }
 
+    /** Tries for the join-time server time sync. The request only reads, so sending it again is safe. */
+    private static final int SERVER_TIME_SYNC_ATTEMPTS = 3;
+
     @Override
     public void onPlayerJoin(@Nullable LocalPlayer localPlayer)
     {
         // Sync the server time offset once on join, then request markets.
         // Avoids per-market overwrites of the shared static timeOffsetMS (Issue #44).
-        BACKEND_INSTANCES.NETWORKING.SERVER_TIME_REQUEST.sendRequestToServer(System.currentTimeMillis()).thenAccept(serverTime ->
-        {
-            long currentTime = System.currentTimeMillis();
-            long turnaroundTime = currentTime - serverTime.clientTimeEcho();
-            long currentServerTime = serverTime.serverTime() + turnaroundTime / 2;
-            ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
-            requestMarkets();
-        });
+        syncServerTime(SERVER_TIME_SYNC_ATTEMPTS);
 
         // Fetch player preferences (favorites, last market) from server.
         // The join-time news toast catch-up (T-077) is chained onto the fetch future
@@ -77,6 +97,38 @@ public class ClientMarketManager implements IClientMarketManager
         // or worse, a default of on would toast for opted-out players).
         StockMarketGuiElement.fetchPlayerPreferences()
                 .thenAccept(prefs -> StockMarketClientHooks.runNewsToastCatchUp(BACKEND_INSTANCES, prefs));
+    }
+
+    /**
+     * Measures the server time offset, then requests the markets. A failed request (T-227: no answer in
+     * time, connection lost) is sent again, up to {@code attemptsLeft} times in total; ServerTimeRequest
+     * changes nothing on the server, so a retry is safe.
+     *
+     * @param attemptsLeft tries left, including this one
+     */
+    private void syncServerTime(int attemptsLeft)
+    {
+        BACKEND_INSTANCES.NETWORKING.SERVER_TIME_REQUEST.sendRequestToServer(System.currentTimeMillis()).whenComplete((serverTime, failure) ->
+        {
+            if (failure != null || serverTime == null) {
+                if (attemptsLeft > 1) {
+                    warn("Server time request failed (" + failure + "), retrying");
+                    syncServerTime(attemptsLeft - 1);
+                } else {
+                    error("Server time request failed, giving up; candle times may be off until the next join", failure);
+                }
+                return;
+            }
+            long currentTime = System.currentTimeMillis();
+            long turnaroundTime = currentTime - serverTime.clientTimeEcho();
+            long currentServerTime = serverTime.serverTime() + turnaroundTime / 2;
+            ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
+            ClientMarket.setCandleUseGameTime(serverTime.candleUseGameTime()); // T-218: before any ClientMarket exists
+            // T-140: the master's initial chart window, before any chart can open (markets are requested below).
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SETTINGS != null)
+                BACKEND_INSTANCES.SETTINGS.setInitialLoadCandles(serverTime.initialLoadCandles());
+            requestMarkets();
+        });
     }
 
     @Override
@@ -91,14 +143,20 @@ public class ClientMarketManager implements IClientMarketManager
         return clientMarkets.get(itemID);
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * The returned future fails when the markets request fails (no answer in time, connection lost, or not
+     * sent); the cached markets are then left as they are.
+     */
     @Override
     public CompletableFuture<List<ItemID>> requestMarkets()
     {
-        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync().thenAccept((factor)->
-        {
-            AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenAccept((response) ->
+        return factorRead.get().thenCompose((factor)->
+            AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenApply((response) ->
             {
+                if(response == null) // not sent; must not be read as "the server has no markets" (that prunes all)
+                    throw new IllegalStateException("Markets request could not be sent");
                 info("Markets request response received with "+response.size()+" markets");
                 for(ItemID itemID : response) {
                     createClientMarket(itemID, factor);
@@ -114,10 +172,8 @@ public class ClientMarketManager implements IClientMarketManager
                     info("Removing stale ClientMarket (no longer on server): " + staleID);
                     onMarketRemoved(staleID);
                 }
-                future.complete(response);
-            });
-        });
-        return future;
+                return response;
+            }));
     }
 
     @Override
@@ -128,9 +184,8 @@ public class ClientMarketManager implements IClientMarketManager
                                                                                   long timeEnd)
     {
         ActiveOrdersRequest.InputData inp = new ActiveOrdersRequest.InputData(itemIDFilter, bankAccountNr, executorPlayerFilter, timeBegin, timeEnd);
-        CompletableFuture<ActiveOrdersRequest.OutputData> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp).thenAccept(future::complete);
-        return future;
+        // The ARRS future as is, so a failed request reaches the caller instead of leaving it pending.
+        return BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp);
     }
 
     @Override
@@ -145,23 +200,32 @@ public class ClientMarketManager implements IClientMarketManager
         return asyncMarketManager.getTradingCurrencyIDAsync();
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * T-233: once the server confirmed the market, the result is {@code true} even if the following item fraction
+     * scale factor read fails (BankSystem request timeout). The local market is then not created here; the next
+     * {@link #requestMarkets()} loads it. The create itself is never sent again (its outcome counts, see T-227).
+     */
     @Override
     public CompletableFuture<Boolean> requestCreateMarket(ItemID itemID)
     {
         return asyncMarketManager.createMarketAsync(itemID).thenCompose(market -> {
             if (market != null) {
                 info("Market created on server for: " + itemID);
-                return BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager()
-                        .getItemFractionScaleFactorAsync()
-                        .thenApply(factor -> {
-                            createClientMarket(itemID, factor);
-                            return true;
-                        });
+                return factorRead.get().handle((factor, failure) -> {
+                    if (failure != null)
+                        warn("Market " + itemID + " was created, but reading the item fraction scale factor failed ("
+                                + failure + "); the next market list request loads it");
+                    else
+                        createClientMarket(itemID, factor);
+                    return true;
+                });
             }
             warn("Server returned null for createMarketAsync: " + itemID);
             return CompletableFuture.completedFuture(false);
         }).exceptionally(ex -> {
-            error("Exception during market creation for: " + itemID, (Exception) ex);
+            error("Exception during market creation for: " + itemID, ex);
             return false;
         });
     }
@@ -185,7 +249,7 @@ public class ClientMarketManager implements IClientMarketManager
             }
             return success;
         }).exceptionally(ex -> {
-            error("Exception during market deletion for: " + marketID, (Exception) ex);
+            error("Exception during market deletion for: " + marketID, ex);
             return false;
         });
     }
@@ -241,7 +305,9 @@ public class ClientMarketManager implements IClientMarketManager
         ClientMarket clientMarket = clientMarkets.get(itemID);
         if(clientMarket == null)
         {
-            if(itemID.isValid()) {
+            // T-237: same rule as isValid(), plus the test seam; a market whose item this side cannot resolve
+            // (an item only the master has) gets no ClientMarket, so it is hidden from every market list
+            if(MultiServerUtils.isMarketResolvableOnThisServer(itemID)) {
                 clientMarket = new ClientMarket(itemID, itemFractionScaleFactor);
                 clientMarkets.put(itemID, clientMarket);
                 // Do NOT pre-fetch any candle history here. With N markets and
@@ -255,7 +321,8 @@ public class ClientMarketManager implements IClientMarketManager
             }
             else
             {
-                error("Can't create ClientMarket with ID: " + itemID + ". ID is invalid");
+                // Expected on a slave without the item's mod, so not an error
+                info("No ClientMarket for " + itemID + ": its item cannot be resolved here");
             }
         }
     }
@@ -271,19 +338,20 @@ public class ClientMarketManager implements IClientMarketManager
         return sb.toString();
     }
 
+    // The log helpers skip logging without a client backend (offline tests, dedicated server test runs).
     protected void info(String message) {
-        BACKEND_INSTANCES.LOGGER.info("[ClientMarketManager]: "+message);
+        if (BACKEND_INSTANCES != null) BACKEND_INSTANCES.LOGGER.info("[ClientMarketManager]: "+message);
     }
     protected void error(String message) {
-        BACKEND_INSTANCES.LOGGER.error("[ClientMarketManager]: "+message);
+        if (BACKEND_INSTANCES != null) BACKEND_INSTANCES.LOGGER.error("[ClientMarketManager]: "+message);
     }
     protected void error(String message, Throwable throwable) {
-        BACKEND_INSTANCES.LOGGER.error("[ClientMarketManager]: "+message, throwable);
+        if (BACKEND_INSTANCES != null) BACKEND_INSTANCES.LOGGER.error("[ClientMarketManager]: "+message, throwable);
     }
     protected void warn(String message) {
-        BACKEND_INSTANCES.LOGGER.warn("[ClientMarketManager]: "+message);
+        if (BACKEND_INSTANCES != null) BACKEND_INSTANCES.LOGGER.warn("[ClientMarketManager]: "+message);
     }
     protected void debug(String message) {
-        BACKEND_INSTANCES.LOGGER.debug("[ClientMarketManager]: "+message);
+        if (BACKEND_INSTANCES != null) BACKEND_INSTANCES.LOGGER.debug("[ClientMarketManager]: "+message);
     }
 }

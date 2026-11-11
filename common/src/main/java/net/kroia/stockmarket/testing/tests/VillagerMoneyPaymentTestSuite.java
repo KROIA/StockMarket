@@ -51,6 +51,7 @@ public class VillagerMoneyPaymentTestSuite extends TestSuite {
         addTest("consume_prefers_fewest_notes", this::test_consume_prefers_fewest_notes);
         addTest("consume_mixed_offer", this::test_consume_mixed_offer);
         addTest("value_conservation_loop", this::test_value_conservation_loop);
+        addTest("notes_taken_match_consume", this::test_notes_taken_match_consume);
     }
 
     // ========================================================================
@@ -459,5 +460,35 @@ public class VillagerMoneyPaymentTestSuite extends TestSuite {
         if (!r.passed()) return r;
 
         return pass("Value is conserved across the trade-and-change loop");
+    }
+
+    // ========================================================================
+    // NoteFlow (T-216)
+    // ========================================================================
+
+    /**
+     * The NoteFlow "villager_consume" rows come from the payment slots before
+     * and after a trade ({@link MoneyPayment#notesTaken}). The notes taken must
+     * be worth exactly the price plus the change {@code consume} returns;
+     * untouched and non-money slots report 0.
+     */
+    private TestResult test_notes_taken_match_consume() {
+        MerchantOffer offer = moneyOffer(2000, 1); // price 20.00
+        // {worth A, count A, worth B, count B}; count B 0 = empty slot 1
+        long[][] payments = {{5000, 1, 0, 0}, {100, 20, 1000, 2}, {1000, 2, 1000, 2}, {500, 3, 100, 9}};
+        for (long[] p : payments) {
+            ItemStack a = moneyStack(p[0], (int) p[1]);
+            ItemStack b = p[3] > 0 ? moneyStack(p[2], (int) p[3]) : ItemStack.EMPTY;
+            ItemStack beforeA = a.copy();
+            ItemStack beforeB = b.copy();
+            long change = MoneyPayment.consume(offer, a, b);
+            long takenValue = MoneyPayment.notesTaken(beforeA, a) * p[0] + MoneyPayment.notesTaken(beforeB, b) * p[2];
+            TestResult r = assertEquals("Notes taken == price + change for " + p[1] + "x" + p[0] + " + " + p[3] + "x" + p[2],
+                    2000L + change, takenValue);
+            if (!r.passed()) return r;
+        }
+        // {1000, 2, 1000, 2} above leaves slot 0 untouched (0 taken).
+        return assertEquals("Non-money slot (a mixed offer's book)", 0,
+                MoneyPayment.notesTaken(new ItemStack(Items.BOOK, 3), new ItemStack(Items.BOOK, 2)));
     }
 }

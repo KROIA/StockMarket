@@ -19,6 +19,11 @@ public class NormalizedRandomPriceGeneratorTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("constructor_zero_order_becomes_one", this::test_constructor_zeroOrder_becomesOne);
         addTest("coefficients_normalized_correctly", this::test_coefficients_normalizedCorrectly);

@@ -9,6 +9,7 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
@@ -97,10 +98,9 @@ public class PluginSubscriptionRequest extends StockMarketGenericRequest<PluginS
         }
 
         // Notify other admins about the subscription change
-        String action = input.subscribe() ? "subscribed" : "unsubscribed";
         broadcastToAdmins(playerSender,
-                getPlayerName(playerSender) + " " + action + " '" + plugin.getName() + "' "
-                        + (input.subscribe() ? "to" : "from") + " " + input.marketID());
+                Component.translatable(input.subscribe() ? "message.stockmarket.admin_broadcast.plugin_subscribed" : "message.stockmarket.admin_broadcast.plugin_unsubscribed",
+                        getPlayerName(playerSender), plugin.getName(), String.valueOf(input.marketID())));
 
         return CompletableFuture.completedFuture(new OutputData(true, PluginSyncData.fromServerPlugin(plugin)));
     }

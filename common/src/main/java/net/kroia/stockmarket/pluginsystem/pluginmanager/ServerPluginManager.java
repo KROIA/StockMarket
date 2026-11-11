@@ -13,7 +13,9 @@ import net.kroia.stockmarket.pluginsystem.Plugins;
 import net.kroia.stockmarket.pluginsystem.interaction.PluginOrderBook;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
+import net.kroia.stockmarket.pluginsystem.plugins.NetFlowPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
+import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
@@ -41,6 +43,11 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
     private boolean loggerEnabled = false;
     private final Map<ItemID, MarketCache> marketCaches = new HashMap<>(); // Contains all caches, instance ownership belongs to this class
+    /**
+     * T-213: false while the one-time VolatilityPlugin -> NetFlowPlugin split still has to run (only after a load
+     * whose migration failed, so the next load retries). Saved as "netFlowPluginMigrationDone".
+     */
+    private boolean netFlowMigrationDone = true;
     @SuppressWarnings("rawtypes")
     private Map<UUID, ServerPlugin> plugins = new LinkedHashMap<>();    // Contains all plugin instances. UUID: plugin instanceID
 
@@ -300,7 +307,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
     /**
      * Auto-subscribes a newly created market to all plugins that opt in,
-     * sorted by subscriptionOrder (0 = earliest, ties resolved by list order).
+     * in plugin list (execution) order.
      *
      * @param marketID the ID of the newly created market
      */
@@ -324,9 +331,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             }
         }
 
-        List<ServerPlugin> sorted = new ArrayList<>(plugins.values());
-        sorted.sort(Comparator.comparingInt(ServerPlugin::getSubscriptionOrder));
-        for (ServerPlugin plugin : sorted)
+        for (ServerPlugin plugin : new ArrayList<>(plugins.values()))
         {
             if (plugin.getAutoSubscribeNewMarkets())
             {
@@ -463,6 +468,8 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         ListTag managerDataTag = new ListTag();
         CompoundTag flagsTag = new CompoundTag();
         flagsTag.putBoolean("newsPluginAutoCreateDone", true);
+        // T-213: same pattern; false only after a failed migration (retried on the next load)
+        flagsTag.putBoolean("netFlowPluginMigrationDone", netFlowMigrationDone);
         managerDataTag.add(flagsTag);
         listTags.put("managerData", managerDataTag);
         return true;
@@ -512,7 +519,6 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             if (pluginTag.contains("description")) plugin.setDescription(NbtCompat.getString(pluginTag, "description"));
             if (pluginTag.contains("loggerEnabled")) plugin.setLoggerEnabled(NbtCompat.getBoolean(pluginTag, "loggerEnabled"));
             if (pluginTag.contains("autoSubscribeNewMarkets")) plugin.setAutoSubscribeNewMarkets(NbtCompat.getBoolean(pluginTag, "autoSubscribeNewMarkets"));
-            if (pluginTag.contains("subscriptionOrder")) plugin.setSubscriptionOrder(NbtCompat.getInt(pluginTag, "subscriptionOrder"));
 
             // Restore subscribed markets
             if (pluginTag.contains("subscribedMarkets")) {
@@ -565,7 +571,115 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         if (!readNewsAutoCreateFlag(listTags)) {
             migrateCreateNewsPlugin();
         }
+        // T-213: split the pre-T-213 VolatilityPlugins (flow model inside) into NetFlowPlugin + VolatilityPlugin.
+        netFlowMigrationDone = readManagerFlag(listTags, "netFlowPluginMigrationDone") || migrateNetFlowPlugins(pluginsTag);
         return success;
+    }
+
+    /** Reads a boolean manager-level flag from the save data (false if missing). */
+    private static boolean readManagerFlag(Map<String, ListTag> listTags, String key) {
+        ListTag managerDataTag = listTags.get("managerData");
+        if (managerDataTag == null || managerDataTag.isEmpty()) return false;
+        return NbtCompat.getBoolean(NbtCompat.getCompound(managerDataTag, 0), key);
+    }
+
+    /**
+     * T-213: one-time split of the pre-T-213 VolatilityPlugin, which also ran the net-flow price model. For every
+     * VolatilityPlugin instance in the save, a NetFlowPlugin is created right before it with the same subscribed
+     * markets, auto-subscribe and enabled state. Its per-market settings are the instance's saved settings bytes
+     * decoded with {@link NetFlowPlugin#LEGACY_VOLATILITY_CODEC} plus the instance's NBT overrides
+     * ({@link NetFlowPlugin#applyLegacyVolatilityNbt}); the saturated flow state is copied. A world without a
+     * VolatilityPlugin gets nothing.
+     *
+     * @param pluginsTag the loaded "plugins" list
+     * @return true on success; false if an instance failed (every NetFlowPlugin created here is removed again,
+     *         the flag stays unset and the next load retries)
+     */
+    boolean migrateNetFlowPlugins(ListTag pluginsTag) {
+        List<ServerPlugin> created = new ArrayList<>();
+        try {
+            for (int i = 0; i < pluginsTag.size(); i++) {
+                CompoundTag pluginTag = NbtCompat.getCompound(pluginsTag, i);
+                if (!Plugins.VOLATILITY_PLUGIN.getPluginTypeID().equals(NbtCompat.getString(pluginTag, "pluginTypeID"))) continue;
+                UUID volID = pluginTag.contains("instanceID") ? NbtCompat.getUUID(pluginTag, "instanceID") : null;
+                if (volID == null || !(plugins.get(volID) instanceof VolatilityPlugin vol)) continue; // not loaded
+                NetFlowPlugin flow = (NetFlowPlugin) addPlugin(Plugins.NET_FLOW_PLUGIN);
+                if (flow == null) return rollbackNetFlowMigration(created, "failed to instantiate the NetFlowPlugin");
+                created.add(flow);
+                moveBefore(flow.getInstanceID(), volID);
+                flow.setAutoSubscribeNewMarkets(vol.getAutoSubscribeNewMarkets());
+
+                // per-market saved settings bytes (or the legacy single payload) and NBT overrides of the old plugin
+                Map<ItemID, byte[]> bytes = new HashMap<>();
+                if (pluginTag.contains("customSettingsMap")) {
+                    ListTag list = NbtCompat.getList(pluginTag, "customSettingsMap", 10);
+                    for (int j = 0; j < list.size(); j++) {
+                        CompoundTag e = NbtCompat.getCompound(list, j);
+                        ItemID id = ItemID.createFromTag(e);
+                        if (id != null && id.isValid() && e.contains("settingsData")) bytes.put(id, NbtCompat.getByteArray(e, "settingsData"));
+                    }
+                }
+                byte[] legacyAll = pluginTag.contains("customSettings") ? NbtCompat.getByteArray(pluginTag, "customSettings") : null;
+                Map<ItemID, CompoundTag> nbt = new HashMap<>();
+                CompoundTag data = pluginTag.contains("pluginData") ? NbtCompat.getCompound(pluginTag, "pluginData") : new CompoundTag();
+                if (data.contains("marketData")) {
+                    ListTag list = NbtCompat.getList(data, "marketData", 10);
+                    for (int j = 0; j < list.size(); j++) {
+                        CompoundTag e = NbtCompat.getCompound(list, j);
+                        ItemID id = ItemID.createFromTag(e);
+                        if (id != null && id.isValid()) nbt.put(id, e);
+                    }
+                }
+
+                for (ItemID marketID : new ArrayList<ItemID>(vol.getSubscribedMarkets())) {
+                    flow.subscribeToMarket(marketID);
+                    byte[] b = bytes.getOrDefault(marketID, legacyAll);
+                    NetFlowPlugin.Settings s = b != null ? decodeLegacyVolatility(b) : NetFlowPlugin.Settings.createDefault();
+                    CompoundTag marketTag = nbt.get(marketID);
+                    if (marketTag != null) {
+                        s = NetFlowPlugin.applyLegacyVolatilityNbt(s, marketTag);
+                        if (marketTag.contains("satFlow") && marketTag.contains("lastFaded"))
+                            flow.restoreFlowState(marketID, NbtCompat.getDouble(marketTag, "satFlow"), NbtCompat.getDouble(marketTag, "lastFaded"));
+                    }
+                    flow.replaceCustomSettings(marketID, s);
+                }
+                flow.setEnabled(vol.isEnabled());
+            }
+        } catch (Exception e) {
+            return rollbackNetFlowMigration(created, "failed: " + e);
+        }
+        if (!created.isEmpty())
+            info("T-213: split " + created.size() + " VolatilityPlugin(s): the net-flow price model now runs in a"
+                    + " NetFlowPlugin placed before each, with the same markets and settings.");
+        return true;
+    }
+
+    /** Decodes one pre-T-213 VolatilityPlugin settings payload with {@link NetFlowPlugin#LEGACY_VOLATILITY_CODEC}. */
+    private static NetFlowPlugin.Settings decodeLegacyVolatility(byte[] bytes) {
+        io.netty.buffer.ByteBuf buf = io.netty.buffer.Unpooled.wrappedBuffer(bytes);
+        try {
+            return NetFlowPlugin.LEGACY_VOLATILITY_CODEC.decode(buf);
+        } finally {
+            buf.release();
+        }
+    }
+
+    /** Removes the NetFlowPlugins a failed migration created, logs why, returns false. */
+    private boolean rollbackNetFlowMigration(List<ServerPlugin> created, String why) {
+        for (ServerPlugin p : created) removePlugin(p);
+        warn("migrateNetFlowPlugins(): " + why + "; no NetFlowPlugin created, retrying on the next load");
+        return false;
+    }
+
+    /** Moves plugin {@code moved} right before plugin {@code anchor} in the execution order. */
+    private void moveBefore(UUID moved, UUID anchor) {
+        Map<UUID, ServerPlugin> reordered = new LinkedHashMap<>();
+        for (Map.Entry<UUID, ServerPlugin> e : plugins.entrySet()) {
+            if (e.getKey().equals(moved)) continue;
+            if (e.getKey().equals(anchor)) reordered.put(moved, plugins.get(moved));
+            reordered.put(e.getKey(), e.getValue());
+        }
+        plugins = reordered;
     }
 
     /** Reads the manager-level "newsPluginAutoCreateDone" flag from the save data. */
@@ -652,23 +766,20 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     private boolean loadDefaults() {
         List<ItemID> marketIDs = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getAvailableMarketIDs();
 
-        ServerPlugin plugin1 = addPlugin(Plugins.VOLATILITY_PLUGIN);
-        ServerPlugin plugin2 = addPlugin(Plugins.DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN);
-        ServerPlugin plugin3 = addPlugin(Plugins.TARGET_PRICE_BOT_PLUGIN);
-        ServerPlugin plugin4 = addPlugin(Plugins.NEWS_PLUGIN);
+        // T-213: NetFlow first, so the VolatilityPlugin reads this tick's equilibrium.
+        List<ServerPlugin> defaults = List.of(
+                addPlugin(Plugins.NET_FLOW_PLUGIN),
+                addPlugin(Plugins.VOLATILITY_PLUGIN),
+                addPlugin(Plugins.DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN),
+                addPlugin(Plugins.TARGET_PRICE_BOT_PLUGIN),
+                addPlugin(Plugins.NEWS_PLUGIN));
 
         if (!marketIDs.isEmpty()) {
             ItemID pair = marketIDs.getFirst();
-            plugin1.subscribeToMarket(pair);
-            plugin2.subscribeToMarket(pair);
-            plugin3.subscribeToMarket(pair);
-            plugin4.subscribeToMarket(pair);
+            for (ServerPlugin plugin : defaults) plugin.subscribeToMarket(pair);
         }
 
-        plugin1.setEnabled(true);
-        plugin2.setEnabled(true);
-        plugin3.setEnabled(true);
-        plugin4.setEnabled(true);
+        for (ServerPlugin plugin : defaults) plugin.setEnabled(true);
         return true;
     }
 
