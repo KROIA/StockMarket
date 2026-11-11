@@ -440,12 +440,13 @@ public class TradeScreen extends StockMarketGuiScreen {
             StockMarketGuiElement.updatePlayerPreferences(prefs);
         }
 
-        // Restore pair selections from preferences
-        if (prefs.getLastPairHaveMarketID() != null) {
+        // Restore pair selections from preferences; like the last market, only legs that are still
+        // available (T-237: a slave lists no market for an item it cannot resolve)
+        if (prefs.getLastPairHaveMarketID() != null && markets.contains(prefs.getLastPairHaveMarketID())) {
             pairHaveMarketID = prefs.getLastPairHaveMarketID();
             pairSelectorWidget.setHaveMarketID(pairHaveMarketID);
         }
-        if (prefs.getLastPairWantMarketID() != null) {
+        if (prefs.getLastPairWantMarketID() != null && markets.contains(prefs.getLastPairWantMarketID())) {
             pairWantMarketID = prefs.getLastPairWantMarketID();
             pairSelectorWidget.setWantMarketID(pairWantMarketID);
         }
@@ -551,6 +552,8 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         // T-158: trading state + hours/clock line (cheap; only touches widgets on change)
         updateTradingStatusUI();
+        // T-179: amount-box limits + trade cooldown on the buy/sell buttons
+        updateOrderLimitsUI();
 
         // Periodically refresh balances for the trading panel (~2s)
         if (now - lastBalanceRefreshMs > BALANCE_REFRESH_INTERVAL_MS) {
@@ -655,6 +658,92 @@ public class TradeScreen extends StockMarketGuiScreen {
         // setText re-runs the label layout, so only call it when the text actually changed.
         if (!hoursText.equals(tradingHoursLabel.getText()))
             tradingHoursLabel.setText(hoursText);
+    }
+
+    /**
+     * T-179: client-side end time ({@link System#currentTimeMillis()}) of the player's global trade
+     * cooldown. Static so it survives market switches and re-opening the screen (the server rule is
+     * global per player). Set from response callbacks (any thread), read every tick.
+     */
+    private static volatile long tradeCooldownUntilMs = 0;
+
+    /**
+     * T-179: pushes the order limits to both trading panels every tick.
+     * <ul>
+     *   <li>Max order size from the market price stream ({@link MarketPriceStream.TradingStatus#maxOrderVolume()},
+     *       updated within ~100 ms of an admin change); unknown (no stream data yet) = unlimited, the server still checks.
+     *       Pair mode: the want-item amount is limited by the want market and, via the current rate,
+     *       by the have market (the server checks both legs).</li>
+     *   <li>Remaining cooldown from {@link #tradeCooldownUntilMs}.</li>
+     * </ul>
+     * Widgets are only touched when a value changes.
+     */
+    private void updateOrderLimitsUI() {
+        long remaining = tradeCooldownUntilMs - System.currentTimeMillis();
+        tradingPanel.setTradeCooldown(remaining);
+        interMarketTradingPanel.setTradeCooldown(remaining);
+        tradingPanel.setMaxQuantity(getMaxOrderVolume(currentMarketID));
+
+        double pairLimit = getMaxOrderVolume(pairWantMarketID);
+        long haveLimit = getMaxOrderVolume(pairHaveMarketID);
+        ClientMarket haveM = pairHaveMarketID != null ? getMarket(pairHaveMarketID) : null;
+        ClientMarket wantM = pairWantMarketID != null ? getMarket(pairWantMarketID) : null;
+        if (haveLimit > 0 && haveM != null && wantM != null && haveM.getCurrentMarketRealPrice() > 0) {
+            double rate = wantM.getCurrentMarketRealPrice() / haveM.getCurrentMarketRealPrice(); // have items per want item
+            if (rate > 0) {
+                // Whole items so the box does not jitter with every small rate change.
+                double haveSideLimit = Math.max(1, Math.floor(haveLimit / rate));
+                pairLimit = pairLimit > 0 ? Math.min(pairLimit, haveSideLimit) : haveSideLimit;
+            }
+        }
+        interMarketTradingPanel.setMaxQuantity(pairLimit);
+    }
+
+    /**
+     * T-179: max order volume of a market as last pushed by its price stream.
+     * @param marketID the market, may be null
+     * @return the limit in real items; 0 = unlimited or unknown
+     */
+    private long getMaxOrderVolume(@Nullable ItemID marketID) {
+        ClientMarket market = marketID != null ? getMarket(marketID) : null;
+        MarketPriceStream.TradingStatus status = market != null ? market.getTradingStatus() : null;
+        return status != null ? status.maxOrderVolume() : 0;
+    }
+
+    /**
+     * T-179: starts the local cooldown display after an ACCEPTED order placed with the buy/sell
+     * buttons. Not called for chart moves/restores — the server exempts them via the move credit.
+     * Starts when the response arrives, i.e. slightly after the server's timestamp, so the buttons
+     * are never re-enabled before the server would accept the next order.
+     *
+     * @param marketID a market of the order (its price stream carries the global cooldown ms)
+     */
+    private void startTradeCooldown(@Nullable ItemID marketID) {
+        long startMs = System.currentTimeMillis();
+        Minecraft.getInstance().execute(() -> {
+            ClientMarket market = marketID != null ? getMarket(marketID) : null;
+            MarketPriceStream.TradingStatus status = market != null ? market.getTradingStatus() : null;
+            if (status != null && status.tradeCooldownMs() > 0)
+                tradeCooldownUntilMs = Math.max(tradeCooldownUntilMs, startMs + status.tradeCooldownMs());
+        });
+    }
+
+    /**
+     * T-179: logs the result of a button-placed order and starts the trade cooldown if it was accepted.
+     * T-227: if the request failed (no answer in time, connection lost) the order may still have been
+     * placed, so the player is told to check their orders. Nothing is resent.
+     * @param marketID the order's market
+     * @param result   the server response, null if there is none
+     * @param error    the request failure, null on an answer
+     */
+    private void onButtonOrderResult(ItemID marketID, @Nullable CreateOrderRequest.OutputData result, @Nullable Throwable error) {
+        if (error != null || result == null) {
+            showOrderOutcomeUnknown();
+            return;
+        }
+        logOrderResult(result);
+        if (result.status == CreateOrderRequest.Status.CREATED)
+            startTradeCooldown(marketID);
     }
 
     /**
@@ -790,6 +879,10 @@ public class TradeScreen extends StockMarketGuiScreen {
         List<Order> orders = filterOrdersBySelectedAccount(lastStreamedOrders);
         List<InterMarketOrder> interMarketOrders =
                 filterInterMarketOrdersBySelectedAccount(lastStreamedInterMarketOrders);
+        // T-237: a slave hides the player's orders on markets for items it cannot resolve (items only the master has)
+        orders.removeIf(order -> !StockMarketGuiElement.isMarketVisible(order.getItemID()));
+        interMarketOrders.removeIf(order -> !StockMarketGuiElement.isMarketVisible(order.getBuyItemID())
+                || !StockMarketGuiElement.isMarketVisible(order.getSellItemID()));
         pendingOrdersPanel.updateOrders(orders);
         pendingOrdersPanel.updateInterMarketOrders(interMarketOrders);
         orderMarkerOverlay.updateOrders(orders);
@@ -1380,7 +1473,62 @@ public class TradeScreen extends StockMarketGuiScreen {
             // Tell the player why: the market is outside its trading hours.
             if (result.status == CreateOrderRequest.Status.MARKET_CLOSED)
                 Minecraft.getInstance().execute(this::showMarketClosedMessage);
+            else if (result.status == CreateOrderRequest.Status.ORDER_TOO_LARGE)
+                showActionBar(Component.translatable("message.stockmarket.order_status.order_too_large", result.detail));
+            else if (result.status == CreateOrderRequest.Status.TRADING_TOO_FAST)
+                showActionBar(tradingTooFastMessage(result.detail));
+            else if (result.status == CreateOrderRequest.Status.ACCOUNT_FROZEN)
+                showActionBar(Component.translatable("message.stockmarket.order_status.account_frozen"));
         }
+    }
+
+    /**
+     * T-166: shows a translated message for the inter-market order error codes that carry a
+     * number after a colon ("ORDER_TOO_LARGE:&lt;limit&gt;", "TRADING_TOO_FAST:&lt;remaining ms&gt;"),
+     * and for "ACCOUNT_FROZEN" (T-195). Other codes are only logged.
+     * @param errorMessage the error code from {@link PlaceInterMarketOrderRequest.OutputData#errorMessage}, may be null
+     */
+    private static void showInterMarketError(@Nullable String errorMessage) {
+        if (errorMessage == null) return;
+        if (errorMessage.equals("ACCOUNT_FROZEN")) { // T-195
+            showActionBar(Component.translatable("message.stockmarket.order_status.account_frozen"));
+            return;
+        }
+        int colon = errorMessage.indexOf(':');
+        if (colon < 0) return;
+        long value;
+        try {
+            value = Long.parseLong(errorMessage.substring(colon + 1));
+        } catch (NumberFormatException e) {
+            return;
+        }
+        String code = errorMessage.substring(0, colon);
+        if (code.equals("ORDER_TOO_LARGE"))
+            showActionBar(Component.translatable("message.stockmarket.order_status.order_too_large", value));
+        else if (code.equals("TRADING_TOO_FAST"))
+            showActionBar(tradingTooFastMessage(value));
+    }
+
+    /** @param remainingMs remaining cooldown; shown as seconds with one decimal (e.g. "0.3") */
+    private static Component tradingTooFastMessage(long remainingMs) {
+        return Component.translatable("message.stockmarket.order_status.trading_too_fast",
+                String.format(java.util.Locale.ROOT, "%.1f", Math.max(0.1, remainingMs / 1000.0)));
+    }
+
+    /** Shows an action-bar message to the local player. Safe to call from any thread. */
+    private static void showActionBar(Component message) {
+        Minecraft.getInstance().execute(() -> {
+            if (Minecraft.getInstance().player != null)
+                Minecraft.getInstance().player.displayClientMessage(message, true);
+        });
+    }
+
+    /**
+     * T-227: action-bar message for an order request that got no answer: it may have been placed, so the
+     * player should check their orders before trying again. Safe to call from any thread.
+     */
+    private static void showOrderOutcomeUnknown() {
+        showActionBar(Component.translatable("message.stockmarket.order_status.outcome_unknown"));
     }
 
     /** T-158: action-bar message telling the player the market is closed. Main thread only. */
@@ -1394,25 +1542,25 @@ public class TradeScreen extends StockMarketGuiScreen {
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createMarketOrder(selectedBankAccountNr, quantity).thenAccept(this::logOrderResult);
+        market.createMarketOrder(selectedBankAccountNr, quantity).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
     private void onSellMarket(double quantity)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createMarketOrder(selectedBankAccountNr, -quantity).thenAccept(this::logOrderResult);
+        market.createMarketOrder(selectedBankAccountNr, -quantity).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
     private void onBuyLimit(double quantity, double price)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createLimitOrder(selectedBankAccountNr, quantity, price).thenAccept(this::logOrderResult);
+        market.createLimitOrder(selectedBankAccountNr, quantity, price).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
     private void onSellLimit(double quantity, double price)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createLimitOrder(selectedBankAccountNr, -quantity, price).thenAccept(this::logOrderResult);
+        market.createLimitOrder(selectedBankAccountNr, -quantity, price).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
 
     /**
@@ -1433,7 +1581,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, 0L, targetBuyRaw);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> info("Inter-market buy: " + (result.success ? "OK" : result.errorMessage)));
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
+                    info("Inter-market buy: " + (result.success ? "OK" : result.errorMessage));
+                    if (!result.success) showInterMarketError(result.errorMessage);
+                    else startTradeCooldown(input.haveItemID()); // T-179
+                });
     }
 
     /**
@@ -1447,7 +1600,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, 0L, 0L);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> info("Inter-market sell: " + (result.success ? "OK" : result.errorMessage)));
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
+                    info("Inter-market sell: " + (result.success ? "OK" : result.errorMessage));
+                    if (!result.success) showInterMarketError(result.errorMessage);
+                    else startTradeCooldown(input.haveItemID()); // T-179
+                });
     }
 
     /**
@@ -1465,7 +1623,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit, targetBuyRaw);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> info("Inter-market buy limit: " + (result.success ? "OK" : result.errorMessage)));
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
+                    info("Inter-market buy limit: " + (result.success ? "OK" : result.errorMessage));
+                    if (!result.success) showInterMarketError(result.errorMessage);
+                    else startTradeCooldown(input.haveItemID()); // T-179
+                });
     }
 
     /**
@@ -1481,7 +1644,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, rawRateLimit, 0L);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> info("Inter-market sell limit: " + (result.success ? "OK" : result.errorMessage)));
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
+                    info("Inter-market sell limit: " + (result.success ? "OK" : result.errorMessage));
+                    if (!result.success) showInterMarketError(result.errorMessage);
+                    else startTradeCooldown(input.haveItemID()); // T-179
+                });
     }
 
     private long getItemFractionScaleFactor() {
@@ -1563,9 +1731,12 @@ public class TradeScreen extends StockMarketGuiScreen {
                                 .thenAccept(result -> {
                                     if (!result.success) {
                                         warn("Move inter-market order failed (" + result.errorMessage + "), restoring original");
+                                        showInterMarketError(result.errorMessage);
                                         PlaceInterMarketOrderRequest.InputData fallback = new PlaceInterMarketOrderRequest.InputData(
                                                 order.getSellItemID(), order.getBuyItemID(), selectedBankAccountNr,
                                                 fallbackHaveVolume, fallbackRateLimit, fallbackTargetBuy);
+                                        // T-166: the restore is covered by the server-side move credit from the
+                                        // cancel above, so max order size / cooldown cannot reject it.
                                         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(fallback)
                                                 .thenAccept(fb -> {
                                                     if (!fb.success) {
@@ -1613,6 +1784,9 @@ public class TradeScreen extends StockMarketGuiScreen {
                             .thenAccept(result -> {
                                 if (result.status != CreateOrderRequest.Status.CREATED) {
                                     warn("Move order failed (" + result.status + "), restoring at original price");
+                                    logOrderResult(result);
+                                    // T-166: the move and this restore are covered by the server-side move
+                                    // credit from the cancel above, so max order size / cooldown cannot reject them.
                                     market.createLimitOrder(selectedBankAccountNr, remainingVolume, originalPrice)
                                             .thenAccept(fallback -> {
                                                 if (fallback.status != CreateOrderRequest.Status.CREATED) {

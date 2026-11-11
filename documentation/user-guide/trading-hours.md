@@ -29,6 +29,8 @@ Which clock the trading hours follow is a **global** setting that applies to all
 
 The setting takes effect immediately, no restart needed. If switching the clock moves a market in or out of its window, that counts as a scheduled transition (see [Commands](#commands)).
 
+Price candles have their own, independent clock setting, see [Candle Timebase](candle-timebase.md).
+
 ---
 
 ## Setting the trading window

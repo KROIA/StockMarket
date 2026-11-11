@@ -10,6 +10,7 @@ import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -83,6 +84,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
         public static final Component PLUGINS_TITLE = Component.translatable(PREFIX + "plugins.title");
         public static final Component PLUGINS_ENABLED = Component.translatable(PREFIX + "plugins.enabled");
         public static final Component PLUGINS_MANAGE = Component.translatable(PREFIX + "plugins.manage");
+        public static final Component PLUGINS_MANAGE_TOOLTIP = Component.translatable(PREFIX + "plugins.manage.tooltip");
+        public static final Component PLUGINS_ENABLED_TOOLTIP = Component.translatable(PREFIX + "plugins.enabled.tooltip");
 
         public static final Component MOD_SETTINGS = Component.translatable(PREFIX + "mod_settings");
         public static final Component MOD_SETTINGS_TOOLTIP = Component.translatable(PREFIX + "mod_settings.tooltip");
@@ -267,8 +270,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
             if (loadingCheckBox) return;
             ClientMarket currentMarket = getSelectedMarket();
             if (currentMarket == null) return;
-            currentMarket.setMaintenanceAsync(maintenance).thenAccept(success -> {
-                if (success) {
+            // whenComplete: also after a failed request (no answer; it may have been applied) the tiles
+            // re-read the real state from the server. Nothing is undone or resent.
+            currentMarket.setMaintenanceAsync(maintenance).whenComplete((success, error) -> {
+                if (error != null || Boolean.TRUE.equals(success)) {
                     Minecraft.getInstance().execute(() -> overviewTab.refreshMarketStates());
                 }
             });
@@ -281,7 +286,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
             for (ItemID marketID : markets) {
                 ClientMarket market = getMarket(marketID);
                 if (market == null) { completed[0]++; continue; }
-                market.setMaintenanceAsync(maintenance).thenAccept(success -> {
+                // whenComplete: a failed request still counts as done, so the final refresh runs
+                market.setMaintenanceAsync(maintenance).whenComplete((success, error) -> {
                     completed[0]++;
                     if (completed[0] >= total) {
                         Minecraft.getInstance().execute(() -> {
@@ -330,6 +336,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
             statusLabel.setAlignment(Label.Alignment.CENTER);
 
             managePluginsButton = new Button(Texts.PLUGINS_MANAGE.getString(), this::onManagePluginsButtonClicked);
+            PluginGuiElement.setSettingTooltip(Texts.PLUGINS_MANAGE_TOOLTIP, managePluginsButton);
+            PluginGuiElement.setSettingTooltip(Texts.PLUGINS_ENABLED_TOOLTIP, statusLabel);
 
             this.addChild(titleLabel);
             this.addChild(statusLabel);
@@ -449,6 +457,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
                     List<ItemID> sorted = new ArrayList<>(markets);
                     sorted.sort(MARKET_TYPE_COMPARATOR);
                     for (ItemID id : sorted) {
+                        // T-237: a slave hides markets for items it cannot resolve (an item only
+                        // the master has); the placeholder below is for the master only
+                        if (!StockMarketGuiElement.isMarketVisible(id))
+                            continue;
                         ItemStack stack = id.getStack();
                         if (stack.isEmpty()) {
                             // The ItemID can no longer be resolved to an item (dangling

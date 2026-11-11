@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.stockmarket.market;
 
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
@@ -12,6 +13,7 @@ import net.kroia.stockmarket.api.market.IAsyncMarket;
 import net.kroia.stockmarket.api.market.ISyncServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketLogger;
@@ -25,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 public class AsyncMarket implements IAsyncMarket{
     private static StockMarketModBackend.ServerInstances SERVER_BACKEND_INSTANCES;
@@ -38,11 +41,36 @@ public class AsyncMarket implements IAsyncMarket{
 
     private final boolean isClientSide;
     private final ItemID itemID;
+    /**
+     * Sends one function call and returns the answer future, or {@code null} when the master is unreachable
+     * and nothing was sent. {@link #sendRequest} in production, a fake in {@link #createForTesting}.
+     */
+    private final Function<InputData, CompletableFuture<OutputData>> transport;
 
     private AsyncMarket(ItemID itemID, boolean isClientSide)
     {
         this.isClientSide = isClientSide;
         this.itemID = itemID;
+        this.transport = this::sendRequest;
+    }
+    private AsyncMarket(ItemID itemID, Function<InputData, CompletableFuture<OutputData>> transport)
+    {
+        this.isClientSide = true;
+        this.itemID = itemID;
+        this.transport = transport;
+    }
+    /**
+     * Test seam (T-227): a market whose calls go to {@code transport} instead of the ARRS, so a test can
+     * fail the answer future without a network. The transport returns the answer future, or {@code null}
+     * for "master unreachable, nothing sent".
+     *
+     * @param itemID    the market
+     * @param transport replaces the ARRS send
+     * @return the market
+     */
+    public static AsyncMarket createForTesting(ItemID itemID, Function<InputData, CompletableFuture<OutputData>> transport)
+    {
+        return new AsyncMarket(itemID, transport);
     }
     public static AsyncMarket createClientMarket(ItemID itemID)
     {
@@ -238,12 +266,13 @@ public class AsyncMarket implements IAsyncMarket{
                     ParamGroup_long_long params = (ParamGroup_long_long)inputData.extra;
                     yield OutputData.of(input.function, market.getRawVolume(params.longValue1, params.longValue2));
                 }
-                case FunctionType.GetRealVolume_1 ->                          OutputData.of(input.function, market.getRealVolume((Long)inputData.extra));
+                // T-238: the price is a Double (DOUBLE codec); a Long cast threw ClassCastException
+                case FunctionType.GetRealVolume_1 ->                          OutputData.of(input.function, market.getRealVolume((Double)inputData.extra));
                 case FunctionType.GetRealVolume_2 ->                          {
                     ParamGroup_double_double params = (ParamGroup_double_double)inputData.extra;
                     yield OutputData.of(input.function, market.getRealVolume(params.value1, params.value2));
                 }
-                case FunctionType.PutOrder_1 ->                           OutputData.of(input.function, market.putOrder((Order)inputData.extra));
+                case FunctionType.PutOrder_1 ->                           OutputData.of(input.function, putCheckedOrder(itemID, (Order)inputData.extra, slaveID));
                 case FunctionType.GetLimitOrders ->                       OutputData.of(input.function, market.getLimitOrders());
                 case FunctionType.IsMaintenance ->                         OutputData.of(input.function, market.isUnderMaintenance());
                 case FunctionType.SetMaintenance ->
@@ -322,6 +351,30 @@ public class AsyncMarket implements IAsyncMarket{
                 }
             });
         }
+        /**
+         * Issue #95: places an order sent by a slave's {@link IAsyncMarket#putOrderAsync} through the same
+         * validation and fund lock as a player's {@code CreateOrderRequest} (membership, permissions, balance,
+         * market state, lock + unlock on refusal). Only the order's market, player, account, type, volume and
+         * price are used; its fill state, time and ID are ignored.
+         *
+         * @param itemID the market the call was sent to
+         * @param order  the order the slave wants placed
+         * @param slaveID the slave the call came from, recorded as the order's origin (T-215)
+         * @return true if the order was placed; false for a bot order (no player), an order for another
+         *         market, or any refusal of the shared order check
+         */
+        private static boolean putCheckedOrder(ItemID itemID, Order order, String slaveID)
+        {
+            UUID player = order.getExecutorPlayerUUID();
+            if(player == null || !itemID.equals(order.getItemID()))
+                return false; // bot orders are master-internal; a call never places into another market
+            ISyncServerBankManager bankManager = AsyncMarket.SERVER_BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
+            CreateOrderRequest.InputData request = new CreateOrderRequest.InputData(itemID, order.getBankAccountNr(), order.getType(),
+                    bankManager.convertToRealAmount(order.getTargetVolume()), bankManager.convertToRealAmount(order.getStartPrice()));
+            return AsyncMarket.SERVER_BACKEND_INSTANCES.NETWORKING.CREATE_ORDER_REQUEST.placeOrder(request, player, slaveID)
+                    .join().status == CreateOrderRequest.Status.CREATED; // completes at once
+        }
+
         @Override
         protected boolean isAllowedToCallByClient(InputData input)
         {
@@ -356,12 +409,14 @@ public class AsyncMarket implements IAsyncMarket{
          * T-123 (untrusted slave gate): tighten the base class default (which
          * would allow every function this class permits from clients) so that
          * mutating function types are refused when forwarded from an untrusted
-         * slave. Read-only queries stay wide open — the news feed, price
-         * requests and market listings must keep working on an untrusted
-         * slave; the untrusted flag only blocks writes.
+         * slave. Public read-only queries stay open — price requests and
+         * market data must keep working on an untrusted slave. GetSettings is
+         * admin data and is refused too (T-239): an untrusted slave sets the
+         * forwarded player UUID itself, so the admin check in the handler
+         * cannot be trusted for it.
          *
          * @param input the forwarded function call
-         * @return true only for read-only functions
+         * @return true only for public read-only functions
          */
         @Override
         protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input)
@@ -374,11 +429,11 @@ public class AsyncMarket implements IAsyncMarket{
                      FunctionType.GetRealVolume_1,
                      FunctionType.GetRealVolume_2,
                      FunctionType.IsMaintenance,
-                     FunctionType.GetCurrentMarketPriceStruct,
-                     FunctionType.GetSettings -> true;
+                     FunctionType.GetCurrentMarketPriceStruct -> true;
                 // SetMaintenance, SetSettings, ResetNetPlayerItemFlow, PutOrder,
                 // SetTradingHours, SetTradingOverride,
                 // GetCurrentMarketPriceStructAndReset are mutating — refused.
+                // GetSettings is admin data — refused (T-239).
                 default -> false;
             };
         }
@@ -392,22 +447,47 @@ public class AsyncMarket implements IAsyncMarket{
         Request instance = Request.instance;
     }
 
-    private CompletableFuture<OutputData> sendRequest(InputData input)
+    /**
+     * The production {@link #transport}: sends {@code input} over the ARRS, to the server on the client and
+     * to the master on a slave.
+     *
+     * @param input the function call to forward
+     * @return the ARRS future, unchanged so its failures reach the caller; {@code null} if this slave is not
+     *         connected to the master (nothing is sent)
+     */
+    private @Nullable CompletableFuture<OutputData> sendRequest(InputData input)
     {
-        CompletableFuture<OutputData> future = new CompletableFuture<>();
-        CompletableFuture<OutputData> tmpFuture;
-        if(isClientSide)
-            tmpFuture = Request.instance.sendRequestToServer(input);
-        else
-            tmpFuture = Request.instance.sendRequestToMaster(input);
-
-        tmpFuture.thenAccept(outputData ->{
-            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
-                info("Response received for request: "+ input.function.toString());
-            future.complete(outputData);
-        });
-
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return null;
+        CompletableFuture<OutputData> future = isClientSide
+                ? Request.instance.sendRequestToServer(input)
+                : Request.instance.sendRequestToMaster(input);
+        if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+            future.thenAccept(outputData -> info("Response received for request: "+ input.function.toString()));
         return future;
+    }
+
+    /**
+     * Calls {@code input.function} on the master and decodes its return value.
+     * <p>
+     * The returned future fails when the ARRS request fails: {@code RequestOutcomeUnknownException} (no answer
+     * in time or the connection was lost; the master may have run the function) or
+     * {@code RequestNotSentException} (never sent), or when the answer can't be decoded. Callers must not undo
+     * or repeat a mutating call because of such a failure.
+     *
+     * @param input             the function and its encoded arguments
+     * @param unreachableResult returned at once, without sending, when this slave is not connected to the master
+     * @param <T>               the function's return type
+     * @return the function's decoded return value
+     */
+    private <T> CompletableFuture<T> call(InputData input, T unreachableResult)
+    {
+        CompletableFuture<OutputData> response = transport.apply(input);
+        if(response == null)
+            return CompletableFuture.completedFuture(unreachableResult);
+        CompletableFuture<T> result = new CompletableFuture<>();
+        AsyncFunctionOutputData.relay(response, result); // completes or fails result like response
+        return result;
     }
 
 
@@ -501,173 +581,91 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<Long> getDefaultPriceAsync() {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(0L);
-        CompletableFuture<Long> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetDefaultPrice, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetDefaultPrice, itemID), 0L);
     }
 
     @Override
     public CompletableFuture<Long> getCurrentMarketPriceAsync() {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(0L);
-        CompletableFuture<Long> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetCurrentMarketPrice, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetCurrentMarketPrice, itemID), 0L);
     }
 
     @Override
     public CompletableFuture<Long> getCurrentTimeAsync() {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(0L);
-        CompletableFuture<Long> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetCurrentTime, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetCurrentTime, itemID), 0L);
     }
 
     @Override
     public CompletableFuture<Long> getRawVolumeAsync(long price) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(0L);
-        CompletableFuture<Long> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetRawVolume_1, itemID, price);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetRawVolume_1, itemID, price), 0L);
     }
 
     @Override
     public CompletableFuture<Long> getRawVolumeAsync(long startPrice, long endPrice)
     {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(0L);
-        CompletableFuture<Long> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetRawVolume_2, itemID, new ParamGroup_long_long(startPrice, endPrice));
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetRawVolume_2, itemID, new ParamGroup_long_long(startPrice, endPrice)), 0L);
     }
 
 
 
     @Override
     public CompletableFuture<Float> getRealVolumeAsync(double price) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(0.0f);
-        CompletableFuture<Float> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetRealVolume_1, itemID, price);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetRealVolume_1, itemID, price), 0.0f);
     }
 
     @Override
     public CompletableFuture<Float> getRealVolumeAsync(double startPrice, double endPrice)
     {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(0.0f);
-        CompletableFuture<Float> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetRealVolume_2, itemID, new ParamGroup_double_double(startPrice, endPrice));
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetRealVolume_2, itemID, new ParamGroup_double_double(startPrice, endPrice)), 0.0f);
     }
 
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * T-237: an order for an item this side cannot resolve (an item only the master has) is refused here with
+     * {@code false} and never forwarded to the master.
+     */
     @Override
     public CompletableFuture<Boolean> putOrderAsync(Order order) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
+        if (!MultiServerUtils.isMarketResolvableOnThisServer(itemID))
             return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.PutOrder_1, itemID, order);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.PutOrder_1, itemID, order), false);
     }
 
     @Override
     public CompletableFuture<List<Order>> getLimitOrdersAsync() {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(List.of());
-        CompletableFuture<List<Order>> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetLimitOrders, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetLimitOrders, itemID), List.of());
     }
 
     @Override
     public CompletableFuture<Boolean> isUnderMaintenanceAsync() {
         // Not reachable -> report under maintenance (mirrors the former "closed" fallback).
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(true);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.IsMaintenance, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.IsMaintenance, itemID), true);
     }
 
     @Override
     public CompletableFuture<Boolean> setMaintenanceAsync(boolean maintenance) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.SetMaintenance, itemID, maintenance);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.SetMaintenance, itemID, maintenance), false);
     }
 
     @Override
     public CompletableFuture<Boolean> setTradingHoursAsync(int openMinute, int closeMinute) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.SetTradingHours, itemID, new ParamGroup_long_long(openMinute, closeMinute));
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.SetTradingHours, itemID, new ParamGroup_long_long(openMinute, closeMinute)), false);
     }
 
     @Override
     public CompletableFuture<Boolean> setTradingOverrideAsync(boolean open) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.SetTradingOverride, itemID, open);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.SetTradingOverride, itemID, open), false);
     }
 
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAsync() {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(new MarketPriceStruct(itemID.getShort(), 0,0,0,0, 0f));
-        CompletableFuture<MarketPriceStruct> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetCurrentMarketPriceStruct, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetCurrentMarketPriceStruct, itemID), new MarketPriceStruct(itemID.getShort(), 0,0,0,0, 0f));
     }
 
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAndResetAsync() {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(new MarketPriceStruct(itemID.getShort(), 0,0,0,0, 0f));
-        CompletableFuture<MarketPriceStruct> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetCurrentMarketPriceStructAndReset, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetCurrentMarketPriceStructAndReset, itemID), new MarketPriceStruct(itemID.getShort(), 0,0,0,0, 0f));
     }
 
 
@@ -675,38 +673,20 @@ public class AsyncMarket implements IAsyncMarket{
     @Override
     public CompletableFuture<MarketSettings> getSettingsAsync()
     {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(new MarketSettings());
-        CompletableFuture<MarketSettings> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetSettings, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.GetSettings, itemID), new MarketSettings());
     }
 
 
     @Override
     public CompletableFuture<Boolean> setSettingsAsync(MarketSettings settings)
     {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.SetSettings, itemID, settings);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.SetSettings, itemID, settings), false);
     }
 
     @Override
     public CompletableFuture<Boolean> resetNetPlayerItemFlowAsync()
     {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.ResetNetPlayerItemFlow, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.ResetNetPlayerItemFlow, itemID), false);
     }
 
     /**
@@ -718,13 +698,7 @@ public class AsyncMarket implements IAsyncMarket{
     @Override
     public CompletableFuture<Boolean> resetVirtualOrderbookAsync()
     {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.ResetVirtualOrderbook, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.ResetVirtualOrderbook, itemID), false);
     }
 
     /**
@@ -735,13 +709,7 @@ public class AsyncMarket implements IAsyncMarket{
     @Override
     public CompletableFuture<Boolean> clearVirtualOrderbookAsync()
     {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.ClearVirtualOrderbook, itemID);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
+        return call(InputData.of(FunctionType.ClearVirtualOrderbook, itemID), false);
     }
 
 

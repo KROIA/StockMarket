@@ -4,6 +4,7 @@ import net.kroia.modutilities.testing.TestCategory;
 
 import static net.kroia.modutilities.testing.TestCategory.ServerType.BOTH;
 import static net.kroia.modutilities.testing.TestCategory.ServerType.MASTER_ONLY;
+import static net.kroia.modutilities.testing.TestCategory.ServerType.SLAVE_ONLY;
 
 public class StockMarketTestCategories {
 
@@ -72,7 +73,11 @@ public class StockMarketTestCategories {
             "stockmarket", "sm_villager_money_payment", "Value-based merchant money payment tests", BOTH, false);
 
     public static final TestCategory VOLATILITY_PLUGIN = new TestCategory(
-            "stockmarket", "sm_volatility_plugin", "VolatilityPlugin flow-equilibrium price tests", BOTH, false);
+            "stockmarket", "sm_volatility_plugin", "VolatilityPlugin random-walk tests", BOTH, false);
+
+    /** T-213: NetFlowPlugin flow-equilibrium price model tests. */
+    public static final TestCategory NET_FLOW_PLUGIN = new TestCategory(
+            "stockmarket", "sm_net_flow_plugin", "NetFlowPlugin flow-equilibrium price tests", BOTH, false);
 
     public static final TestCategory NEWS = new TestCategory(
             "stockmarket", "sm_news", "News event system data model tests (envelope, definitions, library, records)", BOTH, false);
@@ -153,6 +158,10 @@ public class StockMarketTestCategories {
     public static final TestCategory PLUGIN_TEST = new TestCategory(
             "stockmarket", "sm_plugin", "Plugin system tests", MASTER_ONLY, true);
 
+    /** T-225: PluginTestSuite's long market simulation gates, one topic each (off in normal autotest runs). */
+    public static final TestCategory MARKET_GATES = new TestCategory(
+            "stockmarket", "sm_market_gates", "Long market simulation gates: T-207 probes, T-208 Stage B, T-213 anchor gates", MASTER_ONLY, true);
+
     public static final TestCategory INTEGRATION = new TestCategory(
             "stockmarket", "sm_integration", "Integration tests", MASTER_ONLY, true);
 
@@ -182,4 +191,21 @@ public class StockMarketTestCategories {
     // admin stop discard, step-start chains.
     public static final TestCategory NEWS_CHAINS = new TestCategory(
             "stockmarket", "sm_news_chains", "News event chain runtime: requirement filter, publish records, chain parse/validation, chance/delay/maturity, caps bypass, depth/ancestry guards, NBT round-trip, admin stop discard and step-start moment tests", BOTH, false);
+
+    // T-237: markets for items a slave cannot resolve are hidden there; runs on both sides
+    // (some tests skip by side), needs the live ItemID registry.
+    public static final TestCategory MARKET_VISIBILITY = new TestCategory(
+            "stockmarket", "sm_market_visibility", "Markets for items a slave cannot resolve: hidden from lists, pairs, order placement and the portfolio placeholder on the slave, still listed by the master", BOTH, true);
+
+    // T-192: pump-and-dump detector (pump + buy-sell cycle checks) and the per-admin alert toggle.
+    public static final TestCategory PUMP_DUMP = new TestCategory(
+            "stockmarket", "sm_pump_dump", "Pump-and-dump detector: pump and buy-sell cycle flags, window expiry, detector switch, and the persisted per-admin alert toggle (off = no chat, flag still recorded)", MASTER_ONLY, true);
+
+    // T-140: master-owned client settings (initial chart window) at join, after a SET, and on a slave.
+    public static final TestCategory CLIENT_SETTINGS_SYNC = new TestCategory(
+            "stockmarket", "sm_client_settings_sync", "Initial chart window sync: server-instances accessor, ServerTimeRequest join value, client fallback order, SET re-push and the slave getting the master's value", BOTH, true);
+
+    // T-246: the slave-masterdown autotest cell (run_matrix --configs slave-masterdown); skips in every other cell.
+    public static final TestCategory MASTER_DOWN = new TestCategory(
+            "stockmarket", "sm_master_down", "Slave with its master down: StockMarket screens and the StockMarket block refuse with the StockMarket message (slave-masterdown cell only)", SLAVE_ONLY, true);
 }

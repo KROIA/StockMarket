@@ -66,9 +66,11 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     // ── Fields ──
 
-    // Saved viewport state per market item, so switching between markets preserves the user's view
+    // Saved viewport state per market item, so switching between markets preserves the user's view.
+    // T-221: the timeframe is kept as its delta (ms), not as a button index: the index meant a
+    // different timeframe in the other candle timebase (real 1h = index 3 = game 1W).
     private record ViewportState(double viewX, double viewY, double viewWidth, double viewHeight,
-                                 double zoomLevel, int candleTimeIdx) {}
+                                 double zoomLevel, long candleDeltaMs) {}
 
     private static final Map<String, ViewportState> savedViewports = new HashMap<>();
 
@@ -88,6 +90,8 @@ public class CandlestickChart extends StockMarketGuiElement {
     private final Rectangle volumeRect = new Rectangle(1, 1, 0, 0);
     private final Rectangle volumeScissorRect = new Rectangle(1, 1, 0, 0);
     private double zoomLevel = 200;
+    /** Minimum visible candle count (horizontal zoom floor); shared by live zoom and viewport restore. */
+    private static final double MIN_ZOOM_CANDLES = 5.0;
     private final RectangleF chartviewRect = new RectangleF(200, 0, 200, 500);
     private final Point lastDragMousePos = new Point();
     private int maxPriceLabelTextWidth = 0;
@@ -105,6 +109,8 @@ public class CandlestickChart extends StockMarketGuiElement {
     // Lang key for the "loading older data" indicator shown at the left edge
     // of the chart while a paginated fetch of older candles is in flight.
     private static final String KEY_LOADING_OLDER = "stockmarket.candlestick.loadingOlder";
+    /** T-218: "Day %s" label of game-time candles. */
+    private static final String KEY_GAME_DAY = "stockmarket.candlestick.game_day";
 
     // True while a paginated "older data" fetch is in flight for the current
     // candle-delta. Toggled true when we fire the request and reset via
@@ -159,7 +165,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         float buttonFontSizeScale = 1.0f;
 
         for (int i = 0; i < candleTimes.length; i++) {
-            String timeStr = timeToShortString(candleTimes[i]);
+            String timeStr = ClientMarket.isCandleUseGameTime() ? gameDeltaLabel(candleTimes[i]) : timeToShortString(candleTimes[i]);
             int finalI = i;
             Button button = new Button(timeStr, () -> {
                 selectCandleTimeDeltaByIndex(finalI);
@@ -292,6 +298,8 @@ public class CandlestickChart extends StockMarketGuiElement {
      * @param index the index into {@link ClientMarket#getAvailableCandleTimeDeltas()}
      */
     public void selectCandleTimeDeltaByIndex(int index) {
+        // T-218: keep the index inside the active delta set (6 real vs 4 game deltas).
+        index = Math.max(0, Math.min(index, ClientMarket.getAvailableCandleTimeDeltas().length - 1));
         // Same-delta reclick guard: when the user clicks the button for the
         // already-active delta AND its data is already loaded, do NOTHING —
         // no data refetch, no autoCenterView, no button-color repaint (colors
@@ -654,6 +662,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         int offset = Math.max(1, (lastVisibleCandleIndex - firstVisibleCandleIndex) / targetLineCount);
 
         Date lastTime = new Date(0);
+        long lastGameDay = Long.MIN_VALUE;
         maxTimeDateLabelWidth = 0;
         int canvasY = volumeRect.y + volumeRect.height;
         int i = firstVisibleCandleIndex;
@@ -666,9 +675,21 @@ public class CandlestickChart extends StockMarketGuiElement {
             PriceHistoryData.Candle candle = candles.get(i);
             int canvasX = toCanvasSpaceX(candleCount - i - 1);
 
-            Date currentTime = new Date(candle.openTimestamp);
-            String[] timeDateStr = timestampToTimeDate(currentTime, lastTime);
-            lastTime = currentTime;
+            String[] timeDateStr;
+            if (ClientMarket.isCandleUseGameTime() && candle.gameTime >= 0) {
+                // T-218: in-game labels, "Day N" whenever the day changes, then "hh:00".
+                // Legacy candles without game time keep their wall-clock labels.
+                long day = PriceHistoryData.gameDay(candle.gameTime);
+                String hour = PriceHistoryData.gameHourLabel(candle.gameTime);
+                timeDateStr = day != lastGameDay
+                        ? new String[]{Component.translatable(KEY_GAME_DAY, day).getString(), hour}
+                        : new String[]{hour};
+                lastGameDay = day;
+            } else {
+                Date currentTime = new Date(candle.openTimestamp);
+                timeDateStr = timestampToTimeDate(currentTime, lastTime);
+                lastTime = currentTime;
+            }
 
             int textHeight = getTextHeight();
             int lineOffset = Math.max(canvasY, canvasY + 1);
@@ -769,9 +790,9 @@ public class CandlestickChart extends StockMarketGuiElement {
         // Horizontal zoom (disabled when holding Ctrl for vertical-only zoom)
         if (!isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
             double minScrollValue = Math.min(canvasRect.width / 3.f, data.getCandles().size());
-            zoomLevel = Math.max(Math.min(zoomLevel * zoomFactor, minScrollValue), 5.0f);
+            zoomLevel = Math.max(Math.min(zoomLevel * zoomFactor, minScrollValue), MIN_ZOOM_CANDLES);
 
-            if (zoomLevel < minScrollValue && zoomLevel > 5) {
+            if (zoomLevel < minScrollValue && zoomLevel > MIN_ZOOM_CANDLES) {
                 int newCandleWidth = (Math.abs(canvasRect.width / (int) zoomLevel) / 2) * 2;
                 if (newCandleWidth > 0)
                     chartviewRect.width = (double) (((long) zoomLevel * newCandleWidth) / newCandleWidth);
@@ -783,7 +804,7 @@ public class CandlestickChart extends StockMarketGuiElement {
                 chartviewRect.x = mouseWorldX - mouseNormX * chartviewRect.width;
                 clampViewToNewestCandle();
             } else {
-                zoomLevel = Math.max(Math.min(zoomLevel, minScrollValue), 5.0f);
+                zoomLevel = Math.max(Math.min(zoomLevel, minScrollValue), MIN_ZOOM_CANDLES);
                 chartviewRect.width = (int) zoomLevel;
                 clampViewToNewestCandle();
             }
@@ -915,7 +936,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         tag.putDouble("viewW", chartviewRect.width);
         tag.putDouble("viewH", chartviewRect.height);
         tag.putDouble("zoom", zoomLevel);
-        tag.putInt("candleTimeIdx", currentCandleTimeIdx);
+        tag.putLong("candleDeltaMs", ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx]);
         return tag;
     }
 
@@ -927,11 +948,20 @@ public class CandlestickChart extends StockMarketGuiElement {
         if (tag == null || tag.isEmpty()) return;
         chartviewRect.x = NbtCompat.getDouble(tag, "viewX");
         chartviewRect.y = NbtCompat.getDouble(tag, "viewY");
-        chartviewRect.width = NbtCompat.getDouble(tag, "viewW");
+        // T-180: a missing/0 width would draw a zero-width chart until the next scroll. Only the
+        // floor is applied: the live max (min(canvas width / 3, candle count)) needs loaded candles,
+        // which are usually not there yet; the next scroll applies it.
+        chartviewRect.width = Math.max(NbtCompat.getDouble(tag, "viewW"), MIN_ZOOM_CANDLES);
         chartviewRect.height = NbtCompat.getDouble(tag, "viewH");
-        zoomLevel = NbtCompat.getDouble(tag, "zoom");
+        zoomLevel = Math.max(NbtCompat.getDouble(tag, "zoom"), MIN_ZOOM_CANDLES);
         skipAutoCenterOnce = true;
-        selectCandleTimeDeltaByIndex(NbtCompat.getInt(tag, "candleTimeIdx"));
+        // T-221: timeframe saved as its delta. Older tags (display blocks) hold an index into the
+        // real-time deltas, the only set before T-218; a delta outside the active set falls back
+        // to the first one.
+        long savedDelta = tag.contains("candleDeltaMs") ? NbtCompat.getLong(tag, "candleDeltaMs")
+                : ClientMarket.AVAILABLE_CANDLE_TIME_DELTAS[Math.max(0, Math.min(NbtCompat.getInt(tag, "candleTimeIdx"),
+                        ClientMarket.AVAILABLE_CANDLE_TIME_DELTAS.length - 1))];
+        selectCandleTimeDeltaByIndex(ClientMarket.candleTimeDeltaIndex(savedDelta));
         // The deserialised viewport is an authoritative placement — mark this
         // delta as fitted so future reselects don't clobber it with a fresh
         // auto-fit.
@@ -954,20 +984,29 @@ public class CandlestickChart extends StockMarketGuiElement {
         tag.putDouble("viewW", state.viewWidth);
         tag.putDouble("viewH", state.viewHeight);
         tag.putDouble("zoom", state.zoomLevel);
-        tag.putInt("candleTimeIdx", state.candleTimeIdx);
+        tag.putLong("candleDeltaMs", state.candleDeltaMs);
         return tag;
     }
 
     /**
      * Saves the current viewport state (position, zoom, candle time index)
      * into the static map, keyed by the current provider's viewport key.
+     * <p>
+     * T-220: skipped while the first fit for this market is still pending
+     * ({@link #firstDraw} or a pending auto-fit for the current delta, i.e. its
+     * candles have not arrived yet). Until then the rect still holds the PREVIOUS
+     * market's view; saving it would restore a foreign price range (an empty chart
+     * that must be re-centred) on the next visit instead of auto-centring.
      */
     private void saveViewportState() {
+        long currentDelta = ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx];
+        if (firstDraw || pendingAutoFitDeltas.contains(currentDelta))
+            return;
         if (this.priceDataProvider != null) {
             savedViewports.put(this.priceDataProvider.getViewportKey(), new ViewportState(
                     chartviewRect.x, chartviewRect.y,
                     chartviewRect.width, chartviewRect.height,
-                    zoomLevel, currentCandleTimeIdx));
+                    zoomLevel, currentDelta));
         }
     }
 
@@ -982,10 +1021,11 @@ public class CandlestickChart extends StockMarketGuiElement {
 
         chartviewRect.x = state.viewX;
         chartviewRect.y = state.viewY;
-        chartviewRect.width = state.viewWidth;
+        // T-180: same zoom floor as deserializeViewport / live zoom.
+        chartviewRect.width = Math.max(state.viewWidth, MIN_ZOOM_CANDLES);
         chartviewRect.height = state.viewHeight;
-        zoomLevel = state.zoomLevel;
-        currentCandleTimeIdx = state.candleTimeIdx;
+        zoomLevel = Math.max(state.zoomLevel, MIN_ZOOM_CANDLES);
+        currentCandleTimeIdx = ClientMarket.candleTimeDeltaIndex(state.candleDeltaMs);
 
         // Load the correct candle data and update button colors without auto-centering
         skipAutoCenterOnce = true;
@@ -1232,6 +1272,19 @@ public class CandlestickChart extends StockMarketGuiElement {
             formatted = sb.toString();
         }
         return formatted + suffix;
+    }
+
+    /**
+     * T-218: button label of a game-time candle delta (whole in-game hours): 1h, 4h, 1D, 1W.
+     *
+     * @param deltaMs nominal delta, a multiple of {@link PriceHistoryData#GAME_HOUR_MS}
+     * @return the label
+     */
+    private static String gameDeltaLabel(long deltaMs) {
+        long hours = deltaMs / PriceHistoryData.GAME_HOUR_MS;
+        if (hours % 168 == 0) return hours / 168 + "W";
+        if (hours % 24 == 0) return hours / 24 + "D";
+        return hours + "h";
     }
 
     private String timeToShortString(long timeMs) {

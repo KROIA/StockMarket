@@ -55,6 +55,11 @@ public interface ISyncServerMarket {
 
 
     ItemID getItemID();
+    /**
+     * Gets the maximum volume of a single player order on this market.
+     * @return the limit in real items; 0 = unlimited
+     */
+    double getMaxRealOrderVolume();
     long getDefaultPrice();
     long getCurrentMarketPrice();
     long getCurrentTime();
@@ -141,8 +146,30 @@ public interface ISyncServerMarket {
     MarketSettings getSettings();
     void setSettings(MarketSettings settings);
 
+    /**
+     * @return the real net player item flow (raw units; positive = players net-sold). Updated on
+     *         every player fill, never decays.
+     */
     long getNetPlayerItemFlow();
+    /** Resets both the real and the faded ({@link #getFadedNetPlayerItemFlow()}) net flow to 0. */
     void resetNetPlayerItemFlow();
+    /**
+     * #89: exponentially faded net player item flow (raw units, same sign as
+     * {@link #getNetPlayerItemFlow()}). Gets the same per-fill deltas but decays towards 0 with the
+     * half-life {@code MARKET.NET_FLOW_HALF_LIFE_MINUTES}. The price plugins read this value.
+     * @return the faded flow in raw units
+     */
+    double getFadedNetPlayerItemFlow();
+    /**
+     * Overwrites the faded net flow (raw units). Used to saturate it at a plugin's price band.
+     * @param fadedNetPlayerItemFlow the new raw value
+     */
+    void setFadedNetPlayerItemFlow(double fadedNetPlayerItemFlow);
+    /**
+     * Overwrites the net player item flow counter (raw units; positive = players net-sold).
+     * @param netPlayerItemFlow the new raw counter value
+     */
+    void setNetPlayerItemFlow(long netPlayerItemFlow);
     /**
      * Refills the virtual orderbook from the plugin-provided default volume distribution
      * function and drops the sticky-clear flag. Use this after a {@link #clearVirtualOrderbook()}
@@ -159,7 +186,7 @@ public interface ISyncServerMarket {
 
     Orderbook getOrderbook();
 
-    // Returns the accumulated traded volume for the current candle period (real-scaled)
+    // Returns the accumulated traded volume for the current candle period, in RAW units (real * ITEM_FRACTION_SCALE_FACTOR)
     float getCurrentCandleTradedVolume();
 
     void update();

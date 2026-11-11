@@ -11,6 +11,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * CandlestickChart variant for the display block system.
@@ -242,6 +243,22 @@ public class DisplayCandlestickChart extends CandlestickChart {
         @Override
         public @NotNull String getViewportKey() {
             return key;
+        }
+
+        // The two pagination methods below MUST be forwarded: the interface defaults
+        // report "no data / nothing older", which left the display chart empty until
+        // some other screen (TradeScreen) had fetched the same market/timeframe.
+
+        /** Forwards older-history paging to the wrapped provider. */
+        @Override
+        public @NotNull CompletableFuture<Boolean> requestOlderData(long candleDeltaMs, long beforeTimestamp) {
+            return delegate.requestOlderData(candleDeltaMs, beforeTimestamp);
+        }
+
+        /** Forwards the "server has older data" query to the wrapped provider. */
+        @Override
+        public boolean hasMoreOlderData(long candleDeltaMs) {
+            return delegate.hasMoreOlderData(candleDeltaMs);
         }
     }
 }

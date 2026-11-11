@@ -27,6 +27,12 @@ public class PluginMarket implements IPluginMarket
         return serverMarket.getItemID();
     }
 
+    @Override
+    public double getMaxRealOrderVolume()
+    {
+        return serverMarket.getMaxRealOrderVolume();
+    }
+
     /*@Override
     public int getStreamPacketSendTickInterval() {
         return 0;
@@ -94,6 +100,25 @@ public class PluginMarket implements IPluginMarket
         cache.addToNextTargetPrice(delta);
     }
 
+    /** {@inheritDoc} Buffered in the market cache, rolled over by {@link MarketCache#apply()}. */
+    @Override
+    public void setEquilibriumPrice(double equilibriumPrice) {
+        cache.setNextEquilibrium(equilibriumPrice);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public double getEquilibriumPrice() {
+        double e = cache.getEquilibrium();
+        return Double.isNaN(e) ? getDefaultRealPrice() : e;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isTargetPriceSetThisTick() {
+        return cache.isTargetSetThisTick();
+    }
+
     @Override
     public long placeOrder(double amount, double price) {
         Order order = new Order(serverMarket.getItemID(), Order.Type.LIMIT,
@@ -115,6 +140,25 @@ public class PluginMarket implements IPluginMarket
     @Override
     public double getNetPlayerItemFlow() {
         return MarketManager.convertToRealAmountStatic(serverMarket.getNetPlayerItemFlow());
+    }
+
+    /** {@inheritDoc} Non-finite values are ignored. */
+    @Override
+    public void setNetPlayerItemFlow(double netPlayerItemFlow) {
+        if (Double.isNaN(netPlayerItemFlow) || Double.isInfinite(netPlayerItemFlow)) return;
+        serverMarket.setNetPlayerItemFlow(MarketManager.convertToRawAmountStatic(netPlayerItemFlow));
+    }
+
+    @Override
+    public double getFadedNetPlayerItemFlow() {
+        return MarketManager.convertToRealAmountStatic(Math.round(serverMarket.getFadedNetPlayerItemFlow()));
+    }
+
+    /** {@inheritDoc} Non-finite values are ignored. */
+    @Override
+    public void setFadedNetPlayerItemFlow(double fadedNetPlayerItemFlow) {
+        if (Double.isNaN(fadedNetPlayerItemFlow) || Double.isInfinite(fadedNetPlayerItemFlow)) return;
+        serverMarket.setFadedNetPlayerItemFlow(MarketManager.convertToRawAmountStatic(fadedNetPlayerItemFlow));
     }
 
 

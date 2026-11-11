@@ -20,6 +20,8 @@ public class MarketSettings {
             ByteBufCodecs.BOOL.encode(buf, s.ignorePluginAutosubscribe);
             ByteBufCodecs.VAR_INT.encode(buf, s.tradingOpenMinute);
             ByteBufCodecs.VAR_INT.encode(buf, s.tradingCloseMinute);
+            ByteBufCodecs.VAR_LONG.encode(buf, s.maxOrderVolume);
+            ByteBufCodecs.VAR_LONG.encode(buf, s.fadedNetPlayerItemFlow);
         }
 
         @Override
@@ -34,6 +36,8 @@ public class MarketSettings {
             s.ignorePluginAutosubscribe = ByteBufCodecs.BOOL.decode(buf);
             s.tradingOpenMinute = ByteBufCodecs.VAR_INT.decode(buf);
             s.tradingCloseMinute = ByteBufCodecs.VAR_INT.decode(buf);
+            s.maxOrderVolume = ByteBufCodecs.VAR_LONG.decode(buf);
+            s.fadedNetPlayerItemFlow = ByteBufCodecs.VAR_LONG.decode(buf);
             return s;
         }
     };
@@ -46,6 +50,9 @@ public class MarketSettings {
     public float naturalAbundance;
     // Net items put into market by players (sell increases, buy decreases). Read-only on client.
     public long netPlayerItemFlow;
+    // #89: faded (exponentially decaying) net player flow, rounded to raw units. Read-only on
+    // client, only filled by ServerMarket.getSettings() for display; never applied by setSettings.
+    public long fadedNetPlayerItemFlow;
     // Whether the market has a virtual orderbook. Plugins that write to or read from the
     // virtual orderbook should skip this market entirely when this is false. Defaults to true
     // so existing markets (loaded from NBT / JSON that predate this field) keep working.
@@ -65,6 +72,60 @@ public class MarketSettings {
     // open > close wraps over midnight (e.g. 22:00-06:00). 0/1440 = always open (default).
     public int tradingOpenMinute = 0;
     public int tradingCloseMinute = 1440;
+    /**
+     * Maximum volume (real item count, buy or sell) a single player order may have on this market.
+     * 0 = unlimited. Bots are not limited. Defaults to {@link #defaultMaxOrderVolume(float)} of the
+     * natural abundance; markets loaded from saves that predate this field derive it the same way.
+     */
+    public long maxOrderVolume;
+
+    /** Compile-time default of the {@code MARKET.MAX_ORDER_VOLUME_FACTOR} mod setting (one stack). */
+    public static final long DEFAULT_MAX_ORDER_VOLUME_FACTOR = 64L;
+
+    /**
+     * Default max order volume derived from a market's natural abundance:
+     * {@code max(factor, round(factor * naturalAbundance))} - {@code factor} items per abundance unit,
+     * at least {@code factor} items. Single source of the formula, used for new markets, presets,
+     * old saves and the Mod Settings "Apply to all markets" action (T-179).
+     *
+     * @param naturalAbundance the market's natural abundance
+     * @param factor           items per abundance unit (the {@code MAX_ORDER_VOLUME_FACTOR} setting); values &lt; 1 count as 1
+     * @return the default max order volume in real items
+     */
+    public static long defaultMaxOrderVolume(float naturalAbundance, long factor)
+    {
+        long f = Math.max(1L, factor);
+        return Math.max(f, Math.round(f * (double) naturalAbundance));
+    }
+
+    /**
+     * {@link #defaultMaxOrderVolume(float, long)} with the running server's current factor
+     * ({@link net.kroia.stockmarket.StockMarketModBackend#getMaxOrderVolumeFactor()}); on a remote
+     * client (no server) the default factor 64 is used — those values are never authoritative.
+     *
+     * @param naturalAbundance the market's natural abundance
+     * @return the default max order volume in real items
+     */
+    public static long defaultMaxOrderVolume(float naturalAbundance)
+    {
+        return defaultMaxOrderVolume(naturalAbundance, net.kroia.stockmarket.StockMarketModBackend.getMaxOrderVolumeFactor());
+    }
+
+    /**
+     * T-179: clamps an order amount to a market's max order volume, keeping its sign
+     * (so it works for signed buy(+)/sell(-) volumes too). Pure helper used by every
+     * trade-screen amount box.
+     *
+     * @param amount         the requested amount (real items, may be negative for sells)
+     * @param maxOrderVolume the limit in real items; &le; 0 = unlimited (no clamp)
+     * @return {@code amount} with its magnitude limited to {@code maxOrderVolume}
+     */
+    public static double clampOrderAmount(double amount, double maxOrderVolume)
+    {
+        if (maxOrderVolume <= 0 || Math.abs(amount) <= maxOrderVolume)
+            return amount;
+        return Math.copySign(maxOrderVolume, amount);
+    }
 
     /**
      * Trading state shown to clients. MAINTENANCE (admin/integration maintenance mode) takes precedence over
@@ -156,6 +217,7 @@ public class MarketSettings {
         this.virtualOrderbookEnabled = true;
         this.virtualOrderbookCleared = false;
         this.ignorePluginAutosubscribe = false;
+        this.maxOrderVolume = defaultMaxOrderVolume(naturalAbundance);
     }
     public MarketSettings(boolean maintenance, long defaultPrice)
     {
@@ -178,5 +240,6 @@ public class MarketSettings {
         this.virtualOrderbookEnabled = virtualOrderbookEnabled;
         this.virtualOrderbookCleared = false;
         this.ignorePluginAutosubscribe = false;
+        this.maxOrderVolume = defaultMaxOrderVolume(naturalAbundance);
     }
 }

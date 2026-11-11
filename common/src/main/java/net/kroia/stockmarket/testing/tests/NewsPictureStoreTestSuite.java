@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.testing.tests;
 
 import io.netty.buffer.Unpooled;
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -15,6 +14,7 @@ import net.kroia.stockmarket.news.NewsRecord;
 import net.kroia.stockmarket.news.ServerNewsPublisher;
 import net.kroia.stockmarket.news.ValidationReport;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -45,6 +45,11 @@ public class NewsPictureStoreTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.NEWS_PICTURE_STORE;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -434,7 +439,7 @@ public class NewsPictureStoreTestSuite extends TestSuite {
      * the last one.
      */
     private TestResult test_record_streamCodecListMixedHashes() {
-        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        RegistryAccess access = TestFixture.registryAccess();
         if (access == null) {
             return pass("STREAM_CODEC list round-trip skipped (no registry access in this context)");
         }

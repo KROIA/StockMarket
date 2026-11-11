@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * ARRS request to reorder a plugin in the execution order on the server.
  * Input: PluginReorderRequest.InputData containing the plugin's instanceID and the direction to move.
- * Output: The full updated list of PluginSyncData reflecting the new order.
+ * Output: The full updated list of PluginSyncData reflecting the new order; an empty list if the reorder is refused.
  */
 public class PluginReorderRequest extends StockMarketGenericRequest<PluginReorderRequest.InputData, List<PluginSyncData>> {
 
@@ -56,16 +56,15 @@ public class PluginReorderRequest extends StockMarketGenericRequest<PluginReorde
 
         // Require the StockMarket-admin flag (the same flag /stockmarket manage
         // requires), resolved from the master's user map so it also works for
-        // players connected through a slave. Returns the current list so the
-        // client still gets a snapshot to render even when the reorder is refused.
+        // players connected through a slave. A refusal returns an empty list, never
+        // the plugin list: it holds every custom setting, which only admins may read (T-239).
         if (playerSender == null || !playerIsAdmin(playerSender)) {
-            return CompletableFuture.completedFuture(buildCurrentPluginList(pluginManager));
+            return CompletableFuture.completedFuture(getDefaultResponse());
         }
-        // T-123 (untrusted slave gate): plugin reordering is mutating.
-        // Returns the current list (default response) so the client's UI still
-        // gets a snapshot to render even when the reorder is refused.
+        // T-123 (untrusted slave gate): plugin reordering is mutating. The slave
+        // sets the player UUID itself, so it gets no plugin list either (T-239).
         if (!NetworkGate.isMutatingCallAllowed(slaveID, "PluginReorderRequest")) {
-            return CompletableFuture.completedFuture(buildCurrentPluginList(pluginManager));
+            return CompletableFuture.completedFuture(getDefaultResponse());
         }
 
         if (pluginManager == null) {
