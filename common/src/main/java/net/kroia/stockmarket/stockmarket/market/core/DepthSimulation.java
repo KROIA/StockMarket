@@ -19,9 +19,6 @@ import java.util.List;
  */
 public class DepthSimulation
 {
-    /** Safety timeout to prevent infinite loops when walking through sparse depth regions. */
-    private static final int TIMEOUT_COUNT = 10000;
-
     // Utility class — no instances needed
     private DepthSimulation() {}
 
@@ -91,9 +88,10 @@ public class DepthSimulation
 
             // --- Drain virtual buy-side depth from walkPrice down to stopPrice ---
             // Mirrors MatchingEngine.drainVirtualSell(orderVolume, itemDelta, moneyDelta, stopPrice)
-            long timeout = TIMEOUT_COUNT;
-            while (remainingSellVolume < 0 && walkPrice >= stopPrice)
+            long end = Math.max(stopPrice, 1);
+            while (remainingSellVolume < 0)
             {
+                if (walkPrice < end) break;
                 long virtualVol = orderbook.getRawVirtualVolumeRounded(walkPrice);
                 if (virtualVol > 0)
                 {
@@ -116,20 +114,12 @@ public class DepthSimulation
                 }
                 else
                 {
-                    walkPrice--;
+                    // Skip empty levels exactly (never over volume)
+                    long found = walkPrice > end ? orderbook.findVirtualVolume(walkPrice - 1, end, false) : VirtualOrderbook.NO_VOLUME;
+                    if (found == VirtualOrderbook.NO_VOLUME) { walkPrice = end; break; }
+                    walkPrice = found;
                 }
-
-                if (walkPrice <= 0)
-                {
-                    walkPrice = 0;
-                    break;
-                }
-
-                timeout--;
-                if (timeout <= 0)
-                    break;
             }
-
             // --- Match against the next real buy order ---
             if (buyOrderIndex < buyOrders.size() && remainingSellVolume < 0)
             {
@@ -201,7 +191,9 @@ public class DepthSimulation
         // maxAffordable = funds * SF / price
         long remainingBuyVolume;
         if (currentPrice > 0)
-            remainingBuyVolume = dollarBudget * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / currentPrice + 1;
+            // T-176: overflow-safe; saturates instead of wrapping negative for huge budgets
+            remainingBuyVolume = Math.min(MatchingEngine.mulDivSaturated(dollarBudget, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, currentPrice),
+                    Long.MAX_VALUE - 1) + 1;
         else
             remainingBuyVolume = Long.MAX_VALUE;
 
@@ -234,9 +226,11 @@ public class DepthSimulation
 
             // --- Drain virtual sell-side depth from walkPrice up to stopPrice ---
             // Mirrors MatchingEngine.drainVirtualBuy(orderVolume, itemDelta, moneyDelta, stopPrice, availableFunds)
-            long timeout = TIMEOUT_COUNT;
-            while (remainingBuyVolume > 0 && walkPrice <= stopPrice)
+            // T-198: no level bound; findVirtualVolume ends at the price ceiling
+            long end = stopPrice;
+            while (remainingBuyVolume > 0)
             {
+                if (walkPrice > end) break;
                 long virtualVol = orderbook.getRawVirtualVolumeRounded(walkPrice);
                 if (virtualVol < 0)
                 {
@@ -275,14 +269,12 @@ public class DepthSimulation
                 }
                 else
                 {
-                    walkPrice++;
+                    // Skip empty levels exactly (never over volume)
+                    long found = walkPrice < end ? orderbook.findVirtualVolume(walkPrice + 1, end, true) : VirtualOrderbook.NO_VOLUME;
+                    if (found == VirtualOrderbook.NO_VOLUME) { walkPrice = end; break; }
+                    walkPrice = found;
                 }
-
-                timeout--;
-                if (timeout <= 0)
-                    break;
             }
-
             // --- Match against the next real sell order ---
             if (sellOrderIndex < sellOrders.size() && remainingBuyVolume > 0 && availableFunds > 0)
             {
@@ -300,7 +292,7 @@ public class DepthSimulation
                 if (availableFunds < -costFull)
                 {
                     // fillPotential = -funds * SF / price (negative volume for sells)
-                    fillPotential = -availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / sellOrder.getStartPrice();
+                    fillPotential = -MatchingEngine.mulDivSaturated(availableFunds, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, sellOrder.getStartPrice()); // T-176: overflow-safe
                 }
 
                 if (fillPotential >= 0)
@@ -371,7 +363,8 @@ public class DepthSimulation
         boolean done = false;
 
         // Walk through real orders interleaved with virtual depth
-        while (!done)
+        // (the yield check also ends the walk when a full real fill hit the target exactly)
+        while (!done && dollarYield < targetDollars)
         {
             // Determine the stop price for virtual drain
             long stopPrice;
@@ -381,9 +374,16 @@ public class DepthSimulation
                 stopPrice = 0;
 
             // --- Drain virtual buy-side depth from walkPrice down to stopPrice ---
-            long timeout = TIMEOUT_COUNT;
-            while (dollarYield < targetDollars && walkPrice >= stopPrice)
+            long end = Math.max(stopPrice, 1);
+            while (dollarYield < targetDollars)
             {
+                if (walkPrice < end)
+                {
+                    // No real order left: done. Else the next real order is reached.
+                    if (buyOrderIndex >= buyOrders.size())
+                        done = true;
+                    break;
+                }
                 long virtualVol = orderbook.getRawVirtualVolumeRounded(walkPrice);
                 if (virtualVol > 0)
                 {
@@ -393,9 +393,10 @@ public class DepthSimulation
 
                     // partialVolume = remainingDollarsNeeded * SF / price
                     // This is the max volume we'd need to sell at this price to reach the target
-                    long maxVolumeForTarget = remainingDollarsNeeded * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / walkPrice;
+                    // T-176: overflow-safe products (huge dollar targets)
+                    long maxVolumeForTarget = MatchingEngine.mulDivSaturated(remainingDollarsNeeded, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, walkPrice);
                     // Add 1 to handle rounding: we may need one extra raw unit to cover the target
-                    if (maxVolumeForTarget * walkPrice / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR < remainingDollarsNeeded)
+                    if (MatchingEngine.mulDivSaturated(maxVolumeForTarget, walkPrice, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) < remainingDollarsNeeded)
                         maxVolumeForTarget++;
 
                     long canConsume = Math.min(virtualVol, maxVolumeForTarget);
@@ -414,26 +415,19 @@ public class DepthSimulation
                     // If we fully consumed this price level, step down
                     if (canConsume >= virtualVol)
                         walkPrice--;
-                    // else we partially filled but didn't reach target (shouldn't happen
-                    // since we computed maxVolumeForTarget, but handle gracefully)
+                    else
+                    {
+                        // partial fill without reaching the target (shouldn't happen since we
+                        // computed maxVolumeForTarget); stop instead of spinning on this level
+                        done = true;
+                        break;
+                    }
                 }
                 else
                 {
-                    walkPrice--;
-                }
-
-                if (walkPrice <= 0)
-                {
-                    walkPrice = 0;
-                    done = true;
-                    break;
-                }
-
-                timeout--;
-                if (timeout <= 0)
-                {
-                    done = true;
-                    break;
+                    // Skip empty levels exactly (never over volume); none left -> walkPrice < end
+                    long found = walkPrice > end ? orderbook.findVirtualVolume(walkPrice - 1, end, false) : VirtualOrderbook.NO_VOLUME;
+                    walkPrice = found == VirtualOrderbook.NO_VOLUME ? end - 1 : found;
                 }
             }
 
@@ -453,7 +447,7 @@ public class DepthSimulation
                 if (fullCost > remainingDollarsNeeded)
                 {
                     // Partial fill: only sell enough to reach the target
-                    long partialVolume = remainingDollarsNeeded * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / buyOrder.getStartPrice();
+                    long partialVolume = MatchingEngine.mulDivSaturated(remainingDollarsNeeded, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, buyOrder.getStartPrice()); // T-176: overflow-safe
                     if (partialVolume <= 0)
                         partialVolume = 1;  // sell at least 1 raw unit if we need any dollars
 

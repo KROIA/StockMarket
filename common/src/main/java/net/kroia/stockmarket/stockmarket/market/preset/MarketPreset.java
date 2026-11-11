@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import net.kroia.banksystem.util.VolatileItemComponents;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -76,6 +77,11 @@ public class MarketPreset {
     // autosubscribe pass — admins can still subscribe them manually later. Defaults
     // to false so legacy presets keep the old "autosubscribe all" behaviour.
     private boolean ignorePluginAutosubscribe = false;
+    // Max volume of a single player order on markets created from this preset (real items,
+    // 0 = unlimited). Defaults to MarketSettings.defaultMaxOrderVolume(naturalAbundance);
+    // preset files written before this field existed are filled with that value by
+    // MarketPresetManager.forwardMergeCategoryJson.
+    private long maxOrderVolume;
 
     // Cached ItemStack, rebuilt on first access — not serialized by Gson
     private transient ItemStack cachedItemStack;
@@ -122,6 +128,7 @@ public class MarketPreset {
         this.naturalAbundance = naturalAbundance;
         this.orderbookEnabled = orderbookEnabled;
         this.ignorePluginAutosubscribe = ignorePluginAutosubscribe;
+        this.maxOrderVolume = MarketSettings.defaultMaxOrderVolume(naturalAbundance);
     }
 
     // ===== Accessors (named to match the old record accessor style) =====
@@ -142,6 +149,11 @@ public class MarketPreset {
      */
     public boolean isIgnorePluginAutosubscribe() { return ignorePluginAutosubscribe; }
     public void setIgnorePluginAutosubscribe(boolean value) { this.ignorePluginAutosubscribe = value; }
+
+    /** Max volume of a single player order (real items) for markets created from this preset; 0 = unlimited. */
+    public long getMaxOrderVolume() { return maxOrderVolume; }
+    /** @param value max volume of a single player order (real items); 0 = unlimited */
+    public void setMaxOrderVolume(long value) { this.maxOrderVolume = Math.max(0, value); }
     @Nullable
     public JsonObject components()    { return components; }
     public boolean hasComponents()    { return components != null && components.size() > 0; }
@@ -380,6 +392,7 @@ public class MarketPreset {
             // buffer would fail cleanly rather than mis-decoding earlier fields.
             ByteBufCodecs.BOOL.encode(buf, preset.orderbookEnabled);
             ByteBufCodecs.BOOL.encode(buf, preset.ignorePluginAutosubscribe);
+            ByteBufCodecs.VAR_LONG.encode(buf, preset.maxOrderVolume);
         }
 
         @Override
@@ -397,6 +410,7 @@ public class MarketPreset {
             preset.registeredItemIDShort = ByteBufCodecs.SHORT.decode(buf);
             preset.orderbookEnabled = ByteBufCodecs.BOOL.decode(buf);
             preset.ignorePluginAutosubscribe = ByteBufCodecs.BOOL.decode(buf);
+            preset.maxOrderVolume = ByteBufCodecs.VAR_LONG.decode(buf);
             return preset;
         }
     };

@@ -1,10 +1,16 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.stockmarket.market.PriceHistoryCache;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.util.PriceHistoryData;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class ClientMarketTestSuite extends TestSuite {
 
@@ -14,9 +20,17 @@ public class ClientMarketTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("static_time_offset_shared", this::test_staticTimeOffset_sharedAcrossInstances);
         addTest("price_history_data_map_all_deltas", this::test_priceHistoryDataMap_allDeltasPresent);
+        addTest("game_time_deltas", this::test_gameTimeDeltas);
+        addTest("game_candle_frozen_daylight_closes_after_hours", this::test_gameCandleFrozenDaylightClosesAfterHours);
+        addTest("candle_delta_index_restore", this::test_candleDeltaIndexRestore);
         addTest("subscribe_idempotent", this::test_subscribeToMarketPriceUpdate_idempotent);
         addTest("unsubscribe_no_subscription", this::test_unsubscribeFromMarketPriceUpdate_noSubscription);
     }
@@ -55,7 +69,7 @@ public class ClientMarketTestSuite extends TestSuite {
      * All 6 candle time deltas should have entries in AVAILABLE_CANDLE_TIME_DELTAS.
      */
     private TestResult test_priceHistoryDataMap_allDeltasPresent() {
-        long[] deltas = ClientMarket.getAvailableCandleTimeDeltas();
+        long[] deltas = ClientMarket.candleTimeDeltasFor(false); // T-218: real-time set, independent of the server mode
         TestResult r = assertNotNull("Available candle time deltas should not be null", deltas);
         if (!r.passed()) return r;
         r = assertEquals("Should have 6 candle time deltas", 6, deltas.length);
@@ -122,5 +136,91 @@ public class ClientMarketTestSuite extends TestSuite {
                 ClientMarket.CANDLE_TIME_1_DAY == ClientMarket.CANDLE_TIME_1_HOUR * 24);
         if (!r.passed()) return r;
         return pass("Unsubscribe contract verified: returns false when no subscription exists");
+    }
+
+    /**
+     * T-218: game-time deltas are 1h/4h/1D/1W of nominal 50 s in-game hours and never collide
+     * with a real-time delta (both share the delta-keyed caches).
+     */
+    private TestResult test_gameTimeDeltas() {
+        long[] game = ClientMarket.candleTimeDeltasFor(true);
+        TestResult r = assertEquals("4 game deltas", 4, game.length);
+        if (!r.passed()) return r;
+        long[] expected = {50_000L, 200_000L, 1_200_000L, 8_400_000L};
+        for (int i = 0; i < expected.length; i++) {
+            r = assertEquals("game delta " + i, expected[i], game[i]);
+            if (!r.passed()) return r;
+        }
+        for (long g : game)
+            for (long real : ClientMarket.candleTimeDeltasFor(false)) {
+                r = assertTrue("game delta " + g + " differs from real delta " + real, g != real);
+                if (!r.passed()) return r;
+            }
+        return pass("game-time deltas are 1h/4h/1D/1W and distinct from the real ones");
+    }
+
+    /**
+     * T-221: with the master's daylight cycle frozen every raw candle has the same day time, so the
+     * bucket key never changes. The master's 1000-tick fallback rotations must still close a 4h live
+     * candle after 4 raw candles (same cap as PriceHistoryData.aggregateGameHours); repeated stream
+     * packets of one raw candle count once.
+     */
+    private TestResult test_gameCandleFrozenDaylightClosesAfterHours() {
+        boolean original = ClientMarket.isCandleUseGameTime();
+        try {
+            ClientMarket.setCandleUseGameTime(true); // read by the container at construction
+            long delta = ClientMarket.CANDLE_TIME_GAME_4_HOUR;
+            ItemID item = new ItemID((short) 1);
+            PriceHistoryCache cache = new PriceHistoryCache(new long[]{delta});
+            ClientMarket.PriceHistoryContainer container = new ClientMarket.PriceHistoryContainer(item, 100, delta, cache);
+            List<PriceHistoryData.Candle> loaded = new ArrayList<>();
+            loaded.add(new PriceHistoryData.Candle(1_000L, 500L, 500L, 500L, 0f, 6_000L));
+            cache.mergeChunk(delta, new PriceHistoryData(item, 100, loaded, 500L), Long.MAX_VALUE);
+            container.loadFromCache(0L, 500L, false);
+
+            // Frozen daylight: raw candles every 50 s, all at day time 6000. The first one twice.
+            container.onServerCandle(51_000L, 6_000L);
+            container.onServerCandle(51_000L, 6_000L);
+            container.onServerCandle(101_000L, 6_000L);
+            container.onServerCandle(151_000L, 6_000L);
+            TestResult r = assertEquals("4 raw candles stay in one 4h candle", 1, container.history.getCandles().size());
+            if (!r.passed()) return r;
+
+            container.onServerCandle(201_000L, 6_000L);
+            r = assertEquals("the 5th raw candle opens a new 4h candle", 2, container.history.getCandles().size());
+            if (!r.passed()) return r;
+            PriceHistoryData.Candle live = container.history.getCurrentCandle();
+            r = assertEquals("new candle starts at the 5th raw candle", 201_000L, live.openTimestamp);
+            if (!r.passed()) return r;
+            r = assertEquals("new candle keeps the master's day time", 6_000L, live.gameTime);
+            if (!r.passed()) return r;
+            return pass("frozen daylight: 4h live candle closes after 4 fallback rotations");
+        } finally {
+            ClientMarket.setCandleUseGameTime(original);
+        }
+    }
+
+    /**
+     * T-221: a chart timeframe is restored by its delta value; a delta of the other timebase (a real
+     * 1h saved before switching to in-game candles) falls back to the first delta of the active set.
+     */
+    private TestResult test_candleDeltaIndexRestore() {
+        boolean original = ClientMarket.isCandleUseGameTime();
+        try {
+            ClientMarket.setCandleUseGameTime(false);
+            TestResult r = assertEquals("real 1h -> index 3", 3, ClientMarket.candleTimeDeltaIndex(ClientMarket.CANDLE_TIME_1_HOUR));
+            if (!r.passed()) return r;
+            r = assertEquals("game 1W in real mode -> first delta", 0, ClientMarket.candleTimeDeltaIndex(ClientMarket.CANDLE_TIME_GAME_1_WEEK));
+            if (!r.passed()) return r;
+
+            ClientMarket.setCandleUseGameTime(true);
+            r = assertEquals("game 4h -> index 1", 1, ClientMarket.candleTimeDeltaIndex(ClientMarket.CANDLE_TIME_GAME_4_HOUR));
+            if (!r.passed()) return r;
+            r = assertEquals("real 1h in game mode -> first delta (not 1W)", 0, ClientMarket.candleTimeDeltaIndex(ClientMarket.CANDLE_TIME_1_HOUR));
+            if (!r.passed()) return r;
+            return pass("timeframes restore by value and fall back to the first active delta");
+        } finally {
+            ClientMarket.setCandleUseGameTime(original);
+        }
     }
 }

@@ -7,6 +7,7 @@ import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.screen.UI_Colors;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
@@ -80,6 +81,8 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
     private String haveItemName = "";
     private String wantItemName = "";
     private boolean marketOpen = true;
+    // T-179: max order volume of the market(s) in amount-box units (real items); 0 = unlimited.
+    private double maxQuantity = 0;
 
     public InterMarketLimitExchangePanel(BiConsumer<Double, Double> onBuyLimit, BiConsumer<Double, Double> onSellLimit) {
         int darkerBuyColor1 = ColorUtilities.setBrightness(UI_Colors.buyColorGreen_dark, 0.8f);
@@ -127,6 +130,12 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
         quantityTextBox.setOnTextChanged((text) -> {
             double newQuantity = quantityTextBox.getDouble();
             quantity = Math.max(0, newQuantity);
+            // T-179: typed values above the market max order size snap down to it.
+            double limited = MarketSettings.clampOrderAmount(quantity, maxQuantity);
+            if (limited != quantity) {
+                quantity = limited;
+                quantityTextBox.setText(String.valueOf(quantity));
+            }
             updateButtons();
             updateEstimatedCost();
             updateValidation();
@@ -184,14 +193,14 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
         estimatedCostLabel.setAlignment(Alignment.CENTER);
 
         // Buy limit button (green)
-        buyButton = new Button(Texts.BUY.getString(), () -> onBuyLimit.accept(quantity, rateLimit));
+        buyButton = TradingPanel.tradeButton(Texts.BUY.getString(), () -> onBuyLimit.accept(quantity, rateLimit));
         buyButton.setBackgroundColor(darkerBuyColor1);
         buyButton.setHoverColor(darkerBuyColor2);
         buyButton.setPressedColor(darkerBuyColor3);
         buyButton.setOutlineColor(darkerBuyColor4);
 
         // Sell limit button (red)
-        sellButton = new Button(Texts.SELL.getString(), () -> onSellLimit.accept(quantity, rateLimit));
+        sellButton = TradingPanel.tradeButton(Texts.SELL.getString(), () -> onSellLimit.accept(quantity, rateLimit));
         sellButton.setBackgroundColor(darkerSellColor1);
         sellButton.setHoverColor(darkerSellColor2);
         sellButton.setPressedColor(darkerSellColor3);
@@ -256,12 +265,40 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
         updateValidation();
     }
 
+    /**
+     * T-179: sets the market's max order size; the amount box, the +X buttons and
+     * {@link #setQuantity} never exceed it. A current amount above a new limit is reduced.
+     *
+     * @param maxQuantity limit in real items; &le; 0 = unlimited
+     */
+    public void setMaxQuantity(double maxQuantity) {
+        if (maxQuantity == this.maxQuantity) return;
+        this.maxQuantity = maxQuantity;
+        if (MarketSettings.clampOrderAmount(quantity, maxQuantity) != quantity) {
+            setQuantity(quantity);
+            updateButtons();
+            updateEstimatedCost();
+            updateValidation();
+        }
+    }
+
+    /**
+     * T-179: greys out buy/sell while the player's global trade cooldown runs.
+     *
+     * @param remainingMs remaining cooldown in ms; &le; 0 = ready
+     */
+    public void setTradeCooldown(long remainingMs) {
+        TradingPanel.applyTradeCooldown(buyButton, remainingMs);
+        TradingPanel.applyTradeCooldown(sellButton, remainingMs);
+    }
+
     public void setMarketOpen(boolean open) {
         this.marketOpen = open;
         updateValidation();
     }
 
     public void setQuantity(double quantity) {
+        quantity = MarketSettings.clampOrderAmount(quantity, maxQuantity); // T-179
         this.quantity = quantity;
         quantityTextBox.setText(String.valueOf(quantity));
         updateButtons();
@@ -344,6 +381,7 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
         quantity += amount;
         if (quantity < 0)
             quantity = 0;
+        quantity = MarketSettings.clampOrderAmount(quantity, maxQuantity); // T-179
         quantityTextBox.setText(String.valueOf(quantity));
         updateButtons();
         updateEstimatedCost();

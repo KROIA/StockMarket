@@ -11,6 +11,7 @@ import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.data.OrderOriginLog;
 import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
@@ -118,7 +119,7 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             future.complete(new OutputData(false, "NO_SUCH_MARKET_HAVE"));
             return future;
         }
-        if (!haveMarket.isMarketOpen()) {
+        if (haveMarket.isUnderMaintenance() || !haveMarket.isTradingOpen()) { // under maintenance or outside trading hours
             future.complete(new OutputData(false, "MARKET_CLOSED_HAVE"));
             return future;
         }
@@ -128,9 +129,42 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             future.complete(new OutputData(false, "NO_SUCH_MARKET_WANT"));
             return future;
         }
-        if (!wantMarket.isMarketOpen()) {
+        if (wantMarket.isUnderMaintenance() || !wantMarket.isTradingOpen()) { // under maintenance or outside trading hours
             future.complete(new OutputData(false, "MARKET_CLOSED_WANT"));
             return future;
+        }
+
+        // 3b. T-166 anti-autoclicker. Each leg is checked against its own market's
+        // maxOrderVolume: the sell leg with the "have" volume, the buy leg with the exact
+        // target (buy direction) or, without one, the volume estimated at current prices.
+        // Error codes carry the number after a colon: "ORDER_TOO_LARGE:<limit>",
+        // "TRADING_TOO_FAST:<remaining ms>" (decoded by TradeScreen).
+        // Exempt: a limit order covered by a server-granted move credit (the master just cancelled
+        // an own limit inter-market order of the same pair with at least this have-volume, i.e. a
+        // chart move or its restore). Not client-settable — see ServerMarketManager.MoveCredit.
+        ServerMarketManager marketManager = (ServerMarketManager) getServerMarketManager();
+        ServerMarketManager.MoveCredit moveCredit = input.crossRateLimit > 0
+                ? marketManager.findMoveCredit(playerSender, input.haveItemID, input.wantItemID, toRawAmount(input.volume)) : null;
+        if (moveCredit == null) {
+            long haveLimit = haveMarket.getSettings().maxOrderVolume;
+            if (haveLimit > 0 && input.volume > haveLimit) {
+                future.complete(new OutputData(false, "ORDER_TOO_LARGE:" + haveLimit));
+                return future;
+            }
+            long wantLimit = wantMarket.getSettings().maxOrderVolume;
+            long wantPriceNow = wantMarket.getCurrentMarketPrice();
+            double wantVolume = input.targetBuyVolume > 0
+                    ? (double) input.targetBuyVolume / getItemFractionScaleFactor()
+                    : (wantPriceNow > 0 ? input.volume * haveMarket.getCurrentMarketPrice() / wantPriceNow : 0);
+            if (wantLimit > 0 && wantVolume > wantLimit) {
+                future.complete(new OutputData(false, "ORDER_TOO_LARGE:" + wantLimit));
+                return future;
+            }
+            long cooldownRemaining = marketManager.getTradeCooldownRemainingMs(playerSender);
+            if (cooldownRemaining > 0) {
+                future.complete(new OutputData(false, "TRADING_TOO_FAST:" + cooldownRemaining));
+                return future;
+            }
         }
 
         // 4. Get bank manager and bank account
@@ -192,6 +226,13 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
                 future.complete(new OutputData(false, "NO_PERMISSION_TO_DEPOSIT"));
                 return future;
             }
+        }
+
+        // 4c. T-195: an admin-frozen account may not trade. Checked here on the master (slaves only
+        // forward), after the membership gate and before the "have" items are locked.
+        if (serverBankManager.getSync().isAccountFrozen(input.bankAccountNr)) {
+            future.complete(new OutputData(false, "ACCOUNT_FROZEN"));
+            return future;
         }
 
         // 5. Validate player has the "have" items in their item bank
@@ -268,8 +309,7 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
         );
 
         // 8. Enqueue the inter-market order on the "want" (buy) market
-        ServerMarketManager smm = (ServerMarketManager) getServerMarketManager();
-        if (!smm.putInterMarketOrder(imo)) {
+        if (!marketManager.putInterMarketOrder(imo)) {
             // Enqueue failed — unlock the items
             BankStatus unlockStatus = itemBank.unlockAmount(lockVolume);
             if (unlockStatus != BankStatus.SUCCESS) {
@@ -281,7 +321,13 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             return future;
         }
 
-        // 9. Success
+        OrderOriginLog.interMarket(imo.getInterMarketGroupID(), slaveID); // T-215: origin server of the order
+        // 9. Success — only accepted orders (re)start the player's trade cooldown; a re-placed
+        // (moved) order instead uses up its move credit.
+        if (moveCredit != null)
+            marketManager.consumeMoveCredit(playerSender, moveCredit);
+        else
+            marketManager.markPlayerOrderAccepted(playerSender);
         future.complete(new OutputData(true, null));
         return future;
     }

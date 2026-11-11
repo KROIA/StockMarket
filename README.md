@@ -240,6 +240,10 @@ Select the **Market Order** or **Limit Order** tab in the trading panel:
 
 In **Pair Mode**, the trading panel switches to show **Market Exchange** and **Limit Exchange** tabs, which work the same way but for cross-market trades at the current exchange rate.
 
+**Order limits:** each market has a **max order size** (items per order, set by the admin), and after an accepted order you have to wait a short **trade cooldown** (default 0.5 s, shared by all markets) before the next one. An order that breaks either rule is rejected and a message tells you the limit or how long to wait; a rejected order does not restart the cooldown. Split large trades into several orders. The trading panel helps: the amount box and the +X buttons never go above the market's max order size (typed values snap down to it; no limit when it is 0), and after an accepted order the Buy/Sell buttons get a light gray overlay and ignore clicks until the cooldown is over — on every market, also after switching markets. Moving an order on the chart is not affected.
+
+**No answer from the server:** if the server does not confirm an order in time (for example during lag or a lost connection between servers), you get a message that the order **may have been placed**. Check the **Pending Orders** and **My History** tabs before placing it again; the order is never resent automatically.
+
 #### Managing Orders
 - **Pending Orders** tab shows all your active limit orders. Each order has a cancel button.
 - **Drag and drop** — Limit orders appear as markers on the chart. Drag a marker to change the order price. If you don't have enough funds to move a buy order higher, it will stay in place.
@@ -255,12 +259,14 @@ All market management in v2.0 is done through graphical interfaces. The old comm
 
 For a walkthrough of common server setups — the default bot-driven market vs. a fully player-driven market — see the [Admin Setup Use Cases](documentation/user-guide/admin-setup.md) guide.
 
-For scoreboard / tab-list placeholders (requires TAB or Placeholder API) see the [Placeholders](documentation/user-guide/placeholders.md) guide.
+For scoreboard / tab-list placeholders (requires TAB or Placeholder API) see the [Placeholders](documentation/user-guide/placeholders.md) guide. To post player trades and trading alerts to Discord, see [Discord feed](documentation/user-guide/admin-setup.md#discord-feed).
 
 #### Getting Admin Access
 A server operator needs to grant StockMarket admin privileges:<br>
 <code>/stockmarket op</code> — Grant admin to yourself<br>
 <code>/stockmarket op [username]</code> — Grant admin to another player
+
+With LuckPerms, the Mod Setting **Sync admin flag with LuckPerms** (Integrations group, `SYNC_ADMIN_FLAG_WITH_PERMISSION`, default off, restart required) syncs admin mode with the permission node `stockmarket.admin` in both directions: `/stockmarket op` and `deop` write the node, and node changes in LuckPerms update admin mode live. A LuckPerms group grant wins over `deop` (the player stays admin and you get a note). See [Syncing StockMarket admin mode with LuckPerms](documentation/user-guide/admin-setup.md#syncing-stockmarket-admin-mode-with-luckperms).
 
 #### Opening the Management GUI
 Run <code>/stockmarket manage</code> to open the management interface. It has three tabs:
@@ -276,9 +282,12 @@ Run <code>/stockmarket manage</code> to open the management interface. It has th
     The overview shows all existing markets in a searchable grid.<br>
     - Click a market to select it and view its price chart.<br>
     - Use the <b>Market Settings</b> button to configure individual market parameters.<br>
-    - Use the <b>Open/Close</b> checkbox to enable or disable trading on a market. Close a market before making major changes to prevent players from exploiting price movements.<br>
-    - Use the <b>Remove</b> button to delete a market. Open positions from players will be automatically closed.<br>
-    - The <b>Manage Plugins</b> button opens the Plugin Management screen (see below).<br>
+      &nbsp;&nbsp;<b>Max order size</b>: the most items a single player order may buy or sell on this market (0 = unlimited, bots are not limited). Defaults to <code>max(F, F x abundance)</code> with the <b>Max order size factor</b> F from the Mod Settings (default 64), e.g. abundance 5 = 320, 30 = 1,920, 200 = 12,800. Markets from older saves get this default on the first load after the update.<br>
+      &nbsp;&nbsp;The Market Settings also hold the <b>Default Price</b>, <b>Abundance</b>, the market's <a href="documentation/user-guide/trading-hours.md">trading hours</a> (with <b>Apply to all</b>), <b>Enable Virtual Orderbook</b>, <b>Reset</b>/<b>Clear Virtual Orderbook</b>, and the market's <b>Net Flow</b> and <b>Net Flow (faded)</b> with a <b>Reset</b> button.<br>
+    - Use the <b>Maintenance mode</b> checkbox to stop player trading on a market: players can no longer trade, their open orders are cancelled and refunded, bots keep trading. Put a market into maintenance before making major changes to prevent players from exploiting price movements.<br>
+    - Use the <b>Delete</b> button to delete a market. Open orders from players are closed automatically.<br>
+    - The <b>All Markets</b> panel has <b>Maintenance all</b> / <b>End maintenance all</b>, <b>Reset Price Chart</b> (clears the price history of all markets) and <b>Delete all Markets</b>; the last two ask for confirmation.<br>
+    - The <b>Manage Plugins</b> button opens the Plugin Management screen (see below), <b>Mod Settings</b> the server settings (master only, see below) and <b>News</b> the news admin screen.<br>
 </details>
 
 <details close>
@@ -289,8 +298,8 @@ Run <code>/stockmarket manage</code> to open the management interface. It has th
     <b>1)</b> Select an item category from the left panel.<br>
     <b>2)</b> Browse or search for items in the grid.<br>
     <b>3)</b> Click items to add them to the selection list on the right.<br>
-    <b>4)</b> Set a starting price and abundance for each selected item.<br>
-    <b>5)</b> Click <b>Create All</b> to create all selected markets at once.<br>
+    <b>4)</b> Set a starting price and abundance for each selected item, and choose whether the market starts with the virtual order book (<b>Orderbook Enabled</b>) and whether plugins skip it when auto-subscribing (<b>Ignore Plugin Autosubscribe</b>).<br>
+    <b>5)</b> Click <b>Create Selected</b> to create all selected markets at once. A market counts as created as soon as the server confirms it; if a following request gets no answer, the market still shows up the next time the market list loads.<br>
 </details>
 
 <details close>
@@ -299,7 +308,7 @@ Run <code>/stockmarket manage</code> to open the management interface. It has th
     </summary>
     Edit the default price and abundance values used when creating new markets.<br>
     - Browse presets by category.<br>
-    - Adjust price and abundance fields for any item.<br>
+    - Adjust price, abundance and <b>max order</b> (max items per player order on markets created from the preset, 0 = unlimited) for any item. Preset files from older versions and new presets are filled with <code>max(F, F x abundance)</code> (F = Mod Settings factor); existing preset values are kept.<br>
     - Click <b>Save</b> to persist your changes.<br>
 </details>
 
@@ -307,10 +316,14 @@ Run <code>/stockmarket manage</code> to open the management interface. It has th
 The **Mod Settings** button on the Management GUI's overview tab opens an editor for the server's `settings.json` (`world/data/StockMarket/settings.json`), so autosave interval, logging, market and villager-trading settings can be changed without touching the file:
 * The button is only shown when connected to the **master server** — slave servers never load `settings.json`; the master pushes derived data (e.g. villager prices) to them automatically. The server additionally enforces op level 2 and master status for every request.
 * **Apply** validates and clamps the values server-side, saves them to `settings.json` and re-displays the confirmed state. **Reload** re-fetches the current server values, **Defaults** resets the fields to the compile-time defaults (nothing is saved until Apply).
-* Most settings take effect immediately. Fields marked with an orange **⟳ Restart required** label (orderbook array size, trading currency) are only read once at startup — the new value is saved but only applies after a server restart.
+* Most settings take effect immediately. Fields marked with an orange **⟳ Restart required** label (orderbook array size, trading currency, candle timebase, placeholders, LuckPerms sync) are only read once at startup — the new value is saved but only applies after a server restart.
+* **Trade cooldown (ms)** (`ServerMarket.TRADE_COOLDOWN_MS`, default `500`, range 0 - 60000, `0` = off): minimum time between two accepted orders of the same player across all markets and both normal and pair (inter-market) orders — stops autoclickers. Rejected orders don't restart it; bots are not affected. Takes effect immediately.
+* **Max order size factor** (`ServerMarket.MAX_ORDER_VOLUME_FACTOR`, default `64`, minimum 1): the default max order size of a market is `max(factor, factor x abundance)`. Used for new markets and presets and for saves without a value; existing markets keep their limit. The **Apply to all markets** button next to it (asks for confirmation) recomputes the max order size of **every** market from its abundance and the **saved** factor — per-market custom limits, including 0 = unlimited, are overwritten. Press Apply first if you changed the factor.
+* **Candles: use in-game time** (`ServerMarket.CANDLE_USE_GAME_TIME`, default off, restart required): one price candle per in-game hour of the master's overworld instead of one per **Candle time (ms)**; the charts then offer 1h / 4h / 1D / 1W in-game candles labelled `Day N` / `hh:00`. **Candle time (ms)** only applies while this is off. Independent of the trading hours clock. See [Candle Timebase](documentation/user-guide/candle-timebase.md).
+* The **Integrations** group shows one switchable section per external integration: **Placeholders (TAB / Placeholder API)** (`Integrations.PLACEHOLDERS_ENABLED`, default on, restart required, see [Placeholders](documentation/user-guide/placeholders.md)) , **Sync admin flag with LuckPerms** (`Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION`, default off, restart required, see above) and **Discord feed (trades and alerts)** (`Integrations.DISCORD_ENABLED`, default off, takes effect immediately, see [Discord feed](documentation/user-guide/admin-setup.md#discord-feed)). Worlds from older versions keep their LuckPerms sync value: it moves from the Utilities group to Integrations on the first load.
 * Changes to the **Villager Trading** group are propagated to all connected slave servers right away (the villager price table is recomputed and re-broadcast).
 
-This screen is the recommended way to change any persisted mod setting — admins do not need to edit `settings.json` by hand.
+This screen is the recommended way to change any persisted mod setting — admins do not need to edit `settings.json` by hand. Every setting with its default and range is listed in the [Mod Settings Reference](documentation/user-guide/mod-settings.md). For master/slave servers see [Multi-Server Setup](documentation/user-guide/multi-server.md).
 
 #### Plugin System
 Plugins replace the old bot system. They are modular components that can be added to markets to provide liquidity, simulate price movements, and more.
@@ -329,7 +342,7 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 - **Auto-subscribe** — Enable to automatically subscribe a plugin to newly created markets.
 
 <div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
-    <p><strong>Tip:</strong> Close a market before changing its plugin settings to prevent players from exploiting price movements during configuration. Re-open it once you are satisfied with the result. When a market gets closed, all pending orders are cancelled.</p>
+    <p><strong>Tip:</strong> Put a market into <b>maintenance mode</b> before changing its plugin settings to prevent players from exploiting price movements during configuration. End maintenance once you are satisfied with the result. Entering maintenance cancels and refunds all pending player orders of the market.</p>
 </div>
 
 
@@ -342,6 +355,12 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 | /stockmarket \<market\> remove     | Delete a market without the GUI. `<market>` is the item's registry name in quotes (e.g. `"minecraft:iron_ingot"`) or the numeric market ID shown when a name is ambiguous. Also works for broken markets whose item can no longer be resolved | :heavy_check_mark: |
 | /stockmarket preset add \<category\> [name] | Capture the item in your main hand (including data components like enchantments or custom names) as a market preset in `<category>` (created if it doesn't exist yet; quote names containing spaces). The optional `[name]` gives the captured item a custom name; otherwise the preset uses the item's normal display name | :heavy_check_mark: |
 | /stockmarket news                  | Open the in-game newspaper with the latest market news. Admin subcommands manage the news event system — see the [full command reference](documentation/user-guide/news-system/configuration.md#admin-commands) | Subcommands only |
+| /stockmarket open \<market\>, /stockmarket close \<market\> | Force a market open or closed until its next scheduled trading-hours change — see [Trading Hours](documentation/user-guide/trading-hours.md) | :heavy_check_mark: |
+| /stockmarket backup pause\|resume\|status | Pause the database writes while you copy the database (master only) — see [Backups](documentation/user-guide/admin-setup.md#backups) | :heavy_check_mark: |
+| /stockmarket alerts on\|off | Turn trading alert chat messages on or off for yourself (master only, saved) — see [Trading alerts](documentation/user-guide/admin-setup.md#turning-chat-alerts-off) | :heavy_check_mark: |
+| /stockmarket discord status\|reload | Show or reload the Discord webhook routing — see [Discord feed](documentation/user-guide/admin-setup.md#discord-feed) | :heavy_check_mark: (op level 3) |
+
+`/stockmarket op`, `deop`, `preset add`, `alerts` and `backup` only work on the master server. Each admin command has its own permission node — see [Permissions (LuckPerms)](documentation/user-guide/admin-setup.md#permissions-luckperms).
 
 
 
@@ -368,10 +387,11 @@ Both require operator level 2 and only run on the master. The master itself (and
 
 From an **untrusted** slave the master refuses **all** of:
 - mutating operations — placing/cancelling orders, and every plugin, preset, market and settings write;
-- management-data reads — the plugin list & settings, the preset catalog and the mod settings;
+- management-data reads — the plugin list & settings, market settings, the preset catalog and the mod settings;
+- per-player reads — a player's active orders (request and live feed), order history, preferences and admin flag, because the slave names the player itself;
 - the live plugin runtime data feed.
 
-A **trusted** slave behaves normally. Trust changes take effect live — untrusting a slave mid-session tears down its live plugin feed within about one stream interval. Public market data (prices, market list, a player's own orders/history, news) stays available even from an untrusted slave.
+A **trusted** slave behaves normally. Trust changes take effect live — untrusting a slave mid-session tears down its live plugin and order feeds within about one stream interval. Public market data (prices, price history, market list, market-wide trades, news) stays available even from an untrusted slave.
 
 ### 2. StockMarket admin (per-player)
 
@@ -391,36 +411,47 @@ The table below summarizes which access each data class needs:
 | Data class | Access required |
 |------------|-----------------|
 | Market list & prices, public orderbook volume | Public — any player |
-| A player's own active orders / order history / transaction history / preferences | Public — any player |
+| Market-wide transaction history | Public — any player |
 | News feed & pictures, server time | Public — any player |
+| A player's own active orders / order history / preferences / admin flag | That player, trusted slave |
 | Placing / cancelling orders | Trusted slave |
-| Plugin list & settings, target prices, live plugin feed | Trusted slave **and** admin |
+| Plugin list & settings, market settings, target prices, live plugin feed | Trusted slave **and** admin |
 | Preset catalog, market / plugin / preset writes | Trusted slave **and** admin |
 | Mod settings (read & write) | Trusted slave **and** admin |
 
 ## Plugins
 Since v2.0, the old monolithic StockMarketBot has been replaced by a modular **plugin system**. Each plugin handles one aspect of market simulation and can be independently configured, enabled, or subscribed to specific markets through the [Plugin Management](#plugin-system) screen.
 
-The mod ships with four built-in plugins:
+The mod ships with five built-in plugins:
+
+### NetFlowPlugin
+Computes each market's flow-driven [price equilibrium](#price-equilibrium): sustained net selling by players lowers a market's price range, sustained net buying raises it — so the server economy balances itself (heavily farmed items get cheap, sought-after items get expensive). The equilibrium shifts exponentially with the net item flow, so the price can approach but never reach 0, and it is clamped between the Min/Max Price Multipliers. Items with a higher Abundance absorb more trading before their price moves. The optional long-term anchor keeps a small part of lasting trends after the flow has faded. To re-anchor a market at its default price, reset its **Net Flow** in the market settings.
+
+**Settings (main):**
+| Parameter | Description |
+|-----------|-------------|
+| Player Flow Influence | Enables the flow-driven equilibrium. When off, the price wanders around the static default price. Enabled by default. |
+| Flow Sensitivity | How many items (per unit of the market's Abundance) players must net-sell to lower the equilibrium price to ~37%. Higher values make the market more inert. Default: 2000. |
+| Min Price Multiplier | Lower clamp for the equilibrium as a fraction of the anchor. Default: 0.05. |
+| Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the anchor. Default: 3. |
+| Long-term Anchor | Lets lasting trends slowly move the price the flow is measured from. Off by default. Anchor time 2 days, at most 0.1 per day, within 0.25x-4x the default price. |
+
+Full reference with all settings, formulas and tuning advice: [NetFlowPlugin](documentation/user-guide/plugin-system/plugins/net-flow-plugin.md).
 
 ### VolatilityPlugin
-Simulates realistic price movements using a [random walk](#random-walk) algorithm. Each market gets independent price fluctuations around its default price, creating the organic-looking charts you see in-game.
-
-The random walk is anchored on a flow-driven [price equilibrium](#price-equilibrium) instead of the static default price: sustained net selling by players permanently lowers a market's price range, sustained net buying permanently raises it — so the server economy balances itself (heavily farmed items get cheap, sought-after items get expensive). The equilibrium shifts exponentially with the net item flow, so the price can approach but never reach 0, and it is clamped between the Min/Max Price Multipliers. Items with a higher Abundance absorb more trading before their price moves. To re-anchor a market at its default price, reset its **Net Flow** in the market settings.
+Simulates realistic price movements using a [random walk](#random-walk) algorithm. Each market gets independent price fluctuations around the [price equilibrium](#price-equilibrium) published by the NetFlowPlugin (or the default price without it), creating the organic-looking charts you see in-game.
 
 **Settings:**
 | Parameter | Description |
 |-----------|-------------|
 | Volatility Scale | Multiplier for how far the price deviates from the equilibrium price. Higher values produce larger swings. |
-| Player Flow Influence | Enables the flow-driven equilibrium. When off, the price wanders around the static default price. Enabled by default. |
-| Flow Sensitivity | How many items (per unit of the market's Abundance) players must net-sell to lower the equilibrium price to ~37% of its default. Higher values make the market more inert. Default: 500. |
-| Min Price Multiplier | Lower clamp for the equilibrium as a fraction of the default price. Default: 0.05 (never below 5% of the default price). |
-| Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the default price. Default: 20 (never above 20x the default price). |
+
+Full reference with tuning advice: [VolatilityPlugin](documentation/user-guide/plugin-system/plugins/volatility-plugin.md).
 
 ### TargetPriceBot
 The market-making bot that drives prices toward a target value. It places [market orders](#market-order) to push the price in the desired direction. A [PID controller](https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller) determines the size and direction of each order to smoothly converge on the target price without overshooting.
 
-The target price is influenced by the **VolatilityPlugin** (random walk noise) and by player trading activity (supply and demand).
+The target price is influenced by the **NetFlowPlugin** (player supply and demand) and the **VolatilityPlugin** (random walk noise).
 
 **Settings:**
 | Parameter | Description |
@@ -428,12 +459,17 @@ The target price is influenced by the **VolatilityPlugin** (random walk noise) a
 | PID P | Proportional gain — how aggressively the bot reacts to the current price difference. |
 | PID I | Integral gain — how much accumulated past error influences the bot's orders. |
 | PID D | Derivative gain — how much the rate of price change dampens the bot's response. |
-| PID Rate | How quickly the PID controller updates. |
+| PID Rate | Limit of the integral term (anti-windup): caps how much the accumulated price gap can add to the bot output. |
+| Max Order Size Factor | Largest bot order per step as a multiple of the market's max order size (default 10, 0 = unlimited). |
+| Max Target Move (%/s) | How fast the bot's target may follow the target price (default 0.5 %/s, 0 = no limit). |
+| Reversion Time, Oscillation Period / Damping / Amplitude | How a price pushed by a player drifts back to the target: about 600 s, swinging around its way back (defaults 60 s, 0.3, 0.15). Reversion Time 0 = off. |
+
+Full reference and tuning advice: [TargetPriceBot](documentation/user-guide/plugin-system/plugins/target-price-bot.md).
 
 ### DefaultOrderbookVolumeDistributionPlugin
 Automatically fills the [order book](#order-book) with a realistic volume distribution so that players always have liquidity to trade against. Without this plugin, market orders would have no counterpart to fill against.
 
-The distribution uses a power-law shape near the current price (tighter spreads close to market) with a Gaussian cluster around the default price and a background liquidity level across all price levels.
+The distribution is centred on the market's fair price (the NetFlowPlugin equilibrium, else the default price), not on the last traded price: buy volume sits below the current price and sell volume above it, so a dump or pump does not drag the book along. It combines a core shape near the fair price, a cluster around the default price, extra volume at round prices and a background liquidity level across all price levels.
 
 **Settings:**
 | Parameter | Description |
@@ -443,17 +479,22 @@ The distribution uses a power-law shape near the current price (tighter spreads 
 | Accumulation Rate | How fast volume builds up when below target. |
 | Decumulation Rate | How fast excess volume decreases (slower for stability). |
 | Reset Volume | Force an immediate reset of the order book to the target distribution. |
+| Round Level Scale / Width / Range | Extra volume around round prices (default 1, 0.03, 1.1; Scale 0 = off). |
+| Trend Period / Gain / Max Factor | Lean the book against a sustained move: the side opposite to the move refills faster (default 10 min, 10, 4; Gain 0 = off). |
+
+Full reference and tuning advice: [Order Book Volume Distribution](documentation/user-guide/plugin-system/plugins/orderbook-volume-distribution.md).
 
 ### NewsPlugin
 Randomly publishes news events defined in JSON files (`config/StockMarket/news/`) and moves the prices of the affected markets — shocks, trends, crashes and even permanent shifts. Players read the headlines with a craftable **newspaper item**; an opt-in popup notifies interested players when news breaks. Admins control everything through the plugin's management window and the `/stockmarket news` commands.
 
-See the [News Event System overview](documentation/user-guide/news-system/overview.md), the [JSON configuration reference](documentation/user-guide/news-system/configuration.md), and the step-by-step [event authoring tutorial](documentation/user-guide/news-system/authoring-tutorial.md).
+See the [News Event System overview](documentation/user-guide/news-system/overview.md), the [JSON configuration reference](documentation/user-guide/news-system/configuration.md), and the step-by-step [event authoring tutorial](documentation/user-guide/news-system/authoring-tutorial.md). Plugin settings (sensitivity, scheduler): [NewsPlugin](documentation/user-guide/plugin-system/plugins/news-plugin.md).
 
 ### How the plugins work together
-The three plugins combine to create a functioning market:
-1. The **VolatilityPlugin** generates a wandering target price using random walk noise, centered on the flow-adjusted [price equilibrium](#price-equilibrium).
-2. The **TargetPriceBot** places market orders to push the actual price toward the target, using a PID controller for smooth convergence.
-3. The **DefaultOrderbookVolumeDistributionPlugin** keeps the order book filled with liquidity so that both bot orders and player orders can be executed.
+The plugins combine to create a functioning market:
+1. The **NetFlowPlugin** computes the flow-adjusted [price equilibrium](#price-equilibrium).
+2. The **VolatilityPlugin** generates a wandering target price using random walk noise, centered on that equilibrium.
+3. The **TargetPriceBot** places market orders to push the actual price toward the target, using a PID controller for smooth convergence.
+4. The **DefaultOrderbookVolumeDistributionPlugin** keeps the order book filled with liquidity so that both bot orders and player orders can be executed.
 
 While a news event is active, the **NewsPlugin** multiplies the target price from step 1 before the bot acts on it — turning headlines into real price movement.
 
@@ -463,6 +504,10 @@ While a news event is active, the **NewsPlugin** multiplies the target price fro
 Villager (and wandering trader) trade offers for **market-listed items** no longer use emeralds — both trade directions are converted to the configured trading-currency item (`ServerMarket.CURRENCY`, editable in-game via the Mod Settings screen's Market group / ServerMarket section, or directly in `world/data/StockMarket/settings.json`) and priced from the stock market:
 * Only offers whose traded item exists on the stock market are repriced (component-aware, so e.g. specific enchanted books can have their own markets). A trade where the villager sells requires a market for the sold item; a trade where the villager buys requires a market for every item it asks for.
 * Items **without** a market keep their normal vanilla emerald trades. If a market is created for such an item later, the offer converts to currency pricing on the next price refresh; if a market is deleted, affected offers return to their original emerald form.
+* **Optional emerald replacement:** with `REPLACE_EMERALDS_FOR_UNLISTED` turned on and an **emerald market** present, trades of items *without* a market are converted to currency as well, valued at `emerald count × emerald market price`, with **no** buy/sell margin. The emerald price is rounded to 2 significant digits (e.g. 12.34 → 12.00, 0.54 → 0.54, never below the smallest money unit), so offers do not change with every small market move. Trades of market-listed items still use the item's own market price. Without an emerald market, or with the option off, these trades stay emerald-based; turning the option off (or deleting the emerald market) restores them.
+* **Preset prices for villagers:** with `USE_PRESET_PRICES_FOR_VILLAGERS` also turned on, converted trades use the item's **default price from the market presets** (same rounding, no margin) instead of the emerald price, even if no market exists for the item. No emerald market is needed. An item without a preset price keeps its emerald trade; it never falls back to the emerald price.
+* **Discounts:** villager discounts (reputation, Hero of the Village, cured zombies) still apply to money trades, but are capped at **20%** of the undiscounted price. The discount counts whole cost items, so a price paid with fewer than five notes or coins gets no discount.
+* Villager trades never touch the stock market: they place no orders and do not change the net flow or the market price.
 * Prices refresh automatically on the configured interval (default 20 real minutes ≈ one Minecraft day).
 * Original emerald offers are stored in world data; disabling the feature restores every villager's original offers the next time it is interacted with. Partially used offers stay partially used.
 
@@ -480,12 +525,15 @@ Edit these in-game via `/stockmarket manage` → **Mod Settings** → **Villager
 | `PRICE_REFRESH_INTERVAL_MINUTES` | `20` | Real-time minutes between price refreshes/broadcasts. |
 | `VILLAGER_BUY_MARGIN` | `0.8` | Multiplier on the market price when the villager **buys** from the player (villager pays below market). |
 | `VILLAGER_SELL_MARGIN` | `1.2` | Multiplier on the market price when the villager **sells** to the player (villager charges above market). |
+| `REPLACE_EMERALDS_FOR_UNLISTED` | `false` | Also convert emerald trades of items **without** a market into currency, priced via the emerald market (`emerald count × rounded emerald price`, no margin). Only active while an emerald market exists. No restart needed: villagers update on their next interaction after the change. |
+| `USE_PRESET_PRICES_FOR_VILLAGERS` | `false` | Only used while `REPLACE_EMERALDS_FOR_UNLISTED` is on: price converted trades from the item's preset default price (rounded, no margin) instead of the emerald price, even without a market. Items without a preset price stay emerald-based. No restart needed. |
 
 ### Paying with money
 When an offer's price is BankSystem money, the trade accepts **any combination of denominations** — the price is matched by value, not by exact note type. A 20.00 cost can be paid with 1×20, 2×10, 4×5, 20×1, or even a single 50 note:
 * Overpayment returns **exact change** (fewest notes), placed back into the payment slots when possible, otherwise into your inventory (or dropped at your feet if that is full too). No value is ever lost — shift-clicking through a whole stack of large notes settles every trade to the cent.
 * Clicking an offer row **auto-fills** the payment slots with money from your inventory, even when you don't own the exact denomination shown on the offer.
 * Only genuine BankSystem money is matched by value — renamed/modified notes and other mods' currencies are treated as regular items. Non-money offers (emerald trades, generic currency items) keep exact vanilla matching.
+* **Audit trail:** every money trade with a villager is recorded in the BankSystem diagnostics database (NoteFlow): the notes the player pays (`stockmarket:villager_consume`), the change handed back (`stockmarket:villager_change`) and the money a villager pays out (`stockmarket:villager_pay`), each with the player, the villager and its position. Master and slave servers each record the trades made on them. See the BankSystem documentation for how to read this database.
 
 ### Behavior notes
 * **Master-authoritative:** in a multi-server setup only the master server's `settings.json` matters. The master broadcasts a price table to all slave servers, so enabling it on the master enables it everywhere.
@@ -553,9 +601,8 @@ The same can happen for sell orders, in that case the player will not receive as
 ---
 ### Candle Stick Chart
 The candle stick chart is a common used representation of price history.
-Each candle has a fixed time width. Candles are available for different time scales.
-The timescale can't be changed in the mod.
-A admin can change the time for each candle, default is 1 min.
+Each candle has a fixed time width. The buttons on the chart switch between the timeframes 1m, 5m, 15m, 1h, 4h and 1d.
+An admin can change the time for each candle (**Candle time** in the Mod Settings, default 1 min), or switch the candles to in-game hours with 1h / 4h / 1D / 1W timeframes, see [Candle Timebase](documentation/user-guide/candle-timebase.md).
 A cancle can be defined with 4 values:
 - **Open Price**
   The current price the market had when the new candle was created.
@@ -584,13 +631,13 @@ This value is a great source to create random market prive movements.
 
 ### Price Equilibrium
 The base price a market's random walk oscillates around.
-With player flow influence enabled, it shifts permanently with the cumulative net amount of items players traded on that market: net selling lowers it, net buying raises it.
+With player flow influence enabled (NetFlowPlugin), it shifts with the faded net amount of items players traded on that market: net selling lowers it, net buying raises it. With the long-term anchor on, part of a lasting trend stays after the flow has faded.
 
 
 ---
 
 ## Development
-Dev-only code (in-game unit tests, the `devTestScreen`, `exportrecipes` and `starterkit` commands, debug performance logging) is compiled only when the Gradle property `enable_dev_features` is `true`. It defaults to `false` in `gradle.properties` (keep it that way in commits); enable it for a local build with:
+Dev-only code (in-game unit tests, the `devTestScreen` and `exportrecipes` commands, debug performance logging) is compiled only when the Gradle property `enable_dev_features` is `true`. It defaults to `false` in `gradle.properties` (keep it that way in commits); enable it for a local build with:
 
 ```
 ./gradlew build -Penable_dev_features=true
