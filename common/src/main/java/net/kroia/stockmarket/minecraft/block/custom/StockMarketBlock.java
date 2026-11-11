@@ -2,8 +2,9 @@ package net.kroia.stockmarket.minecraft.block.custom;
 
 import net.kroia.banksystem.minecraft.block.custom.TerminalBlock;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.util.StockMarketClientHooks;
+import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 //import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
 import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.level.ServerPlayer;
@@ -57,16 +58,25 @@ public class StockMarketBlock extends TerminalBlock {
             level.removeBlockEntity(pos);
         }
     }*/
+    /**
+     * The chat line the BankSystem base class shows when this slave has no master link and refuses the block,
+     * with or without an item in hand (BankSystem #170 hook; T-246). Replaces the BankSystem wording with the
+     * StockMarket one. Public (widened from protected) so the slave-masterdown tests can check the wording.
+     *
+     * @return the translatable StockMarket "not connected" message
+     */
+    @Override
+    public Component getNoMasterMessage() {
+        return Component.translatable("message.stockmarket.slave_not_connected");
+    }
+
+    /**
+     * Opens the trade screen. T-245: the server decides, so the base class's master-link check (which only
+     * runs server-side) can refuse; the client never opens the screen on its own.
+     */
     @Override
     public void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!level.isClientSide() && player instanceof ServerPlayer)
-        {
-            // todo: replace the function below
-            //SyncStockMarketBlockEntityPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);
-        } else if (level.isClientSide()) {
-            // On the client side, open the TradeScreen
-            BlockEntity entity = level.getBlockEntity(pos);
-            StockMarketClientHooks.openStockMarketBlockScreen(entity, pos);
-        }
+        if (player instanceof ServerPlayer serverPlayer)
+            OpenUIPacket.sendToClient(serverPlayer, OpenUIPacket.GUIType.TRADE);
     }
 }

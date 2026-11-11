@@ -3,7 +3,6 @@ package net.kroia.stockmarket.testing.tests;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -17,6 +16,7 @@ import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin.RuntimeStreamData;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.TestMarket;
 import net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.TestNewsPlugin;
 import net.minecraft.core.RegistryAccess;
@@ -68,6 +68,11 @@ public class NewsAdminTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.NEWS_ADMIN;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -1284,7 +1289,7 @@ public class NewsAdminTestSuite extends TestSuite {
         if (!r.passed()) return r;
 
         // Stream codec round-trip (unconditional append) — needs a registry context.
-        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        RegistryAccess access = TestFixture.registryAccess();
         if (access == null) {
             return pass("stream-codec round-trip skipped (no registry access in this context)");
         }

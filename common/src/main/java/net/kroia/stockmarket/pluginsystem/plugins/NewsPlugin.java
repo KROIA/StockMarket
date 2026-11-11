@@ -686,7 +686,11 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
     @Override
     public void update(List<MarketInterface> markets) {
         ensureLibraryLoaded();
-        advanceTime(measureTickDelta(), markets);
+        // T-158: `markets` only holds markets inside their trading hours. The news timeline
+        // (publishes, permanent default-price bakes) runs on ALL subscribed markets so news
+        // can move a closed market's default price (overnight gap). The target-price
+        // influence in finalize() still only touches open markets.
+        advanceTime(measureTickDelta(), getMarketInterfaces());
     }
 
     /**

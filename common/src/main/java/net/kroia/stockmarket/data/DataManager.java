@@ -4,6 +4,7 @@ import dev.architectury.platform.Platform;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
+import net.kroia.modutilities.setting.Setting;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.StockMarketModSettings;
@@ -20,12 +21,9 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
-import com.google.gson.reflect.TypeToken;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -58,15 +56,12 @@ public class DataManager extends DataPersistence {
     private static final String NEWS_REGISTRY_FILE = "registry.nbt";
     private static final String NEWS_PICTURES_FOLDER = "pictures";
     private static final String SETTINGS_FILE = "settings.json";
-    private static final String STARTER_KIT_FILE = "starterkit_claims.json";
     private static final String PRESET_DIR = "StockMarket/market_presets";
 
     public static Path getPresetPath() {
         return Platform.getConfigFolder().resolve(PRESET_DIR);
     }
 
-
-    private StarterKitData starterKitData = new StarterKitData();
 
     /**
      * Master-side news history (T-072). The DataManager only exists on the master
@@ -105,10 +100,6 @@ public class DataManager extends DataPersistence {
         setLogger(this::error, this::error, this::info, this::warn);
     }
 
-    public StarterKitData getStarterKitData() {
-        return starterKitData;
-    }
-
     /** @return the master-side news history store (see {@link #newsHistory}) */
     public NewsHistory getNewsHistory() {
         return newsHistory;
@@ -142,7 +133,6 @@ public class DataManager extends DataPersistence {
         success &= saveMarketManager();
         success &= savePluginManager();
         success &= savePresets();
-        success &= saveStarterKit();
         success &= saveNews();
 
         if(!success)
@@ -157,10 +147,12 @@ public class DataManager extends DataPersistence {
 
         boolean success = true;
         success &= loadSettings();
+        // Before any other migration: the first settings save writes the Integrations group and drops the old key.
+        migrateIntegrations();
+        migrateNetFlowHalfLife();
         success &= loadMarketManager();
         success &= loadPluginManager();
         success &= loadPresets();
-        success &= loadStarterKit();
         success &= loadNews();
 
         if(!success)
@@ -304,6 +296,87 @@ public class DataManager extends DataPersistence {
     }
 
 
+    /**
+     * T-217: moves {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION} of an older settings.json into the
+     * Integrations group ({@link StockMarketModSettings#migrateIntegrations}) and saves the file at once.
+     * Runs right after {@link #loadSettings()} and before anything else saves the settings, otherwise the
+     * save would write a default Integrations group and drop the old key. No-op for a missing file.
+     */
+    private void migrateIntegrations()
+    {
+        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        Path path = getAbsoluteSavePath(SETTINGS_FILE);
+        try {
+            if(!Files.exists(path))
+                return;
+            com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(Files.readString(path)).getAsJsonObject();
+            if(BACKEND_INSTANCES.SERVER_SETTINGS.migrateIntegrations(root) && saveSettings())
+                info("Moved SYNC_ADMIN_FLAG_WITH_PERMISSION (" + BACKEND_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get()
+                        + ") from Utilities into the Integrations group of settings.json");
+        } catch (Exception e) {
+            error("Could not migrate settings.json into the Integrations group", e);
+        }
+    }
+
+    /** T-208: marker file (world StockMarket data folder) of the one-shot net-flow half-life migration. */
+    public static final String NET_FLOW_HALF_LIFE_MARKER = "NetFlowHalfLife360.marker";
+    /** T-208: the old default {@code NET_FLOW_HALF_LIFE_MINUTES} that the migration replaces. */
+    public static final float OLD_NET_FLOW_HALF_LIFE_MINUTES = 10f;
+
+    /**
+     * T-208: one-shot migration of {@code MARKET.NET_FLOW_HALF_LIFE_MINUTES} from the old default
+     * 10 min to the new default (360 min). Runs right after {@link #loadSettings()}; a marker file
+     * ({@link #NET_FLOW_HALF_LIFE_MARKER}) makes it run once per world, so a value set later (even 10)
+     * is kept. Saves the settings file at once when the value changed.
+     */
+    private void migrateNetFlowHalfLife()
+    {
+        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        Path marker = getAbsoluteSavePath(NET_FLOW_HALF_LIFE_MARKER);
+        Setting<Float> halfLife = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES;
+        try {
+            if(Files.exists(marker))
+                return;
+            if(migrateNetFlowHalfLife(halfLife, marker)) {
+                createSaveFolder();
+                saveSettings();
+                info("Net flow half-life migrated from the old default " + OLD_NET_FLOW_HALF_LIFE_MINUTES
+                        + " to " + halfLife.get() + " minutes (marker " + NET_FLOW_HALF_LIFE_MARKER + ")");
+            } else {
+                info("Net flow half-life kept at " + halfLife.get() + " minutes (marker " + NET_FLOW_HALF_LIFE_MARKER + " written)");
+            }
+        } catch (Exception e) {
+            error("Could not run the net flow half-life migration (marker " + marker + ")", e);
+        }
+    }
+
+    /**
+     * T-208: the pure half-life migration step, testable without a world. Does nothing when the
+     * marker exists. Otherwise sets the setting to its default when it holds exactly the old default
+     * ({@code |v - 10| < 1e-3}), and always writes the marker.
+     *
+     * @param halfLife the {@code NET_FLOW_HALF_LIFE_MINUTES} setting to migrate
+     * @param marker   the marker file; its parent folders are created
+     * @return true if the value was changed
+     * @throws java.io.IOException if the marker cannot be written
+     */
+    public static boolean migrateNetFlowHalfLife(Setting<Float> halfLife, Path marker) throws java.io.IOException
+    {
+        if(Files.exists(marker))
+            return false;
+        Float v = halfLife.get();
+        boolean change = v != null && Math.abs(v - OLD_NET_FLOW_HALF_LIFE_MINUTES) < 1e-3f;
+        if(change)
+            halfLife.set(halfLife.getDefaultValue());
+        if(marker.getParent() != null)
+            Files.createDirectories(marker.getParent());
+        Files.writeString(marker, "NET_FLOW_HALF_LIFE_MINUTES migrated from the old default 10 to 360 (T-208)."
+                + " Delete this file to run the migration again.\n");
+        return change;
+    }
+
     public boolean savePresets()
     {
         if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.PRESET_MANAGER == null) {
@@ -324,40 +397,8 @@ public class DataManager extends DataPersistence {
         return true;
     }
 
-    // Starter kit claim persistence
-    public boolean saveStarterKit()
-    {
-        Path path = getAbsoluteSavePath(STARTER_KIT_FILE);
-        if(!saveAsJson(starterKitData.getClaimedPlayerUUIDs(), path))
-        {
-            error("saveStarterKit(): Failed to save starter kit claims to Json file");
-            return false;
-        }
-        return true;
-    }
-    private boolean loadStarterKit()
-    {
-        Path path = getAbsoluteSavePath(STARTER_KIT_FILE);
-        if(!Files.exists(path))
-        {
-            // First run — no claims file yet, keep the empty set
-            return true;
-        }
-        HashSet<String> claimed = loadFromJson(path, new TypeToken<HashSet<String>>(){}.getType());
-        if(claimed != null)
-        {
-            starterKitData.setClaimedPlayerUUIDs(claimed);
-        }
-        else
-        {
-            error("loadStarterKit(): Failed to load starter kit claims from Json file");
-            return false;
-        }
-        return true;
-    }
-
     /**
-     * News persistence (T-072/T-096/T-110, pattern: {@link #saveStarterKit}).
+     * News persistence (T-072/T-096/T-110).
      * Writes the world-event registry to
      * {@code world/data/StockMarket/News/registry.nbt}. Since T-110 the history is
      * stored as append-persisted chunk files under

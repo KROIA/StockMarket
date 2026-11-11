@@ -6,7 +6,9 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.networking.request.TransactionHistoryRequest;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.kroia.stockmarket.util.InFlightGuard;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.network.chat.Component;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -34,6 +36,8 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
     private boolean needsRebuild = false;
     private List<OrderRecordStruct> pendingRecords = new ArrayList<>();
     private long lastRefreshMs = 0;
+    /** One {@link TransactionHistoryRequest} at a time, released even when the request fails. */
+    private final InFlightGuard refreshGuard = new InFlightGuard();
     @org.jetbrains.annotations.Nullable
     private ItemID currentMarketID;
 
@@ -58,19 +62,37 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
     public void refresh(ItemID marketID) {
         if (marketID == null) return;
         this.currentMarketID = marketID;
-        BACKEND_INSTANCES.NETWORKING.TRANSACTION_HISTORY_REQUEST.sendRequestToServer(
-                new TransactionHistoryRequest.InputData(marketID, MAX_RESULTS)
-        ).thenAccept(response -> updateRecords(response.records()));
+        // At most one request in flight (the master reads the history on its DB executor, which can
+        // be slow). A refresh asked for meanwhile, e.g. after a market switch, runs on the first
+        // frame after the running one has completed.
+        boolean sent = refreshGuard.send(
+                () -> BACKEND_INSTANCES.NETWORKING.TRANSACTION_HISTORY_REQUEST.sendRequestToServer(
+                        new TransactionHistoryRequest.InputData(marketID, MAX_RESULTS)),
+                response -> {
+                    if (!marketID.equals(currentMarketID)) {
+                        lastRefreshMs = 0; // answer for the previous market: fetch the current one now
+                        return;
+                    }
+                    updateRecords(response.records());
+                });
+        if (!sent)
+            lastRefreshMs = 0; // poll again as soon as the running request is done
     }
 
     /**
      * Replaces the displayed records. Thread-safe via dirty flag.
+     * <p>
+     * The auto-refresh polls every few seconds; if the server returns the same records
+     * (OrderRecordStruct is a record of value fields, so List.equals compares contents)
+     * the rebuild is skipped so the list isn't torn down and recreated for nothing.
      *
      * @param records the new list of transaction history records
      */
     public void updateRecords(List<OrderRecordStruct> records) {
+        List<OrderRecordStruct> next = records != null ? new ArrayList<>(records) : new ArrayList<>();
+        if (next.equals(pendingRecords)) return; // unchanged -> keep current widgets
+        pendingRecords = next;
         needsRebuild = true;
-        pendingRecords = records != null ? new ArrayList<>(records) : new ArrayList<>();
     }
 
     @Override
@@ -80,7 +102,7 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
             rebuildRecordList(pendingRecords);
         }
         long now = System.currentTimeMillis();
-        if (now - lastRefreshMs > AUTO_REFRESH_INTERVAL_MS && currentMarketID != null) {
+        if (!refreshGuard.isInFlight() && now - lastRefreshMs > AUTO_REFRESH_INTERVAL_MS && currentMarketID != null) {
             lastRefreshMs = now;
             refresh(currentMarketID);
         }
@@ -130,7 +152,7 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
 
             // BUY / SELL — positive amount = buy, negative = sell
             boolean isBuy = record.amount() > 0;
-            typeLabel = new Label(isBuy ? "BUY" : "SELL");
+            typeLabel = new Label(Component.translatable(isBuy ? "gui.stockmarket.order_row.buy" : "gui.stockmarket.order_row.sell").getString());
             typeLabel.setTextFontScale(0.8f);
             addChild(typeLabel);
 
