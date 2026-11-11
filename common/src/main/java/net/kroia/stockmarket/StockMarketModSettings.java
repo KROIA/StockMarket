@@ -1,5 +1,6 @@
 package net.kroia.stockmarket;
 
+import com.google.gson.JsonObject;
 import net.kroia.modutilities.PermissionCompat;
 
 import net.kroia.banksystem.BankSystemMod;
@@ -7,6 +8,7 @@ import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
+import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.kroia.stockmarket.util.ClientSettings;
 import net.kroia.stockmarket.util.SlaveTrustCache;
@@ -48,6 +50,7 @@ public class StockMarketModSettings extends ModSettings {
     public final Utilities UTILITIES = createGroup(new Utilities());
     public final Market MARKET = createGroup(new Market());
     public final VillagerTrading VILLAGER_TRADING = createGroup(new VillagerTrading());
+    public final Integrations INTEGRATIONS = createGroup(new Integrations());
     //public final Networking NETWORKING = createGroup(new Networking());
 
     public StockMarketModSettings() {
@@ -66,6 +69,17 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);
         public final Setting<Boolean> LOGGING_ENABLE_DEBUG = registerSetting("LOGGING_ENABLE_DEBUG",false, Boolean.class);
+        /**
+         * T-192: default of the per-admin alert chat toggle ({@code /stockmarket alerts on|off}) for admins
+         * that never used the command. Alerts are always written to the server log (and the Discord feed);
+         * this only decides whether an admin gets the chat message. Mirrors BankSystem's
+         * {@code Utilities.ALERTS_DEFAULT_ON}.
+         * <p>
+         * Read live on every alert — no restart required. Slave-propagation: NOT needed (alerts are raised
+         * and sent on the master only).
+         */
+        public final Setting<Boolean> ALERTS_DEFAULT_ON = registerSetting("ALERTS_DEFAULT_ON", true, Boolean.class);
+        // SYNC_ADMIN_FLAG_WITH_PERMISSION moved to Integrations (T-217, see migrateIntegrations).
        // public final Setting<Integer> ADMIN_PERMISSION_LEVEL = registerSetting("ADMIN_PERMISSION_LEVEL",2, Integer.class);
 
         public Utilities() { super("Utilities"); }
@@ -87,7 +101,23 @@ public class StockMarketModSettings extends ModSettings {
     {
         public final Setting<Integer> VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE = registerSetting("VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE", 1000, Integer.class); // Starting balance for new players
         public final Setting<ItemStack> CURRENCY = registerSetting("CURRENCY", BankSystemItems.MONEY.get().getDefaultInstance(), ItemStack.class, new ItemStackJsonParser()); // Starting balance for new players
-        public final Setting<Long> CANDLE_TIME = registerSetting("CANDLE_TIME", 60000L, Long.class); // Time interval of candle sticks in ms
+        public final Setting<Long> CANDLE_TIME = registerSetting("CANDLE_TIME", 60000L, Long.class); // Time interval of candle sticks in ms, real-time mode only
+
+        /**
+         * T-218: candle timebase. {@code false} (default) = one stored candle per
+         * {@link #CANDLE_TIME} of wall-clock time. {@code true} = one stored candle per in-game
+         * hour (1000 ticks) of the master overworld, rotating every 1000 ticks when the daylight
+         * cycle is frozen; charts then offer 1h / 4h / 1D / 1W game buckets. Independent of
+         * {@link #TRADING_HOURS_USE_REAL_TIME}. Both timestamps are stored on every candle, so
+         * switching keeps all history.
+         * <p>
+         * Restart-required: read once by {@code ServerMarketManager.isCandleUseGameTime()} and
+         * sent to clients on join (ServerTimeRequest).
+         * <p>
+         * Slave-propagation: NOT needed. Only the master rotates and serves candles; slave
+         * players receive the flag from the master through ServerTimeRequest.
+         */
+        public final Setting<Boolean> CANDLE_USE_GAME_TIME = registerSetting("CANDLE_USE_GAME_TIME", false, Boolean.class);
 
         /**
          * Server-side hard cap on the number of candles returned by a single
@@ -115,13 +145,147 @@ public class StockMarketModSettings extends ModSettings {
          * <p>
          * Read live on every chart open — no restart required.
          * <p>
-         * Slave-propagation: NOT propagated. This is a client-only preference;
-         * it lives in the master's settings.json so admins can tune the default,
-         * but slaves never consume it (they don't render charts) and the client
-         * receives its value via the normal GET path when opening the Mod
-         * Settings screen. No push-broadcast is needed.
+         * Slave-propagation: slaves never read it (they don't render charts). Clients
+         * get the master's value at join through {@code ServerTimeRequest} (routed to the
+         * master, also from a slave) and, after an admin change, through
+         * {@code ClientSettingsSyncPacket} (master players + relay to every slave's
+         * players) — T-140. Without a synced value the client uses the setting of a
+         * server in its own JVM (single-player) or 512.
          */
         public final Setting<Integer> PRICE_HISTORY_INITIAL_LOAD_CANDLES = registerSetting("PRICE_HISTORY_INITIAL_LOAD_CANDLES", 512, Integer.class);
+
+        /**
+         * Clock source for the per-market trading hours (T-158). {@code false} = in-game
+         * overworld time (tick 0 = 06:00), {@code true} = the master server's local real time.
+         * <p>
+         * Read live every tick in {@code ServerMarketManager.update()} — no restart required.
+         * Switching the source may flip a market's scheduled state; that counts as a scheduled
+         * transition and clears any manual open/close override.
+         * <p>
+         * Slave-propagation: NOT needed. Trading hours are evaluated only on the master; clients
+         * and slaves receive the resulting state and clock via the market price stream.
+         */
+        public final Setting<Boolean> TRADING_HOURS_USE_REAL_TIME = registerSetting("TRADING_HOURS_USE_REAL_TIME", false, Boolean.class);
+
+        /**
+         * Global per-player trade cooldown in ms (T-166, anti-autoclicker). After an ACCEPTED player
+         * order, further orders of the same player are rejected until the cooldown has elapsed
+         * (rejected orders do not restart it). Shared across all markets and both order paths
+         * (normal and inter-market orders). Bots are not affected. 0 = off.
+         * <p>
+         * Read live on every order — no restart required.
+         * <p>
+         * Slave-propagation: NOT needed. Orders from slave players are routed to the master,
+         * which is the only server that reads this value.
+         */
+        public final Setting<Long> TRADE_COOLDOWN_MS = registerSetting("TRADE_COOLDOWN_MS", 500L, Long.class);
+
+        /**
+         * Factor of the default max order size (T-179): a market's derived default is
+         * {@code max(factor, round(factor * naturalAbundance))} real items
+         * (see {@code MarketSettings.defaultMaxOrderVolume}). Clamped to &ge; 1.
+         * <p>
+         * Used whenever a default is DERIVED: new markets, new/default presets, preset files and
+         * market saves without an explicit value, and the Mod Settings "Apply to all markets"
+         * action. Existing markets and presets keep their explicit values until that action runs.
+         * Read live — no restart required.
+         * <p>
+         * Slave-propagation: NOT needed. Markets and presets only live on the master.
+         */
+        public final Setting<Long> MAX_ORDER_VOLUME_FACTOR = registerSetting("MAX_ORDER_VOLUME_FACTOR", 64L, Long.class);
+
+        /**
+         * #89: half-life in minutes of the faded net player flow ({@code ServerMarket.fadedNetPlayerItemFlow}),
+         * the flow value the price plugins (VolatilityPlugin equilibrium) read. The real net flow is not
+         * affected. 0 = no fading (the faded value then equals the real flow).
+         * <p>
+         * Default 360 min (6 h, T-208; was 10 min): a one-off burst is at 50% after 6 h, so a player's
+         * trade keeps its (bounded, see VolatilityPlugin {@code permanentImpact}) effect on the
+         * equilibrium for hours instead of snapping back within minutes; steady demand still counts: a
+         * constant net rate R holds the faded flow at R x 519 min (half-life / ln 2). Worlds that still
+         * hold the old default 10 are moved to 360 once on load ({@code DataManager.migrateNetFlowHalfLife()}).
+         * <p>
+         * Read live every tick (decay in {@code ServerMarket.update()}) — no restart required.
+         * <p>
+         * Slave-propagation: NOT needed. Markets only live on the master.
+         */
+        public final Setting<Float> NET_FLOW_HALF_LIFE_MINUTES = registerSetting("NET_FLOW_HALF_LIFE_MINUTES", 360f, Float.class);
+
+        /**
+         * T-198: recovery half-life in minutes of the virtual depth memory. Virtual (default) volume
+         * consumed outside the hi-res array window stays thin and recovers toward the full default:
+         * the missing fraction halves every half-life. 0 = memory off (depth outside the window is
+         * always the full default, the pre-T-198 behaviour).
+         * <p>
+         * Read live (every tick and on every window move) — no restart required.
+         * <p>
+         * Slave-propagation: NOT needed. Markets only live on the master.
+         */
+        public final Setting<Float> VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES = registerSetting("VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES", 30f, Float.class);
+
+        /**
+         * T-198: price ceiling of the virtual depth: no default ask volume exists above
+         * {@code multiplier x current price}. This ends an order walk through the ask side (it
+         * replaces the former walk level limit); the remainder of a market buy is canceled there.
+         * <p>
+         * Read live — no restart required. Slave-propagation: NOT needed (master only).
+         */
+        public final Setting<Float> VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER = registerSetting("VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER", 100f, Float.class);
+
+        /**
+         * #89: realized trading profit (real money, sum over all markets) a single player may make within
+         * {@link #PROFIT_ALERT_WINDOW_MINUTES} before online admins get a chat alert and the event is
+         * written to the server log. "Realized" = net money of the player's completed/cancelled orders
+         * (sell proceeds minus buy costs) in the window. 0 = off.
+         * <p>
+         * Read live on every completed order — no restart required.
+         * <p>
+         * Slave-propagation: NOT needed. Orders settle only on the master.
+         */
+        public final Setting<Float> PROFIT_ALERT_THRESHOLD = registerSetting("PROFIT_ALERT_THRESHOLD", 1_000_000f, Float.class);
+
+        /**
+         * #89: length of the window (minutes) for {@link #PROFIT_ALERT_THRESHOLD}. Fixed windows per
+         * player; a window starts with the player's first completed order after the previous one ended.
+         * <p>
+         * Read live — no restart required. Slave-propagation: NOT needed (master only).
+         */
+        public final Setting<Long> PROFIT_ALERT_WINDOW_MINUTES = registerSetting("PROFIT_ALERT_WINDOW_MINUTES", 60L, Long.class);
+
+        /**
+         * T-192: master switch of the pump-and-dump detector ({@link net.kroia.stockmarket.util.PumpDumpDetector}).
+         * Off = neither the pump check nor the buy-sell cycle check runs. Detection only observes fills; it
+         * never changes prices, orders or a player's net flow.
+         * <p>
+         * Read live on every finished player order — no restart required. Slave-propagation: NOT needed
+         * (orders are matched on the master only).
+         */
+        public final Setting<Boolean> PUMP_DUMP_ENABLED = registerSetting("PUMP_DUMP_ENABLED", true, Boolean.class);
+
+        /**
+         * T-192: pump check. A player MARKET buy is flagged when the market price rose by more than this
+         * percentage during the tick that executed it, while the same player has an own SELL limit order
+         * resting above the price before that tick. 0 = pump check off.
+         * <p>
+         * Read live — no restart required. Slave-propagation: NOT needed (master only).
+         */
+        public final Setting<Float> PUMP_DUMP_PRICE_MOVE_PERCENT = registerSetting("PUMP_DUMP_PRICE_MOVE_PERCENT", 20f, Float.class);
+
+        /**
+         * T-192: cycle check window in minutes. Items a player bought on one market and sold again on the
+         * same market within this time form a buy-sell cycle.
+         * <p>
+         * Read live — no restart required. Slave-propagation: NOT needed (master only).
+         */
+        public final Setting<Long> PUMP_DUMP_CYCLE_MINUTES = registerSetting("PUMP_DUMP_CYCLE_MINUTES", 30L, Long.class);
+
+        /**
+         * T-192: cycle check threshold (real money). A sell is flagged when its profit over the average
+         * buy price of the same player's buys in the cycle window exceeds this. 0 = cycle check off.
+         * <p>
+         * Read live — no restart required. Slave-propagation: NOT needed (master only).
+         */
+        public final Setting<Float> PUMP_DUMP_CYCLE_PROFIT = registerSetting("PUMP_DUMP_CYCLE_PROFIT", 100_000f, Float.class);
 
         public Market() { super("ServerMarket"); }
 
@@ -158,7 +322,9 @@ public class StockMarketModSettings extends ModSettings {
      * item is listed on the stock market no longer use emeralds: both directions
      * of such a trade are converted to the configured trading currency
      * ({@link Market#CURRENCY}) and priced from the market. Offers for items
-     * <b>without</b> a market keep their vanilla emerald form.
+     * <b>without</b> a market keep their vanilla emerald form, unless
+     * {@link #REPLACE_EMERALDS_FOR_UNLISTED} converts them via the emerald market
+     * (or the preset prices, {@link #USE_PRESET_PRICES_FOR_VILLAGERS}).
      * <p>
      * These settings are only read on the <b>master</b> server (slave servers never
      * load {@code settings.json}); the master broadcasts the resulting price table
@@ -189,7 +355,91 @@ public class StockMarketModSettings extends ModSettings {
          */
         public final Setting<Float> VILLAGER_SELL_MARGIN = registerSetting("VILLAGER_SELL_MARGIN", 1.2f, Float.class);
 
+        /**
+         * When {@code true}, emerald offers whose traded item has <b>no</b> market are
+         * converted to the trading currency as well, valued at
+         * {@code emerald count × emerald market price}, with the emerald price rounded to
+         * two significant digits and no buy/sell margin. Only takes effect while an
+         * emerald market exists (or {@link #USE_PRESET_PRICES_FOR_VILLAGERS} is on);
+         * otherwise such offers keep their vanilla emerald form. Offers whose item is
+         * listed always use the item's own market price. Read live on every table
+         * recompute (not restart-required) and carried to slaves inside the price table.
+         * Disabled by default.
+         */
+        public final Setting<Boolean> REPLACE_EMERALDS_FOR_UNLISTED = registerSetting("REPLACE_EMERALDS_FOR_UNLISTED", false, Boolean.class);
+
+        /**
+         * Only used while {@link #REPLACE_EMERALDS_FOR_UNLISTED} is on. When {@code true},
+         * converted offers are priced from the traded item's default price in the market
+         * presets (even when no market exists for it) instead of
+         * {@code emerald count × emerald price}; same rounding, no margin. An item without
+         * a preset price keeps its emerald trade (never falls back to the emerald price).
+         * Read live on every table recompute (not restart-required); the master sends the
+         * preset prices to slaves inside the price table. Disabled by default.
+         */
+        public final Setting<Boolean> USE_PRESET_PRICES_FOR_VILLAGERS = registerSetting("USE_PRESET_PRICES_FOR_VILLAGERS", false, Boolean.class);
+
         public VillagerTrading() { super("VillagerTrading"); }
+    }
+
+
+    /**
+     * T-217: optional integrations with other mods / services, shown in the Mod Settings screen as
+     * one collapsible on/off section each (same layout as BankSystem's Integrations group).
+     * Takes {@code SYNC_ADMIN_FLAG_WITH_PERMISSION} from {@link Utilities}; older settings.json files
+     * are migrated once by {@link #migrateIntegrations(JsonObject)}.
+     * <p>
+     * Only the master loads these values; slaves keep the defaults, so every gate below is decided
+     * on the master (see the propagation notes in {@code ModSettingsRequest}).
+     */
+    public static final class Integrations extends SettingsGroup
+    {
+        /**
+         * TAB / Placeholder API placeholders ({@code StockMarketPlaceholders}). Off: the master skips
+         * the placeholder registration and refresh tick at server start, so slaves receive empty values.
+         * Restart-required (checked once in {@code StockMarketModBackend.onBankSystemSetupComplete}).
+         */
+        public final Setting<Boolean> PLACEHOLDERS_ENABLED = registerSetting("PLACEHOLDERS_ENABLED", true, Boolean.class);
+
+        /**
+         * Keep the StockMarket admin flag in sync with the permission node stockmarket.admin (see AdminFlagSync).
+         * The LuckPerms listener and the one-time migration are set up at server start, so turning it on
+         * needs a restart (restart-required); op/deop read it live. Master only.
+         */
+        public final Setting<Boolean> SYNC_ADMIN_FLAG_WITH_PERMISSION = registerSetting("SYNC_ADMIN_FLAG_WITH_PERMISSION", false, Boolean.class);
+
+        /**
+         * Discord webhook feed of trades and alerts ({@code StockMarketDiscord}): market-buy, market-sell,
+         * market-exchange and market-alert, routed in {@code config/modutilities/discord/stockmarket.json}. Read live on every post,
+         * master only. Default off.
+         */
+        public final Setting<Boolean> DISCORD_ENABLED = registerSetting("DISCORD_ENABLED", false, Boolean.class);
+
+        public Integrations() { super("Integrations"); }
+    }
+
+    /**
+     * T-217: one-time move of the pre-Integrations key {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION}
+     * into {@link #INTEGRATIONS}. Works on the raw settings.json root because the old key is no longer
+     * registered. Idempotent without a marker: a file that already has an {@code Integrations} group is
+     * left alone, and the caller re-saves when this returns true, which writes that group and drops the
+     * old key.
+     *
+     * @param root the parsed settings.json root object
+     * @return true if the old value was copied into INTEGRATIONS (the caller must save the file)
+     */
+    public boolean migrateIntegrations(JsonObject root)
+    {
+        if (root.has(INTEGRATIONS.getName()))
+            return false;
+        JsonObject utilities = root.get(UTILITIES.getName()) instanceof JsonObject o ? o : null;
+        String key = INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.getName();
+        if (utilities == null || !utilities.has(key))
+            return false;
+        JsonObject moved = new JsonObject();
+        moved.add(key, utilities.get(key));
+        new SettingsStore().fromJson(INTEGRATIONS, moved);
+        return true;
     }
 
 
@@ -212,7 +462,7 @@ public class StockMarketModSettings extends ModSettings {
      * "Mod Settings" screen and the {@code ModSettingsRequest} GET/SET payloads.
      * <p>
      * This is exactly the set of groups registered via {@code createGroup(...)}
-     * (Utilities, ServerMarket, VillagerTrading). The {@link Player} group is
+     * (Utilities, ServerMarket, VillagerTrading, Integrations). The {@link Player} group is
      * intentionally EXCLUDED: it is never registered, never serialized to
      * settings.json and therefore dead — do not expose it in the UI.
      *
@@ -220,7 +470,7 @@ public class StockMarketModSettings extends ModSettings {
      */
     public List<SettingsGroup> getEditableGroups()
     {
-        return List.of(UTILITIES, MARKET, VILLAGER_TRADING);
+        return List.of(UTILITIES, MARKET, VILLAGER_TRADING, INTEGRATIONS);
     }
 
     /**

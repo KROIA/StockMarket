@@ -81,6 +81,24 @@ public class InterMarketTradingPanel extends TabElement {
         limitExchangePanel.setMarketOpen(open);
     }
 
+    /**
+     * T-179: limits the amount boxes of both tabs (want items).
+     * @param maxQuantity limit in want items; &le; 0 = unlimited
+     */
+    public void setMaxQuantity(double maxQuantity) {
+        marketExchangePanel.setMaxQuantity(maxQuantity);
+        limitExchangePanel.setMaxQuantity(maxQuantity);
+    }
+
+    /**
+     * T-179: greys out buy/sell on both tabs while the player's trade cooldown runs.
+     * @param remainingMs remaining cooldown in ms; &le; 0 = ready
+     */
+    public void setTradeCooldown(long remainingMs) {
+        marketExchangePanel.setTradeCooldown(remainingMs);
+        limitExchangePanel.setTradeCooldown(remainingMs);
+    }
+
     /** Sets the quantity in both sub-panels. */
     public void setQuantity(double quantity) {
         marketExchangePanel.setQuantity(quantity);

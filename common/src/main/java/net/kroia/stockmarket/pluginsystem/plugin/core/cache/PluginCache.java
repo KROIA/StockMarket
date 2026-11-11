@@ -29,6 +29,24 @@ public class PluginCache {
         return interfaces;
     }
 
+    /**
+     * Interfaces of all markets that are currently inside their trading hours. Plugins only
+     * update/finalize these, so closed markets keep a static price. Markets under maintenance are
+     * still included (bots keep trading during maintenance).
+     * @return a new list of the open markets' interfaces
+     */
+    public List<MarketInterface> getOpenInterfaces()
+    {
+        List<MarketInterface> open = new ArrayList<>(interfaces.size());
+        for (MarketInterface interf : interfaces)
+        {
+            MarketCache cache = marketCaches.get(interf.market.getMarketID());
+            if (cache == null || cache.isTradingOpen())
+                open.add(interf);
+        }
+        return open;
+    }
+
 
     public boolean putCache(ItemID marketID, MarketCache cache)
     {

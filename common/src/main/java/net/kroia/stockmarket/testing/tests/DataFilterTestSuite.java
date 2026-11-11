@@ -18,6 +18,11 @@ public class DataFilterTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("equality_clause_numeric_id", this::test_getClause_numericId);
         addTest("equality_clause_null_id_throws", this::test_getClause_nullId);
