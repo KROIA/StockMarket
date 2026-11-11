@@ -10,6 +10,7 @@ import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPac
 import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
 import net.kroia.stockmarket.networking.packet.NewsPublishedPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
+import net.kroia.stockmarket.networking.packet.ClientSettingsSyncPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
 import net.kroia.stockmarket.networking.packet.SlaveTrustSyncPacket;
 import net.kroia.stockmarket.networking.packet.TrustFlagUpdatePacket;
@@ -124,6 +125,9 @@ public class StockMarketNetworking extends NetworkPacketManager {
         // the standard 2-arg registerS2C still registers a no-op forward
         // handler which is harmless.
         registerS2C(SlaveTrustSyncPacket.TYPE, SlaveTrustSyncPacket.STREAM_CODEC);
+        // T-140: master-owned client settings pushed after an admin SET. The default
+        // registerS2C also registers the master→slave relay, so slave players get it too.
+        registerS2C(ClientSettingsSyncPacket.TYPE, ClientSettingsSyncPacket.STREAM_CODEC);
     }
 
     @Override

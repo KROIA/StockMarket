@@ -65,10 +65,13 @@ The sequence each tick:
 | Place market orders | `IPluginMarket.placeOrder(amount)` |
 | Place limit orders | `IPluginMarket.placeOrder(amount, price)` |
 | Read current/default/target price | `IPluginMarket.getPrice()`, `getDefaultRealPrice()`, `getTargetPrice()`, `getPreviousTargetPrice()` |
-| Check market state | `IPluginMarket.isMarketOpen()`, `getCurrentCandleTradedVolume()` |
-| Read player supply/demand | `IPluginMarket.getNetPlayerItemFlow()` |
-| Query orderbook depth and capital | `IPluginOrderBook.getRealVolume()`, `getCapital()`, `getBuyOrders(range)`, `getSellOrders(range)` |
-| Manipulate virtual orderbook volume | `IPluginOrderBook.setRawVolume()`, `addRawVolume()`, `resetVirtualVolume()` |
+| Share the equilibrium (fair) price between plugins | `IPluginMarket.setEquilibriumPrice()`, `getEquilibriumPrice()`, `isTargetPriceSetThisTick()` |
+| Shift the default price permanently | `IPluginMarket.setDefaultRealPrice()` |
+| Check market state | `IPluginMarket.isMarketOpen()`, `getCurrentCandleTradedVolume()`, `isVirtualOrderbookEnabled()`, `getMaxRealOrderVolume()` |
+| Read player supply/demand | `IPluginMarket.getNetPlayerItemFlow()`, `getFadedNetPlayerItemFlow()` (preferred for pricing) |
+| Query orderbook depth and capital | `IPluginOrderBook.getRealVolume()`, `getRealVirtualVolume(min, max)`, `getCapital()`, `getBuyOrders(range)`, `getSellOrders(range)` |
+| Size an order that must not overshoot a price | `IPluginOrderBook.getRealVirtualVolumeToPrice()` |
+| Manipulate virtual orderbook volume | `IPluginOrderBook.setRawVolume()`, `addRawVolume()`, `resetVirtualVolume()`, `setVirtualDepthSideFactors()`; `IPluginMarket.clearVirtualOrderbook()`, `resetVirtualOrderbook()` |
 | Register volume distribution calculators | `IPluginOrderBook.registerDefaultVolumeDistributionCalculator()` |
 | Stream type-safe runtime data to client GUI | `ServerPlugin.runtimeDataCodec()`, `provideRuntimeData()`, `getRuntimeDataStreamInterval()` |
 | Define per-market type-safe custom settings | `ServerPlugin.customSettingsCodec()`, `provideDefaultCustomSettings()`, `onCustomSettingsApplied()` |

@@ -8,6 +8,7 @@ import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -191,7 +192,7 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
 
             // BUY / SELL type label
             boolean isBuy = order.getTargetVolume() > 0;
-            typeLabel = new Label(isBuy ? "BUY" : "SELL");
+            typeLabel = new Label(Component.translatable(isBuy ? "gui.stockmarket.order_row.buy" : "gui.stockmarket.order_row.sell").getString());
             typeLabel.setTextFontScale(0.8f);
             addChild(typeLabel);
 
@@ -206,7 +207,7 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
             double realPrice = MarketManager.convertToRealAmountStatic(order.getStartPrice());
             String priceStr = order.getType() == Order.Type.LIMIT
                     ? "@ " + String.format(Locale.ROOT, "%.2f", realPrice)
-                    : "@ MKT";
+                    : Component.translatable("gui.stockmarket.pending_orders_panel.at_market").getString();
             priceLabel = new Label(priceStr);
             priceLabel.setTextFontScale(0.8f);
             addChild(priceLabel);
@@ -319,7 +320,7 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
 
             // Type label: LIMIT or MKT
             boolean isLimit = !order.isMarketOrder();
-            typeLabel = new Label(isLimit ? "LIMIT" : "MKT");
+            typeLabel = new Label(Component.translatable(isLimit ? "gui.stockmarket.order_row.limit" : "gui.stockmarket.order_row.market").getString());
             typeLabel.setTextFontScale(0.8f);
             addChild(typeLabel);
 
@@ -352,7 +353,7 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
                     rateLabel = new Label(String.format("≥ %.2f", pairRate));
                 }
             } else {
-                rateLabel = new Label("MKT");
+                rateLabel = new Label(Component.translatable("gui.stockmarket.order_row.market").getString());
             }
             rateLabel.setTextFontScale(0.8f);
             addChild(rateLabel);

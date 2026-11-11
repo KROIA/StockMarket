@@ -8,7 +8,8 @@
   "mixins": [
     "MerchantMenuMixin",
     "MerchantOfferMixin",
-    "MerchantResultSlotMixin"
+    "MerchantResultSlotMixin",
+    "VillagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

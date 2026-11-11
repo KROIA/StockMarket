@@ -45,16 +45,17 @@ public class PresetEditorTab extends StockMarketGuiElement {
         public static final Component PRICE = Component.translatable(PREFIX + "price");
         public static final Component ABUNDANCE = Component.translatable(PREFIX + "abundance");
         public static final Component ABUNDANCE_TOOLTIP = Component.translatable(PREFIX + "abundance_tooltip");
+        public static final Component MAX_ORDER = Component.translatable(PREFIX + "max_order");
+        public static final Component MAX_ORDER_TOOLTIP = Component.translatable(PREFIX + "max_order_tooltip");
         public static final Component SAVED_OK = Component.translatable(PREFIX + "saved_ok");
         public static final Component SAVE_FAILED = Component.translatable(PREFIX + "save_failed");
 
-        // Category/item management labels (hardcoded until translations are added)
-        public static final String NEW_CATEGORY = "+ New";
-        public static final String RENAME = "Rename";
-        public static final String DELETE = "Delete";
-        public static final String ADD_ITEM = "+ Add Item";
-        public static final String CANCEL = "Cancel";
-        public static final String CONFIRM = "OK";
+        // Category/item management labels
+        public static final Component NEW_CATEGORY = Component.translatable(PREFIX + "new_category");
+        public static final Component RENAME = Component.translatable(PREFIX + "rename");
+        public static final Component DELETE = Component.translatable(PREFIX + "delete");
+        public static final Component ADD_ITEM = Component.translatable(PREFIX + "add_item");
+        public static final Component CONFIRM = Component.translatable(PREFIX + "confirm");
 
         // T-152: label for the "+ From Inventory" button — opens the inventory picker mode.
         public static final Component ADD_FROM_INVENTORY = Component.translatable(
@@ -145,16 +146,16 @@ public class PresetEditorTab extends StockMarketGuiElement {
         saveButton.setPressedColor(0xFF1a6b30);
 
         // Category management buttons
-        newCategoryButton = new Button(Texts.NEW_CATEGORY, this::onNewCategoryClicked);
-        renameCategoryButton = new Button(Texts.RENAME, this::onRenameCategoryClicked);
-        deleteCategoryButton = new Button(Texts.DELETE, this::onDeleteCategoryClicked);
+        newCategoryButton = new Button(Texts.NEW_CATEGORY.getString(), this::onNewCategoryClicked);
+        renameCategoryButton = new Button(Texts.RENAME.getString(), this::onRenameCategoryClicked);
+        deleteCategoryButton = new Button(Texts.DELETE.getString(), this::onDeleteCategoryClicked);
         deleteCategoryButton.setBackgroundColor(0xFFc0392b);
         deleteCategoryButton.setHoverColor(0xFFe74c3c);
 
         // Inline category name input (hidden by default)
         categoryNameInput = new TextBox();
         categoryNameInput.setEnabled(false);
-        categoryNameConfirmButton = new Button(Texts.CONFIRM, this::onCategoryNameConfirmed);
+        categoryNameConfirmButton = new Button(Texts.CONFIRM.getString(), this::onCategoryNameConfirmed);
         categoryNameConfirmButton.setEnabled(false);
 
         // Item selection view for adding items (hidden by default)
@@ -162,7 +163,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         itemSelectionView.setEnabled(false);
 
         // Add/Cancel item buttons
-        addItemButton = new Button(Texts.ADD_ITEM, this::onAddItemClicked);
+        addItemButton = new Button(Texts.ADD_ITEM.getString(), this::onAddItemClicked);
         addItemButton.setBackgroundColor(0xFF2980b9);
         addItemButton.setHoverColor(0xFF3498db);
         // T-154: Cancel became a small square "X" button in the picker header row.
@@ -304,13 +305,15 @@ public class PresetEditorTab extends StockMarketGuiElement {
             String key = preset.getUniqueKey();
             float price = preset.getDefaultPrice();
             float abundance = preset.getNaturalAbundance();
+            long maxOrder = preset.getMaxOrderVolume();
             MarketPreset edited = editedPresets.get(key);
             if (edited != null) {
                 price = edited.getDefaultPrice();
                 abundance = edited.getNaturalAbundance();
+                maxOrder = edited.getMaxOrderVolume();
             }
 
-            PresetEntryWidget entry = new PresetEntryWidget(stack, preset, price, abundance);
+            PresetEntryWidget entry = new PresetEntryWidget(stack, preset, price, abundance, maxOrder);
             itemGridView.addChild(entry);
         }
     }
@@ -469,7 +472,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         JsonObject serialized = MarketPreset.serializeItemStack(stack);
         String itemId = serialized.get("id").getAsString();
         JsonObject components = serialized.has("components") ? serialized.getAsJsonObject("components") : null;
-        MarketPreset newPreset = new MarketPreset(itemId, components, 10.0f, 10.0f);
+        MarketPreset newPreset = new MarketPreset(itemId, components, 10.0f, 100.0f); // price 10, abundance 100
 
         category.getPresets().add(newPreset);
         categoryModified = true;
@@ -861,6 +864,9 @@ public class PresetEditorTab extends StockMarketGuiElement {
         private final TextBox priceTextBox;
         private final Label abundanceLabel;
         private final TextBox abundanceTextBox;
+        // Max volume of a single player order (MarketPreset.maxOrderVolume, 0 = unlimited)
+        private final Label maxOrderLabel;
+        private final TextBox maxOrderTextBox;
         // Toggles MarketPreset.orderbookEnabled — propagates into MarketSettings.virtualOrderbookEnabled
         // when a market is created from this preset.
         private final CheckBox orderbookEnabledCheckBox;
@@ -871,7 +877,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         private final MarketPreset originalPreset;
         private final String presetKey;
 
-        PresetEntryWidget(ItemStack stack, MarketPreset preset, float currentPrice, float currentAbundance) {
+        PresetEntryWidget(ItemStack stack, MarketPreset preset, float currentPrice, float currentAbundance, long currentMaxOrder) {
             super();
             this.originalPreset = preset;
             this.presetKey = preset.getUniqueKey();
@@ -905,6 +911,17 @@ public class PresetEditorTab extends StockMarketGuiElement {
             abundanceTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
             abundanceTextBox.setText(formatFloat(currentAbundance));
             abundanceTextBox.setOnTextChanged(this::onAbundanceChanged);
+
+            maxOrderLabel = new Label(Texts.MAX_ORDER.getString());
+            maxOrderLabel.setAlignment(Label.Alignment.RIGHT);
+            maxOrderLabel.setHoverTooltipSupplier(Texts.MAX_ORDER_TOOLTIP::getString);
+            maxOrderLabel.setHoverTooltipMousePositionAlignment(Alignment.BOTTOM);
+            maxOrderLabel.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+
+            maxOrderTextBox = new TextBox();
+            maxOrderTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 12, 0));
+            maxOrderTextBox.setText(Long.toString(currentMaxOrder));
+            maxOrderTextBox.setOnTextChanged(t -> onFieldChanged());
 
             orderbookEnabledCheckBox = new CheckBox(Component.translatable(
                     "gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.orderbook_enabled").getString(),
@@ -945,6 +962,8 @@ public class PresetEditorTab extends StockMarketGuiElement {
             addChild(priceTextBox);
             addChild(abundanceLabel);
             addChild(abundanceTextBox);
+            addChild(maxOrderLabel);
+            addChild(maxOrderTextBox);
             addChild(orderbookEnabledCheckBox);
             addChild(ignoreAutosubscribeCheckBox);
             addChild(removeButton);
@@ -953,10 +972,18 @@ public class PresetEditorTab extends StockMarketGuiElement {
         }
 
         private void writeBack(float price, float abundance) {
-            editedPresets.put(presetKey, new MarketPreset(
+            MarketPreset edited = new MarketPreset(
                     originalPreset.getItemId(), originalPreset.components(), price, abundance,
                     orderbookEnabledCheckBox.isChecked(),
-                    ignoreAutosubscribeCheckBox.isChecked()));
+                    ignoreAutosubscribeCheckBox.isChecked());
+            edited.setMaxOrderVolume(parseLong(maxOrderTextBox.getText(), originalPreset.getMaxOrderVolume()));
+            editedPresets.put(presetKey, edited);
+        }
+
+        private void onFieldChanged() {
+            float price = parseFloat(priceTextBox.getText(), originalPreset.getDefaultPrice());
+            float abundance = parseFloat(abundanceTextBox.getText(), originalPreset.getNaturalAbundance());
+            writeBack(price, abundance);
         }
 
         private void onPriceChanged(String text) {
@@ -1013,14 +1040,17 @@ public class PresetEditorTab extends StockMarketGuiElement {
             int nameLabelWidth = w / 5;
             int priceLabelWidth = 50;
             int abundanceLabelWidth = 65;
+            int maxOrderLabelWidth = 55;
 
             int fieldWidthOld = (w - iconSize - (w / 4) - priceLabelWidth - abundanceLabelWidth
                     - 2 * baseCheckboxWidth - removeBtnSize - 8 * spacing) / 2;
             int priceFieldWidth = Math.max(20, fieldWidthOld / 3);         // 1/3 of previous
             int abundanceFieldWidth = Math.max(20, fieldWidthOld / 4);     // 1/4 of previous
+            int maxOrderFieldWidth = Math.max(30, fieldWidthOld / 4);
 
             int reservedFixed = iconSize + nameLabelWidth + priceLabelWidth + priceFieldWidth
-                    + abundanceLabelWidth + abundanceFieldWidth + removeBtnSize + 8 * spacing;
+                    + abundanceLabelWidth + abundanceFieldWidth + maxOrderLabelWidth + maxOrderFieldWidth
+                    + removeBtnSize + 10 * spacing;
             int checkboxTotal = Math.max(2 * baseCheckboxWidth, w - reservedFixed);
             // 40/60 split: "Virtual Orderbook" is shorter than "No Plugin Autosubscribe",
             // so give the ignore-autosubscribe box the larger slot.
@@ -1041,7 +1071,10 @@ public class PresetEditorTab extends StockMarketGuiElement {
             // widget interpret the box height as proportional to its width, which blew
             // up the whole row when the freed pixels went to the width. Only the WIDTH
             // is the variable dimension here — height stays fixed to the row.
-            orderbookEnabledCheckBox.setBounds(abundanceTextBox.getRight() + spacing, 1,
+            maxOrderLabel.setBounds(abundanceTextBox.getRight() + spacing, 1, maxOrderLabelWidth, fieldHeight);
+            maxOrderTextBox.setBounds(maxOrderLabel.getRight() + spacing, 1, maxOrderFieldWidth, fieldHeight);
+
+            orderbookEnabledCheckBox.setBounds(maxOrderTextBox.getRight() + spacing, 1,
                     orderbookCheckboxWidth, fieldHeight);
 
             ignoreAutosubscribeCheckBox.setBounds(orderbookEnabledCheckBox.getRight() + spacing, 1,
@@ -1065,6 +1098,17 @@ public class PresetEditorTab extends StockMarketGuiElement {
             s = s.replaceAll("\\.$", "");
         }
         return s;
+    }
+
+    /**
+     * Parses a long from a string, returning defaultVal on failure.
+     */
+    private static long parseLong(String text, long defaultVal) {
+        try {
+            return Long.parseLong(text.trim());
+        } catch (NumberFormatException e) {
+            return defaultVal;
+        }
     }
 
     /**

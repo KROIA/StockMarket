@@ -2,18 +2,26 @@ package net.kroia.stockmarket.pluginsystem.screen;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import net.kroia.modutilities.gui.client.ClientCompat;
+import net.kroia.modutilities.gui.client.GuiScreen;
+import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
+import net.kroia.stockmarket.pluginsystem.plugins.screen.NewsDialogScreen;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.banksystem.util.ItemID;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -36,6 +44,18 @@ import java.util.UUID;
  * @param <TRuntimeData> the runtime data type (use Void if no runtime data)
  */
 public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiElement {
+
+    /** Shared texts of the "Apply to all markets" flow, used by every plugin GUI. */
+    protected static class ApplyAllTexts {
+        private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".plugin_gui.";
+        /** Label of the "Apply to all" button (also used as the confirm button label). */
+        public static final Component APPLY_ALL = Component.translatable(PREFIX + "apply_all");
+        public static final Component APPLY_ALL_TOOLTIP = Component.translatable(PREFIX + "apply_all.tooltip");
+        public static final Component CONFIRM_TITLE = Component.translatable(PREFIX + "apply_all_confirm_title");
+        /** Label and tooltip of the "Defaults" button (see {@link #createDefaultsButton()}). */
+        public static final Component DEFAULTS = Component.translatable(PREFIX + "defaults");
+        public static final Component DEFAULTS_TOOLTIP = Component.translatable(PREFIX + "defaults.tooltip");
+    }
 
     private UUID runtimeStreamID = null;
     private PluginSyncData pluginSyncData = null;
@@ -218,6 +238,91 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
             });
         } finally {
             buf.release();
+        }
+    }
+
+    /**
+     * Sends the given custom settings to every market currently subscribed to this plugin.
+     * Each market is updated through {@link #sendCustomSettings(ItemID, Object)}, so every
+     * confirmation arrives individually via {@link #onCustomSettingsResponse}.
+     *
+     * @param settings the settings to apply to all subscribed markets
+     */
+    protected final void sendCustomSettingsToAllMarkets(TSettings settings) {
+        if (pluginSyncData == null) return;
+        for (ItemID marketID : List.copyOf(pluginSyncData.getSubscribedMarkets())) {
+            sendCustomSettings(marketID, settings);
+        }
+    }
+
+    /**
+     * Opens a confirmation popup warning that the settings of ALL subscribed markets
+     * will be overwritten. On confirm, {@code settings} is sent to every subscribed
+     * market ({@link #sendCustomSettingsToAllMarkets}); on cancel nothing happens and
+     * the previous screen is shown again.
+     *
+     * @param settings the settings read from the form at click time
+     */
+    protected final void confirmApplyToAllMarkets(TSettings settings) {
+        if (pluginSyncData == null || settings == null) return;
+        int count = pluginSyncData.getSubscribedMarkets().size();
+        List<String> lines = Arrays.asList(Component.translatable(
+                "gui." + StockMarketMod.MOD_ID + ".plugin_gui.apply_all_confirm_message",
+                pluginSyncData.getName(), String.valueOf(count)).getString().split("\n"));
+        GuiScreen.setScreen(NewsDialogScreen.confirmDialog(ClientCompat.screen(),
+                ApplyAllTexts.CONFIRM_TITLE, lines, ApplyAllTexts.APPLY_ALL,
+                () -> sendCustomSettingsToAllMarkets(settings)));
+    }
+
+    /**
+     * Returns the plugin's default custom settings (what a newly subscribed market gets), shown by the
+     * "Defaults" button. Override in plugins that have custom settings.
+     *
+     * @return the default settings, or null if this plugin has none (no "Defaults" button)
+     */
+    protected @Nullable TSettings defaultSettings() {
+        return null;
+    }
+
+    /**
+     * Fills the settings form with the given values without sending them. Called by the "Defaults"
+     * button; the user then resets a market with Apply (or all markets with Apply to all).
+     *
+     * @param settings the values to show in the form
+     */
+    protected void showSettings(TSettings settings) {
+        // Default: no-op. Subclasses with a settings form override.
+    }
+
+    /**
+     * Creates the "Defaults" button: it fills the form with {@link #defaultSettings()} via
+     * {@link #showSettings(Object)} and sends nothing. Subclasses add it to their layout.
+     *
+     * @return the button, or null if {@link #defaultSettings()} is null (button hidden)
+     */
+    protected final @Nullable Button createDefaultsButton() {
+        if (defaultSettings() == null) return null;
+        Button button = new Button(ApplyAllTexts.DEFAULTS.getString(), () -> {
+            TSettings defaults = defaultSettings();
+            if (defaults != null) showSettings(defaults);
+        });
+        setSettingTooltip(ApplyAllTexts.DEFAULTS_TOOLTIP, button);
+        return button;
+    }
+
+    /**
+     * Attaches a hover tooltip to setting controls (typically a label and its input).
+     * The tooltip is right-anchored (expands leftwards) because plugin settings are
+     * shown at the right side of their screens.
+     *
+     * @param tooltip  the translated tooltip text (line breaks separate lines)
+     * @param elements the elements that show the tooltip on hover
+     */
+    public static void setSettingTooltip(Component tooltip, GuiElement... elements) {
+        for (GuiElement element : elements) {
+            element.setHoverTooltipSupplier(tooltip::getString);
+            element.setHoverTooltipFontScale(hoverToolTipFontSize);
+            element.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
         }
     }
 

@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.minecraft.world.item.ItemStack;
 
@@ -67,6 +68,19 @@ public class MarketFavoriteButton extends ItemView {
     @Override
     public void renderBackground() {
         super.renderBackground();
+        // These buttons live in lists at the right edge of the trade screen, so the
+        // item tooltip is anchored with its top-right corner at the cursor (body
+        // extends to the LEFT). If it would not fit left of the cursor (very narrow
+        // screen / long name), flip back to the default right-of-cursor placement.
+        // Done here rather than in render() because the PairSelectorWidget override
+        // temporarily nulls the stack during render(); renderBackground() always
+        // runs first in the same frame with the stack still set.
+        if (isMouseOver() && getItemStack() != null) {
+            int tooltipWidth = getTextBounds(ClientPlayerUtilities.getItemDisplayText(getItemStack())).x
+                    + DEFAULT_HOVER_TOOLTIP_MOUSE_OFFSET + DEFAULT_TOOLTIP_BACKGROUND_PADDING;
+            setTooltipPositionAlignment(getMouseXGlobal() >= tooltipWidth
+                    ? Alignment.TOP_RIGHT : Alignment.TOP_LEFT);
+        }
         // Green selection overlay
         if (selected) {
             drawRect(0, 0, getWidth(), getHeight(), 0x6000FF00);
