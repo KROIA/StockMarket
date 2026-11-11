@@ -475,11 +475,11 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         if (hours == null)
             return;
         Minecraft mc = Minecraft.getInstance();
-        Screen parent = mc.screen;
+        Screen parent = net.kroia.modutilities.gui.client.ClientCompat.screen();
         String openText = MarketSettings.formatMinute(hours[0]);
         String closeText = MarketSettings.formatMinute(hours[1]);
-        mc.setScreen(new ConfirmScreen(confirmed -> {
-            mc.setScreen(parent);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(new ConfirmScreen(confirmed -> {
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(parent);
             if (confirmed)
                 applyTradingHoursToAllMarkets(hours[0], hours[1]);
         }, APPLY_ALL_HOURS_CONFIRM_TITLE,
