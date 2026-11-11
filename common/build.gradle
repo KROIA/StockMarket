@@ -60,7 +60,8 @@ if (!(rootProject.findProperty('enable_dev_features') ?: 'false').toBoolean()) {
 configurations.testCompileOnly.extendsFrom configurations.compileOnly // ModUtilities/BankSystem/LuckPerms/JEI APIs
 // ModUtilities and BankSystem are modCompileOnly (the game provides them); offline the tests need them at runtime.
 // Loom creates the remapped configuration only after evaluation.
-afterEvaluate { configurations.testRuntimeClasspath.extendsFrom configurations.modCompileClasspathMainMapped }
+afterEvaluate { configurations.testRuntimeClasspath.extendsFrom configurations.modCompileClasspathMainMapped } // mc<=1.21.11
+//configurations.testRuntimeClasspath.extendsFrom configurations.compileOnly // mc>=26.1 (no remapping: ModUtilities/BankSystem are plain compileOnly)
 
 test {
     useJUnitPlatform()
