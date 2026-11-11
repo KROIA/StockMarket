@@ -653,9 +653,7 @@ A dev build of StockMarket needs ModUtilities and BankSystem jars that were also
 | /stockmarket test list | List the test categories |
 | /stockmarket test \<category\> | Run one category |
 
-`/stockmarket test` runs the StockMarket suites only; BankSystem and ModUtilities have their own `/banksystem test` and `/modutilities test`. An automated test run of StockMarket (see below) covers all three: every StockMarket run also executes the BankSystem and ModUtilities suites.
-
-**Automated test matrix:** the ModUtilities repository contains an autotest harness (`tools/autotest`). It builds the mod (and its ModUtilities/BankSystem dependencies) with dev features enabled, starts the real game on Fabric and NeoForge in several server setups (singleplayer, client on a master server, master + slave, singleplayer world as slave of a master), runs every registered in-game test and reports a pass/fail table (command line or GUI). See its README in the ModUtilities repository for usage.
+`/stockmarket test` runs the StockMarket suites only; BankSystem and ModUtilities have their own `/banksystem test` and `/modutilities test`; run all three to cover the full stack.
 
 <div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
     <p><strong>Warning:</strong> the in-game tests run against the live world: they create scratch markets, bank accounts and users and touch real mod data. The test fixture cleans up after itself, but a failing or aborted test can leave data behind. Never run them on a real world or a production server — use a throwaway test world.</p>
