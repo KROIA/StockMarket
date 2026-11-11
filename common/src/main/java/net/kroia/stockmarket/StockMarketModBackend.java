@@ -27,6 +27,7 @@ import net.kroia.stockmarket.minecraft.compat.StockMarketPlaceholders;
 import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.data.OrderOriginLog;
+import net.kroia.stockmarket.data.filter.EqualityFilter;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
@@ -65,7 +66,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public class StockMarketModBackend implements StockMarketAPI {
@@ -327,6 +333,9 @@ public class StockMarketModBackend implements StockMarketAPI {
             BankSystemMod.getAPI().getEvents().getItemIDsMergedEvent().addListener(ITEM_IDS_MERGED_LISTENER);
             // T-195: master-only; cancel a frozen account's open orders (see onAccountFreezeChanged).
             BankSystemMod.getAPI().getEvents().getAccountFreezeChangedEvent().addListener(ACCOUNT_FREEZE_LISTENER);
+            // SM-267: master-only; BankSystem fires ITEM_IDS_REMOVED right after this setup-complete
+            // listener returns, so the markets loaded below are in place when it arrives.
+            BankSystemMod.getAPI().getEvents().getItemIDsRemovedEvent().addListener(ITEM_IDS_REMOVED_LISTENER);
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
             preRegisterPresetItemStacks();
@@ -548,6 +557,67 @@ public class StockMarketModBackend implements StockMarketAPI {
             serverMarketManager.cancelOrdersOfBankAccount(event.accountNumber());
     }
 
+    /**
+     * SM-267: BankSystem removed the ItemIDs of missing mods (master only, server thread, once per
+     * start right after BANKSYSTEM_SETUP_COMPLETED, so the markets are already loaded).
+     * <p>
+     * For every removed ID:
+     * <ul>
+     *   <li>the market is deleted through {@link ServerMarketManager#deleteMarket(ItemID)}, the
+     *       same path as {@code /stockmarket <market> remove}. It cancels the player orders and the
+     *       inter-market orders that touch the market, refunds the money locked by buy orders
+     *       (the money bank still exists), unsubscribes all plugins (plugin settings, news targets)
+     *       and broadcasts the removal to clients and slaves. Items locked by sell orders are not
+     *       refunded: BankSystem already dropped those item balances.</li>
+     *   <li>its price history and order history rows are deleted. The short is never reused, so
+     *       nothing could read them again; the BankSystem trade ledger keeps the money trail.</li>
+     * </ul>
+     * Afterwards the villager price table is rebuilt and the BankSystem bank (money unlocks) and
+     * then the StockMarket data are saved right away, because the event does not fire again on the
+     * next start. Presets (keyed by item name) and player preferences are left alone.
+     * Idempotent: a second call with the same IDs only re-runs the (empty) deletes.
+     *
+     * @param removed the removed ItemIDs (unmodifiable, from {@code IBankSystemEvents.getItemIDsRemovedEvent()})
+     * @return completes when the database deletes are done (already-complete when nothing ran)
+     */
+    public static CompletableFuture<Void> onItemIDsRemoved(Set<ItemID> removed) {
+        if (removed == null || removed.isEmpty() || SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null)
+            return CompletableFuture.completedFuture(null);
+        ServerMarketManager smm = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        if (smm == null) return CompletableFuture.completedFuture(null); // slave
+
+        int marketsDeleted = 0;
+        int ordersCancelled = 0;
+        List<CompletableFuture<Void>> deletes = new ArrayList<>();
+        for (ItemID id : removed) {
+            var market = smm.getServerMarket(id);
+            if (market != null) {
+                ordersCancelled += (int) market.getLimitOrders().stream().filter(o -> !o.isBotOrder()).count();
+                if (smm.deleteMarket(id)) marketsDeleted++;
+            }
+            Optional<EqualityFilter> byMarket = Optional.of(new EqualityFilter(id.getShort()));
+            if (SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER != null)
+                deletes.add(SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.removeHistory(Optional.empty(), byMarket));
+            if (SERVER_INSTANCES.ORDER_RECORD_MANAGER != null)
+                deletes.add(SERVER_INSTANCES.ORDER_RECORD_MANAGER.removeHistory(Optional.empty(), Optional.empty(), Optional.empty(), byMarket));
+        }
+
+        if (SERVER_INSTANCES.VILLAGER_TRADE_MANAGER != null)
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
+        // BankSystem first: if the server dies between the two saves, a stale StockMarket order
+        // only gets a failing unlock later, instead of money that stays locked forever.
+        if (SERVER_INSTANCES.BANK_SYSTEM_API != null)
+            SERVER_INSTANCES.BANK_SYSTEM_API.getDataHandler().save_bank();
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (server != null)
+            saveDataToFiles(server);
+
+        SERVER_INSTANCES.LOGGER.info("[StockMarketModBackend] Removed items of missing mods: " + removed.size()
+                + " ItemID(s), " + marketsDeleted + " market(s) deleted, " + ordersCancelled
+                + " player order(s) cancelled (locked money refunded, items not refunded), price and order history dropped");
+        return CompletableFuture.allOf(deletes.toArray(new CompletableFuture[0]));
+    }
+
     private static void onItemIDsMerged(Map<ItemID, ItemID> aliasToCanonical) {
         if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
         var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
@@ -702,6 +772,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         IBankSystemEvents events = BankSystemMod.getAPI().getEvents();
         events.getItemIDsMergedEvent().removeListener(ITEM_IDS_MERGED_LISTENER);
         events.getAccountFreezeChangedEvent().removeListener(ACCOUNT_FREEZE_LISTENER);
+        events.getItemIDsRemovedEvent().removeListener(ITEM_IDS_REMOVED_LISTENER);
         events.getMasterServerSlaveConnected().removeListener(SLAVE_CONNECTED_LISTENER);
         events.getTrustChangedSignal().removeListener(TRUST_CHANGED_LISTENER);
         events.getSlaveConnectionAcceptedSignal().removeListener(SLAVE_ACCEPTED_LISTENER);
@@ -855,6 +926,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     private static final Runnable BANK_DATA_LOADED_LISTENER = StockMarketModBackend::onPostBankSystemDataLoaded;
     private static final Consumer<Map<ItemID, ItemID>> ITEM_IDS_MERGED_LISTENER = StockMarketModBackend::onItemIDsMerged;
     private static final Consumer<AccountFreezeChangedEvent> ACCOUNT_FREEZE_LISTENER = StockMarketModBackend::onAccountFreezeChanged;
+    private static final Consumer<Set<ItemID>> ITEM_IDS_REMOVED_LISTENER = ids -> onItemIDsRemoved(ids);
     private static final Runnable SLAVE_CONNECTED_LISTENER = () -> {
         if (SERVER_INSTANCES == null || SERVER_INSTANCES.VILLAGER_TRADE_MANAGER == null) return;
         SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.broadcastTable();

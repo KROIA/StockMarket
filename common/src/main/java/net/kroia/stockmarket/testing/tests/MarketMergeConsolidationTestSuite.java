@@ -15,6 +15,8 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.data.filter.EqualityFilter;
+import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
@@ -28,7 +30,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Master-only in-game tests for {@link ServerMarketManager#consolidateMergedMarkets(Map)} —
@@ -78,6 +83,7 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
         addTest("direct_call_never_auto_creates", this::test_directCall_neverAutoCreates);
         addTest("event_driven_merge_consolidates", this::test_eventDrivenMerge_consolidates);
         addTest("deleted_market_refunds_locked_funds", this::test_deletedMarket_refundsLockedFunds);
+        addTest("removed_item_ids_drop_market_and_refund_money", this::test_removedItemIDs_dropMarketAndRefundMoney);
     }
 
     // ========================================================================
@@ -591,6 +597,80 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
                 smm.deleteMarket(canonical);
                 smm.deleteMarket(alias);
             }
+        } finally {
+            restoreState(snapshot);
+        }
+    }
+
+    /**
+     * SM-267: {@link StockMarketModBackend#onItemIDsRemoved(java.util.Set)} with a fake removed
+     * ID (a synthetic marker paper; BankSystem itself removes nothing here). The market must be
+     * deleted, the money locked by a player buy order refunded, the market's price history rows
+     * dropped, and a second call with the same set must be a harmless no-op.
+     */
+    private TestResult test_removedItemIDs_dropMarketAndRefundMoney() {
+        ServerMarketManager smm = getServerMarketManagerOrFail();
+        if (smm == null) return fail("ServerMarketManager unavailable — not master?");
+        IServerBankManager bankManager = backend.BANK_SYSTEM_API.getServerBankManager().getSync();
+        if (bankManager == null) return fail("ServerBankManager unavailable");
+        if (backend.MARKET_PRICE_HISTORY_MANAGER == null) return fail("MARKET_PRICE_HISTORY_MANAGER is null");
+
+        StateSnapshot snapshot = snapshotState();
+        ItemID removedID = null;
+        try {
+            removedID = registerRepairCostPair()[0];
+            if (!removedID.isValid()) return fail("failed to register the synthetic paper template");
+            ItemID currency = smm.getTradingCurrencyID();
+            if (currency == null) return fail("trading currency unavailable");
+
+            int accountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
+            try {
+                if (!bankManager.allowItemID(removedID))
+                    return fail("could not allow the synthetic paper template for banking");
+                IServerBankAccount account = bankManager.createBankAccount("RemovedItemIDsTest");
+                if (account == null) return fail("failed to create the test bank account");
+                accountNr = account.getAccountNumber();
+
+                IServerBank money = account.getBank(currency);
+                if (money == null) money = account.createBank(currency, 1_000_000);
+                else if (money.deposit(1_000_000) != BankStatus.SUCCESS) return fail("failed to fund the money bank");
+                if (money == null) return fail("failed to create the money bank");
+                long lockedBefore = money.getLockedBalance();
+                final long locked = 50_000;
+                if (money.lockAmount(locked) != BankStatus.SUCCESS) return fail("failed to lock money for the buy order");
+
+                IServerMarket market = smm.createMarket(removedID);
+                if (market == null) return fail("failed to create the test market");
+                var buyOrder = new net.kroia.stockmarket.stockmarket.market.core.order.Order(
+                        removedID, net.kroia.stockmarket.stockmarket.market.core.order.Order.Type.LIMIT,
+                        10, 100, 0, UUID.randomUUID(), accountNr);
+                buyOrder.setOriginalLockedMoney(locked);
+                ((ServerMarket) market).getOrderbook().putOrder(buyOrder);
+
+                backend.MARKET_PRICE_HISTORY_MANAGER.save(new MarketPriceStruct(
+                        removedID.getShort(), 100L, 90L, 110L, System.currentTimeMillis(), 0f)).get(5, TimeUnit.SECONDS);
+
+                StockMarketModBackend.onItemIDsRemoved(Set.of(removedID)).get(10, TimeUnit.SECONDS);
+
+                TestResult r = assertFalse("market of the removed ID deleted", smm.marketExists(removedID));
+                if (!r.passed()) return r;
+                r = assertEquals("money locked by the buy order refunded", lockedBefore, money.getLockedBalance());
+                if (!r.passed()) return r;
+                List<MarketPriceStruct> rows = backend.MARKET_PRICE_HISTORY_MANAGER.getHistory(Optional.empty(),
+                        Optional.of(new EqualityFilter(removedID.getShort())), 10).get(5, TimeUnit.SECONDS);
+                r = assertTrue("price history of the removed ID dropped", rows.isEmpty());
+                if (!r.passed()) return r;
+
+                // Idempotent: nothing left to delete, must not throw.
+                StockMarketModBackend.onItemIDsRemoved(Set.of(removedID)).get(10, TimeUnit.SECONDS);
+                return pass("removed ItemID: market deleted, buy-order money refunded, price history dropped");
+            } finally {
+                if (accountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER)
+                    bankManager.deleteBankAccount(accountNr);
+                smm.deleteMarket(removedID); // no-op when the test passed
+            }
+        } catch (Exception e) {
+            return fail("Exception: " + e);
         } finally {
             restoreState(snapshot);
         }
