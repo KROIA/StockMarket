@@ -3748,7 +3748,7 @@ public class PluginTestSuite extends TestSuite {
             loaded.load(tag);
             TestResult r = assertEquals("reference after load", ref, loaded.test_getReference(itemID));
             if (!r.passed()) return r;
-            CompoundTag m = ((ListTag) tag.get("marketData")).getCompound(0);
+            CompoundTag m = net.kroia.modutilities.NbtCompat.getCompound((ListTag) tag.get("marketData"), 0);
             for (String k : new String[]{"refY", "refV", "refC", "refAnchor", "refLastRaw", "refActive"}) m.remove(k);
             TargetPriceBot legacy = new TargetPriceBot();
             legacy.setLoggerEnabled(false);
