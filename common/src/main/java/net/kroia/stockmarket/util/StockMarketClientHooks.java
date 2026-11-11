@@ -14,10 +14,7 @@ import net.kroia.stockmarket.screen.TradeScreen;
 import net.kroia.stockmarket.screen.uiElements.NewsToast;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
@@ -25,12 +22,6 @@ import java.util.List;
 import java.util.Map;
 
 public class StockMarketClientHooks {
-    public static InteractionResult openStockMarketBlockScreen(BlockEntity entity, BlockPos pos)
-    {
-        Minecraft.getInstance().submit(TradeScreen::openScreen);
-        return InteractionResult.SUCCESS;
-    }
-
     /**
      * Notifies the currently open StockMarket screen that a market has been deleted
      * on the server. Called by {@code MarketRemovedPacket} on the client main thread
@@ -179,6 +170,12 @@ public class StockMarketClientHooks {
                 // server-side, so the screen open travels via OpenUIPacket like the
                 // management GUI. openNewsScreen() schedules on the client main thread.
                 openNewsScreen();
+                break;
+            }
+            case TRADE:
+            {
+                // StockMarket block (T-245): the server checked the master link before sending this.
+                Minecraft.getInstance().submit(TradeScreen::openScreen);
                 break;
             }
         }

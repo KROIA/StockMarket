@@ -9,6 +9,7 @@
   "gui.stockmarket.trade_screen.select_market": "选择市场",
   "gui.stockmarket.trade_screen.market_closed": "市场已休市",
   "message.stockmarket.command_market_removed": "市场 '%s' 已从股票市场中移除",
+  "message.stockmarket.slave_not_connected": "[StockMarket] 这是一个从服务器，且未连接到 StockMarket 主服务器！",
   "message.stockmarket.still_admin_via_luckperms_group": "%s 仍通过 LuckPerms 权限组拥有 StockMarket 管理员身份，因此管理员标记保持开启。要取消其管理员身份，请移除权限组中的 stockmarket.admin。",
   "message.stockmarket.command_market_remove_failed": "移除市场 '%s' 失败",
   "message.stockmarket.command_market_remove_not_found": "未找到 '%s' 对应的市场",
