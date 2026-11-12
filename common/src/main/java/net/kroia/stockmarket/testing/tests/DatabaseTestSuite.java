@@ -162,15 +162,20 @@ public class DatabaseTestSuite extends TestSuite {
             // throws "cannot commit - no transaction is active". Execute a write
             // statement to start a transaction.
             Connection conn = dbManager.getConnection();
-            conn.createStatement().execute("CREATE TABLE IF NOT EXISTS _test_commit (id INTEGER)");
-            conn.createStatement().execute("INSERT INTO _test_commit VALUES (1)");
+            // Statements on the live connection must be closed: an open one makes the SM-315 export's VACUUM INTO fail.
+            try (Statement st = conn.createStatement()) {
+                st.execute("CREATE TABLE IF NOT EXISTS _test_commit (id INTEGER)");
+                st.execute("INSERT INTO _test_commit VALUES (1)");
+            }
 
             boolean result = dbManager.commitTransaction();
             TestResult r = assertTrue("commitTransaction should succeed on valid connection", result);
             if (!r.passed()) return r;
 
             // Clean up the temp table
-            conn.createStatement().execute("DROP TABLE IF EXISTS _test_commit");
+            try (Statement st = conn.createStatement()) {
+                st.execute("DROP TABLE IF EXISTS _test_commit");
+            }
             dbManager.commitTransaction();
 
             return pass("commitTransaction succeeds normally");
@@ -267,15 +272,19 @@ public class DatabaseTestSuite extends TestSuite {
             // SQLite requires an active write transaction before commit — execute a
             // dummy write so the commit has something to commit.
             Connection conn = dbManager.getConnection();
-            conn.createStatement().execute("CREATE TABLE IF NOT EXISTS _test_shutdown (id INTEGER)");
-            conn.createStatement().execute("INSERT INTO _test_shutdown VALUES (1)");
+            try (Statement st = conn.createStatement()) {
+                st.execute("CREATE TABLE IF NOT EXISTS _test_shutdown (id INTEGER)");
+                st.execute("INSERT INTO _test_shutdown VALUES (1)");
+            }
 
             boolean commitResult = dbManager.commitTransaction();
             TestResult r = assertTrue("Commit before close should succeed", commitResult);
             if (!r.passed()) return r;
 
             // Clean up
-            conn.createStatement().execute("DROP TABLE IF EXISTS _test_shutdown");
+            try (Statement st = conn.createStatement()) {
+                st.execute("DROP TABLE IF EXISTS _test_shutdown");
+            }
             dbManager.commitTransaction();
 
             return pass("shutdownDatabase pattern commits before close (verified commit works)");
