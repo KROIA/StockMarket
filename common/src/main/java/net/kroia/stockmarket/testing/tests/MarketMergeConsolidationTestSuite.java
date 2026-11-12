@@ -152,7 +152,10 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
             }
         }
         try {
-            ItemIDManager.replaceState_forTesting(snapshot.items(), snapshot.aliases(), snapshot.counter());
+            // Never move the counter back: a short once handed out (maybe already synced
+            // to slaves) must never be reused; BankSystem's counter is monotonic by design.
+            int counter = Math.max(ItemIDManager.getNextShortCounter_forTesting(), snapshot.counter());
+            ItemIDManager.replaceState_forTesting(snapshot.items(), snapshot.aliases(), counter);
             ItemIDManager.restoreQuarantinedAliases_forTesting(snapshot.quarantined());
         } catch (Throwable t) {
             StockMarketMod.LOGGER.error("Failed to restore the ItemID registry after a merge-consolidation test", t);
@@ -483,7 +486,9 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
                 Map<ItemID, ItemStack> fixture = new HashMap<>();
                 fixture.put(canonical, ItemIDManager.getItemStackTemplate(canonical).copy());
                 fixture.put(alias, ItemIDManager.getItemStackTemplate(alias).copy());
-                ItemIDManager.replaceState_forTesting(fixture, Map.of(), snapshot.counter());
+                // Counter never moves back (monotonic): the pair above was minted past the snapshot.
+                ItemIDManager.replaceState_forTesting(fixture, Map.of(),
+                        Math.max(ItemIDManager.getNextShortCounter_forTesting(), snapshot.counter()));
 
                 // Apply the merge under the explicitly grown set — repair_cost becomes volatile,
                 // the two paper variants collapse in the BankSystem registry, the ITEM_IDS_MERGED

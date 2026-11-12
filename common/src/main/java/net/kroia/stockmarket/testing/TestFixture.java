@@ -398,7 +398,10 @@ public class TestFixture {
         registrySnapshot = null;
         if (snapshot != null) {
             try {
-                ItemIDManager.replaceState_forTesting(snapshot.items(), snapshot.aliases(), snapshot.counter());
+                // Never move the counter back: a short once handed out (maybe already synced
+                // to slaves) must never be reused; BankSystem's counter is monotonic by design.
+                int counter = Math.max(ItemIDManager.getNextShortCounter_forTesting(), snapshot.counter());
+                ItemIDManager.replaceState_forTesting(snapshot.items(), snapshot.aliases(), counter);
                 ItemIDManager.restoreQuarantinedAliases_forTesting(snapshot.quarantined());
             } catch (Throwable t) {
                 StockMarketMod.LOGGER.error("TestFixture[{}]: failed to restore the ItemID registry: {}", label, t.toString());
