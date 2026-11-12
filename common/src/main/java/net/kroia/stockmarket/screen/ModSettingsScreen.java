@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.screen;
 
 import com.google.gson.JsonParser;
+import net.kroia.modutilities.PermissionCompat;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.client.ClientCompat;
 import net.kroia.modutilities.gui.client.GuiScreen;
@@ -27,6 +28,7 @@ import net.kroia.stockmarket.pluginsystem.plugins.screen.NewsDialogScreen;
 import net.kroia.stockmarket.screen.uiElements.ApplyButton;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
+import net.kroia.stockmarket.util.StockMarketPermissions;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -42,8 +44,8 @@ import java.util.function.Supplier;
 /**
  * Master-only admin screen for editing the server's {@code settings.json} in-game.
  * Opened from the ManagementScreen's Overview tab via the "Mod Settings" button
- * (visible only when connected to the master server; the server additionally
- * enforces op level 2 + master status in {@link ModSettingsRequest}).
+ * (visible only when {@link #canOpen()} holds; the server additionally enforces
+ * operator level 2 + StockMarket admin + master status in {@link ModSettingsRequest}).
  * <p>
  * The screen never reads client-side settings — on open it fetches the current
  * values from the master (GET), and "Apply" sends the edited values (SET); the
@@ -208,12 +210,41 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
     private CheckBox usePresetPricesCheckBox = null;
 
     /**
-     * Creates the screen and immediately fetches the current settings from the master.
+     * SM-300: client-side gate for the Mod Settings button and for opening this screen.
+     * True only on the master server when the local player has vanilla operator level 2.
+     * The StockMarket admin flag is not stored on the client: the only way to reach this
+     * screen is the ManagementScreen, which the server opens only for admins
+     * ({@code /stockmarket manage} checks the flag). This is UI convenience only;
+     * {@link ModSettingsRequest} enforces op level 2 + admin flag + master server.
+     *
+     * @return true if the Mod Settings screen may be shown
+     */
+    public static boolean canOpen() {
+        return isMasterServer()
+                && Minecraft.getInstance().player != null
+                && PermissionCompat.hasPermission(Minecraft.getInstance().player, StockMarketPermissions.FALLBACK_LEVEL);
+    }
+
+    /**
+     * Opens the screen if {@link #canOpen()} holds; otherwise the parent stays open
+     * (same refuse-to-open pattern as {@code ManagementScreen.openScreen()}).
      *
      * @param parent the screen to return to when this screen is closed
      *               (normally the ManagementScreen)
      */
-    public ModSettingsScreen(StockMarketGuiScreen parent) {
+    public static void open(StockMarketGuiScreen parent) {
+        if (canOpen())
+            ClientCompat.setScreen(new ModSettingsScreen(parent));
+    }
+
+    /**
+     * Creates the screen and immediately fetches the current settings from the master.
+     * Use {@link #open} so the {@link #canOpen()} gate is applied.
+     *
+     * @param parent the screen to return to when this screen is closed
+     *               (normally the ManagementScreen)
+     */
+    private ModSettingsScreen(StockMarketGuiScreen parent) {
         super(Texts.TITLE, parent);
 
         titleLabel = new Label(Texts.TITLE.getString());

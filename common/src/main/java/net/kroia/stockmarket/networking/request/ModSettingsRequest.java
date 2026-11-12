@@ -2,16 +2,20 @@ package net.kroia.stockmarket.networking.request;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.kroia.modutilities.PermissionCompat;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
+import net.kroia.stockmarket.util.StockMarketPermissions;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -40,11 +44,14 @@ import java.util.concurrent.CompletableFuture;
  * that is used for the settings.json file itself. This avoids duplicating a
  * structured codec for every setting and automatically covers settings added later.
  * <p>
- * <b>Security:</b> the handler enforces BOTH conditions server-side, regardless of
- * any client-side UI gating:
+ * <b>Security:</b> the handler enforces ALL of these conditions server-side, for every
+ * action, regardless of any client-side UI gating (SM-300):
  * <ul>
  *   <li>the sending player must have the StockMarket-admin flag (the same flag
- *       {@code /stockmarket manage} requires), and</li>
+ *       {@code /stockmarket manage} requires),</li>
+ *   <li>the sending player must be online on THIS server and have vanilla operator
+ *       level 2 ({@link StockMarketPermissions#FALLBACK_LEVEL}); a player connected
+ *       through a slave is therefore rejected — the screen is master-only, and</li>
  *   <li>this server must be the MASTER server — only the master loads and owns
  *       settings.json; slaves keep compile-time defaults by design.</li>
  * </ul>
@@ -180,14 +187,18 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
-        // --- Permission check: require the StockMarket-admin flag (the same flag
-        // /stockmarket manage requires), resolved from the master's user map so it
-        // also works for players connected through a slave. Enforced here
-        // regardless of the client-side button gating. Both GET and SET share this
-        // gate (the branches below only add the T-129 slave-trust checks).
-        if (playerSender == null || !playerIsAdmin(playerSender)) {
+        // --- Permission check (SM-300): require BOTH the StockMarket-admin flag (the
+        // same flag /stockmarket manage requires) AND vanilla operator level 2. The op
+        // level can only be checked for a player online on THIS server, so a sender
+        // connected through a slave fails here — the screen is master-only anyway.
+        // Enforced regardless of the client-side button gating. Every action shares
+        // this gate (the branches below only add the T-129 slave-trust checks).
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        ServerPlayer player = playerSender == null || server == null ? null : server.getPlayerList().getPlayer(playerSender);
+        if (player == null || !PermissionCompat.hasPermission(player, StockMarketPermissions.FALLBACK_LEVEL)
+                || !playerIsAdmin(playerSender)) {
             warn("Rejected mod settings " + input.action() + " from " + getPlayerName(playerSender) + ": no permission");
-            return CompletableFuture.completedFuture(new OutputData(false, "No permission (StockMarket admin required)", ""));
+            return CompletableFuture.completedFuture(new OutputData(false, "No permission (operator level 2 and StockMarket admin required)", ""));
         }
 
         // --- Master check: only the master server loads/owns settings.json.
@@ -229,7 +240,7 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         }
 
         // ------------- APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS (T-179) -------------
-        // Same admin + master + trusted-slave gates as SET (checked above). Markets only exist on
+        // Same admin + op + master + trusted-slave gates as SET (checked above). Markets only exist on
         // the master (slaves have no ServerMarketManager), so no slave propagation is needed —
         // order checks run on the master and the new limits reach clients via MarketPriceStream.
         if (input.action() == Action.APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS) {

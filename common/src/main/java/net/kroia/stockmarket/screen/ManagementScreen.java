@@ -424,14 +424,14 @@ public class ManagementScreen extends StockMarketGuiScreen {
             newsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
             listView.addChild(newsButton);
 
-            // Master-only: button that opens the Mod Settings screen (edits the
-            // server's settings.json in-game). Only the master server loads/owns
-            // settings.json, so the button is hidden on slave servers — the flag
-            // is synced at join via PlayerJoinSyncPacket/ClientSettings. The server
-            // additionally enforces op level 2 + master status in ModSettingsRequest.
-            if (isMasterServer()) {
+            // Button that opens the Mod Settings screen (edits the server's
+            // settings.json in-game). Shown only if ModSettingsScreen.canOpen():
+            // master server (synced at join via PlayerJoinSyncPacket/ClientSettings)
+            // and operator level 2; the admin flag is implied by being on this screen.
+            // The server enforces op level 2 + admin flag + master in ModSettingsRequest.
+            if (ModSettingsScreen.canOpen()) {
                 Button modSettingsButton = new Button(Texts.MOD_SETTINGS.getString(),
-                        () -> setScreen(new ModSettingsScreen(parent)));
+                        () -> ModSettingsScreen.open(parent));
                 modSettingsButton.setHeight(elementHeight);
                 modSettingsButton.setHoverTooltipSupplier(Texts.MOD_SETTINGS_TOOLTIP::getString);
                 modSettingsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
