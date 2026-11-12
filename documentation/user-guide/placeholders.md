@@ -123,4 +123,5 @@ All values are computed on the master server. A slave server pulls them from the
 - **Player placeholders** are only provided to slaves the master trusts (`/banksystem trust <slaveID>`). On an untrusted slave they are empty.
 - While a slave is not connected to its master, the placeholders show the last received values (empty after a slave restart).
 - Newly created markets appear on a slave within a few seconds.
+- `portfolio` and `open_orders` on a slave leave out markets whose item the slave does not have (its mod is not installed there), including item/item orders with one side on such a market.
 - The master decides: while its **Placeholders** setting is off, the placeholders are empty on the slaves too.

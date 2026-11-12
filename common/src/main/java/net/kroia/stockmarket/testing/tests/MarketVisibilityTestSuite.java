@@ -226,8 +226,9 @@ public class MarketVisibilityTestSuite extends TestSuite {
     }
 
     /**
-     * T-240: the portfolio placeholder the master computes keeps every market; the slave's copy sums it again
-     * without the market it cannot resolve, and keeps the master's values when every market resolves.
+     * T-240 / SM-247: the portfolio and open_orders placeholders the master computes keep every market; the slave's
+     * copy sums them again without the market it cannot resolve (an inter-market order touching it is left out
+     * too), and keeps the master's values when every market resolves.
      */
     private TestResult test_slavePortfolioExcludesUnresolvableMarket() {
         List<ItemID> items = twoResolvableItems();
@@ -235,7 +236,12 @@ public class MarketVisibilityTestSuite extends TestSuite {
             return skip("fewer than two resolvable items in the registry");
         ItemID shown = items.get(0);
         ItemID hidden = items.get(1);
-        Map<String, String> master = StockMarketPlaceholders.playerValueMap(0, Map.of(shown, 300L, hidden, 700L));
+        // 2 orders on the shown market, 3 on the hidden one, 1 inter-market order between both
+        Map<String, Integer> orders = Map.of(
+                StockMarketPlaceholders.openOrdersPartKey(shown), 2,
+                StockMarketPlaceholders.openOrdersPartKey(hidden), 3,
+                StockMarketPlaceholders.openOrdersPartKey(shown, hidden), 1);
+        Map<String, String> master = StockMarketPlaceholders.playerValueMap(orders, Map.of(shown, 300L, hidden, 700L));
         TestResult r = assertTrue("all markets resolve: master values kept",
                 StockMarketPlaceholders.withoutUnresolvableMarkets(master) == master);
         if (!r.passed()) return r;
@@ -243,7 +249,13 @@ public class MarketVisibilityTestSuite extends TestSuite {
         try {
             r = assertEquals("master keeps both markets", MoneyFormat.formatMoneyRaw(1000), master.get("portfolio_raw"));
             if (!r.passed()) return r;
+            r = assertEquals("master counts every open order", "6", master.get("open_orders"));
+            if (!r.passed()) return r;
             Map<String, String> slave = StockMarketPlaceholders.withoutUnresolvableMarkets(master);
+            r = assertEquals("slave open_orders without the hidden market", "2", slave.get("open_orders"));
+            if (!r.passed()) return r;
+            r = assertEquals("slave open_orders_raw without the hidden market", "2", slave.get("open_orders_raw"));
+            if (!r.passed()) return r;
             r = assertEquals("slave raw value without the hidden market", MoneyFormat.formatMoneyRaw(300), slave.get("portfolio_raw"));
             if (!r.passed()) return r;
             return assertEquals("slave formatted value without the hidden market", MoneyFormat.formatMoney(300), slave.get("portfolio"));
