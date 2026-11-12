@@ -71,6 +71,10 @@ public class Order implements ServerSaveable
     // the tick they're placed in; limit orders can recompute from startPrice.
     transient long originalLockedMoney = 0L;
 
+    // SM-317: set by the player cancel paths right before the order is finished, so the OrderHistory
+    // row records STATUS_CANCELLED_BY_PLAYER. Non-persistent: only read in the same call.
+    transient boolean cancelledByPlayer = false;
+
 
     /**
      * ----------------------------------------------
@@ -172,14 +176,47 @@ public class Order implements ServerSaveable
     }
 
 
+    /**
+     * Builds the OrderHistory row of this finished order. Call only once the order is final
+     * (consumed or cancelled): the finish time is taken now and the status from the fill state.
+     */
     public OrderRecordStruct getHistoricalRecord()
     {
-        short itemID_raw = itemID.getShort();
-        int typeValue = type.ordinal();
-        long averageExecPrice = getAverageExecutionPrice();
-        OrderRecordStruct recordStruct = new OrderRecordStruct(itemID_raw, bankAccountNr, orderExecutor, typeValue, filledVolume, averageExecPrice, time, null,
-                orderID == 0 ? null : orderID);
-        return recordStruct;
+        return toHistoricalRecord(null, orderID == 0 ? null : orderID, getFinalStatus());
+    }
+
+    /**
+     * SM-317: shared row builder for regular orders and inter-market legs.
+     *
+     * @param interMarketGroupID group ID of an inter-market leg, null for a regular order
+     * @param recordOrderID      value of the {@code order_id} column, null if none
+     * @param finalStatus        one of the {@code OrderRecordStruct.STATUS_*} codes
+     * @return the row, with finish time = now, limit price = {@code startPrice} (0 for market orders)
+     *         and wanted volume = {@code targetVolume}
+     */
+    OrderRecordStruct toHistoricalRecord(@Nullable UUID interMarketGroupID, @Nullable Long recordOrderID, int finalStatus)
+    {
+        return new OrderRecordStruct(itemID.getShort(), bankAccountNr, orderExecutor, type.ordinal(), filledVolume,
+                getAverageExecutionPrice(), time, interMarketGroupID, recordOrderID,
+                System.currentTimeMillis(), isMarketOrder() ? 0L : startPrice, targetVolume, finalStatus);
+    }
+
+    /**
+     * SM-317: how this finished order ended. Filled when the whole target volume was filled, otherwise
+     * cancelled by the player if {@link #markCancelledByPlayer()} was called, else cancelled by the system.
+     *
+     * @return one of the {@code OrderRecordStruct.STATUS_*} codes
+     */
+    int getFinalStatus()
+    {
+        if (isFilled()) return OrderRecordStruct.STATUS_FILLED;
+        return cancelledByPlayer ? OrderRecordStruct.STATUS_CANCELLED_BY_PLAYER : OrderRecordStruct.STATUS_CANCELLED_BY_SYSTEM;
+    }
+
+    /** SM-317: marks this order as cancelled by its owner; call right before the cancel bookkeeping runs. */
+    public void markCancelledByPlayer()
+    {
+        cancelledByPlayer = true;
     }
 
     /**

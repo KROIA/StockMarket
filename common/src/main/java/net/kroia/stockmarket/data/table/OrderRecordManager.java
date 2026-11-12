@@ -20,8 +20,8 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
 
     private final DatabaseManager databaseManager;
 
-    public static final String INSERT = "INSERT INTO OrderHistory (itemid, accountid, userid_one, userid_two, type, amount, price, time, intermarket_group_one, intermarket_group_two, order_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT itemid, accountid, userid_one, userid_two, type, amount, price, time, intermarket_group_one, intermarket_group_two, order_id FROM OrderHistory";
+    public static final String INSERT = "INSERT INTO OrderHistory (itemid, accountid, userid_one, userid_two, type, amount, price, time, intermarket_group_one, intermarket_group_two, order_id, finish_time, limit_price, target_volume, final_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    public static final String SELECT = "SELECT itemid, accountid, userid_one, userid_two, type, amount, price, time, intermarket_group_one, intermarket_group_two, order_id, finish_time, limit_price, target_volume, final_status FROM OrderHistory";
     public static final String DELETE = "DELETE FROM OrderHistory";
     public static final String COUNT  = "SELECT COUNT(*) FROM OrderHistory";
 
@@ -138,6 +138,11 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                 stmt.setLong(11, data.orderID());
             else
                 stmt.setNull(11, java.sql.Types.INTEGER);
+            // SM-317: finish fields, NULL when the record has none
+            setNullableLong(stmt, 12, data.finishTime());
+            setNullableLong(stmt, 13, data.limitPrice());
+            setNullableLong(stmt, 14, data.targetVolume());
+            setNullableLong(stmt, 15, data.finalStatus() == null ? null : data.finalStatus().longValue());
             stmt.addBatch();
         }
         catch(SQLException e){
@@ -292,6 +297,20 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
         }, databaseManager.getDatabaseThread());
     }
 
+    /** SM-317: binds {@code value}, or SQL NULL if it is null. */
+    private static void setNullableLong(PreparedStatement stmt, int index, Long value) throws SQLException {
+        if (value != null)
+            stmt.setLong(index, value);
+        else
+            stmt.setNull(index, java.sql.Types.INTEGER);
+    }
+
+    /** SM-317: reads an INTEGER column, null if it holds SQL NULL. */
+    private static Long getNullableLong(ResultSet rs, int index) throws SQLException {
+        long value = rs.getLong(index);
+        return rs.wasNull() ? null : value;
+    }
+
     public OrderRecordStruct mapRow(ResultSet rs){
         try {
             // Reconstruct inter-market group UUID from two longs; (0, 0) means null (no inter-market link)
@@ -300,7 +319,10 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
             UUID groupID = (groupMsb == 0 && groupLsb == 0) ? null : new UUID(groupMsb, groupLsb);
             long orderID = rs.getLong(11);
             Long orderIDOrNull = rs.wasNull() ? null : orderID;
-            return new OrderRecordStruct(rs.getShort(1), rs.getInt(2), new UUID(rs.getLong(3), rs.getLong(4)), rs.getInt(5), rs.getLong(6), rs.getLong(7), rs.getLong(8), groupID, orderIDOrNull);
+            Long finalStatus = getNullableLong(rs, 15); // SM-317 columns are NULL in older rows
+            return new OrderRecordStruct(rs.getShort(1), rs.getInt(2), new UUID(rs.getLong(3), rs.getLong(4)), rs.getInt(5), rs.getLong(6), rs.getLong(7), rs.getLong(8), groupID, orderIDOrNull,
+                    getNullableLong(rs, 12), getNullableLong(rs, 13), getNullableLong(rs, 14),
+                    finalStatus == null ? null : finalStatus.intValue());
         }
         catch(SQLException e){
             StockMarketMod.LOGGER.warn("Failed to read MarketPrice record, is the data corrupt?");

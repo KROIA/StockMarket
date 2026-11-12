@@ -290,6 +290,25 @@ public class OrderTestSuite extends TestSuite {
         if (!r.passed()) return r;
         r = assertEquals("time", 5000L, record.time());
         if (!r.passed()) return r;
+        // SM-317 finish fields
+        r = assertNotNull("finishTime set", record.finishTime());
+        if (!r.passed()) return r;
+        r = assertEquals("limitPrice is 0 for a market order", 0L, record.limitPrice());
+        if (!r.passed()) return r;
+        r = assertEquals("targetVolume", 10L, record.targetVolume());
+        if (!r.passed()) return r;
+        r = assertEquals("finalStatus FILLED", OrderRecordStruct.STATUS_FILLED, record.finalStatus());
+        if (!r.passed()) return r;
+        Order cancelled = new Order(DUMMY_ITEM_ID, Order.Type.LIMIT, -10, 250, 5000L, executor, 3);
+        cancelled.edit(-4, 1000);
+        cancelled.markCancelledByPlayer();
+        OrderRecordStruct partial = cancelled.getHistoricalRecord();
+        r = assertEquals("limitPrice of a limit order", 250L, partial.limitPrice());
+        if (!r.passed()) return r;
+        r = assertEquals("targetVolume signed like amount", -10L, partial.targetVolume());
+        if (!r.passed()) return r;
+        r = assertEquals("finalStatus CANCELLED_BY_PLAYER", OrderRecordStruct.STATUS_CANCELLED_BY_PLAYER, partial.finalStatus());
+        if (!r.passed()) return r;
         return pass("getHistoricalRecord returns correct OrderRecordStruct fields");
     }
 }

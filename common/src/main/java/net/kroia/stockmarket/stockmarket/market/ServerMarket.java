@@ -407,6 +407,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                     && order.getStartPrice() == startPrice
                     && order.getTargetVolume() == targetVolume) {
                 orderbook.removeOrder(order);
+                order.markCancelledByPlayer(); // SM-317: final_status in OrderHistory
                 // unlockRemainingFunds is now called inside onOrderCanceled (Fix 3),
                 // so we no longer invoke it here — that would double-unlock.
                 onOrderCanceled(order);

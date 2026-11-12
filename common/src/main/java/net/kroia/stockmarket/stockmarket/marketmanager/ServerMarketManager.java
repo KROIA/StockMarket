@@ -1322,6 +1322,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 // (the ones a player can drag); allows re-placing this volume (see MoveCredit).
                 long remainingHave = -order.getSellOrder().getRemainingVolume();
                 it.remove();
+                order.getBuyOrder().markCancelledByPlayer(); // SM-317: final_status in OrderHistory (both legs)
                 onInterMarketOrderCanceled(order);
                 if (order.getCrossRateLimit() > 0)
                     grantMoveCredit(playerUUID, order.getSellItemID(), order.getBuyItemID(), remainingHave);

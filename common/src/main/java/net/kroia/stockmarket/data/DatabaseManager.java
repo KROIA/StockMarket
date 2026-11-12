@@ -171,6 +171,16 @@ public class DatabaseManager {
         } catch (SQLException ignored) {
             try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
         }
+        // SM-317: finish time, limit price, wanted volume and final status of the order; NULL for older rows.
+        // Older mod versions name their INSERT columns explicitly, so they keep writing (NULL) after a downgrade.
+        for (String column : new String[]{"finish_time", "limit_price", "target_volume", "final_status"}) {
+            try (Statement stmt = connection.createStatement()) {
+                stmt.execute("ALTER TABLE OrderHistory ADD COLUMN " + column + " INTEGER");
+                connection.commit();
+            } catch (SQLException ignored) {
+                try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
+            }
+        }
     }
 
 
