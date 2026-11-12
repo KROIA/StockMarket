@@ -216,4 +216,5 @@ public class StockMarketTestCategories {
     // SM-313: client integration API for BankSystem (embedded chart, open trade screen); chart tests need a client (sp cells).
     public static final TestCategory CLIENT_INTEGRATION = new TestCategory(
             "stockmarket", "sm_client_integration", "Client integration API: embedded price chart subscription balance, unknown markets, trade screen initial market and OpenUIPacket market round trip", BOTH, true);
+    public static final TestCategory PICKER_REGISTRATION = new TestCategory("stockmarket", "sm_picker_registration", "SM-273: a not-yet-registered plain item gets an ItemID through the picker's server path and its market is created (master, trusted slave); an untrusted slave stays lookup-only", BOTH, true);
 }

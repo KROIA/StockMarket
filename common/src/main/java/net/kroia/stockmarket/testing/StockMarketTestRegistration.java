@@ -127,6 +127,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new MasterDownTestSuite()); // T-246: slave-masterdown cell only (T-245 screen refusal)
         TestRegistry.register(new PortSmokeTestSuite()); // SM-288: per-version port smoke checks
         TestRegistry.register(new ClientIntegrationTestSuite()); // SM-313: client API for BankSystem's company screen
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.ItemPickerRegistrationTestSuite()); // SM-273
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());
