@@ -6,6 +6,7 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.IBankSystemEvents;
+import net.kroia.banksystem.api.audit.AuditExport;
 import net.kroia.banksystem.api.event.AccountFreezeChangedEvent;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.util.ItemID;
@@ -236,6 +237,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         events.getBanksystemSetupCompleteSignal().addListener(BANK_SETUP_COMPLETE_LISTENER);
         events.getBankDataLoadedFromFileSignal().removeListener(BANK_DATA_LOADED_LISTENER);
         events.getBankDataLoadedFromFileSignal().addListener(BANK_DATA_LOADED_LISTENER);
+        // SM-315: our files in /banksystem backup export (master and slave); registering again replaces the entry.
+        AuditExport.register(StockMarketMod.MOD_ID, DataManager::contributeAuditExport);
 
         Plugins.serverSetup();
     }

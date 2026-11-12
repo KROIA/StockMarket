@@ -12,6 +12,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -67,6 +69,8 @@ public class DatabaseManager {
 
 
     public static final Path DATABASE_PATH = DataManager.SQL_DATABASE;
+    /** File name of the market database in {@link #DATABASE_PATH}. */
+    public static final String FILE_NAME = "stockdata.db";
 
     /**
      * Default safety timeout for {@link #pauseForBackup(long)} — 120 seconds.
@@ -206,7 +210,7 @@ public class DatabaseManager {
 
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         Path dbPath = worldPath.resolve(DATABASE_PATH);
-        String url = "jdbc:sqlite:" + Path.of(String.valueOf(dbPath.toAbsolutePath()), "stockdata.db");
+        String url = "jdbc:sqlite:" + Path.of(String.valueOf(dbPath.toAbsolutePath()), FILE_NAME);
         Class<?> driverClass = null;
         Exception exception = null;
         try{
@@ -309,6 +313,29 @@ public class DatabaseManager {
         }
     }
 
+
+    /**
+     * SM-315: writes a consistent copy of {@value #FILE_NAME} to {@code target} with {@code VACUUM INTO}, as a job on
+     * the {@code db-worker}, so it is serialized against every write. Jobs queued before it (an open order-record
+     * batch already has its job queued) run first, and their pending transaction is committed before the copy.
+     * During a {@link #pauseForBackup(long) backup pause} the job waits until the worker resumes.
+     *
+     * @param target the copy to write; must not exist yet
+     * @return completes when the file is written; fails on an SQL error or when the database is not open
+     * @throws java.util.concurrent.RejectedExecutionException if the db-worker is already shut down
+     */
+    public CompletableFuture<Void> snapshotTo(Path target) {
+        return CompletableFuture.runAsync(() -> {
+            if (connection == null)
+                throw new IllegalStateException(FILE_NAME + " is not open");
+            try {
+                // BankSystem's helper: commits pending work, leaves transaction mode for the VACUUM, then restores it.
+                net.kroia.banksystem.data.DatabaseManager.vacuumInto(connection, target);
+            } catch (SQLException e) {
+                throw new CompletionException(e);
+            }
+        }, executor);
+    }
 
     public ExecutorService getDatabaseThread(){
         return executor;

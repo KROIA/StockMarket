@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.data;
 
 import dev.architectury.platform.Platform;
+import net.kroia.banksystem.api.audit.AuditExport;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
@@ -16,11 +18,14 @@ import net.kroia.stockmarket.news.NewsPictureLibrary;
 import net.kroia.stockmarket.news.NewsPictureStore;
 import net.kroia.stockmarket.news.NewsWorldRegistry;
 import net.kroia.stockmarket.news.ValidationReport;
+import net.kroia.stockmarket.villagertrading.VillagerTradeManager;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -596,6 +601,81 @@ public class DataManager extends DataPersistence {
             result.complete(true);
         });
         return result;
+    }
+
+
+    /**
+     * SM-315: StockMarket's part of BankSystem's audit export ({@code /banksystem backup export [name]}), registered
+     * at mod init on master and slave ({@link AuditExport#register}). Runs on the server thread. Saves the StockMarket
+     * files first, so they match memory, then adds them at the same paths as in the world folder
+     * ({@code data/StockMarket/...}):
+     * <ul>
+     *   <li>{@code Database/stockdata.db} and {@code Database/stockmarket_diagnostics.db}: consistent copies,
+     *       {@code VACUUM INTO} on the db-worker and on the diagnostics writer thread ({@code stockmarket-diag-db}).
+     *       A diagnostics file with no open writer is copied as a plain file.</li>
+     *   <li>the {@code MarketManager}, {@code News} and {@code PluginManager} folders</li>
+     *   <li>{@code settings.json}, {@code villager_trades.nbt} and every {@code *.marker} file</li>
+     * </ul>
+     * On a slave (no databases, no market folders) only what exists is added; on the master a missing file is
+     * listed as missing in the manifest.
+     *
+     * @param ctx the export context, valid only during this call
+     */
+    public static void contributeAuditExport(AuditExport.Context ctx) {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (BACKEND_INSTANCES == null || server == null)
+            return;
+        StockMarketModBackend.saveDataToFiles(server);
+        Path world = server.getWorldPath(LevelResource.ROOT);
+        Path base = world.resolve(BASE_PATH);
+
+        DatabaseManager db = BACKEND_INSTANCES.DATABASE_MANAGER;
+        if (db != null)
+            ctx.addDatabase(relPath(DatabaseManager.DATABASE_PATH.resolve(DatabaseManager.FILE_NAME)), db::snapshotTo);
+        Path diagRel = SQL_DATABASE.resolve(OrderOriginLog.FILE_NAME);
+        DiagnosticsDatabase diag = OrderOriginLog.live();
+        if (diag != null && !diag.isDisabled())
+            ctx.addDatabase(relPath(diagRel), diag::snapshotTo);
+        else
+            auditCopy(ctx, world, diagRel, false); // no writer: a plain copy cannot race one
+
+        auditCopy(ctx, world, BASE_PATH.resolve(MARKET_MANAGER_FOLDER), true);
+        auditCopy(ctx, world, BASE_PATH.resolve(NEWS_FOLDER), true);
+        auditCopy(ctx, world, BASE_PATH.resolve(PLUGIN_MANAGER_FOLDER), true);
+        auditCopy(ctx, world, BASE_PATH.resolve(SETTINGS_FILE), false);
+        auditCopy(ctx, world, BASE_PATH.resolve(VillagerTradeManager.DATA_FILE), false);
+        if (Files.isDirectory(base)) {
+            try (DirectoryStream<Path> markers = Files.newDirectoryStream(base, "*.marker")) {
+                for (Path marker : markers)
+                    auditCopy(ctx, world, BASE_PATH.resolve(marker.getFileName().toString()), false);
+            } catch (IOException e) {
+                BACKEND_INSTANCES.LOGGER.warn("[DataManager] audit export: listing the marker files failed: " + e);
+            }
+        }
+    }
+
+    /**
+     * Adds one file or folder of the world to the audit export at the same relative path. On a slave a missing
+     * source is left out instead of being listed as missing.
+     *
+     * @param ctx   the export context
+     * @param world the world folder
+     * @param rel   path relative to the world folder, also the path in the package
+     * @param dir   true for a folder (copied recursively)
+     */
+    private static void auditCopy(AuditExport.Context ctx, Path world, Path rel, boolean dir) {
+        Path src = world.resolve(rel);
+        if (ctx.isSlave() && !Files.exists(src))
+            return;
+        if (dir)
+            ctx.copyDir(src, relPath(rel));
+        else
+            ctx.copyFile(src, relPath(rel));
+    }
+
+    /** @return {@code rel} with {@code /} separators, as the audit package paths are written */
+    private static String relPath(Path rel) {
+        return rel.toString().replace('\\', '/');
     }
 
 
