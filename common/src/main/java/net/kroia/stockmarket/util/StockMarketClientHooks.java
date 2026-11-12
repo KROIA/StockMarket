@@ -39,6 +39,22 @@ public class StockMarketClientHooks {
     }
 
     /**
+     * Tells the currently open StockMarket screen that markets were added to the client
+     * cache (SM-304): by a {@code MarketCreatedPacket} or by a {@code requestMarkets()}
+     * answer that brought new markets. Scheduled on the client main thread, since the
+     * cache fill can complete on a request-future thread.
+     * Screens with market lists override {@link StockMarketGuiScreen#onMarketsAdded}.
+     */
+    public static void notifyScreenMarketsAdded()
+    {
+        Minecraft.getInstance().execute(() -> {
+            if (net.kroia.modutilities.gui.client.ClientCompat.screen() instanceof StockMarketGuiScreen guiScreen) {
+                guiScreen.onMarketsAdded();
+            }
+        });
+    }
+
+    /**
      * Opens the newspaper screen ({@code NewsScreen}). Entry points: the newspaper
      * item's right-click and the {@code /stockmarket news} command (via
      * {@code OpenUIPacket.GUIType.NEWS}, T-076).

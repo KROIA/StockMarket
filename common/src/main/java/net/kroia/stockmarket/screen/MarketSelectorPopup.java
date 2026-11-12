@@ -47,15 +47,18 @@ public class MarketSelectorPopup extends StockMarketGuiScreen {
         titleLabel.setAlignment(Label.Alignment.CENTER);
 
         itemSelectionView = new ItemSelectionView(this::onItemSelected);
+        populateItems();
 
-        // Populate with all available market items
+        addElement(titleLabel);
+        addElement(itemSelectionView);
+    }
+
+    /** Fills the selection view with all available market items, sorted like the other market lists. */
+    private void populateItems() {
         List<ItemID> markets = new ArrayList<>(getAvailableMarkets());
         markets.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
         List<ItemStack> stacks = markets.stream().map(ItemID::getStack).toList();
         itemSelectionView.setItems(stacks);
-
-        addElement(titleLabel);
-        addElement(itemSelectionView);
     }
 
     /**
@@ -67,6 +70,17 @@ public class MarketSelectorPopup extends StockMarketGuiScreen {
     @Override
     public void onMarketRemoved(ItemID marketID) {
         parentScreen.onMarketRemoved(marketID);
+    }
+
+    /**
+     * {@inheritDoc}
+     * SM-304: lists the new markets here and forwards the notice to the covered parent screen,
+     * whose lists were built before the popup opened.
+     */
+    @Override
+    public void onMarketsAdded() {
+        populateItems();
+        parentScreen.onMarketsAdded();
     }
 
     /**

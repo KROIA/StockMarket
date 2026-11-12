@@ -194,6 +194,12 @@ public class TradeScreen extends StockMarketGuiScreen {
     private @Nullable ItemID pairWantMarketID = null;
 
     /**
+     * SM-304: market count the market lists were last built from. tick() refreshes the lists when the
+     * cache size differs, for adds this screen was not told about (e.g. while a popup covered it).
+     */
+    private int knownMarketCount = 0;
+
+    /**
      * Issue #81: markets whose (ref-counted) price stream THIS screen currently holds one
      * subscription on. Never call subscribe/unsubscribe directly — use
      * {@link #syncPriceSubscriptions()} so each market is held at most once.
@@ -453,6 +459,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         // Build favorites bar with all markets and current selection
         favoritesBar.rebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
+        knownMarketCount = markets.size();
 
         // T-155: apply the shared market group to both selectors and highlight the
         // active segmented-control button (with per-group counts).
@@ -547,6 +554,10 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
             if (pairWantMarketID != null && getMarket(pairWantMarketID) == null) {
                 handleMarketRemoved(pairWantMarketID);
+            }
+            // SM-304 safety net: markets added while this screen was not notified directly
+            if (getAvailableMarkets().size() != knownMarketCount) {
+                refreshMarketLists();
             }
         }
 
@@ -1033,6 +1044,35 @@ public class TradeScreen extends StockMarketGuiScreen {
     @Override
     public void onMarketRemoved(ItemID marketID) {
         handleMarketRemoved(marketID);
+    }
+
+    /**
+     * {@inheritDoc}
+     * SM-304: a market was created on the server, or this screen's constructor-started
+     * {@code requestMarkets()} answered with markets the cache did not have yet.
+     */
+    @Override
+    public void onMarketsAdded() {
+        refreshMarketLists();
+    }
+
+    /**
+     * SM-304: rebuilds the market lists from the current client cache without touching the
+     * selection, pair legs or favorites. If nothing is selected in money mode (the cache was
+     * empty when the screen opened), selects the last used market or the first one, like the
+     * constructor. The pair selector reads the cache whenever its dropdown opens, so it needs nothing.
+     */
+    private void refreshMarketLists() {
+        List<ItemID> markets = getAvailableMarkets();
+        knownMarketCount = markets.size();
+        PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+        if (currentMarketID == null && !isPairMode && !markets.isEmpty()) {
+            ItemID last = prefs.getLastMarketID();
+            switchMarket(last != null && markets.contains(last) ? last : markets.getFirst()); // also rebuilds the favorites bar
+        } else {
+            favoritesBar.scheduleRebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
+        }
+        refreshMarketGroupButtons();
     }
 
     /**

@@ -7,6 +7,7 @@ import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.entity.UpdateDisplayViewportPacket;
 import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPacket;
+import net.kroia.stockmarket.networking.packet.MarketCreatedPacket;
 import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
 import net.kroia.stockmarket.networking.packet.NewsPublishedPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
@@ -113,6 +114,8 @@ public class StockMarketNetworking extends NetworkPacketManager {
         // the packet with the MultiServerPacketRegistry, enabling the master→slave
         // relay used to reach players connected to slave servers.
         registerS2C(MarketRemovedPacket.TYPE, MarketRemovedPacket.STREAM_CODEC);
+        // SM-304: market-created broadcast, same registration shape (and slave relay) as MarketRemovedPacket.
+        registerS2C(MarketCreatedPacket.TYPE, MarketCreatedPacket.STREAM_CODEC);
         // News-published broadcast (T-073). Same registration shape as
         // MarketRemovedPacket: registerS2C also registers the packet with the
         // MultiServerPacketRegistry, enabling the master→slave relay used to

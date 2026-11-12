@@ -56,6 +56,21 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
         // Default: nothing to do. Screens without a market selection ignore this.
     }
 
+    /**
+     * Called on the client main thread after new markets were added to the client cache
+     * (SM-304: {@code MarketCreatedPacket}, or a {@code requestMarkets()} answer with new
+     * markets, e.g. the one this constructor starts). {@code getAvailableMarkets()} already
+     * contains them.
+     * <p>
+     * Default implementation does nothing. Screens that list markets (TradeScreen,
+     * ManagementScreen, MarketSelectorPopup) override this to refresh those lists. Only the
+     * currently displayed screen is notified; popups forward it to their parent.
+     */
+    public void onMarketsAdded()
+    {
+        // Default: nothing to do. Screens without market lists ignore this.
+    }
+
     protected IClientMarketManager getMarketManager()
     {
         return BACKEND_INSTANCES.MARKET_MANAGER;

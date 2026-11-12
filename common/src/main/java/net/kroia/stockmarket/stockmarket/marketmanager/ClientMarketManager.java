@@ -30,6 +30,8 @@ public class ClientMarketManager implements IClientMarketManager
     private final IAsyncMarketManager asyncMarketManager;
     /** Reads BankSystem's item fraction scale factor; the client bank manager in production, a fake in tests. */
     private final Supplier<CompletableFuture<Integer>> factorRead;
+    /** Tells the open StockMarket screen that markets were added (SM-304); a no-op or counter in tests. */
+    private final Runnable marketsAddedListener;
 
     private final Map<ItemID, ClientMarket> clientMarkets = new HashMap<>();
 
@@ -42,12 +44,15 @@ public class ClientMarketManager implements IClientMarketManager
     public ClientMarketManager()
     {
         this(AsyncMarketManager.createClientManager(),
-                () -> BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync());
+                () -> BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync(),
+                StockMarketClientHooks::notifyScreenMarketsAdded);
     }
-    private ClientMarketManager(IAsyncMarketManager asyncMarketManager, Supplier<CompletableFuture<Integer>> factorRead)
+    private ClientMarketManager(IAsyncMarketManager asyncMarketManager, Supplier<CompletableFuture<Integer>> factorRead,
+                                Runnable marketsAddedListener)
     {
         this.asyncMarketManager = asyncMarketManager;
         this.factorRead = factorRead;
+        this.marketsAddedListener = marketsAddedListener;
     }
 
     /**
@@ -61,7 +66,23 @@ public class ClientMarketManager implements IClientMarketManager
     public static ClientMarketManager createForTesting(IAsyncMarketManager asyncMarketManager,
                                                        Supplier<CompletableFuture<Integer>> factorRead)
     {
-        return new ClientMarketManager(asyncMarketManager, factorRead);
+        return createForTesting(asyncMarketManager, factorRead, () -> {});
+    }
+
+    /**
+     * Test seam (SM-304): like {@link #createForTesting(IAsyncMarketManager, Supplier)}, plus a listener that
+     * replaces the open-screen notification (the real one touches the client GUI, absent on a dedicated server).
+     *
+     * @param asyncMarketManager   replaces the client's market manager
+     * @param factorRead           replaces BankSystem's item fraction scale factor read
+     * @param marketsAddedListener runs whenever markets were added to the cache
+     * @return the manager
+     */
+    public static ClientMarketManager createForTesting(IAsyncMarketManager asyncMarketManager,
+                                                       Supplier<CompletableFuture<Integer>> factorRead,
+                                                       Runnable marketsAddedListener)
+    {
+        return new ClientMarketManager(asyncMarketManager, factorRead, marketsAddedListener);
     }
 
 
@@ -158,8 +179,9 @@ public class ClientMarketManager implements IClientMarketManager
                 if(response == null) // not sent; must not be read as "the server has no markets" (that prunes all)
                     throw new IllegalStateException("Markets request could not be sent");
                 info("Markets request response received with "+response.size()+" markets");
+                boolean added = false;
                 for(ItemID itemID : response) {
-                    createClientMarket(itemID, factor);
+                    added |= createClientMarket(itemID, factor);
                 }
                 // Prune cached markets the server no longer reports (deleted markets).
                 // Without this the cache only ever grows, so a market deleted on the
@@ -172,6 +194,10 @@ public class ClientMarketManager implements IClientMarketManager
                     info("Removing stale ClientMarket (no longer on server): " + staleID);
                     onMarketRemoved(staleID);
                 }
+                // SM-304: a screen opened before this answer (e.g. the TradeScreen whose constructor
+                // started this request) built its lists from the old cache; let it refresh them.
+                if(added)
+                    marketsAddedListener.run();
                 return response;
             }));
     }
@@ -217,8 +243,8 @@ public class ClientMarketManager implements IClientMarketManager
                     if (failure != null)
                         warn("Market " + itemID + " was created, but reading the item fraction scale factor failed ("
                                 + failure + "); the next market list request loads it");
-                    else
-                        createClientMarket(itemID, factor);
+                    else if (createClientMarket(itemID, factor))
+                        marketsAddedListener.run(); // MarketCreatedPacket may arrive after this; it is then a no-op
                     return true;
                 });
             }
@@ -282,6 +308,29 @@ public class ClientMarketManager implements IClientMarketManager
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Client half of the market-creation propagation (SM-304): the master's
+     * {@code ServerMarketManager} broadcasts a {@code MarketCreatedPacket} (relayed through
+     * slaves), whose handler calls this. The ClientMarket needs the item fraction scale factor,
+     * so it is created when that read completes; a failed read leaves the market to the next
+     * {@link #requestMarkets()}.
+     */
+    @Override
+    public void onMarketAdded(ItemID marketID)
+    {
+        factorRead.get().whenComplete((factor, failure) -> {
+            if (failure != null || factor == null) {
+                warn("Market " + marketID + " was created on the server, but reading the item fraction scale factor failed ("
+                        + failure + "); the next market list request loads it");
+                return;
+            }
+            if (createClientMarket(marketID, factor))
+                marketsAddedListener.run();
+        });
+    }
+
+    /**
+     * {@inheritDoc}
      * Lazily creates and caches the CrossRateMarket on first request.
      * Returns null if either underlying ClientMarket has not been created yet.
      */
@@ -300,7 +349,13 @@ public class ClientMarketManager implements IClientMarketManager
         return crossRate;
     }
 
-    private void createClientMarket(ItemID itemID, int itemFractionScaleFactor)
+    /**
+     * Creates and caches the ClientMarket for {@code itemID} unless it is cached already or its item
+     * cannot be resolved on this side.
+     *
+     * @return true if a new ClientMarket was added
+     */
+    private boolean createClientMarket(ItemID itemID, int itemFractionScaleFactor)
     {
         ClientMarket clientMarket = clientMarkets.get(itemID);
         if(clientMarket == null)
@@ -318,6 +373,7 @@ public class ClientMarketManager implements IClientMarketManager
                 // a single-delta request on first view / delta switch when its
                 // cache is empty (see T-136).
                 info("Created ClientMarket with ID: " + itemID);
+                return true;
             }
             else
             {
@@ -325,6 +381,7 @@ public class ClientMarketManager implements IClientMarketManager
                 info("No ClientMarket for " + itemID + ": its item cannot be resolved here");
             }
         }
+        return false;
     }
 
     @Override

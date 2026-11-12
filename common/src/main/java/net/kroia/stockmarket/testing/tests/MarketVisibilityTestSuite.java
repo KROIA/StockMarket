@@ -61,6 +61,7 @@ public class MarketVisibilityTestSuite extends TestSuite {
         addTest("slave_list_hides_unresolvable_master_market", this::test_slaveListHidesUnresolvableMasterMarket);
         addTest("master_still_lists_unresolvable_market", this::test_masterStillListsUnresolvableMarket);
         addTest("slave_portfolio_excludes_unresolvable_market", this::test_slavePortfolioExcludesUnresolvableMarket);
+        addTest("client_adds_created_market_without_request", this::test_clientAddsCreatedMarketWithoutRequest);
     }
 
     /**
@@ -215,6 +216,46 @@ public class MarketVisibilityTestSuite extends TestSuite {
             r = assertEquals("slave raw value without the hidden market", MoneyFormat.formatMoneyRaw(300), slave.get("portfolio_raw"));
             if (!r.passed()) return r;
             return assertEquals("slave formatted value without the hidden market", MoneyFormat.formatMoney(300), slave.get("portfolio"));
+        } finally {
+            MultiServerUtils.setUnresolvableForTesting(hidden, false);
+        }
+    }
+
+    /**
+     * SM-304: the MarketCreatedPacket handler path ({@code onMarketAdded}) lists a market created on the server
+     * without a markets request and tells the open screen once; a repeat is a no-op, and a market this side
+     * cannot resolve is skipped without a screen refresh.
+     */
+    private TestResult test_clientAddsCreatedMarketWithoutRequest() {
+        List<ItemID> items = twoResolvableItems();
+        if (items == null)
+            return skip("fewer than two resolvable items in the registry");
+        ItemID shown = items.get(0);
+        ItemID hidden = items.get(1);
+        AtomicInteger sends = new AtomicInteger();
+        AtomicInteger notified = new AtomicInteger();
+        AsyncMarketManager transport = AsyncMarketManager.createForTesting(input -> {
+            sends.incrementAndGet();
+            return CompletableFuture.completedFuture(AsyncMarketManager.OutputData.of(input.function, true));
+        });
+        ClientMarketManager manager = ClientMarketManager.createForTesting(transport,
+                () -> CompletableFuture.completedFuture(1), notified::incrementAndGet);
+        MultiServerUtils.setUnresolvableForTesting(hidden, true);
+        try {
+            manager.onMarketAdded(shown);
+            TestResult r = assertTrue("created market listed", manager.getAvailableMarkets().contains(shown));
+            if (!r.passed()) return r;
+            r = assertEquals("open screen told once", 1, notified.get());
+            if (!r.passed()) return r;
+            manager.onMarketAdded(shown);
+            r = assertEquals("repeat is a no-op", 1, notified.get());
+            if (!r.passed()) return r;
+            manager.onMarketAdded(hidden);
+            r = assertFalse("unresolvable market not listed", manager.getAvailableMarkets().contains(hidden));
+            if (!r.passed()) return r;
+            r = assertEquals("no refresh for it", 1, notified.get());
+            if (!r.passed()) return r;
+            return assertEquals("nothing sent to the server", 0, sends.get());
         } finally {
             MultiServerUtils.setUnresolvableForTesting(hidden, false);
         }

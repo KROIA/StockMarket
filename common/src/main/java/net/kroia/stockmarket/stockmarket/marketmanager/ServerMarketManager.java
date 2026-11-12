@@ -18,6 +18,7 @@ import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
+import net.kroia.stockmarket.networking.packet.MarketCreatedPacket;
 import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.OrderLedger;
@@ -189,6 +190,9 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                     pluginManager.autoSubscribeNewMarket(marketID);
                 }
             }
+            // SM-304: tell every client (and slave players) about the new market. Sent only
+            // for a real creation and after markets.put, so a racing requestMarkets sees it too.
+            MarketCreatedPacket.broadcast(marketID);
         }
         return m;
     }
@@ -244,6 +248,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 pluginManager.autoSubscribeNewMarket(marketID);
             }
         }
+        MarketCreatedPacket.broadcast(marketID); // SM-304, see createMarket(ItemID)
         return m;
     }
 

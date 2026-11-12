@@ -93,6 +93,19 @@ public interface IClientMarketManager {
     void onMarketRemoved(ItemID marketID);
 
     /**
+     * Adds a market the server just created to the client cache (SM-304), without a full
+     * {@link #requestMarkets()}. Called by {@code MarketCreatedPacket} on the client main thread.
+     * <p>
+     * Once the market is cached the open StockMarket screen is told to refresh its market
+     * lists. A market whose item this side cannot resolve is skipped; the next
+     * {@link #requestMarkets()} picks it up if it becomes resolvable. Safe to call for an
+     * already cached market (no-op, no screen refresh).
+     *
+     * @param marketID the market that was created on the server
+     */
+    void onMarketAdded(ItemID marketID);
+
+    /**
      * Returns a synthetic cross-rate data provider for the given pair,
      * or null if either underlying market is unavailable.
      * The returned provider derives OHLC candles from the ratio wantPrice / havePrice.

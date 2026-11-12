@@ -758,6 +758,16 @@ public class ManagementScreen extends StockMarketGuiScreen {
     }
 
     /**
+     * {@inheritDoc}
+     * SM-304: a market was created (possibly by another admin, a slave or BankSystem);
+     * reload the market grid so it appears. The selection is kept.
+     */
+    @Override
+    public void onMarketsAdded() {
+        overviewTab.refreshMarketList();
+    }
+
+    /**
      * Builds a placeholder ItemStack for a market whose {@link ItemID} can no longer
      * be resolved to an item ("broken" market). This happens when the registered item
      * template dangles or drifts — e.g. items with volatile data components such as
@@ -867,6 +877,12 @@ public class ManagementScreen extends StockMarketGuiScreen {
         @Override
         public void onMarketRemoved(ItemID removedMarketID) {
             parentScreen.onMarketRemoved(removedMarketID);
+        }
+
+        /** SM-304: forwarded to the covered ManagementScreen, like {@link #onMarketRemoved}. */
+        @Override
+        public void onMarketsAdded() {
+            parentScreen.onMarketsAdded();
         }
     }
 }
