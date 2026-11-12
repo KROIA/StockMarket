@@ -23,14 +23,10 @@ import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.PacketTap;
 import net.kroia.stockmarket.testing.TestFixture;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelOutboundHandlerAdapter;
-import io.netty.channel.ChannelPromise;
-import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -48,7 +44,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -775,7 +770,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
      * chat line (ServerMarket#notifyMarketOrderNotFullyFilled) with the filled amount, the requested amount
      * and the item. Needs a real online player (sp, or mp with the client on this master); skips otherwise.
      * The order runs on a scratch account the player is a member of; the system chat packets sent to the
-     * player are read from a temporary tap on the player's network pipeline, which is removed afterwards.
+     * player are read through a {@link PacketTap}.
      *
      * @param buy true for a market buy against one resting sell, false for a market sell against one resting buy
      */
@@ -784,24 +779,12 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         if (server == null || server.getPlayerList().getPlayers().isEmpty())
             return skip("no player online on this server");
         ServerPlayer player = server.getPlayerList().getPlayers().get(0);
-        Connection conn = connectionOf(server, player);
-        if (conn == null)
-            return skip("the player has no network connection");
 
         return withLimits(0, 0, () -> {
-            List<Component> chat = new CopyOnWriteArrayList<>();
-            String tapName = "stockmarket_test_chat_tap";
-            ChannelOutboundHandlerAdapter tap = new ChannelOutboundHandlerAdapter() {
-                @Override
-                public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-                    if (msg instanceof ClientboundSystemChatPacket pkt)
-                        chat.add(pkt.content());
-                    super.write(ctx, msg, promise);
-                }
-            };
+            PacketTap tap = PacketTap.open(server, player);
+            if (tap == null)
+                return skip("the player has no network connection");
             putMarketInNoLiquidityState();
-            // Last in the pipeline = first to see outbound writes, still as Packet objects.
-            conn.channel().pipeline().addLast(tapName, tap);
             try {
                 // Counterparty: one resting LIMIT of volume 1 on the opposite side (the only liquidity).
                 UUID other = UUID.randomUUID();
@@ -824,10 +807,10 @@ public class CreateOrderRequestTestSuite extends TestSuite {
                     return fail("Expected CREATED, got: " + mkt.status);
 
                 serverMarket.update();
-                pumpUntil(() -> partialFillMessage(chat) != null, 3000);
-                TranslatableContents tc = partialFillMessage(chat);
+                pumpUntil(() -> tap.findTranslatable(PARTIAL_FILL_KEY) != null, 3000);
+                TranslatableContents tc = tap.findTranslatable(PARTIAL_FILL_KEY);
                 if (tc == null)
-                    return fail("no " + PARTIAL_FILL_KEY + " message reached the player (" + chat.size() + " system messages seen)");
+                    return fail("no " + PARTIAL_FILL_KEY + " message reached the player, got " + tap.systemMessages());
 
                 Object[] args = tc.getArgs();
                 TestResult r = assertEquals("message argument count", 3, args.length);
@@ -842,35 +825,10 @@ public class CreateOrderRequestTestSuite extends TestSuite {
                 if (!r.passed()) return r;
                 return pass("Partly filled market " + (buy ? "buy" : "sell") + " told the player: " + args[0] + " of 3.00 " + item);
             } finally {
-                try {
-                    conn.channel().pipeline().remove(tapName);
-                } catch (RuntimeException ignored) {
-                    // channel closed meanwhile: the tap went with it
-                }
+                tap.close();
                 restoreVirtualOrderbookEnabled();
             }
         });
-    }
-
-    /** @return the server-side network connection whose listener is the player's, or null. */
-    private static @Nullable Connection connectionOf(MinecraftServer server, ServerPlayer player) {
-        if (server.getConnection() == null)
-            return null;
-        List<Connection> conns = server.getConnection().getConnections();
-        synchronized (conns) {
-            for (Connection c : conns)
-                if (c.getPacketListener() == player.connection)
-                    return c;
-        }
-        return null;
-    }
-
-    /** @return the first captured partial-fill message, or null. */
-    private static @Nullable TranslatableContents partialFillMessage(List<Component> chat) {
-        for (Component c : chat)
-            if (c.getContents() instanceof TranslatableContents tc && PARTIAL_FILL_KEY.equals(tc.getKey()))
-                return tc;
-        return null;
     }
 
     private TestResult test_putOrderFails_unlocksMoneyBuy() {
