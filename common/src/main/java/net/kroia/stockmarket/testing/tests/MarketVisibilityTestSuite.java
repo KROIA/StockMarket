@@ -16,12 +16,23 @@ import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.util.MultiServerUtils;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.ParseResults;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestion;
+import net.minecraft.commands.CommandSource;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
@@ -32,7 +43,8 @@ import java.util.function.Function;
  * missing, so no second mod loadout is needed. Items are only looked up, never registered (an untrusted
  * slave may not register items). The fake-transport tests run on both sides, the filters are the same code
  * there; the live market list test runs on a slave and the master test on the master. T-240 adds the
- * portfolio placeholder, which a slave sums without those markets.
+ * portfolio placeholder, which a slave sums without those markets. SM-283 adds the slave's command
+ * suggestions/arguments and the client screen gate (history, plugin icons).
  */
 public class MarketVisibilityTestSuite extends TestSuite {
 
@@ -62,6 +74,8 @@ public class MarketVisibilityTestSuite extends TestSuite {
         addTest("master_still_lists_unresolvable_market", this::test_masterStillListsUnresolvableMarket);
         addTest("slave_portfolio_excludes_unresolvable_market", this::test_slavePortfolioExcludesUnresolvableMarket);
         addTest("client_adds_created_market_without_request", this::test_clientAddsCreatedMarketWithoutRequest);
+        addTest("slave_commands_hide_unresolvable_market", this::test_slaveCommandsHideUnresolvableMarket);
+        addTest("client_screen_gate_hides_unresolvable_market_on_slave", this::test_clientScreenGateHidesUnresolvableMarketOnSlave);
     }
 
     /**
@@ -259,6 +273,112 @@ public class MarketVisibilityTestSuite extends TestSuite {
         } finally {
             MultiServerUtils.setUnresolvableForTesting(hidden, false);
         }
+    }
+
+    /**
+     * SM-283, slave only: the real {@code /stockmarket} dispatcher neither suggests a market this slave cannot
+     * resolve ({@code open}, {@code close} and the root {@code <market>} argument) nor accepts it
+     * ({@code open <id>} answers "not found"). Checks first that the market is suggested while it resolves, so
+     * the hidden case cannot pass vacuously. If the slave wrongly accepted it, the master market would be forced
+     * open (test world only).
+     */
+    private TestResult test_slaveCommandsHideUnresolvableMarket() {
+        if (BACKEND_INSTANCES == null || !BACKEND_INSTANCES.MARKET_MANAGER.isSlave())
+            return skip("slave only");
+        if (!MultiServerUtils.canInteractWithStockMarket())
+            return skip("not connected to the master");
+        MinecraftServer server = getServer();
+        if (server == null)
+            return skip("no server");
+        List<ItemID> listed = await(BACKEND_INSTANCES.MARKET_MANAGER.getAsync().getAvailableMarketIDsAsync(), WAIT_MS);
+        if (listed == null || listed.isEmpty())
+            return skip("the master has no market this slave can resolve");
+        ItemID hidden = listed.get(0);
+        String quotedName = "\"" + hidden.getName() + "\"";
+        String numericID = String.valueOf(hidden.getShort());
+        // a name shared by several markets stays suggested for the others; the numeric id is then suggested too
+        boolean nameShared = listed.stream().filter(id -> id.getName().equals(hidden.getName())).count() > 1;
+
+        TestResult r = assertTrue("suggested while it resolves",
+                suggestionTexts(server, "stockmarket open ").contains(nameShared ? numericID : quotedName));
+        if (!r.passed()) return r;
+
+        MultiServerUtils.setUnresolvableForTesting(hidden, true);
+        try {
+            for (String input : List.of("stockmarket open ", "stockmarket close ", "stockmarket ")) {
+                List<String> suggested = suggestionTexts(server, input);
+                r = assertFalse("'" + input + "' does not suggest its numeric id", suggested.contains(numericID));
+                if (!r.passed()) return r;
+                if (!nameShared) {
+                    r = assertFalse("'" + input + "' does not suggest its name", suggested.contains(quotedName));
+                    if (!r.passed()) return r;
+                }
+            }
+
+            List<Component> failures = new CopyOnWriteArrayList<>();
+            CommandSource capture = new CommandSource() {
+                @Override public void sendSystemMessage(Component component) { failures.add(component); }
+                @Override public boolean acceptsSuccess() { return true; }
+                @Override public boolean acceptsFailure() { return true; }
+                @Override public boolean shouldInformAdmins() { return false; }
+            };
+            try {
+                server.getCommands().getDispatcher().execute("stockmarket open " + numericID,
+                        server.createCommandSourceStack().withSource(capture));
+            } catch (CommandSyntaxException e) {
+                return fail("command did not parse: " + e.getMessage());
+            }
+            pumpUntil(() -> !failures.isEmpty(), WAIT_MS);
+            return assertTrue("'stockmarket open " + numericID + "' answers not found, got " + failures,
+                    failures.stream().anyMatch(c -> hasTranslationKey(c, "message.stockmarket.command_market_remove_not_found")));
+        } finally {
+            MultiServerUtils.setUnresolvableForTesting(hidden, false);
+        }
+    }
+
+    /**
+     * SM-283: the gate every client screen uses to hide a market ({@link StockMarketGuiElement#isMarketVisible}:
+     * order history panel, plugin market icons, management grid, trade screen orders). The order history,
+     * trade history and plugin list requests return every market; the slave's screens leave out the hidden one
+     * through this gate. Needs a client in this JVM (sp: master, spslave: slave); skips on a dedicated server.
+     */
+    private TestResult test_clientScreenGateHidesUnresolvableMarketOnSlave() {
+        if (BACKEND_INSTANCES == null)
+            return skip("no server instances");
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null || client.SETTINGS == null)
+            return skip("no client in this JVM");
+        List<ItemID> items = twoResolvableItems();
+        if (items == null)
+            return skip("fewer than two resolvable items in the registry");
+        ItemID shown = items.get(0);
+        ItemID hidden = items.get(1);
+        boolean slave = BACKEND_INSTANCES.MARKET_MANAGER.isSlave();
+        MultiServerUtils.setUnresolvableForTesting(hidden, true);
+        try {
+            TestResult r = assertEquals("client knows whether it is on the master", !slave, StockMarketGuiElement.isMasterServer());
+            if (!r.passed()) return r;
+            r = assertTrue("resolvable market visible", StockMarketGuiElement.isMarketVisible(shown));
+            if (!r.passed()) return r;
+            return assertEquals(slave ? "slave screens hide the unresolvable market" : "master screens still show it",
+                    !slave, StockMarketGuiElement.isMarketVisible(hidden));
+        } finally {
+            MultiServerUtils.setUnresolvableForTesting(hidden, false);
+        }
+    }
+
+    /** @return the suggestion texts the real command dispatcher offers the console for {@code input} */
+    private List<String> suggestionTexts(MinecraftServer server, String input) {
+        CommandDispatcher<CommandSourceStack> dispatcher = server.getCommands().getDispatcher();
+        ParseResults<CommandSourceStack> parse = dispatcher.parse(input, server.createCommandSourceStack());
+        return await(dispatcher.getCompletionSuggestions(parse), WAIT_MS).getList().stream().map(Suggestion::getText).toList();
+    }
+
+    /** @return true if {@code component} or one of its siblings is the translatable text {@code key} */
+    private static boolean hasTranslationKey(Component component, String key) {
+        if (component.getContents() instanceof TranslatableContents t && t.getKey().equals(key))
+            return true;
+        return component.getSiblings().stream().anyMatch(s -> hasTranslationKey(s, key));
     }
 
     /** @return a market order for {@code marketID} */
