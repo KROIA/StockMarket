@@ -3,15 +3,18 @@ package net.kroia.stockmarket.pluginsystem.plugin.core;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
+import net.kroia.stockmarket.util.MultiServerUtils;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Network-transferable snapshot of a plugin's state.
@@ -44,6 +47,27 @@ public class PluginSyncData {
      */
     public static PluginSyncData fromServerPlugin(ServerPlugin<?, ?> plugin) {
         return new PluginSyncData(plugin.getGenericPluginData(), plugin.getSubscribedMarkets(), plugin.encodeAllCustomSettings());
+    }
+
+    /**
+     * SM-309: this snapshot without the markets this side hides ({@link MultiServerUtils#isMarketHiddenHere}:
+     * a slave or a client on a slave cannot resolve the item), in the subscriptions and the custom settings.
+     *
+     * @return this object if nothing is hidden, otherwise a filtered copy
+     */
+    public PluginSyncData withoutHiddenMarkets() {
+        boolean hidesAny = subscribedMarkets.stream().anyMatch(MultiServerUtils::isMarketHiddenHere)
+                || (customSettingsMap != null && customSettingsMap.keySet().stream().anyMatch(MultiServerUtils::isMarketHiddenHere));
+        if (!hidesAny)
+            return this;
+        Map<ItemID, byte[]> settings = null;
+        if (customSettingsMap != null) {
+            settings = new HashMap<>(customSettingsMap);
+            settings.keySet().removeIf(MultiServerUtils::isMarketHiddenHere);
+        }
+        return new PluginSyncData(genericData,
+                subscribedMarkets.stream().filter(id -> !MultiServerUtils.isMarketHiddenHere(id)).collect(Collectors.toCollection(ArrayList::new)),
+                settings);
     }
 
     public GenericPluginData getGenericData() { return genericData; }

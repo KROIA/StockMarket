@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * ARRS request to fetch the full list of plugins from the server.
@@ -73,8 +74,11 @@ public class PluginListRequest extends StockMarketGenericRequest<Integer, List<P
         return ByteBufCodecs.INT.decode(buf);
     }
 
+    /** SM-309: a slave side drops the markets it cannot resolve from every plugin, see {@link PluginSyncData#withoutHiddenMarkets}. */
     @Override
     public List<PluginSyncData> decodeOutput(RegistryFriendlyByteBuf buf) {
-        return ExtraCodecUtils.listStreamCodec(PluginSyncData.STREAM_CODEC).decode(buf);
+        return ExtraCodecUtils.listStreamCodec(PluginSyncData.STREAM_CODEC).decode(buf).stream()
+                .map(PluginSyncData::withoutHiddenMarkets)
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 }

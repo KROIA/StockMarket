@@ -36,6 +36,17 @@ public class MarketManager implements IMarketManager {
         AsyncMarketManager asyncMarketManager = AsyncMarketManager.createSlaveServerManager();
         return new MarketManager(asyncMarketManager, null, null);
     }
+    /**
+     * Test seam (SM-283): a slave-style manager (no sync access) around {@code asyncMarketManager}, e.g. one made by
+     * {@link AsyncMarketManager#createForTesting}, so a test can drive the real commands without real master markets.
+     *
+     * @param asyncMarketManager the async manager the commands and requests read
+     * @return the manager
+     */
+    public static MarketManager createSlaveForTesting(IAsyncMarketManager asyncMarketManager)
+    {
+        return new MarketManager(asyncMarketManager, null, null);
+    }
     public static IClientMarketManager createClient()
     {
         return new ClientMarketManager();

@@ -17,6 +17,17 @@ import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.networking.request.OrderHistoryRequest;
+import net.kroia.stockmarket.networking.request.PluginListRequest;
+import net.kroia.stockmarket.networking.request.TransactionHistoryRequest;
+import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
+import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import io.netty.buffer.Unpooled;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.ParseResults;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -28,8 +39,10 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -44,7 +57,8 @@ import java.util.function.Function;
  * slave may not register items). The fake-transport tests run on both sides, the filters are the same code
  * there; the live market list test runs on a slave and the master test on the master. T-240 adds the
  * portfolio placeholder, which a slave sums without those markets. SM-283 adds the slave's command
- * suggestions/arguments and the client screen gate (history, plugin icons).
+ * suggestions/arguments and the client screen gate (history, plugin icons); SM-309 the history and plugin list
+ * results a slave side decodes.
  */
 public class MarketVisibilityTestSuite extends TestSuite {
 
@@ -76,6 +90,7 @@ public class MarketVisibilityTestSuite extends TestSuite {
         addTest("client_adds_created_market_without_request", this::test_clientAddsCreatedMarketWithoutRequest);
         addTest("slave_commands_hide_unresolvable_market", this::test_slaveCommandsHideUnresolvableMarket);
         addTest("client_screen_gate_hides_unresolvable_market_on_slave", this::test_clientScreenGateHidesUnresolvableMarketOnSlave);
+        addTest("request_results_leave_out_unresolvable_market_on_slave", this::test_requestResultsLeaveOutUnresolvableMarketOnSlave);
     }
 
     /**
@@ -278,33 +293,37 @@ public class MarketVisibilityTestSuite extends TestSuite {
     /**
      * SM-283, slave only: the real {@code /stockmarket} dispatcher neither suggests a market this slave cannot
      * resolve ({@code open}, {@code close} and the root {@code <market>} argument) nor accepts it
-     * ({@code open <id>} answers "not found"). Checks first that the market is suggested while it resolves, so
-     * the hidden case cannot pass vacuously. If the slave wrongly accepted it, the master market would be forced
-     * open (test world only).
+     * ({@code open <id>} answers "not found"). The master of a test cell keeps no markets, so like the other tests
+     * here the slave's market manager is swapped for the real slave {@link AsyncMarketManager} on a fake transport
+     * that lists two resolvable items; nothing reaches the master. Checks first that the market is suggested while
+     * it resolves, so the hidden case cannot pass vacuously.
      */
     private TestResult test_slaveCommandsHideUnresolvableMarket() {
         if (BACKEND_INSTANCES == null || !BACKEND_INSTANCES.MARKET_MANAGER.isSlave())
             return skip("slave only");
-        if (!MultiServerUtils.canInteractWithStockMarket())
-            return skip("not connected to the master");
         MinecraftServer server = getServer();
         if (server == null)
             return skip("no server");
-        List<ItemID> listed = await(BACKEND_INSTANCES.MARKET_MANAGER.getAsync().getAvailableMarketIDsAsync(), WAIT_MS);
-        if (listed == null || listed.isEmpty())
-            return skip("the master has no market this slave can resolve");
-        ItemID hidden = listed.get(0);
+        List<ItemID> items = twoResolvableItems();
+        if (items == null)
+            return skip("fewer than two resolvable items in the registry");
+        ItemID hidden = items.get(1);
         String quotedName = "\"" + hidden.getName() + "\"";
         String numericID = String.valueOf(hidden.getShort());
         // a name shared by several markets stays suggested for the others; the numeric id is then suggested too
-        boolean nameShared = listed.stream().filter(id -> id.getName().equals(hidden.getName())).count() > 1;
+        boolean nameShared = items.get(0).getName().equals(hidden.getName());
 
-        TestResult r = assertTrue("suggested while it resolves",
-                suggestionTexts(server, "stockmarket open ").contains(nameShared ? numericID : quotedName));
-        if (!r.passed()) return r;
-
-        MultiServerUtils.setUnresolvableForTesting(hidden, true);
+        MarketManager real = BACKEND_INSTANCES.MARKET_MANAGER;
+        BACKEND_INSTANCES.MARKET_MANAGER = MarketManager.createSlaveForTesting(AsyncMarketManager.createForTesting(input ->
+                CompletableFuture.completedFuture(input.function == AsyncMarketManager.FunctionType.GetAvailableMarketIDs
+                        ? AsyncMarketManager.OutputData.of(input.function, items)
+                        : AsyncMarketManager.OutputData.of(input.function))));
         try {
+            TestResult r = assertTrue("suggested while it resolves",
+                    suggestionTexts(server, "stockmarket open ").contains(nameShared ? numericID : quotedName));
+            if (!r.passed()) return r;
+
+            MultiServerUtils.setUnresolvableForTesting(hidden, true);
             for (String input : List.of("stockmarket open ", "stockmarket close ", "stockmarket ")) {
                 List<String> suggested = suggestionTexts(server, input);
                 r = assertFalse("'" + input + "' does not suggest its numeric id", suggested.contains(numericID));
@@ -333,14 +352,97 @@ public class MarketVisibilityTestSuite extends TestSuite {
                     failures.stream().anyMatch(c -> hasTranslationKey(c, "message.stockmarket.command_market_remove_not_found")));
         } finally {
             MultiServerUtils.setUnresolvableForTesting(hidden, false);
+            BACKEND_INSTANCES.MARKET_MANAGER = real;
         }
     }
 
     /**
+     * SM-309: the order history, trade history and plugin list results, decoded where they are received, leave out
+     * a market this side cannot resolve on a slave (also a hidden leg's whole inter-market trade, and the market's
+     * plugin custom settings); on the master they keep it. Encodes what the master would send and decodes it
+     * through the real requests.
+     */
+    private TestResult test_requestResultsLeaveOutUnresolvableMarketOnSlave() {
+        if (BACKEND_INSTANCES == null)
+            return skip("no server instances");
+        MinecraftServer server = getServer();
+        if (server == null)
+            return skip("no server");
+        List<ItemID> items = twoResolvableItems();
+        if (items == null)
+            return skip("fewer than two resolvable items in the registry");
+        ItemID shown = items.get(0);
+        ItemID hidden = items.get(1);
+        boolean slave = BACKEND_INSTANCES.MARKET_MANAGER.isSlave();
+        UUID player = UUID.randomUUID();
+        UUID mixedTrade = UUID.randomUUID();
+        UUID shownTrade = UUID.randomUUID();
+        List<OrderRecordStruct> records = List.of(
+                new OrderRecordStruct(shown.getShort(), 1, player, 0, 5, 100, 1000),
+                new OrderRecordStruct(hidden.getShort(), 1, player, 0, 5, 100, 1001),
+                new OrderRecordStruct(shown.getShort(), 1, player, 0, -5, 100, 1002, mixedTrade),
+                new OrderRecordStruct(hidden.getShort(), 1, player, 0, 5, 100, 1002, mixedTrade),
+                new OrderRecordStruct(shown.getShort(), 1, player, 0, -5, 100, 1003, shownTrade),
+                new OrderRecordStruct(shown.getShort(), 1, player, 0, 5, 100, 1003, shownTrade));
+        List<OrderRecordStruct> visible = slave ? List.of(records.get(0), records.get(4), records.get(5)) : records;
+
+        MultiServerUtils.setUnresolvableForTesting(hidden, true);
+        try {
+            OrderHistoryRequest history = BACKEND_INSTANCES.NETWORKING.ORDER_HISTORY_REQUEST;
+            RegistryFriendlyByteBuf buf = buffer(server);
+            history.encodeOutput(buf, new OrderHistoryRequest.OutputData(records));
+            TestResult r = assertEquals(slave ? "order history: slave leaves out the market and its inter-market trade"
+                    : "order history: master keeps everything", visible, history.decodeOutput(buf).records());
+            if (!r.passed()) return r;
+
+            TransactionHistoryRequest trades = BACKEND_INSTANCES.NETWORKING.TRANSACTION_HISTORY_REQUEST;
+            buf = buffer(server);
+            trades.encodeOutput(buf, new TransactionHistoryRequest.OutputData(records));
+            r = assertEquals(slave ? "trade history: slave leaves out the market" : "trade history: master keeps everything",
+                    visible, trades.decodeOutput(buf).records());
+            if (!r.passed()) return r;
+
+            PluginListRequest plugins = BACKEND_INSTANCES.NETWORKING.PLUGIN_LIST_REQUEST;
+            buf = buffer(server);
+            Map<ItemID, byte[]> settings = new HashMap<>();
+            settings.put(shown, new byte[]{1});
+            settings.put(hidden, new byte[]{2});
+            plugins.encodeOutput(buf, List.of(new PluginSyncData(pluginData(server), List.of(shown, hidden), settings)));
+            List<PluginSyncData> decoded = plugins.decodeOutput(buf);
+            r = assertEquals("one plugin", 1, decoded.size());
+            if (!r.passed()) return r;
+            r = assertEquals(slave ? "plugin list: slave leaves out the subscription" : "plugin list: master keeps it",
+                    slave ? List.of(shown) : List.of(shown, hidden), decoded.get(0).getSubscribedMarkets());
+            if (!r.passed()) return r;
+            return assertEquals(slave ? "plugin list: slave leaves out its custom settings" : "plugin list: master keeps them",
+                    slave ? Set.of(shown) : Set.of(shown, hidden), decoded.get(0).getCustomSettings().keySet());
+        } finally {
+            MultiServerUtils.setUnresolvableForTesting(hidden, false);
+        }
+    }
+
+    /** @return an empty network buffer bound to the server's registries */
+    private static RegistryFriendlyByteBuf buffer(MinecraftServer server) {
+        return new RegistryFriendlyByteBuf(Unpooled.buffer(), server.registryAccess());
+    }
+
+    /** @return generic plugin data as the master would send it (built through its codec: the type ID has no setter) */
+    private static GenericPluginData pluginData(MinecraftServer server) {
+        RegistryFriendlyByteBuf buf = buffer(server);
+        ByteBufCodecs.STRING_UTF8.encode(buf, "test:plugin");
+        UUIDUtil.STREAM_CODEC.encode(buf, UUID.randomUUID());
+        ByteBufCodecs.STRING_UTF8.encode(buf, "name");
+        ByteBufCodecs.STRING_UTF8.encode(buf, "description");
+        ByteBufCodecs.BOOL.encode(buf, false);
+        ByteBufCodecs.BOOL.encode(buf, true);
+        ByteBufCodecs.BOOL.encode(buf, false);
+        return GenericPluginData.STREAM_CODEC.decode(buf);
+    }
+
+    /**
      * SM-283: the gate every client screen uses to hide a market ({@link StockMarketGuiElement#isMarketVisible}:
-     * order history panel, plugin market icons, management grid, trade screen orders). The order history,
-     * trade history and plugin list requests return every market; the slave's screens leave out the hidden one
-     * through this gate. Needs a client in this JVM (sp: master, spslave: slave); skips on a dedicated server.
+     * order history panel, plugin market icons, management grid, trade screen orders). Needs a client in this JVM
+     * (sp: master, spslave: slave); skips on a dedicated server.
      */
     private TestResult test_clientScreenGateHidesUnresolvableMarketOnSlave() {
         if (BACKEND_INSTANCES == null)

@@ -99,8 +99,9 @@ public class TransactionHistoryRequest extends StockMarketGenericRequest<Transac
         return InputData.STREAM_CODEC.decode(buf);
     }
 
+    /** SM-309: a slave side drops records on markets it cannot resolve, see {@link OrderHistoryRequest#withoutHiddenMarkets}. */
     @Override
     public OutputData decodeOutput(RegistryFriendlyByteBuf buf) {
-        return OutputData.STREAM_CODEC.decode(buf);
+        return new OutputData(OrderHistoryRequest.withoutHiddenMarkets(OutputData.STREAM_CODEC.decode(buf).records()));
     }
 }
