@@ -364,6 +364,9 @@ public class UserTestSuite extends TestSuite {
             TestResult r = assertTrue("level-0 player passes the requires check",
                     StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_MANAGE));
             if (!r.passed()) return r;
+            // SM-312: the slave's trust answer may still be in flight (or retrying) after a reconnect;
+            // on timeout the assert below fails with the SlaveTrustCache diagnostic.
+            pumpUntil(() -> net.kroia.stockmarket.util.SlaveTrustCache.get() != null, SLAVE_WAIT_MS);
             AtomicBoolean ran = new AtomicBoolean();
             CompletableFuture<Boolean> result = StockMarketCommands.runAsAdmin(source, () -> ran.set(true));
             if (!pumpUntil(result::isDone, SLAVE_WAIT_MS))

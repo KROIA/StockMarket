@@ -486,6 +486,26 @@ public class StockMarketModBackend implements StockMarketAPI {
      * event-loop thread. Non-blocking: uses {@code thenAccept} on the future.
      */
     private static void onSlaveConnectedRefreshTrustCache() {
+        refreshTrustCache(trustConnectionEpoch.get(), 1);
+    }
+
+    /** SM-312: bumped on every SLAVE_CONNECTION_LOST, so answers and retries of an old connection are dropped. */
+    private static final java.util.concurrent.atomic.AtomicInteger trustConnectionEpoch = new java.util.concurrent.atomic.AtomicInteger();
+    private static final int TRUST_REFRESH_MAX_TRIES = 5;
+    private static final long TRUST_REFRESH_RETRY_SECONDS = 3;
+
+    /**
+     * One trust request to the master for the connection {@code epoch}.
+     * <p>
+     * SM-312: the request can fail (e.g. the link drops while it is in flight), and then nothing asked again, so
+     * {@link SlaveTrustCache} stayed {@code null} for the whole connection. A failed or empty answer now logs one
+     * warning line and retries after {@value #TRUST_REFRESH_RETRY_SECONDS} s, up to {@value #TRUST_REFRESH_MAX_TRIES}
+     * tries, while the same connection is still up. After that the next reconnect refreshes as before.
+     *
+     * @param epoch   value of {@link #trustConnectionEpoch} when the connection was accepted
+     * @param attempt 1-based try number
+     */
+    private static void refreshTrustCache(int epoch, int attempt) {
         // Guard against the reconnect race that also protects BankSystem's own
         // onSlaveConnectionAccepted: if this JVM is mid-teardown, SERVER_INSTANCES
         // may already be null.
@@ -497,12 +517,19 @@ public class StockMarketModBackend implements StockMarketAPI {
         try {
             BankSystemMod.getAPI().getServerBankManager().getAsync()
                     .isSlaveServerTrustedAsync(slaveID)
-                    .thenAccept(trusted -> {
-                        if (trusted == null) return; // shouldn't happen — BankSystem uses BOOL codec
-                        boolean changed = SlaveTrustCache.set(trusted);
-                        if (changed) {
-                            SlaveTrustSyncPacket.broadcast(trusted);
+                    .whenComplete((trusted, ex) -> {
+                        // ponytail: epoch check-then-set is not atomic with a disconnect landing in between;
+                        // the next accepted handshake overwrites the value anyway.
+                        if (epoch != trustConnectionEpoch.get())
+                            return; // answer of an older connection
+                        if (ex == null && trusted != null) {
+                            boolean changed = SlaveTrustCache.set(trusted);
+                            if (changed) {
+                                SlaveTrustSyncPacket.broadcast(trusted);
+                            }
+                            return;
                         }
+                        retryTrustRefresh(epoch, attempt, ex != null ? String.valueOf(ex.getMessage()) : "empty answer");
                     });
         } catch (Exception e) {
             // BankSystem torn down mid-flight — leave the cache alone. The next
@@ -512,6 +539,23 @@ public class StockMarketModBackend implements StockMarketAPI {
                         "[StockMarketModBackend] Failed to refresh slave trust cache: " + e.getMessage());
             }
         }
+    }
+
+    /** SM-312: logs the failed trust request and schedules the next try while the same connection is still up. */
+    private static void retryTrustRefresh(int epoch, int attempt, String reason) {
+        boolean giveUp = attempt >= TRUST_REFRESH_MAX_TRIES;
+        if (SERVER_INSTANCES != null && SERVER_INSTANCES.LOGGER != null)
+            SERVER_INSTANCES.LOGGER.warn("[StockMarketModBackend] Slave trust request failed (try " + attempt + "/"
+                    + TRUST_REFRESH_MAX_TRIES + "): " + reason + (giveUp ? "; giving up until the next reconnect"
+                    : "; retrying in " + TRUST_REFRESH_RETRY_SECONDS + " s"));
+        if (giveUp)
+            return;
+        // JDK's shared delayer, no own thread pool. The canInteract check matters: without the link,
+        // isSlaveServerTrustedAsync answers a fail-closed false, which is not the master's answer.
+        CompletableFuture.delayedExecutor(TRUST_REFRESH_RETRY_SECONDS, java.util.concurrent.TimeUnit.SECONDS).execute(() -> {
+            if (epoch == trustConnectionEpoch.get() && MultiServerUtils.canInteractWithBankSystem())
+                refreshTrustCache(epoch, attempt + 1);
+        });
     }
 
     /**
@@ -531,6 +575,7 @@ public class StockMarketModBackend implements StockMarketAPI {
      * a live master-side toggle.
      */
     private static void onSlaveDisconnectedInvalidateTrustCache() {
+        trustConnectionEpoch.incrementAndGet(); // SM-312: drop pending answers/retries of this connection
         SlaveTrustCache.clear();
     }
 
