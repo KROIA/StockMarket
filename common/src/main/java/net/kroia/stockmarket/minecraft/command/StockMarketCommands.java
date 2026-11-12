@@ -24,6 +24,7 @@ import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
 import net.kroia.stockmarket.util.MultiServerUtils;
+import net.kroia.stockmarket.util.SlaveTrustCache;
 import net.kroia.stockmarket.util.StockMarketPermissions;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
@@ -614,8 +615,8 @@ public class StockMarketCommands {
      *   <li>A player runs {@code action} only if they have the StockMarket admin flag ({@code /stockmarket op}), server
      *       op or not. The flag lives on the master, so on a slave this asks the master
      *       ({@code isStockmarketAdminAsync}); a slave without a master connection fails fast with the "not
-     *       connected" message. Without the flag the player gets {@code message.stockmarket.command_admin_only}; if
-     *       the master gives no answer, {@code message.stockmarket.command_async_failed}.</li>
+     *       connected" message. Without the flag the player gets {@link #adminRefusalKey()}; if the master gives
+     *       no answer, {@code message.stockmarket.command_async_failed}.</li>
      * </ul>
      *
      * @param source the command source
@@ -642,7 +643,7 @@ public class StockMarketCommands {
                     } else if (player.hasDisconnected()) {
                         ran.complete(false); // logged off while waiting for the master
                     } else if (!Boolean.TRUE.equals(isAdmin)) {
-                        source.sendFailure(Component.translatable("message.stockmarket.command_admin_only"));
+                        source.sendFailure(Component.translatable(adminRefusalKey()));
                         ran.complete(false);
                     } else {
                         action.run();
@@ -650,6 +651,22 @@ public class StockMarketCommands {
                     }
                 }));
         return ran;
+    }
+
+    /**
+     * SM-312: the message key a player gets when {@link #runAsAdmin} refuses them. The master answers an untrusted
+     * slave's admin-flag read empty (T-239, {@code NetworkGate}), so there even a flagged admin is refused; telling
+     * them "admins only" would be misleading. On a slave the master has reported as untrusted
+     * ({@link SlaveTrustCache}) the player gets {@code message.stockmarket.command_slave_untrusted} instead. While the
+     * trust state is unknown (cache empty) the generic message stays.
+     *
+     * @return {@code message.stockmarket.command_slave_untrusted} on a known-untrusted slave, otherwise
+     *         {@code message.stockmarket.command_admin_only}
+     */
+    public static String adminRefusalKey() {
+        return isSlaveServer() && Boolean.FALSE.equals(SlaveTrustCache.get())
+                ? "message.stockmarket.command_slave_untrusted"
+                : "message.stockmarket.command_admin_only";
     }
 
     /**

@@ -323,7 +323,8 @@ public class UserTestSuite extends TestSuite {
     /**
      * SM-287, slave only: the master holds the admin flag of the online player. A level-0 source of that player
      * passes the {@code requires} check, and {@link StockMarketCommands#runAsAdmin} runs the action if and only if
-     * the master reports the flag. Without it the player gets {@code message.stockmarket.command_admin_only}.
+     * the master reports the flag. Without it the player gets {@code message.stockmarket.command_admin_only}, or on an
+     * untrusted slave {@code message.stockmarket.command_slave_untrusted} (SM-312).
      * <p>
      * The master answers admin-flag reads of an untrusted slave empty (T-239, {@code NetworkGate}), so there no
      * player ever passes: {@code flag=true} needs a trusted slave (autotest cells {@code slave-trusted} /
@@ -371,8 +372,10 @@ public class UserTestSuite extends TestSuite {
             if (!r.passed()) return r;
             r = assertEquals("result matches", flag, result.join());
             if (!r.passed()) return r;
-            boolean adminOnly = messages.stream().anyMatch(c -> hasTranslationKey(c, "message.stockmarket.command_admin_only"));
-            return assertEquals("command_admin_only sent (flag=" + flag + ")", !flag, adminOnly);
+            // SM-312: an untrusted slave names the missing trust instead of "admins only".
+            String refusalKey = trusted ? "message.stockmarket.command_admin_only" : "message.stockmarket.command_slave_untrusted";
+            boolean refused = messages.stream().anyMatch(c -> hasTranslationKey(c, refusalKey));
+            return assertEquals(refusalKey + " sent (flag=" + flag + ", trusted=" + trusted + ")", !flag, refused);
         } finally {
             if (trusted) try {
                 await(master.setStockmarketAdminModeAsync(uuid, before), SLAVE_WAIT_MS);
