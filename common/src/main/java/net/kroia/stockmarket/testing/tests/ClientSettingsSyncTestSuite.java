@@ -1,18 +1,28 @@
 package net.kroia.stockmarket.testing.tests;
 
 import io.netty.buffer.Unpooled;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.PermissionCompat;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.packet.ClientSettingsSyncPacket;
+import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
 import net.kroia.stockmarket.networking.request.ModSettingsRequest;
 import net.kroia.stockmarket.networking.request.ServerTimeRequest;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.testing.PacketTap;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.ClientSettings;
 import net.kroia.stockmarket.util.MultiServerUtils;
+import net.kroia.stockmarket.util.StockMarketPermissions;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+
+import java.util.List;
+import java.util.UUID;
 
 /**
  * T-140: the master's {@code PRICE_HISTORY_INITIAL_LOAD_CANDLES} reaching clients.
@@ -44,6 +54,7 @@ public class ClientSettingsSyncTestSuite extends TestSuite {
         addTest("server_time_output_codec_round_trip", this::test_outputCodecRoundTrip);
         addTest("set_repushes_only_on_change", this::test_setRepushesOnlyOnChange);
         addTest("slave_gets_master_value", this::test_slaveGetsMasterValue);
+        addTest("sp_set_reaches_client_and_chart_request", this::test_spSetReachesClientAndChartRequest);
     }
 
     /** The public accessor returns the running server's instances, with settings loaded. */
@@ -164,5 +175,71 @@ public class ClientSettingsSyncTestSuite extends TestSuite {
         return assertTrue("value inside the sanitize bounds: " + out.initialLoadCandles(),
                 out.initialLoadCandles() >= ModSettingsRequest.MIN_PRICE_HISTORY_INITIAL_LOAD
                         && out.initialLoadCandles() <= ModSettingsRequest.MAX_PRICE_HISTORY_INITIAL_LOAD);
+    }
+
+    /**
+     * SM-274 (sp only: the client state lives in this JVM): an admin SET of the initial-load candles through
+     * {@link ModSettingsRequest} reaches the client ({@link ClientSettingsSyncPacket}), and a ClientMarket's next
+     * initial price-history request asks for exactly that many candles (read from the request the server
+     * received, through a {@link PacketTap}). The old value is restored through the same SET path.
+     */
+    private TestResult test_spSetReachesClientAndChartRequest() {
+        MinecraftServer server = getServer();
+        StockMarketModBackend.ServerInstances srv = StockMarketModBackend.getServerInstances();
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (server == null || server.isDedicatedServer() || client == null || client.SETTINGS == null || client.NETWORKING == null)
+            return skip("sp only (needs the client in this JVM)");
+        if (srv == null || srv.MARKET_MANAGER == null || srv.MARKET_MANAGER.isSlave())
+            return skip("master only");
+        if (server.getPlayerList().getPlayers().isEmpty())
+            return skip("no player online");
+        ServerPlayer player = server.getPlayerList().getPlayers().get(0);
+        if (!PermissionCompat.hasPermission(player, StockMarketPermissions.FALLBACK_LEVEL))
+            return skip("the player has no operator level 2 (cheats off)");
+        List<ItemID> markets = srv.MARKET_MANAGER.getSync().getAvailableMarketIDs();
+        if (markets.isEmpty())
+            return skip("no market to request history for");
+
+        UUID uuid = player.getUUID();
+        boolean wasAdmin = srv.MARKET_MANAGER.getSync().isStockmarketAdmin(uuid);
+        int before = srv.SERVER_SETTINGS.MARKET.getPriceHistoryInitialLoadCandles();
+        int target = before == 777 ? 778 : 777;
+        try {
+            if (!wasAdmin)
+                srv.MARKET_MANAGER.getSync().setStockmarketAdminMode(uuid, true);
+            ModSettingsRequest.OutputData out = setInitialLoad(srv, uuid, target);
+            TestResult r = assertTrue("SET accepted: " + out.message(), out.success());
+            if (!r.passed()) return r;
+            pumpUntil(() -> client.SETTINGS.getInitialLoadCandles() == target, WAIT_MS);
+            r = assertEquals("client synced value", target, client.SETTINGS.getInitialLoadCandles());
+            if (!r.passed()) return r;
+
+            try (PacketTap tap = PacketTap.open(server, player)) {
+                if (tap == null) return fail("no network connection for the player");
+                String typeID = srv.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.getRequestTypeID();
+                long delta = ClientMarket.getAvailableCandleTimeDeltas()[0];
+                new ClientMarket(markets.get(0), 1).requestInitialWindow(delta);
+                pumpUntil(() -> !tap.receivedRequests(typeID).isEmpty(), WAIT_MS);
+                List<byte[]> got = tap.receivedRequests(typeID);
+                if (got.isEmpty()) return fail("the server received no price-history request");
+                RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(got.get(0)), server.registryAccess());
+                MarketPriceHistoryRequest.InputData in = srv.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.decodeInput(buf);
+                r = assertEquals("request delta", delta, in.candleDeltaMs());
+                if (!r.passed()) return r;
+                return assertEquals("candles in the initial window", (long) target,
+                        (in.maxTimestamp() - in.minTimestamp()) / delta);
+            }
+        } finally {
+            setInitialLoad(srv, uuid, before);
+            if (!wasAdmin)
+                srv.MARKET_MANAGER.getSync().setStockmarketAdminMode(uuid, false);
+        }
+    }
+
+    /** Sets PRICE_HISTORY_INITIAL_LOAD_CANDLES through the admin SET path (only that setting in the payload). */
+    private ModSettingsRequest.OutputData setInitialLoad(StockMarketModBackend.ServerInstances srv, UUID player, int value) {
+        String json = "{\"ServerMarket\":{\"PRICE_HISTORY_INITIAL_LOAD_CANDLES\":" + value + "}}";
+        return srv.NETWORKING.MOD_SETTINGS_REQUEST.handleOnMasterServer(
+                new ModSettingsRequest.InputData(ModSettingsRequest.Action.SET, json), "", player).join();
     }
 }
