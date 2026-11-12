@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.api.event.TransactionLoggedEvent;
+import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.api.ledger.TradeLogEntry;
 import net.kroia.banksystem.api.ledger.TradeRowKind;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
@@ -23,6 +25,7 @@ import net.kroia.stockmarket.testing.TestFixture;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public class MarketIntegrationTestSuite extends TestSuite {
 
@@ -699,7 +702,20 @@ public class MarketIntegrationTestSuite extends TestSuite {
             Order buy = sm269LockedBuy(m, 2);
             TestResult r = assertTrue("buy accepted", m.putOrder(buy));
             if (!r.passed()) return r;
-            m.update(); // 1 item fills against the bot, 1 rests in the book
+            // SM-318: the fill is a TRADE row (OrderLedger), so BankSystem must not add RAW_CHANGE rows for it.
+            // The event fires synchronously on the master when a row is written (never without a ledger DB).
+            List<TransactionLoggedEvent> rawRows = new ArrayList<>();
+            Consumer<TransactionLoggedEvent> rawListener = e -> {
+                if (e.type() == LedgerType.RAW_CHANGE && e.accountNumber() == bankAccountNr1) rawRows.add(e);
+            };
+            BACKEND_INSTANCES.BANK_SYSTEM_API.getEvents().getTransactionLoggedEvent().addListener(rawListener);
+            try {
+                m.update(); // 1 item fills against the bot, 1 rests in the book
+            } finally {
+                BACKEND_INSTANCES.BANK_SYSTEM_API.getEvents().getTransactionLoggedEvent().removeListener(rawListener);
+            }
+            r = assertTrue("fill writes no RAW_CHANGE row", rawRows.isEmpty());
+            if (!r.passed()) return r;
             r = assertTrue("buy partly filled and resting", buy.getFilledVolume() > 0 && m.getLimitOrders().contains(buy));
             if (!r.passed()) return r;
             r = assertEquals("rest still locked", 10L, bankAccount1.getBank(moneyID).getLockedBalance());

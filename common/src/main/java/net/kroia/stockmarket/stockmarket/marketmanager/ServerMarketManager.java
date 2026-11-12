@@ -1242,7 +1242,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             return;
         }
 
-        moneyBank.deposit(balance);
+        // SM-318: no RAW_CHANGE row for this refund; the leg TRADE rows (logInterMarketLegs) net out to it.
+        BACKEND_INSTANCES.BANK_SYSTEM_API.getLedger().callerLogs(() -> moneyBank.deposit(balance));
         order.setTransactionMoneyBalance(0);
     }
 
