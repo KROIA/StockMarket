@@ -40,6 +40,7 @@ import net.kroia.stockmarket.testing.tests.OrderTestSuite;
 import net.kroia.stockmarket.testing.tests.OrderbookTestSuite;
 import net.kroia.stockmarket.testing.tests.PIDTestSuite;
 import net.kroia.stockmarket.testing.tests.PlaceholderNamingTestSuite;
+import net.kroia.stockmarket.testing.tests.PortSmokeTestSuite;
 import net.kroia.stockmarket.testing.tests.PluginTestSuite;
 import net.kroia.stockmarket.testing.tests.PumpDumpDetectorTestSuite;
 import net.kroia.stockmarket.testing.tests.PriceHistoryCacheTestSuite;
@@ -123,6 +124,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new MarketVisibilityTestSuite()); // T-237: markets hidden on a slave that cannot resolve their item
         TestRegistry.register(new ClientSettingsSyncTestSuite()); // T-140: initial chart window sync (master + slave)
         TestRegistry.register(new MasterDownTestSuite()); // T-246: slave-masterdown cell only (T-245 screen refusal)
+        TestRegistry.register(new PortSmokeTestSuite()); // SM-288: per-version port smoke checks
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());

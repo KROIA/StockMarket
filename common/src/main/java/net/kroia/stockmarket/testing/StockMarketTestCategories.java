@@ -208,4 +208,8 @@ public class StockMarketTestCategories {
     // T-246: the slave-masterdown autotest cell (run_matrix --configs slave-masterdown); skips in every other cell.
     public static final TestCategory MASTER_DOWN = new TestCategory(
             "stockmarket", "sm_master_down", "Slave with its master down: StockMarket screens and the StockMarket block refuse with the StockMarket message (slave-masterdown cell only)", SLAVE_ONLY, true);
+
+    // SM-288: port smoke checks, every cell (master and slave).
+    public static final TestCategory PORT_SMOKE = new TestCategory(
+            "stockmarket", "sm_port_smoke", "Port smoke checks: recipes loaded, NeoForge mod-bus setup fired, villager sidecar save/reload, display block merge/split/break and block entity save/load", BOTH, true);
 }
