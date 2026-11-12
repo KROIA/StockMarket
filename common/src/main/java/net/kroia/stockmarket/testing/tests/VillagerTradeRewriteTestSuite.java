@@ -3,31 +3,49 @@ package net.kroia.stockmarket.testing.tests;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.villagertrading.MoneyPayment;
 import net.kroia.stockmarket.villagertrading.VillagerTradePriceTable;
 import net.kroia.stockmarket.villagertrading.VillagerTradeRewriter;
 import net.kroia.stockmarket.villagertrading.VillagerTradeData;
+import net.kroia.stockmarket.villagertrading.VillagerTradeManager;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.village.ReputationEventType;
+import net.minecraft.world.entity.npc.Villager; // mc<=1.21.10
+//import net.minecraft.world.entity.npc.villager.Villager; // mc>=1.21.11
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.trading.ItemCost;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.function.ToLongFunction;
 
 /**
@@ -38,7 +56,8 @@ import java.util.function.ToLongFunction;
  * {@link VillagerTradeRewriter#tableLookup}) using synthetic
  * {@link MerchantOffers} and price tables — no live villager entity needed.
  * The T-243 tests cover preset prices and check that a converted villager
- * trade leaves a (scratch) market untouched.
+ * trade leaves a (scratch) market untouched. The SM-284 test goes through a
+ * real villager entity, the interaction handler and the {@code VillagerMixin}.
  */
 public class VillagerTradeRewriteTestSuite extends TestSuite {
 
@@ -77,6 +96,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         addTest("preset_prices_missing_preset_uses_emerald_price", this::test_preset_prices_missing_preset_uses_emerald_price);
         addTest("cap_discounts_no_discount_flag", this::test_cap_discounts_no_discount_flag);
         addTest("converted_trade_no_market_impact", this::test_converted_trade_no_market_impact);
+        addTest("real_villager_interaction_path", this::test_real_villager_interaction_path);
     }
 
     /** Master backend for the market-impact test (static injection, see DevBootstrap). */
@@ -944,6 +964,245 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
             return pass("Converted villager trades leave the market untouched");
         } finally {
             fixture.cleanup();
+        }
+    }
+
+    // ========================================================================
+    // SM-284: the real interaction path (master cells with a player online)
+    // ========================================================================
+
+    /** Emerald price the SM-284 test puts into the table; its 2-digit reference price is 1200 raw. */
+    private static final long SM284_EMERALD_RAW = 1234L;
+    /** Unlisted, preset-free candidates for the offer that has no preset price. */
+    private static final Item[] SM284_PLAIN_ITEMS = {Items.BELL, Items.SPYGLASS, Items.LODESTONE, Items.RECOVERY_COMPASS};
+
+    /**
+     * SM-284: a real villager with emerald offers goes through {@link VillagerTradeRewriter#onInteractEntity}
+     * (the interaction handler) and {@code Villager.mobInteract} (vanilla's {@code updateSpecialPrices} plus the
+     * {@code VillagerMixin} cap). The table is recomputed from the real settings; only the emerald price is set to
+     * {@link #SM284_EMERALD_RAW} so the rounding is known. Checks:
+     * <ul>
+     *   <li>converted offers cost 5 emeralds × the rounded reference price (1200 raw);</li>
+     *   <li>with a cured-zombie reputation and Hero of the Village V, no converted offer is discounted by more
+     *       than {@link VillagerTradeRewriter#MAX_DISCOUNT_PERCENT}%, while a non-emerald (passthrough) offer
+     *       keeps its bigger vanilla discount;</li>
+     *   <li>USE_PRESET_PRICES_FOR_VILLAGERS on: an item with a preset (and no market) costs its rounded preset
+     *       price; an item without a preset keeps the emerald price and gets no discount (SM-308); off again:
+     *       both are back at the emerald price.</li>
+     * </ul>
+     * The villager is never added to the world. Settings, table, sidecar entry and the player's Hero effect are
+     * restored; vanilla counts each mobInteract in the player's "talked to villager" statistic.
+     */
+    private TestResult test_real_villager_interaction_path() {
+        if (backend == null || backend.VILLAGER_TRADE_MANAGER == null || backend.SERVER_SETTINGS == null
+                || backend.MARKET_MANAGER == null || backend.MARKET_MANAGER.getSync() == null) {
+            return skip("master only");
+        }
+        MinecraftServer server = getServer();
+        if (server == null || server.getPlayerList().getPlayers().isEmpty()) {
+            return skip("no player online");
+        }
+        ServerPlayer player = server.getPlayerList().getPlayers().get(0);
+        if (player.isSecondaryUseActive() || player.getMainHandItem().is(Items.VILLAGER_SPAWN_EGG)
+                || player.containerMenu != player.inventoryMenu) {
+            return skip("the player sneaks, holds a villager spawn egg or has a menu open");
+        }
+        ItemID emeraldID = ItemIDManager.getItemID(new ItemStack(Items.EMERALD));
+        if (!emeraldID.isValid()) {
+            return skip("emerald has no ItemID in this world");
+        }
+
+        VillagerTradeManager manager = backend.VILLAGER_TRADE_MANAGER;
+        StockMarketModSettings.VillagerTrading settings = backend.SERVER_SETTINGS.VILLAGER_TRADING;
+        VillagerTradePriceTable oldTable = manager.getTable();
+        boolean oldEnabled = settings.ENABLED.get();
+        boolean oldReplace = settings.REPLACE_EMERALDS_FOR_UNLISTED.get();
+        boolean oldPreset = settings.USE_PRESET_PRICES_FOR_VILLAGERS.get();
+        MobEffectInstance oldHero = player.getEffect(MobEffects.HERO_OF_THE_VILLAGE);
+        Villager villager = EntityType.VILLAGER.create(player.serverLevel());
+        if (villager == null) {
+            return fail("could not create a villager");
+        }
+        VillagerTradeData savedData = manager.getSavedData(server);
+        long[] version = {System.currentTimeMillis()};
+        try {
+            settings.ENABLED.set(true);
+            settings.REPLACE_EMERALDS_FOR_UNLISTED.set(true);
+
+            // Find the preset item first (preset prices on), then work with them off.
+            settings.USE_PRESET_PRICES_FOR_VILLAGERS.set(true);
+            VillagerTradePriceTable presetTable = recomputeWithEmerald(manager, emeraldID, version);
+            if (!presetTable.enabled()) {
+                return skip("villager trading stays disabled (no currency configured)");
+            }
+            if (!(presetTable.currency().getItem() instanceof MoneyItem)) {
+                return skip("the currency is not a BankSystem money item");
+            }
+            TestResult r = assertTrue("USE_PRESET_PRICES_FOR_VILLAGERS on reaches the table", presetTable.usePresetPrices());
+            if (!r.passed()) return r;
+            ItemStack presetItem = findPresetItemWithoutMarket(presetTable);
+            ItemStack plainItem = findPlainItem(presetTable);
+            if (plainItem == null) {
+                return skip("every candidate item has a market or a preset");
+            }
+
+            MerchantOffers offers = villager.getOffers(); // no profession: empty, filled below
+            offers.add(new MerchantOffer(new ItemCost(Items.EMERALD, 5), Optional.empty(), plainItem.copy(), 0, 16, 2, 0.05f, 0));
+            offers.add(new MerchantOffer(new ItemCost(Items.WHEAT, 20), Optional.empty(), new ItemStack(Items.BREAD), 0, 16, 2, 0.05f, 0));
+            if (presetItem != null) {
+                offers.add(new MerchantOffer(new ItemCost(Items.EMERALD, 5), Optional.empty(), presetItem.copy(), 0, 16, 2, 0.05f, 0));
+            }
+            long emeraldPrice = 5 * VillagerTradeRewriter.roundReferencePriceRaw(SM284_EMERALD_RAW);
+
+            // 1) Preset prices off: converted at the rounded emerald price, discounts capped.
+            settings.USE_PRESET_PRICES_FOR_VILLAGERS.set(false);
+            r = assertFalse("USE_PRESET_PRICES_FOR_VILLAGERS off reaches the table",
+                    recomputeWithEmerald(manager, emeraldID, version).usePresetPrices());
+            if (!r.passed()) return r;
+            VillagerTradeRewriter.onInteractEntity(player, villager, InteractionHand.MAIN_HAND);
+            r = assertEquals("rounded reference price (5 × 1200 raw)", emeraldPrice, sellPrice(villager, 0));
+            if (!r.passed()) return r;
+            if (presetItem != null) {
+                r = assertEquals("preset item at the emerald price while preset prices are off", emeraldPrice, sellPrice(villager, 2));
+                if (!r.passed()) return r;
+            }
+            villager.onReputationEventFrom(ReputationEventType.ZOMBIE_VILLAGER_CURED, player);
+            player.addEffect(new MobEffectInstance(MobEffects.HERO_OF_THE_VILLAGE, 1200, 4));
+            r = withTradeMenu(villager, player, () -> {
+                TestResult c = assertCapped("plain offer", villager.getOffers().get(0));
+                if (!c.passed()) return c;
+                MerchantOffer control = villager.getOffers().get(1);
+                c = assertTrue("passthrough offer keeps its vanilla discount (> 20%), diff " + control.getSpecialPriceDiff(),
+                        -control.getSpecialPriceDiff() * 100 > control.getBaseCostA().getCount() * VillagerTradeRewriter.MAX_DISCOUNT_PERCENT);
+                if (!c.passed() || presetItem == null) return c;
+                return assertCapped("preset-item offer", villager.getOffers().get(2));
+            });
+            if (!r.passed()) return r;
+
+            // 2) Preset prices on: preset item at its preset price, the other one no discount.
+            settings.USE_PRESET_PRICES_FOR_VILLAGERS.set(true);
+            VillagerTradePriceTable onTable = recomputeWithEmerald(manager, emeraldID, version);
+            VillagerTradeRewriter.onInteractEntity(player, villager, InteractionHand.MAIN_HAND);
+            VillagerTradeData.VillagerEntry entry = savedData.getEntry(villager.getUUID());
+            r = assertNotNull("sidecar entry created by the interaction", entry);
+            if (!r.passed()) return r;
+            r = assertEquals("no-preset offer keeps the emerald price", emeraldPrice, sellPrice(villager, 0));
+            if (!r.passed()) return r;
+            r = assertTrue("no-preset offer flagged no-discount", entry.get(0).isNoDiscount());
+            if (!r.passed()) return r;
+            if (presetItem != null) {
+                long presetPrice = VillagerTradeRewriter.roundReferencePriceRaw(
+                        VillagerTradeRewriter.presetLookup(onTable).applyAsLong(presetItem));
+                r = assertEquals("preset item at its rounded preset price", presetPrice, sellPrice(villager, 2));
+                if (!r.passed()) return r;
+            }
+            r = withTradeMenu(villager, player, () -> {
+                TestResult c = assertEquals("no-preset offer gets no discount", 0, villager.getOffers().get(0).getSpecialPriceDiff());
+                if (!c.passed() || presetItem == null) return c;
+                return assertCapped("preset-item offer", villager.getOffers().get(2));
+            });
+            if (!r.passed()) return r;
+
+            // 3) Preset prices off again: back to the emerald price, no flag.
+            settings.USE_PRESET_PRICES_FOR_VILLAGERS.set(false);
+            recomputeWithEmerald(manager, emeraldID, version);
+            VillagerTradeRewriter.onInteractEntity(player, villager, InteractionHand.MAIN_HAND);
+            r = assertFalse("no-discount flag cleared", entry.get(0).isNoDiscount());
+            if (!r.passed()) return r;
+            if (presetItem != null) {
+                r = assertEquals("preset item back at the emerald price", emeraldPrice, sellPrice(villager, 2));
+                if (!r.passed()) return r;
+            }
+            return pass("real interaction path: rounded prices, 20% cap, preset toggle"
+                    + (presetItem == null ? "; no preset item without a market, preset price not checked" : ""));
+        } finally {
+            settings.ENABLED.set(oldEnabled);
+            settings.REPLACE_EMERALDS_FOR_UNLISTED.set(oldReplace);
+            settings.USE_PRESET_PRICES_FOR_VILLAGERS.set(oldPreset);
+            manager.applyTable(oldTable);
+            savedData.removeEntry(villager.getUUID());
+            player.removeEffect(MobEffects.HERO_OF_THE_VILLAGE);
+            if (oldHero != null) {
+                player.addEffect(new MobEffectInstance(oldHero));
+            }
+            if (player.containerMenu != player.inventoryMenu) {
+                player.closeContainer();
+            }
+        }
+    }
+
+    /**
+     * Recomputes the master table from the settings and applies it with the emerald price set to
+     * {@link #SM284_EMERALD_RAW} and a new version (so the next interaction reprices).
+     */
+    private static VillagerTradePriceTable recomputeWithEmerald(VillagerTradeManager manager, ItemID emeraldID, long[] version) {
+        manager.recomputeTable();
+        VillagerTradePriceTable t = manager.getTable();
+        Map<Short, Long> prices = new HashMap<>(t.pricesRawByItemIdShort());
+        prices.put(emeraldID.getShort(), SM284_EMERALD_RAW);
+        VillagerTradePriceTable applied = new VillagerTradePriceTable(++version[0], t.enabled(), t.currency(),
+                t.buyMargin(), t.sellMargin(), t.replaceEmeraldsForUnlisted(), prices,
+                t.usePresetPrices(), t.presetPricesRawByItemIdShort());
+        manager.applyTable(applied);
+        return applied;
+    }
+
+    /** @return a market preset's item that has a preset price but no market in {@code table}, or null */
+    private static @Nullable ItemStack findPresetItemWithoutMarket(VillagerTradePriceTable table) {
+        if (backend.PRESET_MANAGER == null) return null;
+        ToLongFunction<ItemStack> market = VillagerTradeRewriter.tableLookup(table);
+        ToLongFunction<ItemStack> preset = VillagerTradeRewriter.presetLookup(table);
+        for (MarketPresetCategory category : backend.PRESET_MANAGER.getCategories()) {
+            for (MarketPreset p : category.getPresets()) {
+                ItemStack stack = p.toItemStack();
+                if (!stack.isEmpty() && !stack.is(Items.EMERALD) && !(stack.getItem() instanceof MoneyItem)
+                        && preset.applyAsLong(stack) > 0 && market.applyAsLong(stack) <= 0) {
+                    return stack.copyWithCount(1);
+                }
+            }
+        }
+        return null;
+    }
+
+    /** @return a candidate item with neither a market nor a preset price in {@code table}, or null */
+    private static @Nullable ItemStack findPlainItem(VillagerTradePriceTable table) {
+        ToLongFunction<ItemStack> market = VillagerTradeRewriter.tableLookup(table);
+        ToLongFunction<ItemStack> preset = VillagerTradeRewriter.presetLookup(table);
+        for (Item item : SM284_PLAIN_ITEMS) {
+            ItemStack stack = new ItemStack(item);
+            if (market.applyAsLong(stack) <= 0 && preset.applyAsLong(stack) <= 0) return stack;
+        }
+        return null;
+    }
+
+    /** @return the raw money value of the live sell offer's costs */
+    private static long sellPrice(Villager villager, int index) {
+        MerchantOffer offer = villager.getOffers().get(index);
+        return isMoney(offer.getBaseCostA()) ? rawValue(offer.getBaseCostA(), offer.getCostB()) : -1L;
+    }
+
+    /** Asserts the offer's discount is at most {@link VillagerTradeRewriter#MAX_DISCOUNT_PERCENT}% of its cost. */
+    private TestResult assertCapped(String label, MerchantOffer offer) {
+        int base = offer.getBaseCostA().getCount();
+        int demandBonus = Math.max(0, Mth.floor((float) (base * offer.getDemand()) * offer.getPriceMultiplier()));
+        int discount = -offer.getSpecialPriceDiff();
+        return assertTrue(label + ": discount " + discount + " of " + (base + demandBonus) + " items is at most "
+                        + VillagerTradeRewriter.MAX_DISCOUNT_PERCENT + "%",
+                discount * 100 <= (base + demandBonus) * VillagerTradeRewriter.MAX_DISCOUNT_PERCENT);
+    }
+
+    /**
+     * Opens the villager's trade menu for {@code player} like a right click ({@code mobInteract}: vanilla's
+     * {@code updateSpecialPrices}, then the {@code VillagerMixin} cap), runs {@code check} while it is open (closing
+     * resets the discounts) and closes it again.
+     */
+    private TestResult withTradeMenu(Villager villager, ServerPlayer player, Supplier<TestResult> check) {
+        villager.mobInteract(player, InteractionHand.MAIN_HAND);
+        try {
+            TestResult r = assertTrue("the trade menu opened", villager.getTradingPlayer() == player);
+            return r.passed() ? check.get() : r;
+        } finally {
+            player.closeContainer();
         }
     }
 }
