@@ -496,6 +496,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     private static final java.util.concurrent.atomic.AtomicInteger trustConnectionEpoch = new java.util.concurrent.atomic.AtomicInteger();
     private static final int TRUST_REFRESH_MAX_TRIES = 5;
     private static final long TRUST_REFRESH_RETRY_SECONDS = 3;
+    private static final long TRUST_REQUEST_TIMEOUT_SECONDS = 5;
 
     /**
      * One trust request to the master for the connection {@code epoch}.
@@ -504,6 +505,12 @@ public class StockMarketModBackend implements StockMarketAPI {
      * {@link SlaveTrustCache} stayed {@code null} for the whole connection. A failed or empty answer now logs one
      * warning line and retries after {@value #TRUST_REFRESH_RETRY_SECONDS} s, up to {@value #TRUST_REFRESH_MAX_TRIES}
      * tries, while the same connection is still up. After that the next reconnect refreshes as before.
+     * <p>
+     * A master that never answers (e.g. it hangs) also counts as a failed try after
+     * {@value #TRUST_REQUEST_TIMEOUT_SECONDS} s. BankSystem's request system fails such a request only after 30 s, and
+     * only from a tick-driven sweep that doesn't run while the server thread is blocked, so without our own timeout
+     * the retry never started. The timeout sits on a {@code copy()} of BankSystem's future, so BankSystem's own future
+     * is never completed by us.
      *
      * @param epoch   value of {@link #trustConnectionEpoch} when the connection was accepted
      * @param attempt 1-based try number
@@ -520,6 +527,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         try {
             BankSystemMod.getAPI().getServerBankManager().getAsync()
                     .isSlaveServerTrustedAsync(slaveID)
+                    .copy()
+                    .orTimeout(TRUST_REQUEST_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
                     .whenComplete((trusted, ex) -> {
                         // ponytail: epoch check-then-set is not atomic with a disconnect landing in between;
                         // the next accepted handshake overwrites the value anyway.
@@ -532,7 +541,12 @@ public class StockMarketModBackend implements StockMarketAPI {
                             }
                             return;
                         }
-                        retryTrustRefresh(epoch, attempt, ex != null ? String.valueOf(ex.getMessage()) : "empty answer");
+                        Throwable cause = ex instanceof java.util.concurrent.CompletionException && ex.getCause() != null ? ex.getCause() : ex;
+                        String reason = cause == null ? "empty answer"
+                                : cause instanceof java.util.concurrent.TimeoutException
+                                        ? "no answer within " + TRUST_REQUEST_TIMEOUT_SECONDS + " s"
+                                        : String.valueOf(cause.getMessage());
+                        retryTrustRefresh(epoch, attempt, reason);
                     });
         } catch (Exception e) {
             // BankSystem torn down mid-flight — leave the cache alone. The next
@@ -544,7 +558,13 @@ public class StockMarketModBackend implements StockMarketAPI {
         }
     }
 
-    /** SM-312: logs the failed trust request and schedules the next try while the same connection is still up. */
+    /**
+     * SM-312: logs the failed trust request and schedules the next try while the same connection is still up.
+     * <p>
+     * The JDK delayer only waits; the next try itself runs on the server thread via {@code server.execute}, so it
+     * doesn't send requests from a JDK pool thread. A blocked server thread that drains its task queue (e.g. {@code managedBlock})
+     * still runs it. If the server is gone, the retry is dropped.
+     */
     private static void retryTrustRefresh(int epoch, int attempt, String reason) {
         boolean giveUp = attempt >= TRUST_REFRESH_MAX_TRIES;
         if (SERVER_INSTANCES != null && SERVER_INSTANCES.LOGGER != null)
@@ -556,8 +576,13 @@ public class StockMarketModBackend implements StockMarketAPI {
         // JDK's shared delayer, no own thread pool. The canInteract check matters: without the link,
         // isSlaveServerTrustedAsync answers a fail-closed false, which is not the master's answer.
         CompletableFuture.delayedExecutor(TRUST_REFRESH_RETRY_SECONDS, java.util.concurrent.TimeUnit.SECONDS).execute(() -> {
-            if (epoch == trustConnectionEpoch.get() && MultiServerUtils.canInteractWithBankSystem())
-                refreshTrustCache(epoch, attempt + 1);
+            MinecraftServer server = UtilitiesPlatform.getServer();
+            if (server == null)
+                return;
+            server.execute(() -> {
+                if (epoch == trustConnectionEpoch.get() && MultiServerUtils.canInteractWithBankSystem())
+                    refreshTrustCache(epoch, attempt + 1);
+            });
         });
     }
 
