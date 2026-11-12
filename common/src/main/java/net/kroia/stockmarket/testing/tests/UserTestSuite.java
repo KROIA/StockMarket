@@ -321,10 +321,15 @@ public class UserTestSuite extends TestSuite {
     private static final long SLAVE_WAIT_MS = 10_000;
 
     /**
-     * SM-287, slave only: the master holds the admin flag of the online player (set via the slave's request to the
-     * master, restored afterwards). A level-0 source of that player passes the {@code requires} check, and
-     * {@link StockMarketCommands#runAsAdmin} runs the action if and only if the master reports the flag. Without it the
-     * player gets {@code message.stockmarket.command_admin_only}.
+     * SM-287, slave only: the master holds the admin flag of the online player. A level-0 source of that player
+     * passes the {@code requires} check, and {@link StockMarketCommands#runAsAdmin} runs the action if and only if
+     * the master reports the flag. Without it the player gets {@code message.stockmarket.command_admin_only}.
+     * <p>
+     * The master answers admin-flag reads of an untrusted slave empty (T-239, {@code NetworkGate}), so there no
+     * player ever passes: {@code flag=true} needs a trusted slave (autotest cells {@code slave-trusted} /
+     * {@code spslave-trusted}, where BankSystem's DevBootstrap trusts the slave from startup) and skips otherwise;
+     * {@code flag=false} runs on every slave. Only on a trusted slave the flag is set through the master (an
+     * untrusted slave's write would be refused) and restored afterwards.
      *
      * @param flag the admin flag the master holds for the player during the test
      */
@@ -336,14 +341,22 @@ public class UserTestSuite extends TestSuite {
         List<ServerPlayer> players = getServer().getPlayerList().getPlayers();
         if (players.isEmpty())
             return skip("no online player");
+        // Empty id: asks the master whether the slave this request comes through is trusted.
+        boolean trusted = Boolean.TRUE.equals(await(
+                backend.BANK_SYSTEM_API.getServerBankManager().getAsync().isSlaveServerTrustedAsync(""), SLAVE_WAIT_MS));
+        if (flag && !trusted)
+            return skip("untrusted slave: the master answers admin-flag reads empty (T-239); runs in the slave-trusted / spslave-trusted cells");
         ServerPlayer player = players.get(0);
         UUID uuid = player.getUUID();
         net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager master = backend.MARKET_MANAGER.getAsync();
-        boolean before = Boolean.TRUE.equals(await(master.isStockmarketAdminAsync(uuid), SLAVE_WAIT_MS));
+        boolean before = trusted && Boolean.TRUE.equals(await(master.isStockmarketAdminAsync(uuid), SLAVE_WAIT_MS));
         try {
-            await(master.setStockmarketAdminModeAsync(uuid, flag), SLAVE_WAIT_MS);
-            if (Boolean.TRUE.equals(await(master.isStockmarketAdminAsync(uuid), SLAVE_WAIT_MS)) != flag)
-                return skip("the master did not apply the flag (untrusted slave or unknown user)");
+            if (trusted) {
+                await(master.setStockmarketAdminModeAsync(uuid, flag), SLAVE_WAIT_MS);
+                TestResult set = assertEquals("master applied the admin flag of " + player.getName().getString(), flag,
+                        Boolean.TRUE.equals(await(master.isStockmarketAdminAsync(uuid), SLAVE_WAIT_MS)));
+                if (!set.passed()) return set;
+            }
 
             java.util.List<net.minecraft.network.chat.Component> messages = new java.util.ArrayList<>();
             CommandSourceStack source = player.createCommandSourceStack().withPermission(0).withSource(capture(messages));
@@ -361,7 +374,7 @@ public class UserTestSuite extends TestSuite {
             boolean adminOnly = messages.stream().anyMatch(c -> hasTranslationKey(c, "message.stockmarket.command_admin_only"));
             return assertEquals("command_admin_only sent (flag=" + flag + ")", !flag, adminOnly);
         } finally {
-            try {
+            if (trusted) try {
                 await(master.setStockmarketAdminModeAsync(uuid, before), SLAVE_WAIT_MS);
             } catch (RuntimeException e) {
                 backend.LOGGER.error("[UserTestSuite] SM-287: could not restore the admin flag of " + player.getName().getString(), e);
