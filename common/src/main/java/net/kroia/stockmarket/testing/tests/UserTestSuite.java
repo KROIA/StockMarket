@@ -375,7 +375,11 @@ public class UserTestSuite extends TestSuite {
             // SM-312: an untrusted slave names the missing trust instead of "admins only".
             String refusalKey = trusted ? "message.stockmarket.command_admin_only" : "message.stockmarket.command_slave_untrusted";
             boolean refused = messages.stream().anyMatch(c -> hasTranslationKey(c, refusalKey));
-            return assertEquals(refusalKey + " sent (flag=" + flag + ", trusted=" + trusted + ")", !flag, refused);
+            List<String> sentKeys = new java.util.ArrayList<>();
+            messages.forEach(c -> collectTranslationKeys(c, sentKeys));
+            return assertEquals(refusalKey + " sent (flag=" + flag + ", trusted=" + trusted
+                    + ", SlaveTrustCache=" + net.kroia.stockmarket.util.SlaveTrustCache.get()
+                    + ", sent keys=" + sentKeys + ")", !flag, refused);
         } finally {
             if (trusted) try {
                 await(master.setStockmarketAdminModeAsync(uuid, before), SLAVE_WAIT_MS);
@@ -439,6 +443,13 @@ public class UserTestSuite extends TestSuite {
     }
 
     /** @return true if {@code c} or one of its siblings is a translatable component with {@code key} */
+    /** SM-312 diagnostics: every translation key in {@code c} and its siblings, in order. */
+    private static void collectTranslationKeys(net.minecraft.network.chat.Component c, List<String> out) {
+        if (c.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t)
+            out.add(t.getKey());
+        c.getSiblings().forEach(s -> collectTranslationKeys(s, out));
+    }
+
     private static boolean hasTranslationKey(net.minecraft.network.chat.Component c, String key) {
         if (c.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t && t.getKey().equals(key))
             return true;
