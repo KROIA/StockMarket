@@ -145,7 +145,13 @@ public class StockMarketClientHooks {
                 }));
     }
 
-    public static void openGUI(OpenUIPacket.GUIType type)
+    /**
+     * Opens a server-requested StockMarket screen (see {@link OpenUIPacket}).
+     *
+     * @param type   the screen to open
+     * @param market the market the screen opens on (TRADE only, SM-313), or null for the screen's default
+     */
+    public static void openGUI(OpenUIPacket.GUIType type, @org.jetbrains.annotations.Nullable net.kroia.banksystem.util.ItemID market)
     {
         Minecraft mc = Minecraft.getInstance();
         switch(type)
@@ -186,8 +192,9 @@ public class StockMarketClientHooks {
             }
             case TRADE:
             {
-                // StockMarket block (T-245): the server checked the master link before sending this.
-                Minecraft.getInstance().submit(TradeScreen::openScreen);
+                // StockMarket block (T-245) or StockMarketClientIntegration.openTradeScreen (SM-313):
+                // the server checked the master link before sending this.
+                Minecraft.getInstance().submit(() -> TradeScreen.openScreen(market));
                 break;
             }
         }

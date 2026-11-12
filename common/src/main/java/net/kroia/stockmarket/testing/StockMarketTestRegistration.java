@@ -2,6 +2,7 @@ package net.kroia.stockmarket.testing;
 
 import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.stockmarket.testing.tests.ActiveOrdersRequestTestSuite;
+import net.kroia.stockmarket.testing.tests.ClientIntegrationTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientMarketTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientSettingsSyncTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientNewsCacheTestSuite;
@@ -125,6 +126,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new ClientSettingsSyncTestSuite()); // T-140: initial chart window sync (master + slave)
         TestRegistry.register(new MasterDownTestSuite()); // T-246: slave-masterdown cell only (T-245 screen refusal)
         TestRegistry.register(new PortSmokeTestSuite()); // SM-288: per-version port smoke checks
+        TestRegistry.register(new ClientIntegrationTestSuite()); // SM-313: client API for BankSystem's company screen
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());

@@ -212,4 +212,8 @@ public class StockMarketTestCategories {
     // SM-288: port smoke checks, every cell (master and slave).
     public static final TestCategory PORT_SMOKE = new TestCategory(
             "stockmarket", "sm_port_smoke", "Port smoke checks: recipes loaded, NeoForge mod-bus setup fired, villager sidecar save/reload, display block merge/split/break and block entity save/load", BOTH, true);
+
+    // SM-313: client integration API for BankSystem (embedded chart, open trade screen); chart tests need a client (sp cells).
+    public static final TestCategory CLIENT_INTEGRATION = new TestCategory(
+            "stockmarket", "sm_client_integration", "Client integration API: embedded price chart subscription balance, unknown markets, trade screen initial market and OpenUIPacket market round trip", BOTH, true);
 }

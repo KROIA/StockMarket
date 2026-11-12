@@ -762,6 +762,15 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         });
         return marketPriceUpdateStreamID != null;
     }
+    /**
+     * @return how many GUI elements currently hold a price stream subscription
+     *         ({@link #subscribeToMarketPriceUpdate()} minus {@link #unsubscribeFromMarketPriceUpdate()}); for tests
+     */
+    public int getStreamSubscriberCount()
+    {
+        return streamSubscriberCount;
+    }
+
     public boolean unsubscribeFromMarketPriceUpdate()
     {
         if(streamSubscriberCount > 0)

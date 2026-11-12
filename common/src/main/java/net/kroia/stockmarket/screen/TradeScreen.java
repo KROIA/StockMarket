@@ -216,7 +216,11 @@ public class TradeScreen extends StockMarketGuiScreen {
     private long lastPriceRefreshMs = 0;
     private static final long PRICE_REFRESH_INTERVAL_MS = 500;
 
-    public TradeScreen()
+    /**
+     * @param preselect market to open on (SM-313, e.g. from BankSystem's company screen), or null for the
+     *                  last used market. Ignored if it is not in the market list.
+     */
+    public TradeScreen(@Nullable ItemID preselect)
     {
         super(Texts.TITLE);
 
@@ -425,9 +429,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         List<ItemID> markets = getAvailableMarkets();
         PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
 
-        ItemID initialMarket = prefs.getLastMarketID();
-        if (initialMarket == null || !markets.contains(initialMarket)) {
-            initialMarket = markets.isEmpty() ? null : markets.getFirst();
+        ItemID initialMarket = pickInitialMarket(preselect, prefs.getLastMarketID(), markets);
+        // SM-313: a preselected market opens in its own group tab (applied to the selectors below),
+        // so the favorites bar shows it. Set here, not by a switchMarket after init (double subscription).
+        if (initialMarket != null && initialMarket.equals(preselect)) {
+            activeMarketGroup = ShareVisualHelpers.isCompanyShare(initialMarket)
+                    ? PairSelectorWidget.Tab.COMPANIES : PairSelectorWidget.Tab.COMMODITIES;
         }
 
         if (initialMarket != null) {
@@ -525,8 +532,33 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     public static void openScreen()
     {
-        TradeScreen screen = new TradeScreen();
+        openScreen(null);
+    }
+
+    /**
+     * Opens the trade screen on a market (SM-313).
+     *
+     * @param preselect the market to show, or null (or an unlisted market) for the last used one
+     */
+    public static void openScreen(@Nullable ItemID preselect)
+    {
+        TradeScreen screen = new TradeScreen(preselect);
         net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
+    }
+
+    /**
+     * Picks the market the screen opens on (SM-313).
+     *
+     * @param preselect  the requested market, or null
+     * @param lastMarket the player's last used market, or null
+     * @param markets    the markets the screen lists
+     * @return {@code preselect} if listed, else {@code lastMarket} if listed, else the first market, else null
+     */
+    public static @Nullable ItemID pickInitialMarket(@Nullable ItemID preselect, @Nullable ItemID lastMarket, List<ItemID> markets)
+    {
+        if (preselect != null && markets.contains(preselect)) return preselect;
+        if (lastMarket != null && markets.contains(lastMarket)) return lastMarket;
+        return markets.isEmpty() ? null : markets.getFirst();
     }
 
     @Override

@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.networking.packet;
 
 import dev.architectury.networking.NetworkManager;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.util.StockMarketClientHooks;
@@ -13,6 +14,7 @@ import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
 //import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public class OpenUIPacket extends StockMarketNetworkPacket {
 
@@ -20,6 +22,7 @@ public class OpenUIPacket extends StockMarketNetworkPacket {
     //public static final Type<OpenUIPacket> TYPE = new Type<>(Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "open_ui_packet")); // mc>=1.21.11
     public static final StreamCodec<RegistryFriendlyByteBuf, OpenUIPacket> STREAM_CODEC = StreamCodec.composite(
             ExtraCodecUtils.enumStreamCodec(OpenUIPacket.GUIType.class), p -> p.guiType,
+            ExtraCodecUtils.nullable(ItemID.STREAM_CODEC), p -> p.market,
             OpenUIPacket::new
     );
     @Override
@@ -49,11 +52,29 @@ public class OpenUIPacket extends StockMarketNetworkPacket {
 
 
     private final GUIType  guiType;
+    /** SM-313: market the screen opens on (TRADE only), or null for the screen's own default. */
+    private final @Nullable ItemID market;
 
     public OpenUIPacket(GUIType guiType)
     {
-        this.guiType = guiType;
+        this(guiType, null);
     }
+
+    /**
+     * @param guiType the screen to open
+     * @param market  the market the screen opens on (only TRADE uses it), or null for its default
+     */
+    public OpenUIPacket(GUIType guiType, @Nullable ItemID market)
+    {
+        this.guiType = guiType;
+        this.market = market;
+    }
+
+    /** @return the screen to open */
+    public GUIType getGuiType() { return guiType; }
+
+    /** @return the market the screen opens on, or null */
+    public @Nullable ItemID getMarket() { return market; }
 
 
     /**
@@ -80,10 +101,21 @@ public class OpenUIPacket extends StockMarketNetworkPacket {
      */
     public static void sendToClient(ServerPlayer player, GUIType guiType)
     {
+        sendToClient(player, guiType, null);
+    }
+
+    /**
+     * Like {@link #sendToClient(ServerPlayer, GUIType)}, with the market the screen opens on (SM-313).
+     *
+     * @param player  the player whose client opens the screen
+     * @param guiType the screen to open
+     * @param market  the market to preselect (only TRADE uses it), or null for the screen's default
+     */
+    public static void sendToClient(ServerPlayer player, GUIType guiType, @Nullable ItemID market)
+    {
         if (!canOpen(player, guiType))
             return;
-        OpenUIPacket packet = new OpenUIPacket(guiType);
-        packet.sendToClient(player);
+        new OpenUIPacket(guiType, market).sendToClient(player);
     }
 
 
@@ -93,6 +125,6 @@ public class OpenUIPacket extends StockMarketNetworkPacket {
     @Override
     protected void handleOnClient(NetworkManager.PacketContext context)
     {
-        StockMarketClientHooks.openGUI(guiType);
+        StockMarketClientHooks.openGUI(guiType, market);
     }
 }

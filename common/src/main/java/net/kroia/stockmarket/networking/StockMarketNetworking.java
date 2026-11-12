@@ -9,6 +9,7 @@ import net.kroia.stockmarket.networking.entity.UpdateDisplayViewportPacket;
 import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPacket;
 import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.networking.packet.NewsPublishedPacket;
+import net.kroia.stockmarket.networking.packet.OpenTradeScreenPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.ClientSettingsSyncPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
@@ -134,6 +135,8 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public void setupServerReceiverPackets() {
         registerC2S(UpdateStockMarketDisplayConfigPacket.TYPE, UpdateStockMarketDisplayConfigPacket.STREAM_CODEC);
         registerC2S(UpdateDisplayViewportPacket.TYPE, UpdateDisplayViewportPacket.STREAM_CODEC);
+        // SM-313: open the trade screen on a market (StockMarketClientIntegration), handled by the player's own server
+        registerC2S(OpenTradeScreenPacket.TYPE, OpenTradeScreenPacket.STREAM_CODEC);
     }
 
     @Override

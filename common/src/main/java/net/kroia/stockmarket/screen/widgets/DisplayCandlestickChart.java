@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen.widgets;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.NbtCompat;
+import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
@@ -22,8 +23,16 @@ import java.util.concurrent.CompletableFuture;
  * Supports two modes:
  * - Item/Money (single market): only targetMarketID is set
  * - Item/Item (cross-rate): both targetMarketID and secondMarketID are set
+ * <p>
+ * Subscription lifecycle (SM-313): connects on {@link #connect()} or lazily on render, and
+ * disconnects on {@link #close()}, on {@link #setRoot(Gui) setRoot(null)} (removed from its GUI)
+ * and when its market disappears from the client cache. Each subscribe is paired with exactly
+ * one unsubscribe, so the market's price stream stops once no chart or screen needs it.
  */
-public class DisplayCandlestickChart extends CandlestickChart {
+public class DisplayCandlestickChart extends CandlestickChart implements AutoCloseable {
+    /** Viewport key part of charts embedded by other mods (SM-313), instead of a display block key. */
+    public static final String EMBED_KEY = "embed";
+
     // Not final: deserializeState() fills these in when the chart is rebuilt from a
     // guiTree shipment through GuiElementRegistry (see the no-arg constructor).
     private ItemID targetMarketID;
@@ -31,6 +40,9 @@ public class DisplayCandlestickChart extends CandlestickChart {
     private long blockKey;
     private String displayViewportKey;
     private boolean connected = false;
+    // The ClientMarkets subscribed by connect(), released exactly once by disconnect().
+    private @Nullable ClientMarket subscribedTarget = null;
+    private @Nullable ClientMarket subscribedSecond = null;
     private @Nullable CompoundTag initialViewport = null;
 
     /**
@@ -50,6 +62,22 @@ public class DisplayCandlestickChart extends CandlestickChart {
      */
     public DisplayCandlestickChart() {
         this(null, null, 0L);
+    }
+
+    /**
+     * Creates a chart embedded in another mod's screen (SM-313, see
+     * {@code StockMarketClientIntegration.createPriceChart}). Its zoom/position is stored under its
+     * own key, so it never moves the TradeScreen's or a display block's view; on first use it
+     * starts from the player's TradeScreen view of the market.
+     *
+     * @param itemID the market to show
+     * @return a chart that connects on creation if the market is cached, else lazily on render
+     */
+    public static DisplayCandlestickChart createEmbedded(ItemID itemID) {
+        DisplayCandlestickChart chart = new DisplayCandlestickChart(itemID, null, 0L);
+        chart.displayViewportKey = "display_" + EMBED_KEY + "_" + itemID.getShort();
+        chart.connect();
+        return chart;
     }
 
     /**
@@ -123,10 +151,38 @@ public class DisplayCandlestickChart extends CandlestickChart {
 
     @Override
     protected void renderBackground() {
-        if (!connected && targetMarketID != null) {
-            connected = tryConnect();
-        }
+        // Lazy (re)connect: covers Gui.deserializeTree, a close() followed by reuse and a detach/re-add.
+        // A market that left the client cache (deleted, or hidden on this slave) is released; its
+        // stream was force-stopped already, and connect() picks it up again if it comes back.
+        if (connected && marketsChanged())
+            disconnect();
+        if (!connected)
+            connect();
         super.renderBackground();
+    }
+
+    /** @return true if a subscribed market is no longer the one in the client cache */
+    private boolean marketsChanged() {
+        if (BACKEND_INSTANCES == null) return true;
+        if (BACKEND_INSTANCES.MARKET_MANAGER.getMarket(targetMarketID) != subscribedTarget) return true;
+        return secondMarketID != null && BACKEND_INSTANCES.MARKET_MANAGER.getMarket(secondMarketID) != subscribedSecond;
+    }
+
+    /**
+     * Detaching the chart from its GUI ({@code root == null}) releases the subscription; the next
+     * render after it is attached again reconnects.
+     */
+    @Override
+    public void setRoot(Gui root) {
+        super.setRoot(root);
+        if (root == null)
+            disconnect();
+    }
+
+    /** Releases the price stream subscription (same as {@link #disconnect()}). Safe to call repeatedly. */
+    @Override
+    public void close() {
+        disconnect();
     }
 
     /**
@@ -150,23 +206,37 @@ public class DisplayCandlestickChart extends CandlestickChart {
         }
     }
 
+    /**
+     * Releases the subscriptions taken by {@link #connect()} and clears the chart. Idempotent.
+     */
     public void disconnect() {
-        if (connected && BACKEND_INSTANCES != null) {
-            if (targetMarketID != null) {
-                ClientMarket market = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(targetMarketID);
-                if (market != null) market.unsubscribeFromMarketPriceUpdate();
-            }
-            if (secondMarketID != null) {
-                ClientMarket market = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(secondMarketID);
-                if (market != null) market.unsubscribeFromMarketPriceUpdate();
-            }
-        }
+        // Unsubscribe the instances that were subscribed, not a fresh cache lookup: a market
+        // deleted and re-created meanwhile is a different ClientMarket with its own count.
+        if (subscribedTarget != null) subscribedTarget.unsubscribeFromMarketPriceUpdate();
+        if (subscribedSecond != null) subscribedSecond.unsubscribeFromMarketPriceUpdate();
+        subscribedTarget = null;
+        subscribedSecond = null;
         connected = false;
         setPriceDataProvider(null);
     }
 
+    /**
+     * Subscribes to the market's live prices and binds the chart to it. Idempotent: does nothing
+     * while connected. Client thread only.
+     *
+     * @return true if connected (now or already); false if the chart has no market or the market
+     *         (or, for a cross rate, either leg) is not in the client cache
+     */
+    public boolean connect() {
+        if (!connected && targetMarketID != null)
+            connected = tryConnect();
+        return connected;
+    }
+
     private boolean tryConnect() {
         if (BACKEND_INSTANCES == null) return false;
+        // Own saved view first (set by an earlier connection of this chart key); else the trade view.
+        boolean hasOwnView = lookupSavedViewport(displayViewportKey) != null;
 
         if (secondMarketID != null) {
             // Cross-rate (Item/Item) mode
@@ -186,12 +256,14 @@ public class DisplayCandlestickChart extends CandlestickChart {
             // subscribe is paired with exactly one unsubscribe in disconnect().
             haveMarket.subscribeToMarketPriceUpdate();
             wantMarket.subscribeToMarketPriceUpdate();
+            subscribedTarget = wantMarket;
+            subscribedSecond = haveMarket;
 
             setPriceDataProvider(new DisplayProviderWrapper(provider, displayViewportKey));
             if (initialViewport != null) {
                 deserializeViewport(initialViewport);
                 initialViewport = null;
-            } else {
+            } else if (!hasOwnView) {
                 CompoundTag tradeViewport = lookupSavedViewport(provider.getViewportKey());
                 if (tradeViewport != null) {
                     deserializeViewport(tradeViewport);
@@ -204,12 +276,13 @@ public class DisplayCandlestickChart extends CandlestickChart {
             if (market == null) return false;
 
             market.subscribeToMarketPriceUpdate();
+            subscribedTarget = market;
             setPriceDataProvider(new DisplayProviderWrapper(market, displayViewportKey));
 
             if (initialViewport != null) {
                 deserializeViewport(initialViewport);
                 initialViewport = null;
-            } else {
+            } else if (!hasOwnView) {
                 CompoundTag tradeViewport = lookupSavedViewport(market.getViewportKey());
                 if (tradeViewport != null) {
                     deserializeViewport(tradeViewport);
