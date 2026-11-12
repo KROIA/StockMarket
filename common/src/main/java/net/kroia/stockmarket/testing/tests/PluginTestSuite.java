@@ -140,6 +140,9 @@ public class PluginTestSuite extends TestSuite {
 
         // Network gates
         addTest("reorder_nonAdmin_getsNoPluginList", this::test_reorder_nonAdmin_getsNoPluginList);
+        // SM-277: legacy save key, Apply-to-all custom settings request path
+        addTest("genericData_legacySubscriptionOrder_loads", this::test_genericData_legacySubscriptionOrder_loads);
+        addTest("customSettings_applyToAllMarkets_viaClientRequest", this::test_customSettings_applyToAllMarkets_viaClientRequest);
 
         // Logging
         addTest("errorLogging_gatedByLoggerEnabled", this::test_errorLogging_gatedByLoggerEnabled);
@@ -4321,6 +4324,83 @@ public class PluginTestSuite extends TestSuite {
             manager.cancelInterMarketOrdersForMarket(want.getItemID());
             want.test_clearOrderbook();
             want.test_clearIncomingOrderBuffers();
+        }
+    }
+
+    // ── SM-277 ───────────────────────────────────────────────────────────────
+
+    /** SM-277: an old save with the removed {@code subscriptionOrder} key still loads, the other fields keep their values. */
+    private TestResult test_genericData_legacySubscriptionOrder_loads() {
+        UUID id = UUID.randomUUID();
+        CompoundTag tag = new CompoundTag();
+        new net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData(id).save(tag);
+        tag.putString("name", "legacy");
+        tag.putBoolean("enabled", false);
+        tag.putInt("subscriptionOrder", 3);
+        var loaded = new net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData(UUID.randomUUID());
+        TestResult r = assertTrue("loads", loaded.load(tag));
+        if (!r.passed()) return r;
+        return assertEquals("fields kept", List.of(id, "legacy", false), List.of(loaded.getInstanceID(), loaded.getName(), loaded.isEnabled()));
+    }
+
+    /**
+     * SM-277: the request path of a plugin screen's "apply to all markets" ({@code PluginGuiElement
+     * .sendCustomSettingsToAllMarkets} -> {@code requestUpdateCustomSettings} -> {@code PluginCustomSettingsRequest},
+     * once per subscribed market). Sends one VolatilityPlugin settings payload from this JVM's client for every market
+     * the plugin is subscribed to and checks every answer succeeded and every market's settings on the server equal
+     * the payload. The GUI loop itself is not driven (the subscribed list is read on the server, the GUI reads the
+     * same list from its sync data). sp only (client and master in one JVM); the player gets StockMarket admin mode
+     * for the test if needed. Every market's previous settings and the admin flag are restored.
+     */
+    private TestResult test_customSettings_applyToAllMarkets_viaClientRequest() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null || client.PLUGIN_MANAGER == null || pluginManager == null)
+            return skip("sp only (client and master in this JVM)");
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null)
+            return skip("no client player");
+        VolatilityPlugin plugin = null;
+        for (ServerPlugin<?, ?> p : pluginManager.getPlugins().values())
+            if (p instanceof VolatilityPlugin v && !v.getSubscribedMarkets().isEmpty()) {
+                plugin = v;
+                break;
+            }
+        if (plugin == null)
+            return skip("no VolatilityPlugin with a subscribed market");
+        UUID player = mc.player.getUUID();
+        var manager = backend.MARKET_MANAGER.getSync();
+        boolean wasAdmin = manager.isStockmarketAdmin(player);
+        List<ItemID> markets = List.copyOf(plugin.getSubscribedMarkets());
+        java.util.Map<ItemID, VolatilityPlugin.Settings> before = new java.util.HashMap<>();
+        for (ItemID id : markets)
+            before.put(id, plugin.getCustomSettings(id));
+        VolatilityPlugin.Settings payload = new VolatilityPlugin.Settings(0.4321f);
+        ByteBuf buf = Unpooled.buffer();
+        VolatilityPlugin.Settings.CODEC.encode(buf, payload);
+        byte[] bytes = new byte[buf.readableBytes()];
+        buf.readBytes(bytes);
+        buf.release();
+        UUID instanceID = plugin.getInstanceID();
+        try {
+            if (!wasAdmin)
+                manager.setStockmarketAdminMode(player, true);
+            java.util.function.Supplier<List<java.util.concurrent.CompletableFuture<net.kroia.stockmarket.networking.request.PluginCustomSettingsRequest.OutputData>>> send = () ->
+                    markets.stream().map(id -> client.PLUGIN_MANAGER.requestUpdateCustomSettings(instanceID, id, bytes)).toList();
+            var futures = mc.isSameThread() ? send.get() : await(mc.submit(send), 10_000);
+            await(java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0])), 10_000);
+            for (int i = 0; i < markets.size(); i++) {
+                TestResult r = assertTrue("request for market " + markets.get(i) + " succeeded", futures.get(i).join().success());
+                if (!r.passed()) return r;
+                r = assertEquals("settings of market " + markets.get(i), payload, plugin.getCustomSettings(markets.get(i)));
+                if (!r.passed()) return r;
+            }
+            return pass("payload applied to all " + markets.size() + " subscribed markets");
+        } finally {
+            for (var e : before.entrySet())
+                if (e.getValue() != null)
+                    plugin.replaceCustomSettings(e.getKey(), e.getValue());
+            if (!wasAdmin)
+                manager.setStockmarketAdminMode(player, false);
         }
     }
 }
