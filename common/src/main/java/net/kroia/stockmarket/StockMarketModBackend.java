@@ -592,7 +592,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         for (ItemID id : removed) {
             var market = smm.getServerMarket(id);
             if (market != null) {
-                ordersCancelled += (int) market.getLimitOrders().stream().filter(o -> !o.isBotOrder()).count();
+                ordersCancelled += market.cancelAllPlayerOrdersAndBuffers(); // SM-269: book + buffers, real count
                 if (smm.deleteMarket(id)) marketsDeleted++;
             }
             Optional<EqualityFilter> byMarket = Optional.of(new EqualityFilter(id.getShort()));
@@ -754,6 +754,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         if (manager == null)
             return;
         try {
+            // SM-269: buffered orders are not saved; cancel and refund them while BankSystem is still up
+            manager.cancelBufferedPlayerOrders();
             manager.logOpenOrdersToLedger(OrderLedger.SHUTDOWN);
         } catch (RuntimeException e) {
             SERVER_INSTANCES.LOGGER.error("[StockMarketModBackend] Failed to write SHUTDOWN ledger rows", e);

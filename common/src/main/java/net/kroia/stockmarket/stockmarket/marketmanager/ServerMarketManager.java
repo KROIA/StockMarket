@@ -262,10 +262,10 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         ServerMarket market = markets.get(marketID);
         if (market == null) return false;
 
-        // Close market: cancels player orders and inter-market orders via callback
-        if (!market.isUnderMaintenance()) {
-            market.setMaintenance(true);
-        }
+        // Close market: cancels and refunds every player order (book and input buffers) and the
+        // inter-market orders via callback. SM-269: also when the market already is under
+        // maintenance (e.g. loaded that way), otherwise clear() below would drop locked orders.
+        market.setMaintenance(true);
 
         // Clear remaining orders (bot orders that survived close)
         market.getOrderbook().clear();
@@ -359,7 +359,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             {
                 if (!markets.containsKey(alias))
                     continue;
-                int refunded = countRefundableOrders(alias);
+                // SM-269: cancel here (deleteMarket then finds none) to log the real count
+                int refunded = markets.get(alias).cancelAllPlayerOrdersAndBuffers();
                 deleteMarket(alias);
                 if (deletedSummary.length() > 0) deletedSummary.append(", ");
                 deletedSummary.append(alias).append(" (refunded ").append(refunded).append(" order(s))");
@@ -373,24 +374,6 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         }
     }
 
-    /**
-     * Counts the player limit orders on the given market that will be refunded when
-     * {@link #deleteMarket(ItemID)} closes it. Bot orders are excluded — they never
-     * had bank reservations. Used only for the merge consolidation log line.
-     */
-    private int countRefundableOrders(ItemID marketID)
-    {
-        ServerMarket market = markets.get(marketID);
-        if (market == null)
-            return 0;
-        int count = 0;
-        for (net.kroia.stockmarket.stockmarket.market.core.order.Order order : market.getLimitOrders())
-        {
-            if (!order.isBotOrder())
-                count++;
-        }
-        return count;
-    }
 
 
 
@@ -1127,6 +1110,20 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         if (OrderLedger.logDelta(order.getSellOrder(), ref, rowKind, currency)) rows++;
         if (OrderLedger.logDelta(order.getBuyOrder(), ref, rowKind, currency)) rows++;
         return rows;
+    }
+
+    /**
+     * SM-269: cancels and refunds the player orders still buffered for matching in every market.
+     * The input buffers are not saved, so this runs at shutdown before the final save.
+     *
+     * @return the number of cancelled orders
+     */
+    public int cancelBufferedPlayerOrders()
+    {
+        int count = 0;
+        for (ServerMarket m : markets.values())
+            count += m.cancelBufferedPlayerOrders();
+        return count;
     }
 
     /**

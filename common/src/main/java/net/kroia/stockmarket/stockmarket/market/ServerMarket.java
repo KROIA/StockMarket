@@ -38,6 +38,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 public class ServerMarket implements ServerSaveable, IServerMarket {
     private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
@@ -427,20 +428,62 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     public int cancelOrdersOfBankAccount(int bankAccountNr)
     {
+        return cancelPlayerOrders(true, order -> order.getBankAccountNr() == bankAccountNr);
+    }
+
+    /**
+     * SM-269: cancels every player order of this market, the resting ones in the book and the ones
+     * still buffered for matching, through {@link #onOrderCanceled(Order)} (unlock, CLOSE ledger row,
+     * order record). Works whatever the maintenance state. Used by maintenance and market deletion.
+     * Bot orders and inter-market legs are left alone (see {@link #cancelOrdersOfBankAccount(int)}).
+     *
+     * @return the number of cancelled orders
+     */
+    public int cancelAllPlayerOrdersAndBuffers()
+    {
+        return cancelPlayerOrders(true, order -> true);
+    }
+
+    /**
+     * SM-269: cancels the player orders still buffered for matching (not the book), through
+     * {@link #onOrderCanceled(Order)}. The buffers are not saved, so this runs at shutdown, and every
+     * tick while the market is under maintenance so a buffered order never reaches its book.
+     *
+     * @return the number of cancelled orders
+     */
+    public int cancelBufferedPlayerOrders()
+    {
+        return cancelPlayerOrders(false, order -> true);
+    }
+
+    /**
+     * Shared cancel loop: removes the matching player orders (no bot orders, no inter-market legs)
+     * from the book (if {@code includeBook}) and from the 4 input buffers, and cancels each through
+     * {@link #onOrderCanceled(Order)}.
+     *
+     * @param includeBook also cancel the resting limit orders in the book
+     * @param filter      selects the player orders to cancel
+     * @return the number of cancelled orders
+     */
+    private int cancelPlayerOrders(boolean includeBook, Predicate<Order> filter)
+    {
         int count = 0;
-        for (Order order : getLimitOrders()) // copy, safe to remove while iterating
+        if (includeBook)
         {
-            if (order.isBotOrder() || order.getBankAccountNr() != bankAccountNr) continue;
-            orderbook.removeOrder(order);
-            onOrderCanceled(order);
-            count++;
+            for (Order order : getLimitOrders()) // copy, safe to remove while iterating
+            {
+                if (order.isBotOrder() || !filter.test(order)) continue;
+                orderbook.removeOrder(order);
+                onOrderCanceled(order);
+                count++;
+            }
         }
         for (PriorityQueue<Order> buffer : List.of(buyMarketOrders_inputBuffer, sellMarketOrders_inputBuffer,
                 buyLimitOrders_inputBuffer, sellLimitOrders_inputBuffer))
         {
             List<Order> matches = new ArrayList<>();
             for (Order order : buffer)
-                if (order.isPlayerOrder() && order.getType() != Order.Type.INTER_MARKET && order.getBankAccountNr() == bankAccountNr)
+                if (order.isPlayerOrder() && order.getType() != Order.Type.INTER_MARKET && filter.test(order))
                     matches.add(order);
             for (Order order : matches)
             {
@@ -513,7 +556,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         this.settings.maintenance = maintenance;
         if (maintenance) {
-            cancelAllPlayerOrders();
+            int cancelledCount = cancelAllPlayerOrdersAndBuffers();
+            if (cancelledCount > 0)
+                info("Maintenance enabled: cancelled " + cancelledCount + " player order(s)");
             if (marketMaintenanceCallback != null) {
                 marketMaintenanceCallback.accept(itemID);
             }
@@ -521,21 +566,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         return true;
     }
 
-    private void cancelAllPlayerOrders() {
-        List<Order> limitOrders = new ArrayList<>(getLimitOrders());
-        int cancelledCount = 0;
-        for (Order order : limitOrders) {
-            if (order.isBotOrder()) continue;
-            orderbook.removeOrder(order);
-            // unlockRemainingFunds is now called inside onOrderCanceled (Fix 3),
-            // so we no longer invoke it here — that would double-unlock.
-            onOrderCanceled(order);
-            cancelledCount++;
-        }
-        if (cancelledCount > 0) {
-            info("Maintenance enabled: cancelled " + cancelledCount + " player order(s)");
-        }
-    }
     @Override
     public CompletableFuture<Boolean> setMaintenanceAsync(boolean maintenance) {
         return CompletableFuture.completedFuture(setMaintenance(maintenance));
@@ -837,6 +867,14 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         fadedNetPlayerItemFlow = fade(fadedNetPlayerItemFlow, netFlowHalfLifeSeconds(), TICK_SECONDS);
         // T-198: consumed virtual depth outside the array window recovers on tick time (also while closed).
         orderbook.fadeVirtualDepthMemory(TICK_SECONDS);
+        // SM-269: a buffered player order must never reach the book of a market under maintenance
+        // (e.g. buffered while closed, maintenance flag set without setMaintenance). Cancel + refund it.
+        if (settings.maintenance)
+        {
+            int cancelledCount = cancelBufferedPlayerOrders();
+            if (cancelledCount > 0)
+                info("Under maintenance: cancelled " + cancelledCount + " buffered player order(s)");
+        }
         // Closed (outside trading hours / override): no matching, price stays static. Buffered
         // orders stay buffered; putOrder already rejects new ones while closed.
         if (!tradingOpen)

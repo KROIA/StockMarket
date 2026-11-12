@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.api.ledger.TradeLogEntry;
+import net.kroia.banksystem.api.ledger.TradeRowKind;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
@@ -9,6 +11,7 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
+import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
@@ -17,6 +20,8 @@ import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public class MarketIntegrationTestSuite extends TestSuite {
@@ -63,6 +68,10 @@ public class MarketIntegrationTestSuite extends TestSuite {
         addTest("slave_forwarded_legit_calls_allowed", this::test_slaveForwarded_legitCallsAllowed);
         addTest("untrusted_slave_market_settings_refused", this::test_untrustedSlave_marketSettingsRefused);
         addTest("is_admin_query_refused", this::test_isAdminQuery_refused);
+        // SM-269: no player order is dropped without a refund
+        addTest("delete_market_in_maintenance_refunds_resting_order", this::test_deleteMarket_inMaintenance_refundsRestingOrder);
+        addTest("maintenance_buffered_order_never_reaches_book", this::test_maintenance_bufferedOrderNeverReachesBook);
+        addTest("delete_market_refunds_buffered_order", this::test_deleteMarket_refundsBufferedOrder);
     }
 
     @Override
@@ -641,6 +650,123 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private AsyncMarket marketAs(String slaveID, UUID playerSender) {
         return AsyncMarket.createForTesting(serverMarket.getItemID(), input ->
                 AsyncMarket.Request.instance.handleOnMasterServer(input, slaveID, playerSender));
+    }
+
+    // ---- SM-269: deleting a market or maintenance never drops a player order without a refund ----
+
+    /**
+     * Scratch market with no virtual liquidity at price 10; account 1 gets an item bank for it and
+     * 1000 money with nothing locked.
+     */
+    private IServerMarket sm269Market(String name) {
+        IServerMarket m = fixture.createMarket(name);
+        m.test_setDefaultVolumeProviderFunction(this::emptyVolumeDistribution);
+        m.test_setCurrentMarketPrice(10);
+        m.test_clearOrderbook();
+        bankAccount1.createBank(m.getItemID(), 0);
+        bankAccount1.getBank(moneyID).setBalance(1000);
+        return m;
+    }
+
+    /** Restores account 1's money: nothing locked, balance 1000. */
+    private void sm269ResetMoney() {
+        long locked = bankAccount1.getBank(moneyID).getLockedBalance();
+        if (locked > 0) bankAccount1.getBank(moneyID).unlockAmount(locked);
+        bankAccount1.getBank(moneyID).setBalance(1000);
+    }
+
+    /** A player limit buy of {@code units} items at 10, with its money locked the way the order request does. */
+    private Order sm269LockedBuy(IServerMarket m, int units) {
+        long cost = units * 10L;
+        bankAccount1.getBank(moneyID).lockAmount(cost);
+        Order buy = new Order(m.getItemID(), Order.Type.LIMIT, (long) units * scaleFactor, 10, 0, UUID.randomUUID(), bankAccountNr1);
+        buy.setOriginalLockedMoney(cost);
+        return buy;
+    }
+
+    /**
+     * A market saved under maintenance still holds a partly filled resting player buy. Deleting it
+     * cancels the order: the locked money is released and a CLOSE ledger row is written.
+     */
+    private TestResult test_deleteMarket_inMaintenance_refundsRestingOrder() {
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        IServerMarket m = sm269Market("sm269_delete_maint");
+        List<TradeLogEntry> rows = new ArrayList<>();
+        OrderLedger.Writer.testSink = rows::add;
+        try {
+            m.putOrder(new Order(m.getItemID(), Order.Type.LIMIT, -scaleFactor, 10, 0)); // bot sell, 1 item
+            m.update();
+            Order buy = sm269LockedBuy(m, 2);
+            TestResult r = assertTrue("buy accepted", m.putOrder(buy));
+            if (!r.passed()) return r;
+            m.update(); // 1 item fills against the bot, 1 rests in the book
+            r = assertTrue("buy partly filled and resting", buy.getFilledVolume() > 0 && m.getLimitOrders().contains(buy));
+            if (!r.passed()) return r;
+            r = assertEquals("rest still locked", 10L, bankAccount1.getBank(moneyID).getLockedBalance());
+            if (!r.passed()) return r;
+            m.getSettings().maintenance = true; // as loaded from a save: flag only, the order stays
+
+            r = assertTrue("market deleted", manager.deleteMarket(m.getItemID()));
+            if (!r.passed()) return r;
+            r = assertEquals("locked money released", 0L, bankAccount1.getBank(moneyID).getLockedBalance());
+            if (!r.passed()) return r;
+            String ref = OrderLedger.orderRef(buy.getOrderID());
+            r = assertTrue("CLOSE ledger row written", rows.stream()
+                    .anyMatch(e -> e.ref().equals(ref) && e.rowKind() == TradeRowKind.CLOSE));
+            if (!r.passed()) return r;
+            return pass("Deleting a market under maintenance cancels and refunds its resting player order");
+        } finally {
+            OrderLedger.Writer.testSink = null;
+            sm269ResetMoney();
+        }
+    }
+
+    /**
+     * An order buffered while trading is closed, then maintenance is switched on (flag only): when the
+     * market reopens, the buffered order is cancelled and refunded instead of entering the book.
+     */
+    private TestResult test_maintenance_bufferedOrderNeverReachesBook() {
+        IServerMarket m = sm269Market("sm269_maint_buffer");
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        try {
+            Order buy = sm269LockedBuy(m, 1);
+            TestResult r = assertTrue("buy accepted", m.putOrder(buy));
+            if (!r.passed()) return r;
+            m.setTradingOverride(false);
+            m.updateTradingHours(manager.getCurrentTradingMinute()); // closed: the order stays buffered
+            m.update();
+            r = assertEquals("still locked while closed", 10L, bankAccount1.getBank(moneyID).getLockedBalance());
+            if (!r.passed()) return r;
+            m.getSettings().maintenance = true;
+            m.setTradingOverride(true);
+            m.updateTradingHours(manager.getCurrentTradingMinute());
+            m.update();
+            for (Order o : m.getLimitOrders()) {
+                r = assertTrue("no player order in the book", o.isBotOrder());
+                if (!r.passed()) return r;
+            }
+            return assertEquals("locked money released", 0L, bankAccount1.getBank(moneyID).getLockedBalance());
+        } finally {
+            m.getSettings().maintenance = false;
+            m.test_clearOrderbook();
+            m.test_clearIncomingOrderBuffers();
+            sm269ResetMoney();
+        }
+    }
+
+    /** An order put in the same tick as the market is deleted (still buffered) is refunded. */
+    private TestResult test_deleteMarket_refundsBufferedOrder() {
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        IServerMarket m = sm269Market("sm269_delete_buffer");
+        try {
+            TestResult r = assertTrue("buy accepted", m.putOrder(sm269LockedBuy(m, 1)));
+            if (!r.passed()) return r;
+            r = assertTrue("market deleted", manager.deleteMarket(m.getItemID()));
+            if (!r.passed()) return r;
+            return assertEquals("locked money released", 0L, bankAccount1.getBank(moneyID).getLockedBalance());
+        } finally {
+            sm269ResetMoney();
+        }
     }
 
     private float emptyVolumeDistribution(double price) {
