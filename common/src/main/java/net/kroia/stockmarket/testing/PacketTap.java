@@ -5,6 +5,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import net.kroia.stockmarket.mixin.ConnectionAccessor;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
@@ -72,7 +73,7 @@ public final class PacketTap implements AutoCloseable {
         synchronized (conns) {
             for (Connection c : conns)
                 if (c.getPacketListener() == player.connection)
-                    return new PacketTap(c.channel());
+                    return new PacketTap(((ConnectionAccessor) c).stockmarket$getChannel());
         }
         return null;
     }
