@@ -24,7 +24,11 @@ import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.util.TradeAlerts;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.minecraft.commands.CommandSource;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -37,6 +41,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
@@ -100,6 +105,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         addTest("switch_off_posts_nothing", () -> master(this::switchOff));
         addTest("alert_posts_message", () -> master(this::alert));
         addTest("live_webhook_posts", () -> master(this::live));
+        addTest("discord_status_command_mounted", this::discordStatusCommand);
     }
 
     @Override
@@ -443,6 +449,48 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         } catch (IOException e) {
             return false;
         }
+    }
+
+    /**
+     * SM-282: {@code /stockmarket discord status} is mounted (StockMarketCommands, ModUtilities'
+     * {@code DiscordWebhooks.command()}): a level-3 source runs it and gets at least one reply line; a level-0
+     * source cannot run it. What the status says (and the slave line) is ModUtilities' to test. Runs on every
+     * server (master and slave mount it); read-only.
+     */
+    private TestResult discordStatusCommand() {
+        MinecraftServer server = getServer();
+        if (server == null)
+            return skip("no server");
+        List<Component> replies = new CopyOnWriteArrayList<>();
+        CommandSource capture = new CommandSource() {
+            @Override public void sendSystemMessage(Component component) { replies.add(component); }
+            @Override public boolean acceptsSuccess() { return true; }
+            @Override public boolean acceptsFailure() { return true; }
+            @Override public boolean shouldInformAdmins() { return false; }
+        };
+        CommandSourceStack base = server.createCommandSourceStack().withSource(capture);
+        int result;
+        try {
+            result = server.getCommands().getDispatcher().execute("stockmarket discord status", base.withPermission(3));
+        } catch (CommandSyntaxException e) {
+            return fail("level 3 could not run it: " + e.getMessage());
+        }
+        TestResult r = assertEquals("level 3: command succeeds", 1, result);
+        if (!r.passed()) return r;
+        r = assertFalse("level 3: at least one reply line", replies.isEmpty());
+        if (!r.passed()) return r;
+
+        replies.clear();
+        boolean refused;
+        try {
+            server.getCommands().getDispatcher().execute("stockmarket discord status", base.withPermission(0));
+            refused = false;
+        } catch (CommandSyntaxException e) {
+            refused = true;
+        }
+        r = assertTrue("level 0: not permitted", refused);
+        if (!r.passed()) return r;
+        return assertTrue("level 0: no status reply, got " + replies, replies.isEmpty());
     }
 
     // ------------------------------------------------------------------ helpers
