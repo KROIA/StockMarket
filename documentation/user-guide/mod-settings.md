@@ -94,7 +94,7 @@ prices are built.
 | Villager buy margin | `VILLAGER_BUY_MARGIN` | 0.8 | 0.01 - 100 | Multiplier on the market price when a villager buys from the player |
 | Villager sell margin | `VILLAGER_SELL_MARGIN` | 1.2 | 0.01 - 100 | Multiplier on the market price when a villager sells to the player |
 | Replace emeralds for unlisted items | `REPLACE_EMERALDS_FOR_UNLISTED` | off | | Emerald trades of items without a market are paid in money at the emerald market price (rounded to 2 significant digits, no margin). Needs an emerald market |
-| Use preset prices for villagers | `USE_PRESET_PRICES_FOR_VILLAGERS` | off | | Only active while the emerald replacement is on (greyed out otherwise). Converted trades use the item's preset default price instead of the emerald price, even without a market. Items without a preset price keep their emerald trades |
+| Use preset prices for villagers | `USE_PRESET_PRICES_FOR_VILLAGERS` | off | | Only active while the emerald replacement is on (greyed out otherwise). Converted trades use the item's preset default price instead of the emerald price, even without a market. Items without a preset price use the emerald price and get no villager discount |
 
 Villager discounts (reputation, Hero of the Village, cured zombies) on money trades are capped at 20% and count whole cost items, so a small money cost (fewer than five notes or coins) shows no discount.
 

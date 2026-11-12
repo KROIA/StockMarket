@@ -124,6 +124,7 @@ public class PortSmokeTestSuite extends TestSuite {
             VillagerTradeData.VillagerEntry entry = writer.getSavedData(server)
                     .getOrCreateEntry(villager, server.overworld().getGameTime());
             entry.append(new VillagerTradeData.OriginalOffer(original, true));
+            entry.get(0).setNoDiscount(true);
             entry.append(VillagerTradeData.OriginalOffer.PASSTHROUGH);
             entry.setPricedVersion(42);
             entry.flagClamped(0);
@@ -141,6 +142,8 @@ public class PortSmokeTestSuite extends TestSuite {
             if (!r.passed()) return r;
             VillagerTradeData.OriginalOffer first = loaded.get(0);
             r = assertTrue("first offer must stay a rewritten snapshot", !first.isPassthrough() && first.isRewritten());
+            if (!r.passed()) return r;
+            r = assertTrue("first offer must keep its no-discount flag", first.isNoDiscount());
             if (!r.passed()) return r;
             MerchantOffer offer = first.offer();
             r = assertTrue("cost A must be 5 emeralds", offer.getBaseCostA().is(Items.EMERALD) && offer.getBaseCostA().getCount() == 5);

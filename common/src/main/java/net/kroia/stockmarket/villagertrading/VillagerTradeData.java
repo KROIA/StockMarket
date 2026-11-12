@@ -77,6 +77,8 @@ public class VillagerTradeData {
         private final @Nullable MerchantOffer offer;
         /** Whether the live offer at this index is currently in currency form. */
         private boolean rewritten;
+        /** Whether the live currency-form offer gets no discount (preset-price fallback). */
+        private boolean noDiscount;
 
         public OriginalOffer(@Nullable MerchantOffer offer, boolean rewritten) {
             this.offer = offer;
@@ -101,6 +103,20 @@ public class VillagerTradeData {
         /** Records whether the live offer at this index is currently in currency form. */
         public void setRewritten(boolean rewritten) {
             this.rewritten = rewritten;
+        }
+
+        /**
+         * @return {@code true} when the live currency-form offer gets no discount
+         *         at all (preset prices on, but its item has no preset price, so
+         *         it is priced from the emerald market)
+         */
+        public boolean isNoDiscount() {
+            return noDiscount;
+        }
+
+        /** Records whether the live offer gets no discount (see {@link #isNoDiscount}). */
+        public void setNoDiscount(boolean noDiscount) {
+            this.noDiscount = noDiscount;
         }
     }
 
@@ -301,9 +317,15 @@ public class VillagerTradeData {
                 // true: back then every stored snapshot was immediately rewritten,
                 // so the live offer is in currency form and must be restorable.
                 boolean rewritten = !originalTag.contains("rewritten") || NbtCompat.getBoolean(originalTag, "rewritten");
+                // Missing flag (data written before it existed) reads as false.
+                boolean noDiscount = NbtCompat.getBoolean(originalTag, "noDiscount");
                 // Decode failure degrades to pass-through to keep index alignment.
                 entry.originals.add(offer
-                        .map(o -> new OriginalOffer(o, rewritten))
+                        .map(o -> {
+                            OriginalOffer original = new OriginalOffer(o, rewritten);
+                            original.setNoDiscount(noDiscount);
+                            return original;
+                        })
                         .orElse(OriginalOffer.PASSTHROUGH));
             }
             data.villagers.put(NbtCompat.getUUID(villagerTag, "uuid"), entry);
@@ -337,6 +359,7 @@ public class VillagerTradeData {
                     if (encoded.isPresent()) {
                         originalTag.put("offer", encoded.get());
                         originalTag.putBoolean("rewritten", original.isRewritten());
+                        originalTag.putBoolean("noDiscount", original.isNoDiscount());
                     } else {
                         // Encode failure degrades to pass-through to keep alignment.
                         originalTag.putBoolean("passthrough", true);

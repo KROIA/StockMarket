@@ -74,7 +74,8 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         addTest("emerald_replace_listed_item_uses_market", this::test_emerald_replace_listed_item_uses_market);
         addTest("emerald_replace_toggle_off_restores", this::test_emerald_replace_toggle_off_restores);
         addTest("preset_prices_price_unlisted_item", this::test_preset_prices_price_unlisted_item);
-        addTest("preset_prices_missing_preset_stays_emerald", this::test_preset_prices_missing_preset_stays_emerald);
+        addTest("preset_prices_missing_preset_uses_emerald_price", this::test_preset_prices_missing_preset_uses_emerald_price);
+        addTest("cap_discounts_no_discount_flag", this::test_cap_discounts_no_discount_flag);
         addTest("converted_trade_no_market_impact", this::test_converted_trade_no_market_impact);
     }
 
@@ -809,29 +810,92 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     }
 
     /**
-     * Preset prices on: an item without a preset price keeps its emerald trade,
-     * even though an emerald market exists (no fallback to the emerald price).
+     * Preset prices on (SM-308): an item without a preset price falls back to the
+     * rounded emerald price and is flagged no-discount; without an emerald market
+     * it stays in emeralds.
      */
-    private TestResult test_preset_prices_missing_preset_stays_emerald() {
+    private TestResult test_preset_prices_missing_preset_uses_emerald_price() {
         MerchantOffers offers = new MerchantOffers();
-        MerchantOffer sell = sellIronOffer();
-        MerchantOffer buy = buyCoalOffer();
-        offers.add(sell);
-        offers.add(buy);
+        offers.add(sellIronOffer());
+        offers.add(buyCoalOffer());
         VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         // Empty preset map: neither iron nor coal has a preset price.
         boolean changed = VillagerTradeRewriter.processOffers(
                 offers, entry, presetTable(1L, Map.of()), emeraldOnlyLookup(), null);
 
-        TestResult r = assertFalse("Nothing converted without preset prices", changed);
+        TestResult r = assertTrue("Offers without a preset price must be converted", changed);
         if (!r.passed()) return r;
-        r = assertTrue("Sell offer untouched (emerald)", offers.get(0) == sell);
+        MerchantOffer sell = offers.get(0);
+        r = assertTrue("Sell cost is currency", isMoney(sell.getBaseCostA()));
         if (!r.passed()) return r;
-        r = assertTrue("Buy offer untouched (emerald)", offers.get(1) == buy);
+        // 5 emeralds × 100 raw = 500 raw, no margin
+        r = assertEquals("Sell cost = emeralds × emerald price (500 raw)",
+                500L, rawValue(sell.getBaseCostA(), sell.getCostB()));
+        if (!r.passed()) return r;
+        MerchantOffer buy = offers.get(1);
+        r = assertTrue("Buy result is currency", isMoney(buy.getResult()));
+        if (!r.passed()) return r;
+        r = assertEquals("Payout = emeralds × emerald price (100 raw)", 100L, rawValue(buy.getResult()));
+        if (!r.passed()) return r;
+        r = assertTrue("Fallback offers are flagged no-discount",
+                entry.get(0).isNoDiscount() && entry.get(1).isNoDiscount());
         if (!r.passed()) return r;
 
-        return pass("Items without a preset price stay in emeralds");
+        // Same offers with preset prices off: converted too, but not flagged.
+        VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(2L, true), emeraldOnlyLookup(), null);
+        r = assertTrue("Preset prices off: no no-discount flag",
+                !entry.get(0).isNoDiscount() && !entry.get(1).isNoDiscount());
+        if (!r.passed()) return r;
+
+        // No emerald market: the offers stay in emeralds.
+        MerchantOffers emeraldOffers = new MerchantOffers();
+        MerchantOffer vanilla = sellIronOffer();
+        emeraldOffers.add(vanilla);
+        VillagerTradeData.VillagerEntry emeraldEntry = new VillagerTradeData.VillagerEntry();
+        changed = VillagerTradeRewriter.processOffers(
+                emeraldOffers, emeraldEntry, presetTable(1L, Map.of()), stack -> 0L, null);
+        r = assertFalse("Nothing converted without an emerald market", changed);
+        if (!r.passed()) return r;
+        r = assertTrue("Offer untouched (emerald)", emeraldOffers.get(0) == vanilla);
+        if (!r.passed()) return r;
+
+        return pass("Items without a preset price use the emerald price with no discount");
+    }
+
+    /**
+     * capDiscounts (SM-308): a no-discount offer loses every discount but keeps a
+     * price increase; a normal rewritten offer is still capped at 20%; an offer
+     * in emerald form keeps its vanilla discount.
+     */
+    private TestResult test_cap_discounts_no_discount_flag() {
+        MerchantOffers offers = new MerchantOffers();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+        for (int i = 0; i < 4; i++) {
+            // 10 money → 1 iron, demand 0: the 20% cap is 2 items.
+            offers.add(new MerchantOffer(new ItemCost(moneyCurrency().getItem(), 10), Optional.empty(),
+                    new ItemStack(Items.IRON_INGOT), 0, 16, 2, 0.05f, 0));
+            entry.append(new VillagerTradeData.OriginalOffer(sellIronOffer(), i != 3));
+        }
+        entry.get(0).setNoDiscount(true);
+        entry.get(1).setNoDiscount(true);
+        offers.get(0).setSpecialPriceDiff(-5); // flagged, discounted
+        offers.get(1).setSpecialPriceDiff(3);  // flagged, bad reputation
+        offers.get(2).setSpecialPriceDiff(-5); // not flagged
+        offers.get(3).setSpecialPriceDiff(-5); // emerald form (not rewritten)
+
+        VillagerTradeRewriter.capDiscounts(offers, entry);
+
+        TestResult r = assertEquals("Flagged offer has no discount", 0, offers.get(0).getSpecialPriceDiff());
+        if (!r.passed()) return r;
+        r = assertEquals("Flagged offer keeps a price increase", 3, offers.get(1).getSpecialPriceDiff());
+        if (!r.passed()) return r;
+        r = assertEquals("Unflagged offer capped at 20% (2 of 10)", -2, offers.get(2).getSpecialPriceDiff());
+        if (!r.passed()) return r;
+        r = assertEquals("Emerald-form offer keeps its vanilla discount", -5, offers.get(3).getSpecialPriceDiff());
+        if (!r.passed()) return r;
+
+        return pass("No-discount offers lose every discount, others are capped at 20%");
     }
 
     /**

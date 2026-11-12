@@ -373,7 +373,8 @@ public class StockMarketModSettings extends ModSettings {
          * converted offers are priced from the traded item's default price in the market
          * presets (even when no market exists for it) instead of
          * {@code emerald count × emerald price}; same rounding, no margin. An item without
-         * a preset price keeps its emerald trade (never falls back to the emerald price).
+         * a preset price falls back to the emerald price (stays emerald without an emerald
+         * market) and that offer gets no villager discount at all.
          * Read live on every table recompute (not restart-required); the master sends the
          * preset prices to slaves inside the price table. Disabled by default.
          */
