@@ -23,6 +23,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -71,7 +73,7 @@ public class ItemPickerRegistrationTestSuite extends TestSuite {
         Boolean trusted = slave ? SlaveTrustCache.get() : Boolean.TRUE;
         if (trusted == null)
             return skip("this slave does not know yet whether the master trusts it");
-        ItemStack stack = unregisteredPlainItem();
+        ItemStack stack = unregisteredPlainItem(slave);
         if (stack == null)
             return skip("every vanilla item already has an ItemID");
 
@@ -91,7 +93,8 @@ public class ItemPickerRegistrationTestSuite extends TestSuite {
                 return assertFalse("untrusted slave: " + itemName(stack) + " is not registered", isRegistered(stack));
             }
 
-            TestResult r = assertTrue(itemName(stack) + " got an ItemID" + (slave ? " from the master" : ""),
+            TestResult r = assertTrue(itemName(stack) + " got an ItemID" + (slave ? " from the master (trust cache="
+                            + SlaveTrustCache.get() + ", connected=" + MultiServerUtils.canInteractWithStockMarket() + ")" : ""),
                     pumpUntil(() -> isRegistered(stack), WAIT_MS));
             if (!r.passed()) return r;
             marketID = ItemIDManager.getItemID(stack);
@@ -129,9 +132,18 @@ public class ItemPickerRegistrationTestSuite extends TestSuite {
         }
     }
 
-    /** @return a vanilla item's plain default stack this server has no ItemID for, or null if all have one */
-    private static @Nullable ItemStack unregisteredPlainItem() {
-        for (Item item : BuiltInRegistries.ITEM) {
+    /**
+     * @param reverse scan the registry back to front. A slave does this: in the slave-trusted cell the master runs
+     *                this test first and its fixture rolls the ItemID registry back, so the slave avoids the master's
+     *                first pick (SM-273 diagnostic: does the rollback break re-registration from a slave?).
+     * @return a vanilla item's plain default stack this server has no ItemID for, or null if all have one
+     */
+    private static @Nullable ItemStack unregisteredPlainItem(boolean reverse) {
+        List<Item> items = new ArrayList<>();
+        BuiltInRegistries.ITEM.forEach(items::add);
+        if (reverse)
+            Collections.reverse(items);
+        for (Item item : items) {
             if (item == Items.AIR || !"minecraft".equals(BuiltInRegistries.ITEM.getKey(item).getNamespace()))
                 continue;
             ItemStack stack = new ItemStack(item);
