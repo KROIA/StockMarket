@@ -1059,11 +1059,10 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     }
 
     /**
-     * @return the per-market pagination cache. Package-private helper for
-     *         tests and future in-package UI code; charts should go through
-     *         {@link #getPriceHistoryData(long)} instead.
+     * @return the per-market pagination cache. Public for tests (SM-275); charts should go
+     *         through {@link #getPriceHistoryData(long)} instead.
      */
-    PriceHistoryCache getHistoryCache()
+    public PriceHistoryCache getHistoryCache()
     {
         return historyCache;
     }

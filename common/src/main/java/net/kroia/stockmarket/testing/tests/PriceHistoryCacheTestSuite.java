@@ -1,16 +1,39 @@
 package net.kroia.stockmarket.testing.tests;
 
+import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.market.IPriceDataProvider;
+import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
+import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
+import net.kroia.stockmarket.screen.uiElements.OrderHistoryPanel;
+import net.kroia.stockmarket.screen.uiElements.TransactionHistoryPanel;
+import net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.market.PriceHistoryCache;
+import net.kroia.stockmarket.testing.ClientThread;
+import net.kroia.stockmarket.testing.PacketTap;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.PriceHistoryData.Candle;
 
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * In-game test suite for the client pagination cache
@@ -81,6 +104,9 @@ public class PriceHistoryCacheTestSuite extends TestSuite
         addTest("server_start_floor_no_older_data", this::test_serverStartFloor_noOlderData);
         addTest("server_start_floor_oldest_covered", this::test_serverStartFloor_oldestCovered);
         addTest("server_start_floor_oldest_below_min", this::test_serverStartFloor_oldestBelowMin);
+        // SM-275: client-side, sp cells only
+        addTest("display_chart_provider_loads_history", this::test_displayChartProviderLoadsHistory);
+        addTest("history_panels_keep_unchanged_rows", this::test_historyPanelsKeepUnchangedRows);
     }
 
     // ------------------------------------------------------------------
@@ -345,5 +371,204 @@ public class PriceHistoryCacheTestSuite extends TestSuite
 
         return assertFalse("atServerStart should stay false when oldest < loadedMin",
                 cache.atServerStart(DELTA_MS));
+    }
+
+    // ------------------------------------------------------------------
+    // SM-275: client-side checks (sp cells only; skip offline and elsewhere)
+    // ------------------------------------------------------------------
+
+    private static final long CLIENT_WAIT_MS = 10_000L;
+
+    /** @return null when this JVM runs the client next to the server (sp), else the skip result */
+    private @Nullable TestResult skipUnlessSp()
+    {
+        MinecraftServer server = getServer();
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (server == null || server.isDedicatedServer() || client == null || client.MARKET_MANAGER == null)
+            return skip("sp only (needs the client in this JVM)");
+        if (server.getPlayerList().getPlayers().isEmpty())
+            return skip("no player online");
+        return null;
+    }
+
+    /** Runs {@code task} on the client thread and waits for it (the server keeps ticking meanwhile). */
+    private <T> T onClient(Supplier<T> task)
+    {
+        return await(ClientThread.submit(task), CLIENT_WAIT_MS);
+    }
+
+    /** @return a market the client has cached, or null (client thread) */
+    private static @Nullable ClientMarket anyClientMarket()
+    {
+        IClientMarketManager manager = StockMarketModBackend.getClientInstances().MARKET_MANAGER;
+        for (ItemID id : manager.getAvailableMarkets())
+        {
+            ClientMarket market = manager.getMarket(id);
+            if (market != null)
+                return market;
+        }
+        return null;
+    }
+
+    /**
+     * SM-275 part 1 (T-162): the display chart's provider wrapper forwards history paging to its market. For the
+     * 5m, 15m and 1h deltas: right after the chart connects, the wrapper's hasMoreOlderData matches the market's;
+     * the initial window fills the market's PriceHistoryCache; a pan-left page through the wrapper either reaches
+     * the server (seen through a {@link PacketTap}) and extends the cache, or, at the server's oldest candle,
+     * completes with nothing added.
+     */
+    private TestResult test_displayChartProviderLoadsHistory()
+    {
+        TestResult s = skipUnlessSp();
+        if (s != null) return s;
+        long[] deltas = {ClientMarket.CANDLE_TIME_5_MIN, ClientMarket.CANDLE_TIME_15_MIN, ClientMarket.CANDLE_TIME_1_HOUR};
+        long[] available = ClientMarket.getAvailableCandleTimeDeltas();
+        for (long d : deltas)
+            if (Arrays.stream(available).noneMatch(a -> a == d))
+                return skip("game-time candles active, real-time deltas not in use");
+        ClientMarket market = onClient(PriceHistoryCacheTestSuite::anyClientMarket);
+        if (market == null)
+            return skip("the client has no market cached");
+
+        MinecraftServer server = getServer();
+        ServerPlayer player = server.getPlayerList().getPlayers().get(0);
+        StockMarketModBackend.ServerInstances srv = StockMarketModBackend.getServerInstances();
+        if (srv == null || srv.NETWORKING == null)
+            return skip("no server networking");
+        PriceHistoryCache cache = market.getHistoryCache();
+        DisplayCandlestickChart[] chart = new DisplayCandlestickChart[1];
+        try (PacketTap tap = PacketTap.open(server, player))
+        {
+            if (tap == null) return fail("no network connection for the player");
+            // One client-thread task: no history response can land between connect and the checks.
+            String forwardError = onClient(() -> {
+                chart[0] = DisplayCandlestickChart.createEmbedded(market.getItemID());
+                IPriceDataProvider p = chart[0].getPriceDataProvider();
+                if (p == null) return "display chart did not connect";
+                if (p == market) return "provider is the market itself, not the display wrapper";
+                for (long d : deltas)
+                    if (p.hasMoreOlderData(d) != market.hasMoreOlderData(d))
+                        return "hasMoreOlderData(" + d + ") not forwarded";
+                return null;
+            });
+            if (forwardError != null) return fail(forwardError);
+            IPriceDataProvider provider = onClient(() -> chart[0].getPriceDataProvider());
+
+            StringBuilder atStart = new StringBuilder();
+            for (long d : deltas)
+            {
+                onClient(() -> { market.requestInitialWindow(d); return null; });
+                if (!pumpUntil(() -> cache.hasCache(d), CLIENT_WAIT_MS))
+                    return fail("the initial window for delta " + d + " put no candles into the cache");
+                long before = cache.loadedMinTimestamp(d);
+                boolean more = onClient(() -> provider.hasMoreOlderData(d));
+                Boolean added = await(onClient(() -> provider.requestOlderData(d, before)), CLIENT_WAIT_MS);
+                if (!more)
+                {
+                    TestResult r = assertFalse("delta " + d + ": no older page at the server's oldest candle", added);
+                    if (!r.passed()) return r;
+                    atStart.append(' ').append(d);
+                    continue;
+                }
+                TestResult r = assertTrue("delta " + d + ": the pan-left request reached the server",
+                        pumpUntil(() -> olderRequestSeen(srv, server, tap, d, before), CLIENT_WAIT_MS));
+                if (!r.passed()) return r;
+                if (added)
+                {
+                    r = assertTrue("delta " + d + ": the cache holds the older candles", cache.loadedMinTimestamp(d) < before);
+                    if (!r.passed()) return r;
+                }
+            }
+            return pass("display chart history loads through its provider"
+                    + (atStart.length() > 0 ? "; already at the server's oldest candle (no page sent) for:" + atStart : ""));
+        }
+        finally
+        {
+            if (chart[0] != null)
+                onClient(() -> { chart[0].close(); return null; });
+        }
+    }
+
+    /** @return true if the server received a price-history request for {@code delta} ending at {@code before} */
+    private static boolean olderRequestSeen(StockMarketModBackend.ServerInstances srv, MinecraftServer server,
+                                            PacketTap tap, long delta, long before)
+    {
+        MarketPriceHistoryRequest request = srv.NETWORKING.MARKET_PRICE_HISTORY_REQUEST;
+        for (byte[] bytes : tap.receivedRequests(request.getRequestTypeID()))
+        {
+            MarketPriceHistoryRequest.InputData in = request.decodeInput(
+                    new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(bytes), server.registryAccess()));
+            if (in.candleDeltaMs() == delta && in.maxTimestamp() == before)
+                return true;
+        }
+        return false;
+    }
+
+    /**
+     * SM-275 part 2 (T-163): OrderHistoryPanel and TransactionHistoryPanel keep their row widgets and scroll offset
+     * when fed the same records again, and add a new record without losing the scroll offset. Built on the client
+     * thread and never rendered (no auto-refresh request); rows are applied through {@code applyPendingRecords}.
+     */
+    private TestResult test_historyPanelsKeepUnchangedRows()
+    {
+        TestResult s = skipUnlessSp();
+        if (s != null) return s;
+        ClientMarket market = onClient(PriceHistoryCacheTestSuite::anyClientMarket);
+        if (market == null)
+            return skip("the client has no market cached");
+        short item = market.getItemID().getShort();
+        return onClient(() -> {
+            OrderHistoryPanel orders = new OrderHistoryPanel();
+            TestResult r = checkPanelKeepsRows("OrderHistoryPanel", orders, orders::updateRecords, orders::applyPendingRecords, item);
+            if (!r.passed()) return r;
+            TransactionHistoryPanel trades = new TransactionHistoryPanel();
+            return checkPanelKeepsRows("TransactionHistoryPanel", trades, trades::updateRecords, trades::applyPendingRecords, item);
+        });
+    }
+
+    /** Feeds 30 rows, the same 30 again, then 31; checks row reuse, the new row and the scroll offset (client thread). */
+    private TestResult checkPanelKeepsRows(String name, GuiElement panel, Consumer<List<OrderRecordStruct>> update,
+                                           Runnable apply, short item)
+    {
+        panel.setBounds(0, 0, 300, 120);
+        VerticalListView list = null;
+        for (GuiElement child : panel.getChilds())
+            if (child instanceof VerticalListView v)
+                list = v;
+        if (list == null) return fail(name + ": no list view");
+
+        UUID user = new UUID(0L, 275L);
+        long now = System.currentTimeMillis() + 60_000L; // newer than any "cleared before" time of the player
+        List<OrderRecordStruct> records = new ArrayList<>();
+        for (int i = 0; i < 30; i++)
+            records.add(new OrderRecordStruct(item, 0, user, 0, 100L * (i + 1), 1000L, now - i * 1000L));
+        update.accept(records);
+        apply.run();
+        List<GuiElement> first = new ArrayList<>(list.getChilds());
+        TestResult r = assertEquals(name + ": rows built", 30, first.size());
+        if (!r.passed()) return r;
+        list.setScrollOffset(48);
+        int offset = list.getScrollOffset();
+        r = assertTrue(name + ": the list scrolls (offset " + offset + ")", offset > 0);
+        if (!r.passed()) return r;
+
+        update.accept(new ArrayList<>(records));
+        apply.run();
+        List<GuiElement> second = list.getChilds();
+        boolean reused = second.size() == first.size();
+        for (int i = 0; reused && i < first.size(); i++)
+            reused = second.get(i) == first.get(i);
+        r = assertTrue(name + ": an unchanged update keeps the row widgets", reused);
+        if (!r.passed()) return r;
+        r = assertEquals(name + ": an unchanged update keeps the scroll offset", offset, list.getScrollOffset());
+        if (!r.passed()) return r;
+
+        List<OrderRecordStruct> more = new ArrayList<>(records);
+        more.add(0, new OrderRecordStruct(item, 0, user, 0, 500L, 1000L, now + 1000L));
+        update.accept(more);
+        apply.run();
+        r = assertEquals(name + ": the new row is shown", 31, list.getChilds().size());
+        if (!r.passed()) return r;
+        return assertEquals(name + ": a new row keeps the scroll offset", offset, list.getScrollOffset());
     }
 }
