@@ -128,6 +128,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new PortSmokeTestSuite()); // SM-288: per-version port smoke checks
         TestRegistry.register(new ClientIntegrationTestSuite()); // SM-313: client API for BankSystem's company screen
         TestRegistry.register(new net.kroia.stockmarket.testing.tests.ItemPickerRegistrationTestSuite()); // SM-273
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.DocumentationLinkTestSuite()); // SM-276
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());
