@@ -2,6 +2,7 @@ package net.kroia.stockmarket.api.marketmanager;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.market.IPriceDataProvider;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.minecraft.client.player.LocalPlayer;
@@ -80,7 +81,7 @@ public interface IClientMarketManager {
     /**
      * Removes all client-side state for a market that no longer exists on the server.
      * Called when the server broadcasts a market deletion
-     * (see {@code MarketRemovedPacket}) and when {@link #requestMarkets()} detects
+     * (see {@code MarketChangedPacket} REMOVED) and when {@link #requestMarkets()} detects
      * that a cached market is no longer reported by the server.
      * <p>
      * Cleanup includes: the cached {@link ClientMarket} instance, its market price
@@ -93,17 +94,23 @@ public interface IClientMarketManager {
     void onMarketRemoved(ItemID marketID);
 
     /**
-     * Adds a market the server just created to the client cache (SM-304), without a full
-     * {@link #requestMarkets()}. Called by {@code MarketCreatedPacket} on the client main thread.
-     * <p>
-     * Once the market is cached the open StockMarket screen is told to refresh its market
-     * lists. A market whose item this side cannot resolve is skipped; the next
-     * {@link #requestMarkets()} picks it up if it becomes resolvable. Safe to call for an
-     * already cached market (no-op, no screen refresh).
+     * Applies a market change the server broadcast (SM-310), without a full {@link #requestMarkets()}.
+     * Called by {@code MarketChangedPacket} on the client main thread.
+     * <ul>
+     *   <li>{@code ADDED}: creates the {@link ClientMarket} (once the item fraction scale factor is read). A market
+     *       whose item this side cannot resolve is skipped; the next {@link #requestMarkets()} picks it up if it
+     *       becomes resolvable. Already cached: no-op, no screen refresh.</li>
+     *   <li>{@code REMOVED}: {@link #onMarketRemoved(ItemID)}.</li>
+     *   <li>{@code OPENED}/{@code CLOSED}/{@code MAINTENANCE_ON}/{@code MAINTENANCE_OFF}: updates the cached
+     *       market's state ({@link ClientMarket#applyStateChange}); ignored for an uncached market.</li>
+     * </ul>
+     * After a change the open StockMarket screen is notified
+     * ({@code StockMarketGuiScreen.onMarketsChanged}, or {@code onMarketRemoved} for REMOVED).
      *
-     * @param marketID the market that was created on the server
+     * @param marketID the market that changed on the server
+     * @param kind     what changed
      */
-    void onMarketAdded(ItemID marketID);
+    void onMarketChanged(ItemID marketID, MarketChangedPacket.Kind kind);
 
     /**
      * Returns a synthetic cross-rate data provider for the given pair,

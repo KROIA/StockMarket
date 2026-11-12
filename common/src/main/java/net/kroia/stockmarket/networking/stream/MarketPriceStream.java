@@ -153,7 +153,7 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
             if(serverMarket == null) {
                 // The market was deleted while this stream was active. Clients
                 // normally stop their subscription themselves when they receive the
-                // MarketRemovedPacket — this is the server-side safety net so no
+                // MarketChangedPacket REMOVED — this is the server-side safety net so no
                 // orphaned stream keeps polling a nonexistent market forever.
                 info("Market " + itemID + " no longer exists — stopping price stream");
                 stopStream();

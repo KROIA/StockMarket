@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.screen;
 
 import net.kroia.banksystem.util.ItemID;
+import org.jetbrains.annotations.Nullable;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.elements.Label;
@@ -74,13 +76,14 @@ public class MarketSelectorPopup extends StockMarketGuiScreen {
 
     /**
      * {@inheritDoc}
-     * SM-304: lists the new markets here and forwards the notice to the covered parent screen,
+     * SM-304/SM-310: lists new markets here and forwards every change to the covered parent screen,
      * whose lists were built before the popup opened.
      */
     @Override
-    public void onMarketsAdded() {
-        populateItems();
-        parentScreen.onMarketsAdded();
+    public void onMarketsChanged(MarketChangedPacket.Kind kind, @Nullable ItemID marketID) {
+        if (kind == MarketChangedPacket.Kind.ADDED)
+            populateItems();
+        parentScreen.onMarketsChanged(kind, marketID);
     }
 
     /**

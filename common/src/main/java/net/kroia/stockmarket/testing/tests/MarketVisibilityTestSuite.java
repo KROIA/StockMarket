@@ -13,6 +13,8 @@ import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket.Kind;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings.TradingState;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.util.MultiServerUtils;
@@ -251,9 +253,10 @@ public class MarketVisibilityTestSuite extends TestSuite {
     }
 
     /**
-     * SM-304: the MarketCreatedPacket handler path ({@code onMarketAdded}) lists a market created on the server
-     * without a markets request and tells the open screen once; a repeat is a no-op, and a market this side
-     * cannot resolve is skipped without a screen refresh.
+     * SM-304/SM-310: the MarketChangedPacket handler path ({@code onMarketChanged}) lists a market created on the
+     * server (ADDED) without a markets request and tells the open screen once; a repeat is a no-op, and a market
+     * this side cannot resolve is skipped without a screen refresh. CLOSED/MAINTENANCE_ON/OFF/OPENED then update
+     * the ClientMarket's trading state (no price stream running) and REMOVED drops it, each with one screen notice.
      */
     private TestResult test_clientAddsCreatedMarketWithoutRequest() {
         List<ItemID> items = twoResolvableItems();
@@ -271,18 +274,40 @@ public class MarketVisibilityTestSuite extends TestSuite {
                 () -> CompletableFuture.completedFuture(1), notified::incrementAndGet);
         MultiServerUtils.setUnresolvableForTesting(hidden, true);
         try {
-            manager.onMarketAdded(shown);
+            manager.onMarketChanged(shown, Kind.ADDED);
             TestResult r = assertTrue("created market listed", manager.getAvailableMarkets().contains(shown));
             if (!r.passed()) return r;
             r = assertEquals("open screen told once", 1, notified.get());
             if (!r.passed()) return r;
-            manager.onMarketAdded(shown);
+            manager.onMarketChanged(shown, Kind.ADDED);
             r = assertEquals("repeat is a no-op", 1, notified.get());
             if (!r.passed()) return r;
-            manager.onMarketAdded(hidden);
+            manager.onMarketChanged(hidden, Kind.ADDED);
             r = assertFalse("unresolvable market not listed", manager.getAvailableMarkets().contains(hidden));
             if (!r.passed()) return r;
             r = assertEquals("no refresh for it", 1, notified.get());
+            if (!r.passed()) return r;
+            // SM-310: state changes reach the cached ClientMarket
+            TradingState open = TradingState.OPEN, closed = TradingState.CLOSED, maintenance = TradingState.MAINTENANCE;
+            r = assertEquals("unknown state reads open", open, manager.getMarket(shown).getTradingState());
+            if (!r.passed()) return r;
+            manager.onMarketChanged(shown, Kind.CLOSED);
+            r = assertEquals("CLOSED applied", closed, manager.getMarket(shown).getTradingState());
+            if (!r.passed()) return r;
+            manager.onMarketChanged(shown, Kind.MAINTENANCE_ON);
+            r = assertEquals("MAINTENANCE_ON applied", maintenance, manager.getMarket(shown).getTradingState());
+            if (!r.passed()) return r;
+            manager.onMarketChanged(shown, Kind.MAINTENANCE_OFF);
+            r = assertEquals("MAINTENANCE_OFF back to closed", closed, manager.getMarket(shown).getTradingState());
+            if (!r.passed()) return r;
+            manager.onMarketChanged(shown, Kind.OPENED);
+            r = assertEquals("OPENED applied", open, manager.getMarket(shown).getTradingState());
+            if (!r.passed()) return r;
+            manager.onMarketChanged(hidden, Kind.CLOSED);
+            r = assertEquals("screen told per state change, not for an unlisted market", 5, notified.get());
+            if (!r.passed()) return r;
+            manager.onMarketChanged(shown, Kind.REMOVED);
+            r = assertFalse("REMOVED drops the market", manager.getAvailableMarkets().contains(shown));
             if (!r.passed()) return r;
             return assertEquals("nothing sent to the server", 0, sends.get());
         } finally {

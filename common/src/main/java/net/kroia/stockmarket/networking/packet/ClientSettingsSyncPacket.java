@@ -24,7 +24,7 @@ import org.jetbrains.annotations.Nullable;
  * from {@code ServerTimeRequest} (which every client sends once per join and which is routed to the
  * master); this packet only covers players that are already online when the value changes.
  * <p>
- * <b>Propagation</b> (same shape as {@link MarketRemovedPacket}): {@link #broadcast(int)} sends to
+ * <b>Propagation</b> (same shape as {@link MarketChangedPacket}): {@link #broadcast(int)} sends to
  * every player of this (master) server and relays to every slave, whose
  * {@link #handleOnSlave(ForwardPacketContext)} re-sends it to the slave's own players. Slaves never
  * read the value themselves.

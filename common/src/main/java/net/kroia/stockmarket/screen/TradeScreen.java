@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.screen.custom.BankAccountSelectionScreen;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
@@ -543,7 +544,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                 } else {
                     // Safety net: the market vanished from the client cache (deleted on
                     // the server) but this screen was not notified directly — e.g. the
-                    // MarketRemovedPacket arrived while a popup covered this screen.
+                    // MarketChangedPacket REMOVED arrived while a popup covered this screen.
                     // Re-validate and fall back gracefully.
                     handleMarketRemoved(currentMarketID);
                 }
@@ -1049,18 +1050,22 @@ public class TradeScreen extends StockMarketGuiScreen {
     /**
      * {@inheritDoc}
      * SM-304: a market was created on the server, or this screen's constructor-started
-     * {@code requestMarkets()} answered with markets the cache did not have yet.
+     * {@code requestMarkets()} answered with markets the cache did not have yet: rebuild the lists.
+     * SM-310: open/closed/maintenance changes need nothing here; the displayed markets' price
+     * streams carry their trading state and {@link #tick()} applies it.
      */
     @Override
-    public void onMarketsAdded() {
-        refreshMarketLists();
+    public void onMarketsChanged(MarketChangedPacket.Kind kind, @Nullable ItemID marketID) {
+        if (kind == MarketChangedPacket.Kind.ADDED)
+            refreshMarketLists();
     }
 
     /**
      * SM-304: rebuilds the market lists from the current client cache without touching the
      * selection, pair legs or favorites. If nothing is selected in money mode (the cache was
      * empty when the screen opened), selects the last used market or the first one, like the
-     * constructor. The pair selector reads the cache whenever its dropdown opens, so it needs nothing.
+     * constructor. An open pair-selector dropdown is re-filled too (SM-310); a closed one reads the
+     * cache when it opens.
      */
     private void refreshMarketLists() {
         List<ItemID> markets = getAvailableMarkets();
@@ -1073,6 +1078,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             favoritesBar.scheduleRebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
         }
         refreshMarketGroupButtons();
+        pairSelectorWidget.refreshDropdown();
     }
 
     /**

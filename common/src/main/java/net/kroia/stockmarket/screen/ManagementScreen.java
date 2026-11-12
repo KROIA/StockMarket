@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen;
 
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.*;
@@ -499,6 +500,18 @@ public class ManagementScreen extends StockMarketGuiScreen {
             loadMarketGrid();
         }
 
+        /**
+         * SM-310: sets the maintenance marker of one market's grid icon.
+         *
+         * @param marketID    the market; null or not in the grid: nothing happens
+         * @param maintenance true if the market is under maintenance
+         */
+        void setMarketMaintenance(@Nullable ItemID marketID, boolean maintenance) {
+            for (MarketItemView view : allMarketItems)
+                if (view.marketID.equals(marketID))
+                    view.setMaintenance(maintenance);
+        }
+
         public void refreshMarketStates() {
             for (MarketItemView view : allMarketItems) {
                 ClientMarket market = getMarket(view.marketID);
@@ -761,10 +774,21 @@ public class ManagementScreen extends StockMarketGuiScreen {
      * {@inheritDoc}
      * SM-304: a market was created (possibly by another admin, a slave or BankSystem);
      * reload the market grid so it appears. The selection is kept.
+     * SM-310: a market entered or left maintenance (possibly by another admin or BankSystem);
+     * update its grid marker and, if it is selected, the maintenance checkbox.
      */
     @Override
-    public void onMarketsAdded() {
-        overviewTab.refreshMarketList();
+    public void onMarketsChanged(MarketChangedPacket.Kind kind, @Nullable ItemID marketID) {
+        switch (kind) {
+            case ADDED -> overviewTab.refreshMarketList();
+            case MAINTENANCE_ON, MAINTENANCE_OFF -> {
+                boolean maintenance = kind == MarketChangedPacket.Kind.MAINTENANCE_ON;
+                overviewTab.setMarketMaintenance(marketID, maintenance);
+                if (marketID != null && marketID.equals(selectedMarketID))
+                    overviewTab.getCurrentMarketManagerWidget().setMaintenanceCheckBoxChecked(maintenance);
+            }
+            default -> {} // OPENED/CLOSED: the grid shows only maintenance
+        }
     }
 
     /**
@@ -879,10 +903,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
             parentScreen.onMarketRemoved(removedMarketID);
         }
 
-        /** SM-304: forwarded to the covered ManagementScreen, like {@link #onMarketRemoved}. */
+        /** SM-304/SM-310: forwarded to the covered ManagementScreen, like {@link #onMarketRemoved}. */
         @Override
-        public void onMarketsAdded() {
-            parentScreen.onMarketsAdded();
+        public void onMarketsChanged(MarketChangedPacket.Kind kind, @Nullable ItemID marketID) {
+            parentScreen.onMarketsChanged(kind, marketID);
         }
     }
 }

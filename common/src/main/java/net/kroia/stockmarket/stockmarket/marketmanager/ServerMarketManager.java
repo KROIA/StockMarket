@@ -18,8 +18,7 @@ import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
-import net.kroia.stockmarket.networking.packet.MarketCreatedPacket;
-import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
@@ -192,7 +191,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             }
             // SM-304: tell every client (and slave players) about the new market. Sent only
             // for a real creation and after markets.put, so a racing requestMarkets sees it too.
-            MarketCreatedPacket.broadcast(marketID);
+            MarketChangedPacket.broadcast(marketID, MarketChangedPacket.Kind.ADDED);
         }
         return m;
     }
@@ -248,7 +247,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 pluginManager.autoSubscribeNewMarket(marketID);
             }
         }
-        MarketCreatedPacket.broadcast(marketID); // SM-304, see createMarket(ItemID)
+        MarketChangedPacket.broadcast(marketID, MarketChangedPacket.Kind.ADDED); // SM-304, see createMarket(ItemID)
         return m;
     }
 
@@ -290,7 +289,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         // Clients react by purging their cached ClientMarket (which otherwise only
         // grows and would keep the deleted market selectable in the trade screen)
         // and by deselecting the market in any open GUI.
-        MarketRemovedPacket.broadcast(marketID);
+        broadcastStates.remove(marketID);
+        MarketChangedPacket.broadcast(marketID, MarketChangedPacket.Kind.REMOVED);
         return true;
     }
     @Override
@@ -307,7 +307,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
      *   <li><b>Delete alias-keyed duplicates:</b> for every alias in the group that has
      *       an entry in {@code markets}, call {@link #deleteMarket(ItemID)} — which
      *       cancels the market's open player orders, refunds their locked funds,
-     *       unsubscribes it from plugins, and broadcasts {@code MarketRemovedPacket}.</li>
+     *       unsubscribes it from plugins, and broadcasts {@code MarketChangedPacket} REMOVED.</li>
      *   <li><b>Canonical-keyed market is left completely alone.</b> If a market for
      *       {@code canonicalID} exists, it is not a duplicate — it stays untouched.</li>
      *   <li><b>Never re-key.</b> An alias-keyed market is deleted outright rather than
@@ -890,7 +890,38 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         for (ServerMarket m : markets.values())
         {
             m.updateTradingHours(currentTradingMinute);
+            broadcastStateChanges(m);
         }
+    }
+
+    /**
+     * SM-310: last open/maintenance state broadcast per market, as {@link #STATE_OPEN}/{@link #STATE_MAINTENANCE}
+     * bits. A market's first entry is recorded silently (clients learn the initial state from the price stream).
+     */
+    private final Map<ItemID, Integer> broadcastStates = new HashMap<>();
+    private static final int STATE_OPEN = 1, STATE_MAINTENANCE = 2;
+
+    /**
+     * SM-310: broadcasts a {@link MarketChangedPacket} for each open/closed and maintenance edge of
+     * {@code market} since the last tick. Runs at the end of every tick after the trading hours were
+     * applied, so one place catches every source: schedule, manual override, admin maintenance toggle,
+     * settings panel, BankSystem open/close.
+     *
+     * @param market the market to check
+     */
+    private void broadcastStateChanges(ServerMarket market)
+    {
+        int state = (market.isTradingOpen() ? STATE_OPEN : 0) | (market.isUnderMaintenance() ? STATE_MAINTENANCE : 0);
+        Integer last = broadcastStates.put(market.getItemID(), state);
+        if (last == null || last == state)
+            return;
+        int changed = last ^ state;
+        if ((changed & STATE_MAINTENANCE) != 0)
+            MarketChangedPacket.broadcast(market.getItemID(), (state & STATE_MAINTENANCE) != 0
+                    ? MarketChangedPacket.Kind.MAINTENANCE_ON : MarketChangedPacket.Kind.MAINTENANCE_OFF);
+        if ((changed & STATE_OPEN) != 0)
+            MarketChangedPacket.broadcast(market.getItemID(), (state & STATE_OPEN) != 0
+                    ? MarketChangedPacket.Kind.OPENED : MarketChangedPacket.Kind.CLOSED);
     }
 
     /**

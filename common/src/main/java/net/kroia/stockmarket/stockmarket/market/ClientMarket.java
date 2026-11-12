@@ -9,6 +9,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IClientMarket;
 import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.networking.request.OrderbookVolumeRequest;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
@@ -337,6 +338,11 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     private long currentMarketPrice;
     /** Latest trading status from {@code MarketPriceStream} (T-158); null until the first update arrives. */
     private @Nullable MarketPriceStream.TradingStatus tradingStatus;
+    /**
+     * SM-310: open / maintenance flags from the last {@code MarketChangedPacket} for this market; null until the
+     * first change after join. Used by {@link #getTradingState()} while no stream status is available.
+     */
+    private @Nullable Boolean pushedOpen, pushedMaintenance;
 
     public ClientMarket(@NotNull ItemID itemID, int itemScaleFactor)
     {
@@ -931,7 +937,8 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     }
 
     /**
-     * Current trading state from the latest stream update.
+     * Current trading state from the latest stream update, else (SM-310) from the last
+     * {@code MarketChangedPacket} state change (see {@link #applyStateChange}).
      * <p>
      * Unknown (no data yet) is reported as {@link MarketSettings.TradingState#OPEN} so trading controls
      * never get stuck disabled; the server still rejects orders on closed/under-maintenance markets, and the first
@@ -942,7 +949,27 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     public MarketSettings.TradingState getTradingState()
     {
         MarketPriceStream.TradingStatus status = tradingStatus;
-        return status == null ? MarketSettings.TradingState.OPEN : status.getTradingState();
+        if (status != null) return status.getTradingState();
+        if (Boolean.TRUE.equals(pushedMaintenance)) return MarketSettings.TradingState.MAINTENANCE;
+        return Boolean.FALSE.equals(pushedOpen) ? MarketSettings.TradingState.CLOSED : MarketSettings.TradingState.OPEN;
+    }
+
+    /**
+     * SM-310: applies an open/closed/maintenance change broadcast by the master ({@code MarketChangedPacket}),
+     * so {@link #getTradingState()} is current also for markets without a running price stream.
+     * ADDED and REMOVED are handled by the client market manager and ignored here.
+     *
+     * @param kind what changed
+     */
+    public void applyStateChange(MarketChangedPacket.Kind kind)
+    {
+        switch (kind) {
+            case OPENED -> pushedOpen = true;
+            case CLOSED -> pushedOpen = false;
+            case MAINTENANCE_ON -> pushedMaintenance = true;
+            case MAINTENANCE_OFF -> pushedMaintenance = false;
+            default -> {}
+        }
     }
 
     /** @return future resolving to {@code true} if this market is under maintenance */

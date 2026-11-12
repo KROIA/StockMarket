@@ -6,6 +6,7 @@ import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -40,7 +41,7 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
 
     /**
      * Called on the client main thread when the server reports that a market was
-     * deleted (see {@code MarketRemovedPacket}). Invoked after the client market
+     * deleted (see {@code MarketChangedPacket} REMOVED). Invoked after the client market
      * caches have been purged, so {@code getMarket(marketID)} already returns null.
      * <p>
      * Default implementation does nothing. Screens that hold a market selection
@@ -57,16 +58,20 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
     }
 
     /**
-     * Called on the client main thread after new markets were added to the client cache
-     * (SM-304: {@code MarketCreatedPacket}, or a {@code requestMarkets()} answer with new
-     * markets, e.g. the one this constructor starts). {@code getAvailableMarkets()} already
-     * contains them.
+     * Called on the client main thread after a market change was applied to the client cache (SM-310,
+     * through {@code StockMarketClientHooks.notifyScreenMarketsChanged}): a {@code MarketChangedPacket}, or a
+     * {@code requestMarkets()} answer with new markets (e.g. the one this constructor starts).
+     * {@code getAvailableMarkets()} and {@code getMarket(id).getTradingState()} already reflect it.
+     * REMOVED is not delivered here but to {@link #onMarketRemoved(ItemID)}.
      * <p>
-     * Default implementation does nothing. Screens that list markets (TradeScreen,
-     * ManagementScreen, MarketSelectorPopup) override this to refresh those lists. Only the
-     * currently displayed screen is notified; popups forward it to their parent.
+     * Default implementation does nothing. Screens that list markets (TradeScreen, ManagementScreen,
+     * MarketSelectorPopup) override this to refresh those lists or state markers. Only the currently
+     * displayed screen is notified; popups forward it to their parent.
+     *
+     * @param kind     ADDED, OPENED, CLOSED, MAINTENANCE_ON or MAINTENANCE_OFF
+     * @param marketID the market that changed, or null when several markets were added at once
      */
-    public void onMarketsAdded()
+    public void onMarketsChanged(MarketChangedPacket.Kind kind, @Nullable ItemID marketID)
     {
         // Default: nothing to do. Screens without market lists ignore this.
     }

@@ -4,6 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.client.RecipeImageExporter;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.request.NewsHistoryRequest;
 import net.kroia.stockmarket.news.NewsRecord;
@@ -23,33 +24,28 @@ import java.util.Map;
 
 public class StockMarketClientHooks {
     /**
-     * Notifies the currently open StockMarket screen that a market has been deleted
-     * on the server. Called by {@code MarketRemovedPacket} on the client main thread
-     * after the client market caches have already been purged.
-     * Screens that keep a market selection (TradeScreen, ManagementScreen) override
-     * {@link StockMarketGuiScreen#onMarketRemoved} to deselect the dead market.
+     * The one client hook for market changes (SM-310): tells the currently open StockMarket screen that a
+     * market was added, removed, opened, closed, or entered/left maintenance. Called by the client market
+     * manager after its cache is updated, for a {@code MarketChangedPacket} and for a {@code requestMarkets()}
+     * answer that brought new markets. Scheduled on the client main thread, since the cache fill can complete
+     * on a request-future thread.
+     * <p>
+     * REMOVED goes to {@link StockMarketGuiScreen#onMarketRemoved} (deselect the dead market, the cache is
+     * already purged); every other kind to {@link StockMarketGuiScreen#onMarketsChanged}.
      *
-     * @param marketID the market that was deleted on the server
+     * @param kind     what changed
+     * @param marketID the market that changed, or null when several markets were added at once
      */
-    public static void notifyScreenMarketRemoved(ItemID marketID)
-    {
-        if (net.kroia.modutilities.gui.client.ClientCompat.screen() instanceof StockMarketGuiScreen guiScreen) {
-            guiScreen.onMarketRemoved(marketID);
-        }
-    }
-
-    /**
-     * Tells the currently open StockMarket screen that markets were added to the client
-     * cache (SM-304): by a {@code MarketCreatedPacket} or by a {@code requestMarkets()}
-     * answer that brought new markets. Scheduled on the client main thread, since the
-     * cache fill can complete on a request-future thread.
-     * Screens with market lists override {@link StockMarketGuiScreen#onMarketsAdded}.
-     */
-    public static void notifyScreenMarketsAdded()
+    public static void notifyScreenMarketsChanged(MarketChangedPacket.Kind kind, @Nullable ItemID marketID)
     {
         Minecraft.getInstance().execute(() -> {
-            if (net.kroia.modutilities.gui.client.ClientCompat.screen() instanceof StockMarketGuiScreen guiScreen) {
-                guiScreen.onMarketsAdded();
+            if (!(net.kroia.modutilities.gui.client.ClientCompat.screen() instanceof StockMarketGuiScreen guiScreen))
+                return;
+            if (kind == MarketChangedPacket.Kind.REMOVED) {
+                if (marketID != null)
+                    guiScreen.onMarketRemoved(marketID);
+            } else {
+                guiScreen.onMarketsChanged(kind, marketID);
             }
         });
     }

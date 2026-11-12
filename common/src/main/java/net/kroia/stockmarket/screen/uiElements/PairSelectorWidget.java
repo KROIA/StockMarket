@@ -654,6 +654,16 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     }
 
     /**
+     * SM-310: re-fills the dropdown from the client market cache if it is open (a market was
+     * created while the player was choosing); keeps the search text. A closed dropdown is filled
+     * when it opens, so nothing happens then.
+     */
+    public void refreshDropdown() {
+        if (dropdownTarget != null)
+            populateDropdown();
+    }
+
+    /**
      * Closes the dropdown and clears the selection target.
      */
     private void closeDropdown() {
