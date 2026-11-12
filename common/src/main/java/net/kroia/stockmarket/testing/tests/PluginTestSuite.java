@@ -2724,8 +2724,8 @@ public class PluginTestSuite extends TestSuite {
      */
     private static boolean harnessRefill = false;
     /**
-     * T-213: anchor override of every {@link HarnessModel}: null = the NetFlowPlugin default (G5: the existing
-     * replays run with it), false = off (the golden equivalence), true = on.
+     * T-213: anchor override of every {@link HarnessModel}: null = the NetFlowPlugin default (on since SM-319,
+     * so the existing replays run with the anchor on: G5), false = off (the golden equivalence), true = on.
      */
     private static Boolean harnessAnchor = null;
 

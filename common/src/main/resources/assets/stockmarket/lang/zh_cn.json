@@ -533,7 +533,7 @@
   "gui.stockmarket.net_flow_plugin.capacity_volatility_scale.tooltip": "用于流向容量的波动率倍率\n（容量 = 敏感度 x 丰度 / (1 + 倍率)）。\n与波动率插件的倍率相同可保持拆分前的行为。默认值：0.3",
   "gui.stockmarket.net_flow_plugin.theta_cap_enabled.tooltip": "启用后，交易的持久价格变动上限为\n“永久冲击”乘以其在默认订单簿上的冲击。默认值：开",
   "gui.stockmarket.net_flow_plugin.saturation_enabled.tooltip": "启用后，超出价格限制的流向不会被记录，\n从限制处返回无需额外的反向交易。默认值：开",
-  "gui.stockmarket.net_flow_plugin.anchor_enabled.tooltip": "启用后，持续的净交易会缓慢移动衡量流向的基准价格（锚点），\n因此流向消退后，持续趋势的一部分会保留下来。\n管理员重置流向会同时重置锚点。\n禁用时，锚点即为默认价格。默认值：关",
+  "gui.stockmarket.net_flow_plugin.anchor_enabled.tooltip": "启用后，持续的净交易会缓慢移动衡量流向的基准价格（锚点），\n因此流向消退后，持续趋势的一部分会保留下来。\n管理员重置流向会同时重置锚点。\n禁用时，锚点即为默认价格。默认值：开",
   "gui.stockmarket.net_flow_plugin.anchor_time_days.tooltip": "锚点的时间常数（天）：越高 = 越慢，保留部分越小\n（2 天约保留每次流向的 18%）。\n低于 1 天会使快速抛售再买回有利可图。默认值：2",
   "gui.stockmarket.net_flow_plugin.anchor_max_move_per_day.tooltip": "锚点每天的最大移动量（对数单位，\n0.1 = 每天约 10%），限制饱和流向。默认值：0.1",
   "gui.stockmarket.net_flow_plugin.anchor_min_mult.tooltip": "锚点的下限，以默认价格的倍数表示。\n必须介于 0 和 1 之间，否则使用默认值。默认值：0.25",

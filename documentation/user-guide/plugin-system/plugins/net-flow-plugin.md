@@ -19,7 +19,7 @@ anchor      = default price                             (long-term anchor off)
 - The TargetPriceBot holds a price pushed by a player trade at most at the edge of the default band around the equilibrium (5 % to 3 times, the default Min/Max Price Multiplier).
 - The plugin only works on markets whose virtual order book is enabled. Other markets are skipped.
 
-> **Upgrading from an older version:** the flow settings used to be part of the VolatilityPlugin. When an existing world is loaded for the first time, a NetFlowPlugin is created in front of each VolatilityPlugin, with the same subscriptions, auto-subscribe and enabled state, and every market's Player Flow Influence, Flow Sensitivity, Min/Max Price Multiplier and Permanent Impact are copied over (the old Volatility Scale becomes the Capacity Volatility Scale). Prices continue exactly where they were. Going back to an older mod version afterwards resets the VolatilityPlugin flow settings to their defaults and logs an *unknown plugin* warning for the NetFlowPlugin.
+> **Upgrading from an older version:** the flow settings used to be part of the VolatilityPlugin. When an existing world is loaded for the first time, a NetFlowPlugin is created in front of each VolatilityPlugin, with the same subscriptions, auto-subscribe and enabled state, and every market's Player Flow Influence, Flow Sensitivity, Min/Max Price Multiplier and Permanent Impact are copied over (the old Volatility Scale becomes the Capacity Volatility Scale). Prices continue exactly where they were. The Long-term Anchor starts on, at the default price; uncheck it to keep the old behaviour. Going back to an older mod version afterwards resets the VolatilityPlugin flow settings to their defaults and logs an *unknown plugin* warning for the NetFlowPlugin.
 
 ## Settings Overview
 
@@ -35,7 +35,7 @@ All settings are **per market**. Select a market icon in the plugin entry of the
 | Capacity Volatility Scale | `0.3` | number >= 0 | Makes the capacity smaller for volatile markets |
 | Book Depth Cap | on | on / off | Whether the default order book limits the capacity |
 | Flow Saturation | on | on / off | Whether flow beyond the price limits is ignored |
-| Long-term Anchor | off | on / off | Whether lasting trends move the anchor |
+| Long-term Anchor | on | on / off | Whether lasting trends move the anchor |
 | Anchor Time (days) | `2` | greater than 0 | How slowly the anchor follows the flow |
 | Anchor Max Move / Day | `0.1` | number >= 0 | Largest anchor move per day |
 | Anchor Min Multiplier | `0.25` | strictly between 0 and 1 | Lowest anchor, as a fraction of the default price |
@@ -86,7 +86,7 @@ When the equilibrium is at its floor or ceiling, extra flow is not stored. If pl
 
 Without the anchor the net flow fades away and the price always returns to the default price, even after weeks of one-sided trading. The anchor keeps a small part of a **lasting** trend: it slowly moves the price the flow is measured from.
 
-The anchor is **off by default**. Check **Long-term Anchor** for a market and click **Apply** (or **Apply to all**) to use it.
+The anchor is **on by default**. Uncheck **Long-term Anchor** for a market and click **Apply** (or **Apply to all**) to switch it off. Markets that already have saved NetFlowPlugin settings keep their choice.
 
 ```
 every tick:  anchor move = flow exponent x elapsed time / Anchor Time    (at most Anchor Max Move / Day per day)
@@ -103,7 +103,7 @@ every tick:  anchor move = flow exponent x elapsed time / Anchor Time    (at mos
 - Higher **Anchor Time** = slower, smaller lasting part. Keep it at 1 day or above: shorter times let a fast dump-and-buy-back trade profit.
 - **Anchor Max Move / Day** caps very large flows: with `0.1` the anchor moves at most about 10 % per day, 0.7 in log units (about 2x) per saturated week.
 - **Anchor Min/Max Multiplier** limit how far a long trend can carry the price away from the default price. The equilibrium can reach `Anchor x Min/Max Price Multiplier`, so with all defaults a diamond ranges from 160 x 0.25 x 0.05 = 2 to 160 x 4 x 3 = 1,920.
-- With **Long-term Anchor** off (the default) every market always returns to its default price, as in older versions.
+- With **Long-term Anchor** off every market always returns to its default price, as in older versions.
 
 ## Generic Settings
 

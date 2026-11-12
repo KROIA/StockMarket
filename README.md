@@ -434,7 +434,7 @@ Computes each market's flow-driven [price equilibrium](#price-equilibrium): sust
 | Flow Sensitivity | How many items (per unit of the market's Abundance) players must net-sell to lower the equilibrium price to ~37%. Higher values make the market more inert. Default: 2000. |
 | Min Price Multiplier | Lower clamp for the equilibrium as a fraction of the anchor. Default: 0.05. |
 | Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the anchor. Default: 3. |
-| Long-term Anchor | Lets lasting trends slowly move the price the flow is measured from. Off by default. Anchor time 2 days, at most 0.1 per day, within 0.25x-4x the default price. |
+| Long-term Anchor | Lets lasting trends slowly move the price the flow is measured from. On by default. Anchor time 2 days, at most 0.1 per day, within 0.25x-4x the default price. |
 
 Full reference with all settings, formulas and tuning advice: [NetFlowPlugin](documentation/user-guide/plugin-system/plugins/net-flow-plugin.md).
 
