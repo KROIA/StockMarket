@@ -988,33 +988,19 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /**
-     * replays the pattern of a reported server exploit (#89) (rapid buy / short wait / sell cycles) with and without
-     * the mitigations (faded flow + target rate limit at their defaults vs. half-life 0 and no rate
-     * limit). Asserts that with the defaults the rapid pattern makes no profit beyond a small bound
-     * and reports a patient variant (60 s hold) plus each mitigation alone.
-     * <p>
-     * Bound: 0.5% of the bought volume valued at the default price.
+     * Replays the pattern of a reported server exploit (#89): 20 rapid cycles of 5 max buys, 1 s wait, sell back,
+     * with the mitigations at their defaults. Asserts the pattern makes no profit (SM-262: bound 0). What protects
+     * now (the T-208 bot reference anchor and the #96 fair-price depth) is asserted by t208_noProfit_diamond/dirt
+     * and the T213_G1 gate, so the former mitigation on/off replays are gone.
      */
     private TestResult test_pumpReplay_noProfit() {
         try {
-            float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
-            float move = TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
-            int cycles = 20, orders = 5, rapidWait = 20, patientCycles = 5, patientWait = 1200;
-            ReplayResult rapidOn = replay(hl, move, cycles, orders, rapidWait);
-            ReplayResult rapidOff = replay(0f, 0f, cycles, orders, rapidWait);
-            ReplayResult patientOn = replay(hl, move, patientCycles, orders, patientWait);
-            ReplayResult patientOff = replay(0f, 0f, patientCycles, orders, patientWait);
-            ReplayResult patientFadeOnly = replay(hl, 0f, patientCycles, orders, patientWait);
-            ReplayResult patientRateOnly = replay(0f, move, patientCycles, orders, patientWait);
-            String report = "rapid ON: " + rapidOn + " | rapid OFF: " + rapidOff
-                    + " | patient ON: " + patientOn + " | patient OFF: " + patientOff
-                    + " | patient fade-only: " + patientFadeOnly + " | patient rate-only: " + patientRateOnly;
-            StockMarketMod.LOGGER.info("[#89 replay] {}", report);
-            double bought = (double) cycles * orders * MarketSettings.defaultMaxOrderVolume(50) * 160;
-            double bound = 0.005 * bought;
-            if (rapidOn.profit() > bound)
-                return fail("Rapid replay with mitigations made " + rapidOn.profit() + " > bound " + bound + ". " + report);
-            return pass(report);
+            ReplayResult rapid = replay(backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue(),
+                    TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND, 20, 5, 20);
+            StockMarketMod.LOGGER.info("[#89 replay] {}", rapid);
+            if (rapid.profit() > 0)
+                return fail("Rapid replay made a profit of " + rapid.profit() + ". " + rapid);
+            return pass(rapid.toString());
         } catch (Exception e) {
             return fail("Exception: " + e);
         }
