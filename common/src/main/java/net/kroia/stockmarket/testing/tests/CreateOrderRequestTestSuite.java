@@ -949,7 +949,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
     // ── T-215: OrderOrigin rows in stockmarket_diagnostics.db ────────────────
 
     /**
-     * The file holds only Meta and OrderOrigin (no BankSystem tables); OrderOrigin has exactly ref, origin_server_uid,
+     * The file holds only Meta, OrderOrigin and TradeAlert (no BankSystem tables); OrderOrigin has exactly ref, origin_server_uid,
      * origin_name; master rows get the own uid, slave rows the slave's.
      */
     private TestResult test_orderOrigin_columnsAndFirstRowWins() {
@@ -975,12 +975,12 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             }
             TestResult r = assertEquals("columns", List.of("ref", "origin_server_uid", "origin_name"), columns);
             if (!r.passed()) return r;
-            List<String> tables = new ArrayList<>(); // no TransferJournal / NoteFlow from BankSystem's schema
+            List<String> tables = new ArrayList<>(); // no TransferJournal / NoteFlow from BankSystem's schema; TradeAlert is SM-316
             try (Connection c = DiagnosticsDatabase.connect(file); Statement st = c.createStatement();
                  ResultSet rs = st.executeQuery("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")) {
                 while (rs.next()) tables.add(rs.getString(1));
             }
-            r = assertEquals("tables", List.of("Meta", "OrderOrigin"), tables);
+            r = assertEquals("tables", List.of("Meta", "OrderOrigin", "TradeAlert"), tables);
             if (!r.passed()) return r;
             r = assertEquals("master row", self + "|", originRow(file, "sm:order:1"));
             if (!r.passed()) return r;
@@ -988,7 +988,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             if (!r.passed()) return r;
             r = assertEquals("unknown slave row", "null|unknown-slave", originRow(file, "sm:order:3"));
             if (!r.passed()) return r;
-            return pass("Meta + OrderOrigin only, 3 columns, uid per origin, first row of a ref wins");
+            return pass("Meta + OrderOrigin + TradeAlert only, 3 columns, uid per origin, first row of a ref wins");
         } catch (Exception e) {
             return fail("Exception: " + e);
         } finally {

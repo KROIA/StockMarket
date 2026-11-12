@@ -269,3 +269,18 @@ The table `OrderOrigin` has one row per player order the master accepted:
 * Bot orders are not recorded. The account, item, amounts and time of an order are not repeated here; look them up in the order history or the BankSystem transaction ledger under the same reference.
 * Only the master writes the file; it is created when the master starts.
 * Gameplay never reads it. You can delete it while the server is stopped; it is created again at the next start.
+
+The table `TradeAlert` in the same file has one row per trading alert (profit alert and pump-and-dump detector), so a copy of the world shows what the server flagged and when. Worlds from before this table get it at the next master start.
+
+| Column | Content |
+|---|---|
+| `ts` | When the alert was raised (Unix time in milliseconds) |
+| `kind` | `profit` (profit alert), `pump_dump_pump` (market buy that pushed the price while the player's own sell order rested above), `pump_dump_cycle` (quick buy-then-sell profit), `other` |
+| `player_uuid` | The flagged player |
+| `account_number` | The bank account of the flagged order; empty for `profit`, which counts all of a player's accounts |
+| `item_id` | The market's item ID; empty for `profit`, which counts all markets |
+| `amount` | The value that crossed the threshold, in the mod's internal raw units: the profit for `profit` and `pump_dump_cycle`, the price rise for `pump_dump_pump` |
+| `window_ms` | The time window in milliseconds (`PROFIT_ALERT_WINDOW_MINUTES` or `PUMP_DUMP_CYCLE_MINUTES`); empty for `pump_dump_pump` |
+| `threshold` | The threshold that was exceeded: money for `profit` and `pump_dump_cycle`, percent for `pump_dump_pump` |
+| `text` | The alert text as written to the server log |
+| `order_ids` | Comma-separated order IDs: the buy and then the player's resting sell orders for `pump_dump_pump`, the sell for `pump_dump_cycle`; empty for `profit` |

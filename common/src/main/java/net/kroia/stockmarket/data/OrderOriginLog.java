@@ -18,8 +18,9 @@ import java.util.UUID;
  * The file is written by BankSystem's {@link DiagnosticsDatabase} with this mod's own schema: its own connection and
  * daemon thread {@value #THREAD_NAME} (never the server thread or the StockMarket db-worker), opened at master start,
  * a corrupt file is moved aside and recreated, a full queue drops writes. Gameplay never reads it, so deleting
- * it never changes game state. The file holds only Meta (created_ms, schema_version {@value #SCHEMA_VERSION}) and
- * OrderOrigin, none of BankSystem's tables; no other Meta keys are written.
+ * it never changes game state. The file holds only Meta (created_ms, schema_version {@value #SCHEMA_VERSION}),
+ * OrderOrigin and TradeAlert (SM-316, see {@code TradeAlerts.Row}), none of BankSystem's tables; no other Meta keys
+ * are written.
  * <p>
  * Master only: orders are created there. The table holds only what is stored nowhere else. Account, item and time
  * of an order are in OrderHistory, the BankSystem TransactionLog and the saved order book under the same ref, so a
@@ -34,12 +35,26 @@ import java.util.UUID;
 public final class OrderOriginLog {
     public static final String FILE_NAME = "stockmarket_diagnostics.db";
     public static final String THREAD_NAME = "stockmarket-diag-db";
-    /** Meta schema_version of the file; bump it when a table or column is added to {@link #SCHEMA}. */
-    public static final String SCHEMA_VERSION = "1";
-    /** The file's tables after Meta, run in order on every open, so each statement must be idempotent. */
-    static final List<String> SCHEMA = List.of("CREATE TABLE IF NOT EXISTS OrderOrigin "
-            + "(ref TEXT PRIMARY KEY, origin_server_uid TEXT, origin_name TEXT NOT NULL)");
+    /** Meta schema_version of the file; bump it when a table or column is added to {@link #SCHEMA}. 2 = TradeAlert (SM-316). */
+    public static final String SCHEMA_VERSION = "2";
+    /**
+     * The file's tables after Meta, run in order on every open, so each statement must be idempotent. Files written
+     * before a table existed get it at their next open (CREATE TABLE IF NOT EXISTS).
+     */
+    static final List<String> SCHEMA = List.of(
+            "CREATE TABLE IF NOT EXISTS OrderOrigin "
+                    + "(ref TEXT PRIMARY KEY, origin_server_uid TEXT, origin_name TEXT NOT NULL)",
+            // SM-316: one row per TradeAlerts.raise; columns and kind codes in TradeAlerts.Row
+            "CREATE TABLE IF NOT EXISTS TradeAlert (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, kind TEXT NOT NULL, "
+                    + "player_uuid TEXT, account_number INTEGER, item_id INTEGER, amount INTEGER, window_ms INTEGER, "
+                    + "threshold REAL, text TEXT NOT NULL, order_ids TEXT)");
     private static final String INSERT = "INSERT OR IGNORE INTO OrderOrigin (ref, origin_server_uid, origin_name) VALUES (?, ?, ?)";
+    /**
+     * SM-316: inserts one TradeAlert row; parameters in column order ts, kind, player_uuid, account_number, item_id,
+     * amount, window_ms, threshold, text, order_ids. Written by {@code TradeAlerts.raise} through {@link #live()}.
+     */
+    public static final String INSERT_TRADE_ALERT = "INSERT INTO TradeAlert (ts, kind, player_uuid, account_number, item_id, "
+            + "amount, window_ms, threshold, text, order_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     private static volatile @Nullable DiagnosticsDatabase live;
 

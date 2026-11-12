@@ -1,11 +1,13 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.data.OrderOriginLog;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
@@ -15,9 +17,13 @@ import net.kroia.stockmarket.util.PumpDumpDetector;
 import net.kroia.stockmarket.util.TradeAlerts;
 import net.minecraft.nbt.CompoundTag;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
@@ -174,8 +180,11 @@ public class PumpDumpDetectorTestSuite extends TestSuite {
                 return fail("alerts still on for the admin -> chat would be sent");
             List<String> alerts = capture(() -> PumpDumpDetector.checkPumps(MARKET, List.of(buy(admin)), 100, 130,
                     List.of(sell(admin, 150)), new StockMarketModSettings.Market()));
-            return alerts.size() == 1 ? pass("alerts off -> no chat; flag recorded: " + alerts.get(0))
-                    : fail("flag not recorded: " + alerts);
+            if (alerts.size() != 1)
+                return fail("flag not recorded: " + alerts);
+            long rows = tradeAlertRows(admin, TradeAlerts.Row.KIND_PUMP); // SM-316: one TradeAlert row on the master
+            return rows == 1 ? pass("alerts off -> no chat; flag recorded in log and TradeAlert: " + alerts.get(0))
+                    : fail("TradeAlert rows for the pump: " + rows);
         } finally {
             manager().removeUser(admin);
         }
@@ -244,6 +253,31 @@ public class PumpDumpDetectorTestSuite extends TestSuite {
             TradeAlerts.alertCapture = null;
         }
         return out;
+    }
+
+    /**
+     * SM-316: waits for the live diagnostics writer to commit, then counts the player's TradeAlert rows of one kind.
+     *
+     * @param player the flagged player
+     * @param kind   the {@link TradeAlerts.Row} kind code
+     * @return the row count, or -1 when no diagnostics file is open
+     */
+    private static long tradeAlertRows(UUID player, String kind) {
+        DiagnosticsDatabase live = OrderOriginLog.live();
+        if (live == null) return -1;
+        try {
+            live.flush().get(10, TimeUnit.SECONDS);
+            try (Connection c = DiagnosticsDatabase.connect(live.getFile());
+                 PreparedStatement ps = c.prepareStatement("SELECT COUNT(*) FROM TradeAlert WHERE player_uuid = ? AND kind = ?")) {
+                ps.setString(1, player.toString());
+                ps.setString(2, kind);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? rs.getLong(1) : 0;
+                }
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private TestResult master(Supplier<TestResult> body) {
