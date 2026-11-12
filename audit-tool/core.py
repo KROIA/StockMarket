@@ -16,7 +16,7 @@ MAX_JSON_BYTES = 64 * 1024 * 1024
 # BankSystem ledger type codes (TransactionLog.type_code). THE one table to edit when codes change.
 # Source: .claude/specs/banksystem_ledger_api.md, "CODE TABLE v2" (2026-11-08). Codes are append-only (27+ may follow).
 # sign = effect of `amount` on balance+locked of item_id:
-#   +1 / -1 (amount is unsigned), 1 for TRANSFER (amount is already signed: - out / + in),
+#   +1 / -1 (amount is unsigned), 1 = amount is already signed (- out / + in): TRANSFER, PAYOUT, DIVIDEND,
 #   0 = no net change, None = unknown or absolute set (interval gets labelled, not explained),
 #   'buy' / 'sell' = trade row: item_id moves +-amount, currency_item moves -+money_amount.
 # TODO(confirm): final table follows once BankSystem #109 builds green; signs marked TODO are guesses.
@@ -42,11 +42,11 @@ LEDGER_TYPES = {
     17: ('CRAFT_CONSUME', -1),
     18: ('CRAFT_OUTPUT', +1),
     19: ('STARTING_BALANCE', +1),
-    20: ('PAYOUT', -1),               # TODO(confirm): written on the source account only?
-    21: ('DIVIDEND', +1),             # TODO(confirm sign)
+    20: ('PAYOUT', 1),                # signed per leg since BankSystem 6a602082; legacy rows: see ledger_sign
+    21: ('DIVIDEND', 1),              # same as PAYOUT
     22: ('SHARE_STAMP', None),        # TODO(confirm sign)
     23: ('SHARE_REDEEM', None),       # TODO(confirm sign)
-    24: ('SHARE_TRADE', None),        # TODO(confirm sign)
+    24: ('SHARE_TRADE', None),        # deposits +; withdrawals - since BankSystem 6a602082, + before (ambiguous)
     25: ('ACCOUNT_DELETE_PAYOUT', -1),  # balance handed out as items on user deletion (outflow)
     26: ('ACCOUNT_FREEZE', 0),        # TODO(confirm): freeze moves nothing?
     27: ('ADMIN_DISALLOW_ITEM', -1),  # every holder's balance of a disallowed item is cleared
@@ -57,6 +57,14 @@ LEGACY_KINDS = {'DEPOSIT': (1, 1), 'WITHDRAW': (2, 1), 'TRANSFER_OUT': (3, -1), 
                 'PAYOUT': (20, 1), 'DIVIDEND': (21, 1), 'SHARE_STAMP': (22, 1), 'SHARE_REDEEM': (23, 1),
                 'SHARE_TRADE': (24, 1)}
 TRADE_CODES = {c for c, (_, s) in LEDGER_TYPES.items() if s in ('buy', 'sell')}
+PER_LEG_CODES = (20, 21)   # PAYOUT, DIVIDEND: signed per leg only on rows with balance_after (BankSystem 6a602082)
+
+
+def ledger_sign(r):
+    """LEDGER_TYPES sign of a ledger row. Legacy PAYOUT / DIVIDEND rows (balance_after NULL) wrote both legs unsigned,
+    the source (company account) leg included, and the tool does not know company accounts: unknown sign (None)."""
+    if r['code'] in PER_LEG_CODES and r.get('balance_after') is None: return None
+    return LEDGER_TYPES.get(r['code'], ('?', None))[1]
 ORDER_ID_COLUMNS = ('order_id', 'orderId')   # persisted StockMarket order id (spec: order_id)
 LEDGER_OPTIONAL = ('type_code', 'ref', 'money_amount', 'price', 'currency_item', 'tag', 'virtual_qty',
                    'source_kind', 'note', 'balance_after', 'actor_name', 'other_account')
@@ -646,7 +654,7 @@ def reconcile(w, fills=None, threshold_raw=100000):
             ev[(f.account, w.money_id)].append((f.time, -money_of(f.amount, f.price)))
     for r in L:
         a, i, t, amt = r['account_number'], r['item_id'], r.get('ts') or 0, r.get('amount') or 0
-        sign = LEDGER_TYPES.get(r['code'], ('?', None))[1]
+        sign = ledger_sign(r)
         if sign in ('buy', 'sell'):
             if r.get('money_amount') is None: continue
             s = 1 if sign == 'buy' else -1
@@ -752,7 +760,7 @@ def _raw_sum(items_json):
 def _into_bank(r, direction):
     """Signed raw value a master ledger row moves into the bank (+) or out of it (-). Codes without a fixed sign
     (UNKNOWN_LEGACY, SHARE_TRADE, codes newer than LEDGER_TYPES) follow the journal direction, else the amount's sign."""
-    s, a = LEDGER_TYPES.get(r['code'], ('?', None))[1], r.get('amount') or 0
+    s, a = ledger_sign(r), r.get('amount') or 0
     if isinstance(s, int): return s * a
     return -abs(a) if direction == 'FROM_MASTER' else abs(a) if direction == 'TO_MASTER' else a
 

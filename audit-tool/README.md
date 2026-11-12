@@ -167,12 +167,14 @@ CI: `.github/workflows/audit-tool.yml` (windows-latest).
     them are detected.
   - **The type-code table is the single dict `LEDGER_TYPES` in `core.py`** (CODE TABLE v2 from the BankSystem ledger
     spec). `TODO(confirm)` marks the signs that still have to be confirmed.
-  - Only TRANSFER (3) amounts are signed. Legacy `TRANSFER_OUT` rows are negated on load, the same way the BankSystem
-    migration does it.
+  - TRANSFER (3) amounts are signed. Legacy `TRANSFER_OUT` rows are negated on load, the same way the BankSystem
+    migration does it. PAYOUT (20) and DIVIDEND (21) rows are signed per leg when `balance_after` is set; older rows
+    (`balance_after` NULL) are unsigned on both legs and count as unknown sign. SHARE_TRADE (24) stays unknown sign:
+    withdrawals are negative in new worlds, but a positive row can be a deposit or an older withdrawal.
 - **Reconciliation:** the bank delta between two BalanceHistory snapshots is compared with the explained flow.
   - Trade flow comes from the ledger TRADE_BUY/SELL rows (`money_amount`, `currency_item`) when they exist. Fills
     before the first ledger trade row, or all fills in 2.1.2 worlds, come from OrderHistory.
-  - Signed non-trade ledger rows are added to that. Rows with an unknown sign (ADMIN_SET, SHARE_*) are not counted;
+  - Signed non-trade ledger rows are added to that. Rows with an unknown sign (ADMIN_SET, SHARE_*, legacy PAYOUT/DIVIDEND) are not counted;
     they only label the interval.
 - **virtual_qty:** when it is present, the report splits each account's trade money into money from the virtual
   or bot book and player-to-player money.

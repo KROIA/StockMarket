@@ -115,6 +115,40 @@ def check(new_format):
         shutil.rmtree(root, ignore_errors=True)
 
 
+def check_payout_signs():
+    """PAYOUT / DIVIDEND: new rows (balance_after set) are signed per leg, legacy rows (balance_after NULL) unsigned on
+    both legs, so they stay unknown and only label the interval. SHARE_TRADE stays unknown either way."""
+    root = tempfile.mkdtemp(prefix='audit_selftest_')
+    try:
+        build(root, True)
+        bs = sqlite3.connect(os.path.join(root, 'BankSystem', 'Database', 'banksystem.db'))
+        bs.execute('ALTER TABLE TransactionLog ADD COLUMN balance_after INTEGER')
+        co, ho = 10, 11   # company account, holder account
+        bs.executemany('INSERT INTO TransactionLog (account_number,kind,item_id,amount,other_account,ts,type_code,ref,balance_after)'
+                       ' VALUES (?,?,?,?,?,?,?,?,?)', [
+            (co, 'PAYOUT', MONEY, -500, ho, T + 30000, 20, 'run-p', 9500), (ho, 'PAYOUT', MONEY, 500, co, T + 30000, 20, 'run-p', 500),
+            (co, 'DIVIDEND', MONEY, -300, ho, T + 31000, 21, 'run-d', 9200), (ho, 'DIVIDEND', MONEY, 300, co, T + 31000, 21, 'run-d', 800),
+            (co, 'PAYOUT', MONEY, 200, ho, T + 40000, 20, None, None), (ho, 'PAYOUT', MONEY, 200, co, T + 40000, 20, None, None),
+            (co, 'DIVIDEND', MONEY, 100, ho, T + 41000, 21, None, None), (ho, 'DIVIDEND', MONEY, 100, co, T + 41000, 21, None, None)])
+        bs.executemany('INSERT INTO BalanceHistory (account_number,item_id,balance,locked_balance,time) VALUES (?,?,?,0,?)',
+                       [(co, MONEY, 10000, T + 29000), (co, MONEY, 9200, T + 32000), (co, MONEY, 8900, T + 42000),
+                        (ho, MONEY, 0, T + 29000), (ho, MONEY, 800, T + 32000), (ho, MONEY, 1100, T + 42000)])
+        bs.commit(); bs.close()
+        with core.World(root) as w:
+            rec = {r['account']: r for r in core.reconcile(w, threshold_raw=0)[0] if r['account'] in (co, ho)}
+            assert set(rec) == {co, ho}, rec   # new signed legs explain T+29000..T+32000 exactly
+            for a, res in ((co, -300), (ho, 300)):
+                r = rec[a]
+                assert r['from'] == core.ts(T + 32000) and r['residual'] == res, r
+                assert r['note'] == 'unsigned ledger rows: DIVIDEND,PAYOUT', r
+        assert core._into_bank({'code': 20, 'amount': -500, 'balance_after': 9500}, 'TO_MASTER') == -500
+        assert core._into_bank({'code': 21, 'amount': 100, 'balance_after': None}, 'FROM_MASTER') == -100   # legacy: journal direction
+        for amt, after in ((-200, 1000), (200, 1200), (200, None)):   # new withdrawal, deposit, legacy row
+            assert core.ledger_sign({'code': 24, 'amount': amt, 'balance_after': after}) is None
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def check_nbt():
     data = nbt.dumps({'a': [1, 2], 's': 'x', 'c': {'l': 2**40}})
     assert nbt.loads(data) == {'a': [1, 2], 's': 'x', 'c': {'l': 2**40}}
@@ -340,6 +374,7 @@ def main():
     check_nbt(); print('nbt parser: ok')
     check(True); print('new format (type_code/order_id/virtual_qty): ok')
     check(False); print('legacy 2.1.2 format: ok')
+    check_payout_signs(); print('PAYOUT/DIVIDEND signed and legacy legs, SHARE_TRADE unknown sign: ok')
     check_corrupt(); print('corrupt db salvage: ok')
     check_no_diagnostics(); print('no diagnostics data (missing DB / tables): ok')
     check_diagnostics(); print('diagnostics readers + multi-save join (%d transfer classes): ok' % len({c for c, _, _ in TRANSFERS.values() if c}))
