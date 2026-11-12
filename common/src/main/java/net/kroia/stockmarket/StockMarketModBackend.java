@@ -739,8 +739,9 @@ public class StockMarketModBackend implements StockMarketAPI {
     /**
      * T-191: writes a SHUTDOWN ledger row for every open player order with fills that are not in the
      * ledger yet. Must run while BankSystem's database is still open, so Fabric calls it from an
-     * earlier SERVER_STOPPING phase (BankSystem's stop handler runs first there); on NeoForge
-     * StockMarket's stop handler already runs before BankSystem's. Calling it again is harmless:
+     * earlier SERVER_STOPPING phase (BankSystem's stop handler runs first there) and NeoForge from a
+     * HIGHEST-priority ServerStoppingEvent subscriber (SM-205), ahead of both mods' Architectury
+     * SERVER_STOPPING handlers. {@link #onServerStop} calls it once more. Calling it again is harmless:
      * the second call finds no unlogged fills. Master only (no-op on a slave).
      *
      * @param server the stopping server (unused, keeps the lifecycle-callback signature)
@@ -787,11 +788,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         }
         OrderOriginLog.close(); // no-op on slaves
 
-        if(MultiServerManager.instanceExists())
-        {
-            MultiServerManager.stop();
-            MultiServerManager.cleanup();
-        }
+        // SM-249: no MultiServerManager.stop()/cleanup() here. BankSystem owns the MultiServerManager lifecycle
+        // and cleans it up in its own onServerStop, whichever mod's stop handler runs first.
         SERVER_INSTANCES = null;
     }
 
