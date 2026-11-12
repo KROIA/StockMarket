@@ -117,6 +117,9 @@ public class ClientIntegrationTestSuite extends TestSuite {
 
     /** Preselect if listed, else last, else first, else null. */
     private TestResult test_pickInitialMarket() {
+        // TradeScreen extends the client-only Screen: loading it on a dedicated server crashes (SM-313).
+        if (StockMarketModBackend.getClientInstances() == null)
+            return skip("no client in this JVM");
         ItemID a = new ItemID((short) 101), b = new ItemID((short) 102), c = new ItemID((short) 103);
         List<ItemID> markets = List.of(a, b);
         TestResult r = assertEquals("listed preselect wins", b, TradeScreen.pickInitialMarket(b, a, markets));
