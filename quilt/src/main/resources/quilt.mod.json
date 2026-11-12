@@ -41,5 +41,5 @@
       }
     ]
   },
-  "mixin": []
+  "mixin": "stockmarket.mixins.json"
 }
