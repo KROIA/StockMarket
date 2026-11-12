@@ -41,6 +41,7 @@ public final class DevBootstrap {
         MarketIntegrationTestSuite.setBackend(instances);
         InterMarketExecutorTestSuite.setBackend(instances);
         MarketVisibilityTestSuite.setBackend(instances); // T-237: runs on master and slave
+        UserTestSuite.setBackend(instances); // SM-266/SM-287 admin command gate; master tests skip on a slave (no sync manager)
         StockMarketTestRegistration.register();
         if (isMaster) {
             MatchingEngineTestSuite.setBackend(instances);
@@ -59,7 +60,6 @@ public final class DevBootstrap {
             PumpDumpDetectorTestSuite.setBackend(instances); // T-192
             AdminFlagSyncLuckPermsTests.setBackend(instances);
             StockMarketLuckPermsRemovedTests.setBackend(instances);
-            UserTestSuite.setBackend(instances); // SM-266 admin command gate
         }
     }
 }

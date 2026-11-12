@@ -50,6 +50,10 @@ public class UserTestSuite extends TestSuite {
         addTest("admin_command_non_player_uses_op_level", this::test_adminCommand_nonPlayerUsesOpLevel);
         addTest("admin_command_non_op_with_flag_allowed", () -> test_adminCommand_gate(true, 0, true));
         addTest("admin_command_op_without_flag_refused", () -> test_adminCommand_gate(false, 4, false));
+        addTest("slave_admin_command_non_op_with_flag_allowed", () -> test_slaveAdminCommand_gate(true));
+        addTest("slave_admin_command_without_flag_refused", () -> test_slaveAdminCommand_gate(false));
+        addTest("op_deop_backup_need_level_2", this::test_opDeopBackup_needLevel2);
+        addTest("manage_node_visible_to_level_0_player", this::test_manageNode_visibleToLevel0Player);
         addTest("duplicate_name_self_op_flags_executor", this::test_duplicateName_selfOpFlagsExecutor);
         addTest("duplicate_name_lookup_refuses_ambiguous", this::test_duplicateName_lookupRefusesAmbiguous);
         addTest("duplicate_name_join_marks_old_stale", this::test_duplicateName_joinMarksOldStale);
@@ -310,6 +314,119 @@ public class UserTestSuite extends TestSuite {
         } finally {
             manager.setStockmarketAdminMode(uuid, before);
         }
+    }
+
+    // === SM-287: flag-gated admin commands for a non-op player on a slave ===
+
+    private static final long SLAVE_WAIT_MS = 10_000;
+
+    /**
+     * SM-287, slave only: the master holds the admin flag of the online player (set via the slave's request to the
+     * master, restored afterwards). A level-0 source of that player passes the {@code requires} check, and
+     * {@link StockMarketCommands#runAsAdmin} runs the action if and only if the master reports the flag. Without it the
+     * player gets {@code message.stockmarket.command_admin_only}.
+     *
+     * @param flag the admin flag the master holds for the player during the test
+     */
+    private TestResult test_slaveAdminCommand_gate(boolean flag) {
+        if (backend == null || backend.MARKET_MANAGER == null || !backend.MARKET_MANAGER.isSlave())
+            return skip("slave only");
+        if (!net.kroia.stockmarket.util.MultiServerUtils.canInteractWithStockMarket())
+            return skip("not connected to the master");
+        List<ServerPlayer> players = getServer().getPlayerList().getPlayers();
+        if (players.isEmpty())
+            return skip("no online player");
+        ServerPlayer player = players.get(0);
+        UUID uuid = player.getUUID();
+        net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager master = backend.MARKET_MANAGER.getAsync();
+        boolean before = Boolean.TRUE.equals(await(master.isStockmarketAdminAsync(uuid), SLAVE_WAIT_MS));
+        try {
+            await(master.setStockmarketAdminModeAsync(uuid, flag), SLAVE_WAIT_MS);
+            if (Boolean.TRUE.equals(await(master.isStockmarketAdminAsync(uuid), SLAVE_WAIT_MS)) != flag)
+                return skip("the master did not apply the flag (untrusted slave or unknown user)");
+
+            java.util.List<net.minecraft.network.chat.Component> messages = new java.util.ArrayList<>();
+            CommandSourceStack source = player.createCommandSourceStack().withPermission(0).withSource(capture(messages));
+            TestResult r = assertTrue("level-0 player passes the requires check",
+                    StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_MANAGE));
+            if (!r.passed()) return r;
+            AtomicBoolean ran = new AtomicBoolean();
+            CompletableFuture<Boolean> result = StockMarketCommands.runAsAdmin(source, () -> ran.set(true));
+            if (!pumpUntil(result::isDone, SLAVE_WAIT_MS))
+                return fail("admin check via the master did not complete");
+            r = assertEquals("action ran (flag=" + flag + ")", flag, ran.get());
+            if (!r.passed()) return r;
+            r = assertEquals("result matches", flag, result.join());
+            if (!r.passed()) return r;
+            boolean adminOnly = messages.stream().anyMatch(c -> hasTranslationKey(c, "message.stockmarket.command_admin_only"));
+            return assertEquals("command_admin_only sent (flag=" + flag + ")", !flag, adminOnly);
+        } finally {
+            try {
+                await(master.setStockmarketAdminModeAsync(uuid, before), SLAVE_WAIT_MS);
+            } catch (RuntimeException e) {
+                backend.LOGGER.error("[UserTestSuite] SM-287: could not restore the admin flag of " + player.getName().getString(), e);
+            }
+        }
+    }
+
+    /**
+     * SM-287: {@code /stockmarket op|deop|backup} stay on their node (op level 2): a level-0 source of the online
+     * player cannot use them, a level-2 source can. Skips if a permission mod grants the player the node anyway
+     * (then the source level does not decide). Same dispatcher on master and slave, so it runs on both.
+     */
+    private TestResult test_opDeopBackup_needLevel2() {
+        com.mojang.brigadier.tree.CommandNode<CommandSourceStack> root = stockmarketNode();
+        if (root == null) return skip("/stockmarket not registered");
+        List<ServerPlayer> players = getServer().getPlayerList().getPlayers();
+        if (players.isEmpty()) return skip("no online player");
+        CommandSourceStack level0 = players.get(0).createCommandSourceStack().withPermission(0);
+        for (String literal : new String[]{"op", "deop", "backup"}) {
+            com.mojang.brigadier.tree.CommandNode<CommandSourceStack> node = root.getChild(literal);
+            TestResult r = assertNotNull("/stockmarket " + literal + " registered", node);
+            if (!r.passed()) return r;
+            boolean at0 = node.canUse(level0), at2 = node.canUse(level0.withPermission(2));
+            if (at0 && at2)
+                return skip("a permission mod grants the player /stockmarket " + literal);
+            r = assertFalse("level-0 player cannot use /stockmarket " + literal, at0);
+            if (!r.passed()) return r;
+            r = assertTrue("level-2 player can use /stockmarket " + literal, at2);
+            if (!r.passed()) return r;
+        }
+        return pass("op, deop and backup need level 2");
+    }
+
+    /** SM-287: the {@code /stockmarket manage} node is usable by a level-0 player, so it is sent to non-op clients. */
+    private TestResult test_manageNode_visibleToLevel0Player() {
+        com.mojang.brigadier.tree.CommandNode<CommandSourceStack> root = stockmarketNode();
+        if (root == null) return skip("/stockmarket not registered");
+        List<ServerPlayer> players = getServer().getPlayerList().getPlayers();
+        if (players.isEmpty()) return skip("no online player");
+        com.mojang.brigadier.tree.CommandNode<CommandSourceStack> manage = root.getChild("manage");
+        TestResult r = assertNotNull("/stockmarket manage registered", manage);
+        if (!r.passed()) return r;
+        return assertTrue("level-0 player can use /stockmarket manage",
+                manage.canUse(players.get(0).createCommandSourceStack().withPermission(0)));
+    }
+
+    private com.mojang.brigadier.tree.CommandNode<CommandSourceStack> stockmarketNode() {
+        return getServer().getCommands().getDispatcher().getRoot().getChild("stockmarket");
+    }
+
+    /** @return a command output that records every message (success and failure) into {@code messages} */
+    private static net.minecraft.commands.CommandSource capture(List<net.minecraft.network.chat.Component> messages) {
+        return new net.minecraft.commands.CommandSource() {
+            @Override public void sendSystemMessage(net.minecraft.network.chat.Component component) { messages.add(component); }
+            @Override public boolean acceptsSuccess() { return true; }
+            @Override public boolean acceptsFailure() { return true; }
+            @Override public boolean shouldInformAdmins() { return false; }
+        };
+    }
+
+    /** @return true if {@code c} or one of its siblings is a translatable component with {@code key} */
+    private static boolean hasTranslationKey(net.minecraft.network.chat.Component c, String key) {
+        if (c.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t && t.getKey().equals(key))
+            return true;
+        return c.getSiblings().stream().anyMatch(s -> hasTranslationKey(s, key));
     }
 
     // === SM-264: two stored users with the same name (e.g. after switching online-mode) ===
