@@ -1,7 +1,10 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -9,13 +12,28 @@ import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.villagertrading.MoneyPayment;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.npc.ClientSideMerchant;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.inventory.MerchantContainer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.ItemCost;
 import net.minecraft.world.item.trading.MerchantOffer;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 
@@ -52,6 +70,7 @@ public class VillagerMoneyPaymentTestSuite extends TestSuite {
         addTest("consume_mixed_offer", this::test_consume_mixed_offer);
         addTest("value_conservation_loop", this::test_value_conservation_loop);
         addTest("notes_taken_match_consume", this::test_notes_taken_match_consume);
+        addTest("trade_writes_note_flow_rows", this::test_trade_writes_note_flow_rows);
     }
 
     // ========================================================================
@@ -490,5 +509,141 @@ public class VillagerMoneyPaymentTestSuite extends TestSuite {
         // {1000, 2, 1000, 2} above leaves slot 0 untouched (0 taken).
         return assertEquals("Non-money slot (a mixed offer's book)", 0,
                 MoneyPayment.notesTaken(new ItemStack(Items.BOOK, 3), new ItemStack(Items.BOOK, 2)));
+    }
+
+    // ========================================================================
+    // NoteFlow rows (SM-281)
+    // ========================================================================
+
+    /**
+     * SM-281: the rows the result-slot mixin writes ({@code MerchantResultSlotMixin} calls
+     * {@link MoneyPayment#recordTrade}, then {@link MoneyPayment#deliverChange}) reach BankSystem's NoteFlow table
+     * for the cell's real {@link ServerPlayer} (rows are skipped for client-side players) and the villager:
+     * a 50$ note for a 20.00 price gives one {@code villager_consume} row of -1 note and {@code villager_change}
+     * rows for exactly the 30.00 change; an offer paying a 10$ note gives one {@code villager_pay} row of +1.
+     * A temp diagnostics DB stands in for the live one (restored after); the villager is never added to the world.
+     * The full result-slot click is not driven here. Needs a player on this server (sp, mp, slave); skips elsewhere.
+     */
+    private TestResult test_trade_writes_note_flow_rows() {
+        MinecraftServer server = getServer();
+        if (server == null)
+            return skip("no server");
+        if (server.getPlayerList().getPlayers().isEmpty())
+            return skip("needs a real player on this server");
+        ServerPlayer player = server.getPlayerList().getPlayers().get(0);
+        if (!ItemIDManager.getItemID(moneyStack(5000, 1)).isValid())
+            return skip("money ItemIDs not synced yet");
+        Villager villager = EntityType.VILLAGER.create(server.overworld()); // never added to the world // mc<=1.21.1
+        //Villager villager = EntityType.VILLAGER.create(server.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=1.21.2 mc<=26.1
+        //Villager villager = net.minecraft.world.entity.EntityTypes.VILLAGER.create(server.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=26.2
+        if (villager == null)
+            return fail("villager not created");
+
+        BankSystemModBackend.Instances bank = BankSystemModBackend.getInstances_forTesting();
+        DiagnosticsDatabase live = bank.DIAGNOSTICS_DB;
+        Path dir = null;
+        DiagnosticsDatabase db = null;
+        try {
+            dir = Files.createTempDirectory("stockmarket-noteflow-test");
+            Path file = dir.resolve("noteflow.db");
+            db = new DiagnosticsDatabase(file);
+            bank.DIAGNOSTICS_DB = db;
+
+            // Villager sells: a 50$ note pays a 20.00 offer, as the mixin does around vanilla's onTake
+            MerchantOffer buy = moneyOffer(2000, 1);
+            MerchantContainer slots = new MerchantContainer(new ClientSideMerchant(player));
+            slots.setItem(0, moneyStack(5000, 1));
+            ItemStack[] paidBefore = {slots.getItem(0).copy(), slots.getItem(1).copy()};
+            long change = MoneyPayment.consume(buy, slots.getItem(0), slots.getItem(1));
+            MoneyPayment.recordTrade(buy, paidBefore, slots, player, villager);
+            MoneyPayment.deliverChange(change, slots, player, villager); // into the emptied payment slots
+
+            // Villager buys: pays a 10$ note for coal
+            MerchantOffer sell = new MerchantOffer(new ItemCost(Items.COAL, 15), Optional.empty(),
+                    moneyStack(1000, 1), 0, 16, 2, 0.0f, 0);
+            MerchantContainer sellSlots = new MerchantContainer(new ClientSideMerchant(player));
+            MoneyPayment.recordTrade(sell, new ItemStack[]{new ItemStack(Items.COAL, 15), ItemStack.EMPTY},
+                    sellSlots, player, villager);
+
+            await(db.flush(), 10_000);
+            List<Map<String, Object>> rows = queryRows(file, player.getUUID().toString());
+            String villagerUUID = villager.getUUID().toString();
+            for (Map<String, Object> row : rows) {
+                TestResult r = assertEquals("villager on row " + row, villagerUUID, row.get("villager_uuid"));
+                if (!r.passed()) return r;
+            }
+
+            List<Map<String, Object>> consumed = bySource(rows, MoneyPayment.NOTE_FLOW_CONSUME);
+            TestResult r = assertEquals("one consume row: " + rows, 1, consumed.size());
+            if (!r.passed()) return r;
+            r = assertEquals("consume row: the 50$ note, -1", List.of(id(moneyStack(5000, 1)), -1L),
+                    List.of(num(consumed.get(0).get("item_id")), num(consumed.get(0).get("amount"))));
+            if (!r.passed()) return r;
+
+            r = assertEquals("change 50 - 20", 3000L, change);
+            if (!r.passed()) return r;
+            Map<Long, Long> expectedChange = new HashMap<>();
+            for (ItemStack note : MoneyPayment.makeChange(change))
+                expectedChange.merge(id(note), (long) note.getCount(), Long::sum);
+            List<Map<String, Object>> changed = bySource(rows, MoneyPayment.NOTE_FLOW_CHANGE);
+            Map<Long, Long> changeRows = new HashMap<>();
+            for (Map<String, Object> row : changed)
+                changeRows.merge(num(row.get("item_id")), num(row.get("amount")), Long::sum);
+            r = assertEquals("change rows (item id -> notes) for 30.00", expectedChange, changeRows);
+            if (!r.passed()) return r;
+
+            List<Map<String, Object>> paid = bySource(rows, MoneyPayment.NOTE_FLOW_PAY);
+            r = assertEquals("one pay row: " + rows, 1, paid.size());
+            if (!r.passed()) return r;
+            r = assertEquals("pay row: the 10$ note, +1", List.of(id(moneyStack(1000, 1)), 1L),
+                    List.of(num(paid.get(0).get("item_id")), num(paid.get(0).get("amount"))));
+            if (!r.passed()) return r;
+            return assertEquals("no other rows: " + rows, consumed.size() + changed.size() + paid.size(), rows.size());
+        } catch (Exception e) {
+            return fail(e.toString());
+        } finally {
+            bank.DIAGNOSTICS_DB = live;
+            if (db != null)
+                db.close();
+            if (dir != null) {
+                try (var walk = Files.walk(dir)) {
+                    walk.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
+                } catch (Exception ignored) {
+                    // best effort: a temp dir
+                }
+            }
+        }
+    }
+
+    /** @return the NoteFlow rows of {@code playerUUID} in {@code file}, in insert order */
+    private static List<Map<String, Object>> queryRows(Path file, String playerUUID) throws Exception {
+        List<Map<String, Object>> out = new ArrayList<>();
+        try (Connection c = DiagnosticsDatabase.connect(file);
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT source, item_id, amount, villager_uuid FROM NoteFlow WHERE player_uuid = ? ORDER BY id")) {
+            ps.setString(1, playerUUID);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> row = new HashMap<>();
+                    for (String column : List.of("source", "item_id", "amount", "villager_uuid"))
+                        row.put(column, rs.getObject(column));
+                    out.add(row);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static List<Map<String, Object>> bySource(List<Map<String, Object>> rows, String source) {
+        return rows.stream().filter(row -> source.equals(row.get("source"))).toList();
+    }
+
+    /** @return the stack's ItemID short, as the NoteFlow item_id column stores it */
+    private static long id(ItemStack stack) {
+        return ItemIDManager.getItemID(stack).getShort();
+    }
+
+    private static long num(Object o) {
+        return o instanceof Number n ? n.longValue() : Long.MIN_VALUE;
     }
 }
