@@ -24,6 +24,15 @@ import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelOutboundHandlerAdapter;
+import io.netty.channel.ChannelPromise;
+import net.minecraft.network.Connection;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -39,6 +48,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -106,6 +116,9 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         addTest("marketBuy_noLiquidity_unlocksMoney", this::test_marketBuy_noLiquidity_unlocksMoney);
         addTest("marketSell_partialFill_unlocksRemainderItems", this::test_marketSell_partialFill_unlocksRemainderItems);
         addTest("marketBuy_partialFill_unlocksRemainderMoney", this::test_marketBuy_partialFill_unlocksRemainderMoney);
+        // SM-278: the T-173 chat line telling the player how much of a market order filled
+        addTest("marketSell_partialFill_messagesPlayer", () -> test_partialFill_messagesPlayer(false));
+        addTest("marketBuy_partialFill_messagesPlayer", () -> test_partialFill_messagesPlayer(true));
 
         // T-166: max order size + global per-player trade cooldown
         addTest("maxOrder_oversizeRejected", this::test_maxOrder_oversizeRejected);
@@ -753,6 +766,111 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             restoreVirtualOrderbookEnabled();
             return fail("Exception: " + e.getMessage());
         }
+    }
+
+    private static final String PARTIAL_FILL_KEY = "message.stockmarket.order_status.market_order_partially_filled";
+
+    /**
+     * SM-278: a partly filled player MARKET order sends its owner the {@code market_order_partially_filled}
+     * chat line (ServerMarket#notifyMarketOrderNotFullyFilled) with the filled amount, the requested amount
+     * and the item. Needs a real online player (sp, or mp with the client on this master); skips otherwise.
+     * The order runs on a scratch account the player is a member of; the system chat packets sent to the
+     * player are read from a temporary tap on the player's network pipeline, which is removed afterwards.
+     *
+     * @param buy true for a market buy against one resting sell, false for a market sell against one resting buy
+     */
+    private TestResult test_partialFill_messagesPlayer(boolean buy) {
+        MinecraftServer server = getServer();
+        if (server == null || server.getPlayerList().getPlayers().isEmpty())
+            return skip("no player online on this server");
+        ServerPlayer player = server.getPlayerList().getPlayers().get(0);
+        Connection conn = connectionOf(server, player);
+        if (conn == null)
+            return skip("the player has no network connection");
+
+        return withLimits(0, 0, () -> {
+            List<Component> chat = new CopyOnWriteArrayList<>();
+            String tapName = "stockmarket_test_chat_tap";
+            ChannelOutboundHandlerAdapter tap = new ChannelOutboundHandlerAdapter() {
+                @Override
+                public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+                    if (msg instanceof ClientboundSystemChatPacket pkt)
+                        chat.add(pkt.content());
+                    super.write(ctx, msg, promise);
+                }
+            };
+            putMarketInNoLiquidityState();
+            // Last in the pipeline = first to see outbound writes, still as Packet objects.
+            conn.channel().pipeline().addLast(tapName, tap);
+            try {
+                // Counterparty: one resting LIMIT of volume 1 on the opposite side (the only liquidity).
+                UUID other = UUID.randomUUID();
+                IServerBankAccount otherAcc = freshAccount(buy ? "MsgSeller" : "MsgBuyer", 10000000, 1000, other);
+                CreateOrderRequest.OutputData rest = executeRequest(new CreateOrderRequest.InputData(
+                        itemID, otherAcc.getAccountNumber(), Order.Type.LIMIT, buy ? -1.0 : 1.0, 100.0), other);
+                if (rest.status != CreateOrderRequest.Status.CREATED)
+                    return fail("Setup: resting LIMIT expected CREATED, got: " + rest.status);
+
+                // The real player: MARKET order of 3 on a scratch account it is a member of.
+                IServerBankAccount acc = fixture.createBankAccount(buy ? "MsgBuyPlayer" : "MsgSellPlayer");
+                acc.addUser(new User(player.getUUID(), player.getGameProfile().getName()), BankPermission.getAllPermissions());
+                acc.createBank(itemID, 0);
+                acc.createBank(moneyID, 0);
+                acc.getBank(itemID).setBalance(1000);
+                acc.getBank(moneyID).setBalance(10000000);
+                CreateOrderRequest.OutputData mkt = executeRequest(new CreateOrderRequest.InputData(
+                        itemID, acc.getAccountNumber(), Order.Type.MARKET, buy ? 3.0 : -3.0, 0.0), player.getUUID());
+                if (mkt.status != CreateOrderRequest.Status.CREATED)
+                    return fail("Expected CREATED, got: " + mkt.status);
+
+                serverMarket.update();
+                pumpUntil(() -> partialFillMessage(chat) != null, 3000);
+                TranslatableContents tc = partialFillMessage(chat);
+                if (tc == null)
+                    return fail("no " + PARTIAL_FILL_KEY + " message reached the player (" + chat.size() + " system messages seen)");
+
+                Object[] args = tc.getArgs();
+                TestResult r = assertEquals("message argument count", 3, args.length);
+                if (!r.passed()) return r;
+                double filled = Double.parseDouble(String.valueOf(args[0]));
+                r = assertTrue("filled amount " + args[0] + " is between 0 and 3", filled > 0 && filled < 3);
+                if (!r.passed()) return r;
+                r = assertEquals("requested amount", "3.00", String.valueOf(args[1]));
+                if (!r.passed()) return r;
+                String item = args[2] instanceof Component c ? c.getString() : String.valueOf(args[2]);
+                r = assertEquals("item name", itemID.getStack().getHoverName().getString(), item);
+                if (!r.passed()) return r;
+                return pass("Partly filled market " + (buy ? "buy" : "sell") + " told the player: " + args[0] + " of 3.00 " + item);
+            } finally {
+                try {
+                    conn.channel().pipeline().remove(tapName);
+                } catch (RuntimeException ignored) {
+                    // channel closed meanwhile: the tap went with it
+                }
+                restoreVirtualOrderbookEnabled();
+            }
+        });
+    }
+
+    /** @return the server-side network connection whose listener is the player's, or null. */
+    private static @Nullable Connection connectionOf(MinecraftServer server, ServerPlayer player) {
+        if (server.getConnection() == null)
+            return null;
+        List<Connection> conns = server.getConnection().getConnections();
+        synchronized (conns) {
+            for (Connection c : conns)
+                if (c.getPacketListener() == player.connection)
+                    return c;
+        }
+        return null;
+    }
+
+    /** @return the first captured partial-fill message, or null. */
+    private static @Nullable TranslatableContents partialFillMessage(List<Component> chat) {
+        for (Component c : chat)
+            if (c.getContents() instanceof TranslatableContents tc && PARTIAL_FILL_KEY.equals(tc.getKey()))
+                return tc;
+        return null;
     }
 
     private TestResult test_putOrderFails_unlocksMoneyBuy() {
