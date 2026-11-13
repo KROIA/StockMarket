@@ -6,6 +6,7 @@ import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
@@ -82,7 +83,7 @@ public class MultiServerUtils {
         // T-159: translatable so the client resolves it in the player's language
         ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
         if (player != null)
-            player.sendSystemMessage(Component.translatable("message.stockmarket.slave_not_connected"));
+            player.sendSystemMessage(Component.translatable("message.stockmarket.slave_not_connected").withStyle(ChatFormatting.RED)); // SM-312: refusals are red
         return false;
     }
 

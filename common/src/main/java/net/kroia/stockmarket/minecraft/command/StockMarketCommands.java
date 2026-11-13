@@ -81,11 +81,11 @@ public class StockMarketCommands {
     private static int setAlerts(CommandSourceStack source, boolean enabled) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         if (!isMaster())
-            player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+            source.sendFailure(Component.translatable("message.stockmarket.command_master_only"));
         else if (net.kroia.stockmarket.util.TradeAlerts.setAlertsEnabled(player.getUUID(), enabled))
             player.sendSystemMessage(Component.translatable(enabled ? "message.stockmarket.alerts.on" : "message.stockmarket.alerts.off"));
         else
-            player.sendSystemMessage(Component.translatable("message.stockmarket.alerts.failed"));
+            source.sendFailure(Component.translatable("message.stockmarket.alerts.failed"));
         return Command.SINGLE_SUCCESS;
     }
 
@@ -140,7 +140,7 @@ public class StockMarketCommands {
                             if (isMaster())
                                 masterHandler().stockmarket_setStockmarketAdminMode(player.getUUID(), true);
                             else
-                                player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+                                source.sendFailure(Component.translatable("message.stockmarket.command_master_only"));
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -151,7 +151,7 @@ public class StockMarketCommands {
                                     if (isMaster())
                                         masterHandler().stockmarket_setStockmarketAdminMode_user(player.getUUID(), toPlayer, true);
                                     else
-                                        player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+                                        source.sendFailure(Component.translatable("message.stockmarket.command_master_only"));
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -164,7 +164,7 @@ public class StockMarketCommands {
                             if (isMaster())
                                 masterHandler().stockmarket_setStockmarketAdminMode(player.getUUID(), false);
                             else
-                                player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+                                source.sendFailure(Component.translatable("message.stockmarket.command_master_only"));
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -175,7 +175,7 @@ public class StockMarketCommands {
                                     if (isMaster())
                                         masterHandler().stockmarket_setStockmarketAdminMode_user(player.getUUID(), toPlayer, false);
                                     else
-                                        player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+                                        source.sendFailure(Component.translatable("message.stockmarket.command_master_only"));
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )

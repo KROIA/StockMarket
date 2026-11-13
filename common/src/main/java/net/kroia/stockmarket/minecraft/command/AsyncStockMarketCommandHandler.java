@@ -17,6 +17,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.codec.ByteBufCodecs;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -224,29 +225,30 @@ public class AsyncStockMarketCommandHandler implements IAsyncStockMarketCommandH
             if (throwable != null) {
                 String text = "Async command execution failed for player: " + playerName;
                 error(text, throwable);
-                sendToPlayer(executor, Component.translatable("message.stockmarket.command_async_failed", playerName));
+                sendFailure(executor, Component.translatable("message.stockmarket.command_async_failed", playerName));
                 return;
             }
             boolean success = (Boolean) result.decodeResult();
             String text = "Async command execution result for command " + result.function.name() + " from player: " + playerName + " Result: " + (success ? "Success" : "Failure");
             info(text);
             if (!success) {
-                sendToPlayer(executor, Component.translatable("message.stockmarket.command_async_result_failure",
+                sendFailure(executor, Component.translatable("message.stockmarket.command_async_result_failure",
                         result.function.name(), playerName));
             }
         });
     }
 
     /**
-     * Sends a (translatable) chat message to an online player; resolved on the client (T-159).
+     * Sends a (translatable) failure line to an online player in red, like {@code CommandSourceStack.sendFailure}
+     * (SM-312); resolved on the client (T-159).
      *
      * @param player  recipient UUID; ignored if offline
      * @param message message component
      */
-    private static void sendToPlayer(UUID player, Component message) {
+    private static void sendFailure(UUID player, Component message) {
         ServerPlayer serverPlayer = ServerPlayerUtilities.getOnlinePlayer(player);
         if (serverPlayer != null)
-            serverPlayer.sendSystemMessage(message);
+            serverPlayer.sendSystemMessage(message.copy().withStyle(ChatFormatting.RED));
     }
 
     // === Logging ===

@@ -6,6 +6,7 @@ import net.kroia.stockmarket.api.command.IServerStockMarketCommandHandler;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
@@ -54,7 +55,7 @@ public class ServerStockMarketCommandHandler implements IServerStockMarketComman
         @Nullable UUID playerUUID = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getPlayerUUID(userName);
         if (playerUUID == null) {
             boolean ambiguous = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager().isUserNameAmbiguous(userName);
-            sendMessage(executor, Component.translatable(ambiguous
+            sendFailure(executor, Component.translatable(ambiguous
                     ? "message.stockmarket.command_player_name_ambiguous"
                     : "message.stockmarket.command_player_not_found", userName));
             return false;
@@ -83,7 +84,7 @@ public class ServerStockMarketCommandHandler implements IServerStockMarketComman
             net.kroia.stockmarket.util.AdminFlagSync.pushToLuckPerms(executor, playerUUID, userName, isAdmin);
             return true;
         }
-        sendMessage(executor, Component.translatable("message.stockmarket.command_player_not_found", userName));
+        sendFailure(executor, Component.translatable("message.stockmarket.command_player_not_found", userName));
         return false;
     }
 
@@ -111,6 +112,19 @@ public class ServerStockMarketCommandHandler implements IServerStockMarketComman
         ServerPlayer serverPlayer = ServerPlayerUtilities.getOnlinePlayer(player);
         if (serverPlayer != null)
             serverPlayer.sendSystemMessage(Component.literal("[StockMarket] ").append(message));
+    }
+
+    /**
+     * SM-312: like {@link #sendMessage}, but the whole line is red, the same as {@code CommandSourceStack.sendFailure}.
+     * For refusals and failures only.
+     *
+     * @param player  recipient UUID; ignored if the player is offline
+     * @param message message body, usually {@code Component.translatable(key, args)}
+     */
+    public static void sendFailure(UUID player, Component message) {
+        ServerPlayer serverPlayer = ServerPlayerUtilities.getOnlinePlayer(player);
+        if (serverPlayer != null)
+            serverPlayer.sendSystemMessage(Component.literal("[StockMarket] ").append(message).withStyle(ChatFormatting.RED));
     }
 
     private static void info(String msg) {
