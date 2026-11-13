@@ -1717,11 +1717,12 @@ public class PluginTestSuite extends TestSuite {
     // Captured on the pre-T-213 code (cfd6ad3c, flow inside VolatilityPlugin). The refactor (NetFlowPlugin +
     // VolatilityPlugin, anchor off) must reproduce them bit for bit.
     // #96: re-captured after the default depth moved to the fair price (deliberate behaviour change).
+    // SM-241: pump hash re-captured, the bot keeps its reference on same-direction fills (deliberate behaviour change).
 
     /** Golden hash of the scripted flow series over all {@link #GOLDEN_SCALES} x flow x calculator x maxMult configs. */
     private static final long GOLDEN_SCRIPT_HASH = 0x7ca4b1a5d1bba416L;
     /** Golden hash of the t208 diamond_default pump30 price path (volatility scale 0, book refill on). */
-    private static final long GOLDEN_PUMP_HASH = 0xcdb3103aa5ffe147L;
+    private static final long GOLDEN_PUMP_HASH = 0xcaf42eca64243b03L;
     /** Volatility scales of the golden configs (they enter the flow capacity as 1 + scale). */
     private static final float[] GOLDEN_SCALES = {0f, 0.3f, 1.5f};
 
@@ -3686,7 +3687,8 @@ public class PluginTestSuite extends TestSuite {
      * T-208 {@link TargetPriceBot#stepReference} invariants (pure, default settings): after a spike to S
      * the reference stays in [T, S], swings to a trough below its centre and then a peak above it, mirrors
      * a dump of the same log size, and is within 10% of the excess after 5 reversion times. A fill towards
-     * T (a ping) keeps the centre; a fill further away resets it.
+     * T (a ping) keeps the centre; SM-241: so does a fill further away on the same side (it only moves the
+     * anchor), while a fill on the other side of T starts a new spike.
      */
     private TestResult test_targetPriceBot_referenceInvariants() {
         TargetPriceBot.Settings s = TargetPriceBot.Settings.createDefault();
@@ -3716,7 +3718,7 @@ public class PluginTestSuite extends TestSuite {
         if (!trough || !peak) return fail("Expected a trough below the centre, then a peak (trough " + trough + ", peak " + peak + ")");
         double left = up.active() ? up.y() - lnT : 0;
         if (Math.abs(left) > 0.1 * excess) return fail("Not within 10% of the excess after 5 reversion times: " + left);
-        // A ping towards T keeps the centre and the velocity; a push further away resets the centre.
+        // A ping towards T keeps the centre and the velocity; SM-241: a push further away keeps them too.
         TargetPriceBot.Reference r = TargetPriceBot.anchorReference(TargetPriceBot.Reference.IDLE, lnT, lnT + excess, s, maxMove);
         for (int i = 0; i < 40; i++) r = TargetPriceBot.stepReference(r, lnT, s, maxMove, dt);
         double lnPing = Math.log(165);
@@ -3724,8 +3726,11 @@ public class PluginTestSuite extends TestSuite {
         if (ping.c() != r.c() || ping.v() != r.v() || ping.anchor() != lnPing || ping.y() > lnPing)
             return fail("A ping towards T must keep the centre and only move the anchor: " + r + " -> " + ping);
         TargetPriceBot.Reference push = TargetPriceBot.anchorReference(r, lnT, Math.log(175), s, maxMove);
-        if (push.c() != Math.log(175) - lnT || push.y() != Math.log(175))
-            return fail("A push further away must reset the centre: " + push);
+        if (push.c() != r.c() || push.v() != r.v() || push.y() != r.y() || push.anchor() != Math.log(175))
+            return fail("A push further away (same side) must keep the centre and only move the anchor: " + r + " -> " + push);
+        TargetPriceBot.Reference flip = TargetPriceBot.anchorReference(r, lnT, Math.log(150), s, maxMove);
+        if (flip.c() != Math.log(150) - lnT || flip.y() != Math.log(150))
+            return fail("A fill on the other side of T must start a new spike: " + flip);
         return pass(String.format(Locale.ROOT, "Stays in [T, S], trough then peak, dump mirrored, %.2e (log) left after 5 tau", left));
     }
 
@@ -4078,11 +4083,11 @@ public class PluginTestSuite extends TestSuite {
         }
     }
 
-    /** #96: a fill anchors the bot's reference inside [E x 5%, E x 3] (the NetFlowPlugin's default clamps) only. */
+    /** #96: a fill anchors the bot's reference inside [E x 25%, E x 3] only (SM-241: the bot's own floor). */
     private TestResult test_targetPriceBot_referenceAnchorBand() {
         TestResult r = assertEquals("inside the band", 150.0, TargetPriceBot.referenceAnchorPrice(150, 160));
         if (!r.passed()) return r;
-        r = assertEquals("below: lower edge", 160 * (double) NetFlowPlugin.DEFAULT_MIN_PRICE_MULT, TargetPriceBot.referenceAnchorPrice(0.01, 160));
+        r = assertEquals("below: lower edge", 160 * (double) TargetPriceBot.BOT_MIN_PRICE_MULT, TargetPriceBot.referenceAnchorPrice(0.01, 160));
         if (!r.passed()) return r;
         r = assertEquals("above: upper edge", 160 * (double) NetFlowPlugin.DEFAULT_MAX_PRICE_MULT, TargetPriceBot.referenceAnchorPrice(5000, 160));
         if (!r.passed()) return r;

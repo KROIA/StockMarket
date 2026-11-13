@@ -16,7 +16,7 @@ The bot sizes its orders from the virtual order book depth only and never trades
 
 - Needs a target from the [VolatilityPlugin](volatility-plugin.md) on the same market.
 - Trades against the virtual volume created by the [order book volume distribution plugin](orderbook-volume-distribution.md). With more depth the bot simply places bigger orders, so Volume Scale does not change how fast the bot reaches the target.
-- After a player trade the bot holds the price near the level the player pushed it to and lets it return to the target over the Reversion time. It holds it at most at the edge of the [NetFlowPlugin](net-flow-plugin.md)'s default price band, 5 % to 3 times the equilibrium price: a player who dumps or pumps the price beyond that band sees the bot bring it back to the band edge, and the slow return starts from there.
+- After a player trade the bot holds the price near the level the player pushed it to and lets it return to the target over the Reversion time. Further trades in the same direction do not restart that return, so steady selling or buying is still pulled back towards the target. The bot holds the price at most at the edge of its band, 25 % to 3 times the [NetFlowPlugin](net-flow-plugin.md)'s equilibrium price: a player who dumps or pumps the price beyond that band sees the bot bring it back to the band edge, and the slow return starts from there.
 - Only works on markets whose virtual order book is enabled.
 
 ## Settings Overview
