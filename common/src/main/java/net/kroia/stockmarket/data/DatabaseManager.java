@@ -73,7 +73,7 @@ public class DatabaseManager {
     private static final StackWalker SUBMITTER = StackWalker.getInstance();
 
     /** db-worker jobs running at least this long log one WARN line. */
-    private static final long SLOW_JOB_NANOS = TimeUnit.SECONDS.toNanos(1);
+    public static final long SLOW_JOB_NANOS = TimeUnit.SECONDS.toNanos(1);
 
     /**
      * SM-307: wraps a db-worker job, times it with {@link System#nanoTime()} and logs one WARN line when it runs
@@ -82,6 +82,9 @@ public class DatabaseManager {
      * @param job    the queued job (a FutureTask, CompletableFuture task or plain lambda)
      * @param origin the frame that submitted it, or {@code null} if none was found
      */
+    /** SM-307: a db-worker job that logs its own, more detailed slow-run WARN, so {@link TimedJob} skips its generic one. */
+    public interface SelfTimedJob extends Runnable {}
+
     private record TimedJob(Runnable job, StackWalker.StackFrame origin) implements Runnable {
         @Override
         public void run() {
@@ -91,7 +94,7 @@ public class DatabaseManager {
             } finally {
                 long took = System.nanoTime() - start;
                 // The backup pause parks the worker on purpose (BS backup tests hit it in every cell): not a slow job.
-                if (took > SLOW_JOB_NANOS && !isBackupPause())
+                if (took > SLOW_JOB_NANOS && !isBackupPause() && !(job instanceof SelfTimedJob))
                     StockMarketMod.LOGGER.warn("[StockMarket] slow db-worker job: {} ms, submitted at {}",
                             TimeUnit.NANOSECONDS.toMillis(took), origin != null ? origin : job);
             }

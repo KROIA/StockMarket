@@ -62,7 +62,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
         synchronized (this) {
             if (openBatch == null) {
                 Batch batch = new Batch();
-                databaseManager.getDatabaseThread().execute(() -> writeBatch(batch)); // throws if closed: stays null
+                databaseManager.getDatabaseThread().execute((DatabaseManager.SelfTimedJob) () -> writeBatch(batch)); // throws if closed: stays null
                 openBatch = batch;
             }
             // Under the lock, so the job cannot take the records before this one is in.
@@ -82,6 +82,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
      * @param batch the batch to write
      */
     private void writeBatch(Batch batch) {
+        long start = System.nanoTime();
         List<OrderRecordStruct> records;
         synchronized (this) {
             if (openBatch == batch)
@@ -91,7 +92,13 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
         try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(INSERT)) {
             records.forEach(d -> queueRecord(preparedStatement, d));
             preparedStatement.executeBatch();
+            long inserted = System.nanoTime();
             databaseManager.commitTransaction();
+            long committed = System.nanoTime();
+            // SM-307: tells a large batch (insert) apart from a slow journal/fsync (commit).
+            if (committed - start > DatabaseManager.SLOW_JOB_NANOS)
+                StockMarketMod.LOGGER.warn("[StockMarket] slow order-record batch: {} records, insert {} ms, commit {} ms",
+                        records.size(), (inserted - start) / 1_000_000, (committed - inserted) / 1_000_000);
             batch.done.complete(null);
         } catch (SQLException | RuntimeException e) {
             // Production callers ignore the future, so log here: a failed batch loses all of its records.
