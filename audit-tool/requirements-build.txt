@@ -1,2 +1,0 @@
-# Build-time only (the tool itself is stdlib-only). Installed into audit-tool/.venv by build.py.
-pyinstaller==6.22.3
