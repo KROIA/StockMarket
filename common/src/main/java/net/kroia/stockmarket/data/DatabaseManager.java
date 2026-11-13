@@ -59,7 +59,55 @@ public class DatabaseManager {
                         "db-worker is shut down, rejected job " + job);
                 StockMarketMod.LOGGER.error("[StockMarket] Database job submitted after close() was rejected: {}", job, e);
                 throw e;
-            });
+            }) {
+        /** SM-307: every job enters here (submit, CompletableFuture.*Async, execute), so it is timed once. */
+        @Override
+        public void execute(Runnable job) {
+            super.execute(new TimedJob(job, SUBMITTER.walk(frames -> frames.skip(1)
+                    .filter(f -> !f.getClassName().startsWith("java."))
+                    .findFirst().orElse(null))));
+        }
+    };
+
+    /** Captures the first non-JDK frame that submitted a db-worker job (the job's origin for the slow-job WARN). */
+    private static final StackWalker SUBMITTER = StackWalker.getInstance();
+
+    /** db-worker jobs running at least this long log one WARN line. */
+    private static final long SLOW_JOB_NANOS = TimeUnit.SECONDS.toNanos(1);
+
+    /**
+     * SM-307: wraps a db-worker job, times it with {@link System#nanoTime()} and logs one WARN line when it runs
+     * longer than {@link #SLOW_JOB_NANOS}. Always on; costs one stack walk per submit and one clock read per run.
+     *
+     * @param job    the queued job (a FutureTask, CompletableFuture task or plain lambda)
+     * @param origin the frame that submitted it, or {@code null} if none was found
+     */
+    private record TimedJob(Runnable job, StackWalker.StackFrame origin) implements Runnable {
+        @Override
+        public void run() {
+            long start = System.nanoTime();
+            try {
+                job.run();
+            } finally {
+                long took = System.nanoTime() - start;
+                // The backup pause parks the worker on purpose (BS backup tests hit it in every cell): not a slow job.
+                if (took > SLOW_JOB_NANOS && !isBackupPause())
+                    StockMarketMod.LOGGER.warn("[StockMarket] slow db-worker job: {} ms, submitted at {}",
+                            TimeUnit.NANOSECONDS.toMillis(took), origin != null ? origin : job);
+            }
+        }
+
+        /** @return true if this job was submitted by {@link DatabaseManager#pauseForBackup(long)} */
+        private boolean isBackupPause() {
+            return origin != null && origin.getMethodName().equals("pauseForBackup")
+                    && origin.getClassName().equals(DatabaseManager.class.getName());
+        }
+
+        @Override
+        public String toString() {
+            return job + " submitted at " + origin;
+        }
+    }
 
     /**
      * How long {@link #close()} waits for queued db-worker jobs to finish before forcing

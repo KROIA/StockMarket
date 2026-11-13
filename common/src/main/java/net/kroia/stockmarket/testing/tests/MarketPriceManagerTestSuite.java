@@ -111,7 +111,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             // mapRow may throw NPE before reaching the try/catch
             return pass("mapRow throws NPE on null ResultSet (not wrapped in try/catch for null input)");
         } catch (Exception e) {
-            return fail("Unexpected exception: " + e.getMessage());
+            return fail("Unexpected exception: " + e.toString());
         }
     }
 
@@ -134,7 +134,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             }
             return pass("Query result list does not contain nulls (null check in place)");
         } catch (Exception e) {
-            return fail("Exception: " + e.getMessage());
+            return fail("Exception: " + e.toString());
         }
     }
 
@@ -165,7 +165,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return pass("queueRecord sets all 5 fields correctly and data is retrievable");
         } catch (Exception e) {
-            return fail("Exception: " + e.getMessage());
+            return fail("Exception: " + e.toString());
         } finally {
             purgeScratchRows(SCRATCH_MARKET_ID_A);
         }
@@ -186,7 +186,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             // Should not throw - verifies date filter SQL is valid
             return pass("Query with date filter only executes without error, returned " + results.size() + " records");
         } catch (Exception e) {
-            return fail("Exception: " + e.getMessage());
+            return fail("Exception: " + e.toString());
         }
     }
 
@@ -203,7 +203,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
 
             return pass("Query with market filter only executes without error, returned " + results.size() + " records");
         } catch (Exception e) {
-            return fail("Exception: " + e.getMessage());
+            return fail("Exception: " + e.toString());
         }
     }
 
@@ -222,7 +222,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
 
             return pass("Query with both date AND market filter executes without error, returned " + results.size() + " records");
         } catch (Exception e) {
-            return fail("Exception: " + e.getMessage());
+            return fail("Exception: " + e.toString());
         }
     }
 
@@ -237,7 +237,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
 
             return pass("Query with no filters executes without error, returned " + results.size() + " records");
         } catch (Exception e) {
-            return fail("Exception: " + e.getMessage());
+            return fail("Exception: " + e.toString());
         }
     }
 
@@ -262,7 +262,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return pass("LIMIT clause correctly applied, returned " + results.size() + " records");
         } catch (Exception e) {
-            return fail("Exception: " + e.getMessage());
+            return fail("Exception: " + e.toString());
         } finally {
             purgeScratchRows(SCRATCH_MARKET_ID_B);
         }
@@ -281,7 +281,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             // Should not throw and can return any number of results
             return pass("Zero limit executes without LIMIT clause, returned " + results.size() + " records");
         } catch (Exception e) {
-            return fail("Exception: " + e.getMessage());
+            return fail("Exception: " + e.toString());
         }
     }
 
@@ -301,7 +301,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             }
             return pass("PreparedStatements properly managed via try-with-resources (Issue #37 documented)");
         } catch (Exception e) {
-            return fail("Exception during repeated queries (possible resource leak): " + e.getMessage());
+            return fail("Exception during repeated queries (possible resource leak): " + e.toString());
         }
     }
 
@@ -364,7 +364,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return assertEquals("6-arg struct stores NO_GAME_TIME", MarketPriceStruct.NO_GAME_TIME, rows.get(2).gameTime());
         } catch (Exception e) {
-            return fail("Exception: " + e);
+            return fail("Exception: " + e.toString());
         }
     }
 
@@ -380,7 +380,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return assertEquals("legacy volume intact", 2.5f, rows.get(0).tradedVolume());
         } catch (Exception e) {
-            return fail("Exception: " + e);
+            return fail("Exception: " + e.toString());
         }
     }
 
@@ -400,7 +400,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return assertEquals("legacy row keeps NO_GAME_TIME", MarketPriceStruct.NO_GAME_TIME, rows.get(0).gameTime());
         } catch (Exception e) {
-            return fail("Exception: " + e);
+            return fail("Exception: " + e.toString());
         }
     }
 }
