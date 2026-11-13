@@ -220,4 +220,7 @@ public class StockMarketTestCategories {
     public static final TestCategory DOCUMENTATION = new TestCategory("stockmarket", "sm_docs", "SM-276: relative links, images and anchors in README.md and documentation/ resolve; plugin SVGs are well-formed with a size (offline)", BOTH, false);
     // BS-269: the master-side fixture hooks (FixtureTestRequest), driven from a trusted slave.
     public static final TestCategory FIXTURE_HOOKS = new TestCategory("stockmarket", "sm_fixture_hooks", "BS-269: a trusted slave makes the master change a market setting and restore it, place a bot order, detach plugins, backfill candles and read back a filled order", SLAVE_ONLY, true);
+
+    // BS-269: opt-in driver of the generated audit fixture (slave-trusted cell, run only with --only).
+    public static final TestCategory AUDIT_FIXTURE = new TestCategory("stockmarket", "sm_audit_fixture", "BS-269 (opt-in): drives the whole audit-fixture story from a trusted slave and adds the StockMarket market cases B1-B8 and the market part of story E to the answer key", SLAVE_ONLY, true);
 }
