@@ -2477,9 +2477,9 @@ public class PluginTestSuite extends TestSuite {
     private static void t208Write(String stage) throws java.io.IOException {
         java.nio.file.Path dir = t208Dir();
         List<java.util.Map<String, Object>> rows = T208_ROWS.getOrDefault(stage, List.of());
-        java.nio.file.Files.writeString(dir.resolve(stage + "_rows.csv"), toCsv(rows));
+        t208WriteFile(dir.resolve(stage + "_rows.csv"), toCsv(rows));
         List<java.util.Map<String, Object>> cps = T208_CHECKPOINTS.get(stage);
-        if (cps != null) java.nio.file.Files.writeString(dir.resolve(stage + "_checkpoints.csv"), toCsv(cps));
+        if (cps != null) t208WriteFile(dir.resolve(stage + "_checkpoints.csv"), toCsv(cps));
         long ticks = 0;
         double wall = 0, maxExploit = Double.NEGATIVE_INFINITY;
         int exploitRows = 0;
@@ -2510,7 +2510,52 @@ public class PluginTestSuite extends TestSuite {
                 """, stage, tests.size(), rows.size(), ticks, wall, wall > 0 ? ticks / wall : 0, exploitRows,
                 exploitRows > 0 ? String.format(Locale.ROOT, "%.4f", maxExploit) : "null", maxExploit <= 0,
                 stage, cps != null ? "\"" + stage + "_checkpoints.csv\"" : "null");
-        java.nio.file.Files.writeString(dir.resolve(stage + "_summary.json"), json);
+        t208WriteFile(dir.resolve(stage + "_summary.json"), json);
+    }
+
+    /**
+     * SM-321: writes a T-208 report file through a temp file in the same folder and a move into place, with 3 tries
+     * 200 ms apart (Windows: an editor, indexer or antivirus can hold the target open or memory-mapped). The files
+     * are diagnostics that no assertion reads back, so a final failure only logs a warning.
+     *
+     * @param target  the report file
+     * @param content its full text
+     * @return true if the file was written
+     */
+    private static boolean t208WriteFile(java.nio.file.Path target, String content) {
+        java.nio.file.Path tmp = null;
+        for (int attempt = 1; ; attempt++) {
+            try {
+                if (tmp == null) tmp = java.nio.file.Files.createTempFile(target.getParent(), target.getFileName() + ".", ".tmp");
+                java.nio.file.Files.writeString(tmp, content);
+                try {
+                    java.nio.file.Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                            java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                    java.nio.file.Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                return true;
+            } catch (java.io.IOException e) {
+                boolean last = attempt >= 3;
+                if (!last) {
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        last = true;
+                    }
+                }
+                if (last) {
+                    StockMarketMod.LOGGER.warn("[T-208] could not write {} after {} tries: {}", target, attempt, e.toString());
+                    try {
+                        if (tmp != null) java.nio.file.Files.deleteIfExists(tmp);
+                    } catch (java.io.IOException ignored) {
+                        // a leftover .tmp is harmless
+                    }
+                    return false;
+                }
+            }
+        }
     }
 
     /** CSV of rows with the union of their keys as the header (missing cells empty). */
@@ -2651,7 +2696,9 @@ public class PluginTestSuite extends TestSuite {
                 for (int i = 0; i < r.profit().length; i++) csv.append(",p").append(i + 1).append("_items");
                 csv.append('\n').append(body);
             }
-            java.nio.file.Files.writeString(t208Dir().resolve("chart_" + chart + ".csv"), csv.toString());
+            // the chart file is this test's whole output, so a failed write fails the test
+            if (!t208WriteFile(t208Dir().resolve("chart_" + chart + ".csv"), csv.toString()))
+                return fail("could not write chart_" + chart + ".csv (see log)");
             return pass("chart_" + chart + ".csv" + (lastLine != null ? lastLine : ""));
         } catch (Exception e) {
             return fail("Exception: " + e);
