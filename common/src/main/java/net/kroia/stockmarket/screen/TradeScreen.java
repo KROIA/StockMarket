@@ -1544,9 +1544,7 @@ public class TradeScreen extends StockMarketGuiScreen {
      * @param result the server response for the create-order request
      */
     private void logOrderResult(CreateOrderRequest.OutputData result) {
-        if (result.status == CreateOrderRequest.Status.CREATED) {
-            info("Order created");
-        } else {
+        if (result.status != CreateOrderRequest.Status.CREATED) {
             warn("Order rejected: " + result.status);
             // Tell the player why: the market is outside its trading hours.
             if (result.status == CreateOrderRequest.Status.MARKET_CLOSED)
@@ -1661,7 +1659,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .whenComplete((result, error) -> {
                     if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
-                    info("Inter-market buy: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
                 });
@@ -1680,7 +1677,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .whenComplete((result, error) -> {
                     if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
-                    info("Inter-market sell: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
                 });
@@ -1703,7 +1699,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .whenComplete((result, error) -> {
                     if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
-                    info("Inter-market buy limit: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
                 });
@@ -1724,7 +1719,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .whenComplete((result, error) -> {
                     if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
-                    info("Inter-market sell limit: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
                 });

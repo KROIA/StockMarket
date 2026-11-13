@@ -350,7 +350,6 @@ public class PresetEditorTab extends StockMarketGuiElement {
                     categoryModified = false;
                     buildCategoryButtons();
                     rebuildItemGrid();
-                    info("Deleted category: " + toDelete);
                 } else {
                     warn("Failed to delete category: " + toDelete);
                 }
@@ -375,7 +374,6 @@ public class PresetEditorTab extends StockMarketGuiElement {
                         if (cat != null) cat.setCategory(name);
                         selectedCategory = name;
                         buildCategoryButtons();
-                        info("Renamed category to: " + name);
                     } else {
                         warn("Failed to rename category");
                     }
@@ -393,7 +391,6 @@ public class PresetEditorTab extends StockMarketGuiElement {
                         categoryModified = false;
                         buildCategoryButtons();
                         rebuildItemGrid();
-                        info("Created category: " + name);
                     } else {
                         warn("Failed to create category");
                     }
@@ -727,7 +724,6 @@ public class PresetEditorTab extends StockMarketGuiElement {
                 if (success) {
                     editedPresets.clear();
                     categoryModified = false;
-                    info(Texts.SAVED_OK.getString());
                 } else {
                     warn(Texts.SAVE_FAILED.getString());
                 }

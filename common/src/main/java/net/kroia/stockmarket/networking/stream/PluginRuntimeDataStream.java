@@ -85,7 +85,6 @@ public class PluginRuntimeDataStream extends StockMarketGenericStream<UUID, Plug
 
     @Override
     public void onStopStreamSendingOnServer() {
-        info("PluginRuntimeDataStream stopped for plugin: " + pluginInstanceID);
     }
 
     @Override

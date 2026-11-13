@@ -191,7 +191,6 @@ public class ClientMarketManager implements IClientMarketManager
             {
                 if(response == null) // not sent; must not be read as "the server has no markets" (that prunes all)
                     throw new IllegalStateException("Markets request could not be sent");
-                info("Markets request response received with "+response.size()+" markets");
                 boolean added = false;
                 for(ItemID itemID : response) {
                     added |= createClientMarket(itemID, factor);
@@ -204,7 +203,6 @@ public class ClientMarketManager implements IClientMarketManager
                         .filter(cached -> !response.contains(cached))
                         .toList();
                 for(ItemID staleID : staleMarkets) {
-                    info("Removing stale ClientMarket (no longer on server): " + staleID);
                     onMarketRemoved(staleID);
                 }
                 // SM-304: a screen opened before this answer (e.g. the TradeScreen whose constructor
@@ -251,7 +249,6 @@ public class ClientMarketManager implements IClientMarketManager
     {
         return asyncMarketManager.createMarketAsync(itemID).thenCompose(market -> {
             if (market != null) {
-                info("Market created on server for: " + itemID);
                 return factorRead.get().handle((factor, failure) -> {
                     if (failure != null)
                         warn("Market " + itemID + " was created, but reading the item fraction scale factor failed ("
@@ -277,7 +274,6 @@ public class ClientMarketManager implements IClientMarketManager
     {
         return asyncMarketManager.deleteMarketAsync(marketID).thenApply(success -> {
             if (success) {
-                info("Market deleted on server for: " + marketID);
                 // Remove the local client market, its stream subscription and any
                 // cross-rate markets referencing it. The server additionally broadcasts
                 // a MarketChangedPacket REMOVED to all clients (including this one) — the
@@ -312,7 +308,6 @@ public class ClientMarketManager implements IClientMarketManager
             // Stop the price stream even if GUI elements are still subscribed —
             // the server-side market is gone, the stream can never deliver again.
             removedMarket.forceStopMarketPriceStream();
-            info("Removed ClientMarket for deleted market: " + marketID);
         }
         // Cross-rate markets derived from the deleted market are now dead as well.
         crossRateMarkets.entrySet().removeIf(entry ->
@@ -403,14 +398,9 @@ public class ClientMarketManager implements IClientMarketManager
                 // — the CandlestickChart's selectCandleTimeDeltaByIndex fires
                 // a single-delta request on first view / delta switch when its
                 // cache is empty (see T-136).
-                info("Created ClientMarket with ID: " + itemID);
                 return true;
             }
-            else
-            {
-                // Expected on a slave without the item's mod, so not an error
-                info("No ClientMarket for " + itemID + ": its item cannot be resolved here");
-            }
+            // else: expected on a slave without the item's mod, not an error
         }
         return false;
     }

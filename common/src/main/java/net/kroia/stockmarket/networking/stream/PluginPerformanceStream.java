@@ -68,7 +68,6 @@ public class PluginPerformanceStream extends StockMarketGenericStream<Byte, Plug
 
     @Override
     public void onStopStreamSendingOnServer() {
-        info("PluginPerformanceStream stopped");
     }
 
     @Override

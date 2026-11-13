@@ -525,7 +525,6 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
                 new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, startTime, endTime, 0, candleUseGameTime);
         BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(input).thenAccept((historyData) ->
         {
-            info("Initial price window received for: " + itemID + " delta=" + candleDeltaMs);
             applyHistoryResponse(candleDeltaMs, historyData);
         });
     }
@@ -722,9 +721,6 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
             if (serverOldest != PriceHistoryCache.SERVER_OLDEST_UNKNOWN
                     && serverOldest != PriceHistoryData.NO_OLDER_DATA)
             {
-                info("Initial window empty for delta=" + candleDeltaMs
-                        + "; server reports oldest at " + serverOldest
-                        + " — firing bootstrap follow-up.");
                 // Fire-and-forget; the response will re-enter applyHistoryResponse.
                 requestOlderWindow(candleDeltaMs, Long.MAX_VALUE);
             }
@@ -756,7 +752,6 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         },()->
         {
             // Stream stopped
-            info("MARKET_PRICE_STREAM stopped for itemID: "+itemID);
             marketPriceUpdateStreamID  = null;
             tradingStatus = null; // stale once the stream is gone
         });

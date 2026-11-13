@@ -80,7 +80,6 @@ public class ActiveOrdersStream extends StockMarketGenericStream<Byte, ActiveOrd
 
     @Override
     public void onStopStreamSendingOnServer() {
-        info("ActiveOrdersStream stopped for player: " + playerUUID);
     }
 
     @Override

@@ -99,7 +99,6 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
         if(needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender))
             return CompletableFuture.completedFuture(new PriceHistoryData(System.currentTimeMillis() , input.item, getItemFractionScaleFactor()));
         CompletableFuture<PriceHistoryData> future = new CompletableFuture<>();
-        info("MarketPriceHistoryRequest started for item: " + input);
         // [HistoryPerf] timing: t0 = request accepted, DB = until both queries finished
         // (includes waiting in the single-thread DB executor queue).
         final long perfT0 = System.nanoTime();

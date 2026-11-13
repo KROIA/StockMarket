@@ -132,11 +132,9 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
     @Override
     public void onStartStreamSendingOnSever() {
         itemID = getContextData();
-        //info("MarketPriceStream started for item: " + itemID);
     }
     @Override
     public void onStopStreamSendingOnServer() {
-        info("MarketPriceStream ended for item: " + itemID);
     }
 
     @Override
@@ -206,7 +204,6 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
 
     @Override
     public ResponseData provideStreamPacketOnServer() {
-        //info("MarketPriceStream provided for item: " + itemID + " price: " + lastPrice.marketPrice);
         return lastPrice;
     }
 
