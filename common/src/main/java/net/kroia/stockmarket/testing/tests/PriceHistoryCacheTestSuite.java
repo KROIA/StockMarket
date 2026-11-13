@@ -21,6 +21,7 @@ import net.kroia.stockmarket.testing.ClientThread;
 import net.kroia.stockmarket.testing.PacketTap;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.PriceHistoryData;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.PriceHistoryData.Candle;
 
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -397,17 +398,36 @@ public class PriceHistoryCacheTestSuite extends TestSuite
         return await(ClientThread.submit(task), CLIENT_WAIT_MS);
     }
 
-    /** @return a market the client has cached, or null (client thread) */
-    private static @Nullable ClientMarket anyClientMarket()
+    /**
+     * @return a market the client has cached that this server can show and that still exists on the master, or null.
+     * SM-320: the client can keep a stale ClientMarket after the master's test fixtures deleted a temporary market;
+     * such a market is hidden on a slave (or gone on the master), so the panels show no rows for it.
+     */
+    private @Nullable ClientMarket anyClientMarket()
+    {
+        List<ClientMarket> visible = onClient(PriceHistoryCacheTestSuite::visibleClientMarkets);
+        StockMarketModBackend.ServerInstances srv = StockMarketModBackend.getServerInstances();
+        if (srv == null || srv.MARKET_MANAGER == null)
+            return null;
+        // test thread, not the client thread: await keeps the server ticking while a slave asks the master
+        for (ClientMarket market : visible)
+            if (Boolean.TRUE.equals(await(srv.MARKET_MANAGER.getAsync().marketExistsAsync(market.getItemID()), CLIENT_WAIT_MS)))
+                return market;
+        return null;
+    }
+
+    /** @return the client's cached markets that this server may show ({@link StockMarketGuiElement#isMarketVisible}) (client thread) */
+    private static List<ClientMarket> visibleClientMarkets()
     {
         IClientMarketManager manager = StockMarketModBackend.getClientInstances().MARKET_MANAGER;
+        List<ClientMarket> markets = new ArrayList<>();
         for (ItemID id : manager.getAvailableMarkets())
         {
             ClientMarket market = manager.getMarket(id);
-            if (market != null)
-                return market;
+            if (market != null && StockMarketGuiElement.isMarketVisible(id))
+                markets.add(market);
         }
-        return null;
+        return markets;
     }
 
     /**
@@ -426,9 +446,9 @@ public class PriceHistoryCacheTestSuite extends TestSuite
         for (long d : deltas)
             if (Arrays.stream(available).noneMatch(a -> a == d))
                 return skip("game-time candles active, real-time deltas not in use");
-        ClientMarket market = onClient(PriceHistoryCacheTestSuite::anyClientMarket);
+        ClientMarket market = anyClientMarket();
         if (market == null)
-            return skip("the client has no market cached");
+            return skip("the client has no live market this server can show");
 
         MinecraftServer server = getServer();
         ServerPlayer player = server.getPlayerList().getPlayers().get(0);
@@ -513,9 +533,9 @@ public class PriceHistoryCacheTestSuite extends TestSuite
     {
         TestResult s = skipUnlessSp();
         if (s != null) return s;
-        ClientMarket market = onClient(PriceHistoryCacheTestSuite::anyClientMarket);
+        ClientMarket market = anyClientMarket();
         if (market == null)
-            return skip("the client has no market cached");
+            return skip("the client has no live market this server can show");
         short item = market.getItemID().getShort();
         return onClient(() -> {
             OrderHistoryPanel orders = new OrderHistoryPanel();
