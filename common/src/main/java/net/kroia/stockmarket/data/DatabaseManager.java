@@ -114,9 +114,16 @@ public class DatabaseManager {
 
     /**
      * How long {@link #close()} waits for queued db-worker jobs to finish before forcing
-     * the executor down.
+     * the executor down. SM-323: generous, because a slow disk or antivirus can make each
+     * commit take seconds and every queued job is a write that would be lost.
      */
-    private static final long CLOSE_DRAIN_TIMEOUT_SECONDS = 10;
+    private static final long CLOSE_DRAIN_TIMEOUT_SECONDS = 60;
+
+    /**
+     * SM-307: how long a statement waits for a lock held by another connection (an external
+     * SQLite browser or backup tool) before failing with SQLITE_BUSY.
+     */
+    private static final int BUSY_TIMEOUT_MS = 5_000;
 
 
     public static final Path DATABASE_PATH = DataManager.SQL_DATABASE;
@@ -257,6 +264,23 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Opens {@value #FILE_NAME} in the world's database folder and creates/migrates its tables.
+     * <p>
+     * SM-307: the connection uses WAL journal mode, {@code synchronous=NORMAL} and a
+     * {@link #BUSY_TIMEOUT_MS} busy timeout (same settings as BankSystem's DiagnosticsDatabase).
+     * The SQLite default (rollback journal DELETE + synchronous FULL) creates and deletes
+     * {@code stockdata.db-journal} and fsyncs several times on every commit, which made commits
+     * take seconds on machines whose antivirus scans each new file. WAL appends to one
+     * long-lived {@code -wal} file instead. The database is then three files on disk
+     * ({@code .db}, {@code -wal}, {@code -shm}); {@link #close()} and
+     * {@link #pauseForBackup(long)} checkpoint the WAL so the {@code .db} alone is complete.
+     * The PRAGMAs are passed as connection properties, which sqlite-jdbc applies at open,
+     * before {@code setAutoCommit(false)} starts a transaction (journal_mode cannot change
+     * inside one). The resulting journal mode is logged once at INFO.
+     *
+     * @param server the running server, used to resolve the world folder
+     */
     public void connectToDatabase(MinecraftServer server){
 
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
@@ -295,7 +319,16 @@ public class DatabaseManager {
             if(!Files.exists(dbPath.toAbsolutePath())){
                 Files.createDirectories(dbPath.toAbsolutePath());
             }
-            connection = DriverManager.getConnection(url);
+            java.util.Properties props = new java.util.Properties(); // sqlite-jdbc SQLiteConfig keys, applied at open
+            props.setProperty("journal_mode", "WAL");
+            props.setProperty("synchronous", "NORMAL");
+            props.setProperty("busy_timeout", Integer.toString(BUSY_TIMEOUT_MS));
+            connection = DriverManager.getConnection(url, props);
+            // Still in auto-commit here: read back the mode SQLite actually uses (it keeps the old
+            // one, e.g. on a file system without shared-memory support).
+            try (Statement st = connection.createStatement(); ResultSet rs = st.executeQuery("PRAGMA journal_mode")) {
+                StockMarketMod.LOGGER.info("[StockMarket] {} journal_mode={}", FILE_NAME, rs.next() ? rs.getString(1) : "unknown");
+            }
             connection.setAutoCommit(false);
         } catch (SQLException e) {
             StockMarketMod.LOGGER.error("Failed to connect to database {}", e.getMessage());
@@ -322,45 +355,94 @@ public class DatabaseManager {
      *   <li>A parked {@link #pauseForBackup(long) backup pause} is released, otherwise
      *       the drain would hang until the pause safety timeout.</li>
      *   <li>{@code shutdown()} stops accepting new jobs; later submits are rejected.</li>
-     *   <li>Queued jobs are awaited for {@link #CLOSE_DRAIN_TIMEOUT_SECONDS}. When called
+     *   <li>SM-323: the queue is drained until it is empty, capped at
+     *       {@link #CLOSE_DRAIN_TIMEOUT_SECONDS}. Only if that cap is hit is the executor
+     *       forced down, with a WARN naming how many queued jobs were dropped. When called
      *       from the db-worker itself, awaiting would wait on our own thread, so the
      *       remaining queue is run inline instead.</li>
-     *   <li>The connection is committed and closed.</li>
+     *   <li>The connection is committed, the WAL is checkpointed into {@value #FILE_NAME}
+     *       with {@code TRUNCATE} (so the {@code .db} alone is complete for anyone copying
+     *       the world after the stop), and the connection is closed. The checkpoint runs only
+     *       once no db-worker job can still be running.</li>
      * </ol>
      */
     public void close(){
         resumeFromBackup();
         executor.shutdown();
 
+        boolean workerDone; // true once no db-worker job can run concurrently with the checkpoint below
         if (Thread.currentThread() == workerThread) {
             // Called from inside a db-worker job: run what is still queued inline so it
             // executes before the connection closes, without waiting on ourselves.
             List<Runnable> remaining = new ArrayList<>();
             executor.getQueue().drainTo(remaining);
             remaining.forEach(Runnable::run);
+            workerDone = true; // we are the worker
         } else {
             try {
                 if (!executor.awaitTermination(CLOSE_DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    StockMarketMod.LOGGER.error("[StockMarket] db-worker did not finish its queued jobs within {}s, forcing shutdown; pending database writes may be lost",
-                            CLOSE_DRAIN_TIMEOUT_SECONDS);
-                    executor.shutdownNow();
+                    List<Runnable> dropped = executor.shutdownNow();
+                    StockMarketMod.LOGGER.warn("[StockMarket] db-worker did not finish its queued jobs within {}s, forcing shutdown; {} queued database job(s) dropped, the running one interrupted",
+                            CLOSE_DRAIN_TIMEOUT_SECONDS, dropped.size());
                     executor.awaitTermination(1, TimeUnit.SECONDS);
                 }
             } catch (InterruptedException e) {
-                executor.shutdownNow();
+                List<Runnable> dropped = executor.shutdownNow();
+                StockMarketMod.LOGGER.warn("[StockMarket] close() interrupted while draining the db-worker; {} queued database job(s) dropped",
+                        dropped.size());
                 Thread.currentThread().interrupt();
             }
+            workerDone = executor.isTerminated();
         }
 
         try{
             if(connection != null && !connection.isClosed()) {
                 connection.commit();
+                if (workerDone)
+                    checkpointWal("at close");
                 connection.close();
                 StockMarketMod.LOGGER.info("Successfully closed database connection");
             }
         }
         catch (SQLException e) {
             StockMarketMod.LOGGER.error("Failed to close database connection {}",  e.getMessage());
+        }
+    }
+
+    /**
+     * SM-307: copies every committed page from {@code stockdata.db-wal} back into
+     * {@value #FILE_NAME} and truncates the {@code -wal} file to 0 bytes, so the {@code .db}
+     * file alone is a complete database (file-level backups, copies of a stopped world).
+     * <p>
+     * Must run on the db-worker or after it has terminated, never concurrently with it.
+     * The checkpoint must run outside a transaction, so pending work is committed and
+     * auto-commit is switched on for it, then off again (same as BankSystem's
+     * DiagnosticsDatabase close). Failures and an incomplete checkpoint (another connection,
+     * e.g. an SQLite browser, still reading) are logged at WARN, never thrown.
+     *
+     * @param when short context for the log line, e.g. "at close"
+     */
+    private void checkpointWal(String when) {
+        Connection c = connection;
+        try {
+            if (c == null || c.isClosed())
+                return;
+            boolean wasInTransaction = !c.getAutoCommit();
+            if (wasInTransaction) {
+                c.commit();
+                c.setAutoCommit(true);
+            }
+            try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery("PRAGMA wal_checkpoint(TRUNCATE)")) {
+                // Columns: busy (1 = could not finish), WAL frames, frames checkpointed.
+                if (rs.next() && rs.getInt(1) != 0)
+                    StockMarketMod.LOGGER.warn("[StockMarket] WAL checkpoint of {} {} incomplete: another connection still uses the file",
+                            FILE_NAME, when);
+            } finally {
+                if (wasInTransaction)
+                    c.setAutoCommit(false);
+            }
+        } catch (SQLException e) {
+            StockMarketMod.LOGGER.warn("[StockMarket] WAL checkpoint of {} {} failed: {}", FILE_NAME, when, e.getMessage());
         }
     }
 
@@ -397,9 +479,11 @@ public class DatabaseManager {
     }
 
     /**
-     * Submits a "commit + park" job to the single-thread {@code db-worker} executor so an
+     * Submits a "commit + checkpoint + park" job to the single-thread {@code db-worker} executor so an
      * external filesystem backup (e.g. {@code tar} of the world directory) can capture a
      * consistent snapshot of the SQLite files without racing an in-flight commit.
+     * SM-307: before the ack the job runs a {@code TRUNCATE} WAL checkpoint, so during the
+     * pause {@value #FILE_NAME} alone holds every committed write and the {@code -wal} file is empty.
      * <p>
      * Because the worker is single-threaded, any writes queued before this call complete
      * first — the worker drains them. Only once the pause job becomes the currently-running
@@ -441,6 +525,9 @@ public class DatabaseManager {
                 } catch (SQLException e) {
                     StockMarketMod.LOGGER.error("[StockMarket] db-worker pause commit failed: {}", e.getMessage());
                 }
+                // SM-307: in WAL mode committed pages may still sit in stockdata.db-wal; move them
+                // into the .db before the ack, so a backup that copies only stockdata.db is complete.
+                checkpointWal("before backup pause");
                 // Distinctive ack line — backup scripts grep for this exact string.
                 StockMarketMod.LOGGER.info("[StockMarket] db-worker paused for backup");
                 boolean released;

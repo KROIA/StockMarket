@@ -250,6 +250,7 @@ StockMarket keeps price candles, order history and other trade data in an SQLite
 | `/stockmarket backup status` | Shows whether the writes are paused and for how many seconds. |
 
 * The commands need the permission `stockmarket.admin.command.backup` (operator level 2 without a permission mod) and only work on the master server. They work from the console, so a backup script can use them (for example through RCON).
+* While the server runs, two helper files `stockdata.db-wal` and `stockdata.db-shm` sit next to `stockdata.db`. During a backup pause, and after a clean server stop, `stockdata.db` alone is complete, because pending changes are written into it first. After a crash, keep the `-wal` file together with `stockdata.db`: it holds the latest changes.
 * A pause ends by itself after **120 seconds**, with a warning in the log, so a forgotten `resume` cannot stop the market data for good. Copy the database within that time.
 * Trading goes on during the pause. Saving to the database, and loading chart and order history (which also goes through the database queue), wait until it ends.
 * The [order origin record](#order-origin-record) `stockmarket_diagnostics.db` is not paused by these commands, and a restore does not need it.
