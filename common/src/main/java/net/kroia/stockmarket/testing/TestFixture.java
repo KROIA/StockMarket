@@ -403,6 +403,11 @@ public class TestFixture {
                 int counter = Math.max(ItemIDManager.getNextShortCounter_forTesting(), snapshot.counter());
                 ItemIDManager.replaceState_forTesting(snapshot.items(), snapshot.aliases(), counter);
                 ItemIDManager.restoreQuarantinedAliases_forTesting(snapshot.quarantined());
+                // BS-264/SM-320: the restore only changes the master's table. Slaves and players received each
+                // scratch ID when it was minted and would keep it, so a ClientMarket that outlived its REMOVED
+                // could still resolve its item and stay listed. A full sync drops the IDs the master no longer
+                // has (master only; a no-op elsewhere).
+                ItemIDManager.broadcastFullSync_forTesting();
             } catch (Throwable t) {
                 StockMarketMod.LOGGER.error("TestFixture[{}]: failed to restore the ItemID registry: {}", label, t.toString());
             }

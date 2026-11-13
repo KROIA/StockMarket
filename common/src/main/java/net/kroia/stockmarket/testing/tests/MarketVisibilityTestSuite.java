@@ -90,6 +90,7 @@ public class MarketVisibilityTestSuite extends TestSuite {
         addTest("master_still_lists_unresolvable_market", this::test_masterStillListsUnresolvableMarket);
         addTest("slave_portfolio_excludes_unresolvable_market", this::test_slavePortfolioExcludesUnresolvableMarket);
         addTest("client_adds_created_market_without_request", this::test_clientAddsCreatedMarketWithoutRequest);
+        addTest("client_drops_market_removed_while_add_pending", this::test_clientDropsMarketRemovedWhileAddPending);
         addTest("slave_commands_hide_unresolvable_market", this::test_slaveCommandsHideUnresolvableMarket);
         addTest("client_screen_gate_hides_unresolvable_market_on_slave", this::test_clientScreenGateHidesUnresolvableMarketOnSlave);
         addTest("request_results_leave_out_unresolvable_market_on_slave", this::test_requestResultsLeaveOutUnresolvableMarketOnSlave);
@@ -325,6 +326,31 @@ public class MarketVisibilityTestSuite extends TestSuite {
         } finally {
             MultiServerUtils.setUnresolvableForTesting(hidden, false);
         }
+    }
+
+    /**
+     * SM-320: ADDED waits for the item fraction scale factor read (a server round trip), REMOVED does not. A market
+     * created and deleted within that window (test fixtures do it in one tick) must not be listed once the read
+     * completes; a market whose ADDED was not cancelled still is.
+     */
+    private TestResult test_clientDropsMarketRemovedWhileAddPending() {
+        List<ItemID> items = twoResolvableItems();
+        if (items == null)
+            return skip("fewer than two resolvable items in the registry");
+        ItemID removed = items.get(0);
+        ItemID kept = items.get(1);
+        CompletableFuture<Integer> factor = new CompletableFuture<>();
+        AsyncMarketManager transport = AsyncMarketManager.createForTesting(input ->
+                CompletableFuture.completedFuture(AsyncMarketManager.OutputData.of(input.function, true)));
+        ClientMarketManager manager = ClientMarketManager.createForTesting(transport, () -> factor);
+        manager.onMarketChanged(removed, Kind.ADDED);
+        manager.onMarketChanged(kept, Kind.ADDED);
+        manager.onMarketChanged(removed, Kind.REMOVED);
+        factor.complete(1);
+        TestResult r = assertFalse("market removed while its ADDED was pending is not listed",
+                manager.getAvailableMarkets().contains(removed));
+        if (!r.passed()) return r;
+        return assertTrue("other pending market is listed", manager.getAvailableMarkets().contains(kept));
     }
 
     /**

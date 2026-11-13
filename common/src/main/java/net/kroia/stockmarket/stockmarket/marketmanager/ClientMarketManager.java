@@ -40,6 +40,14 @@ public class ClientMarketManager implements IClientMarketManager
 
     private final Map<ItemID, ClientMarket> clientMarkets = new HashMap<>();
 
+    /**
+     * SM-320: markets whose ADDED notice is waiting for the item fraction scale factor read (a server round trip).
+     * A REMOVED that arrives in that window finds no ClientMarket to drop, so it clears the entry here instead,
+     * and the late ADDED completion then does not create a ClientMarket for the already deleted market (it would
+     * stay listed until the next {@link #requestMarkets()}).
+     */
+    private final Set<ItemID> pendingAdds = new HashSet<>();
+
     /** Composite key for caching cross-rate market instances. */
     private record CrossRateKey(ItemID haveItemID, ItemID wantItemID) {}
 
@@ -323,16 +331,22 @@ public class ClientMarketManager implements IClientMarketManager
     public void onMarketChanged(ItemID marketID, MarketChangedPacket.Kind kind)
     {
         switch (kind) {
-            case ADDED -> factorRead.get().whenComplete((factor, failure) -> {
-                if (failure != null || factor == null) {
-                    warn("Market " + marketID + " was created on the server, but reading the item fraction scale factor failed ("
-                            + failure + "); the next market list request loads it");
-                    return;
-                }
-                if (createClientMarket(marketID, factor))
-                    marketsChangedListener.accept(kind, marketID);
-            });
+            case ADDED -> {
+                pendingAdds.add(marketID);
+                factorRead.get().whenComplete((factor, failure) -> {
+                    if (!pendingAdds.remove(marketID))
+                        return; // SM-320: REMOVED arrived while the read was pending; the market is gone
+                    if (failure != null || factor == null) {
+                        warn("Market " + marketID + " was created on the server, but reading the item fraction scale factor failed ("
+                                + failure + "); the next market list request loads it");
+                        return;
+                    }
+                    if (createClientMarket(marketID, factor))
+                        marketsChangedListener.accept(kind, marketID);
+                });
+            }
             case REMOVED -> {
+                pendingAdds.remove(marketID); // SM-320: cancels an ADDED still waiting for its factor read
                 onMarketRemoved(marketID);
                 marketsChangedListener.accept(kind, marketID);
             }
