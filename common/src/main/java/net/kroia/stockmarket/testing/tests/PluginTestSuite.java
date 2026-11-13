@@ -1950,14 +1950,39 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /**
-     * G3 timber supplier: one max-order market sell every 2 h for 5 days, then 2 idle days (compressed by c).
+     * SM-241: steady-state flow exponent g the G3 supplier is sized for ({@code g = F_ss / capacity}). Derivation
+     * (continuous model, times in days, τ_f = half-life / ln 2 = 0.361 d, τ_A = 2 d, anchor rate cap 0.1/d):
+     * the faded flow ramps as {@code F = g C (1 - e^(-t/τ_f))}, the flow exponent is {@code f = -F / C} and the
+     * anchor integrates {@code da/dt = f / τ_A} (cap not reached while {@code g / τ_A < 0.1}), so
+     * {@code ln p = a + f}. Averaged over day 1 that is {@code -0.79 g}, over day 5 {@code -3.07 g}:
+     * {@code ln(day5 / day1) ~ -2.28 g}. The gate's 0.9 needs g &gt;= 0.046; 0.07 expects day5/day1 ~0.85.
+     * The bot's lag behind the falling target scales with the selling rate in both days, so it about cancels in
+     * the ratio. The same model gives 0.9915 for the pre-SM-241 supplier (g 0.0036; measured 0.992).
+     * After the 2 idle days the flow has faded and the anchor (~-2.5 g) keeps ~0.73 of the day-5 log drop (needs 0.5).
+     */
+    private static final double T213_G3_FLOW_EXPONENT = 0.07;
+
+    /**
+     * G3 timber supplier: one max-order market sell every {@code every} ticks for 5 days, then 2 idle days (compressed
+     * by c). SM-241: {@code every} is derived from the market so the faded flow settles at
+     * {@link #T213_G3_FLOW_EXPONENT} x capacity: a steady sell rate r (items/tick) fades to {@code F_ss = r τ_f}
+     * ({@code τ_f} = half-life / ln 2 in ticks), so {@code every = maxOrder x τ_f / (g x capacity)}, capacity from
+     * the live {@link NetFlowPlugin#flowBand} (θ-capped by the default book, ~3.8M items at the diamond defaults:
+     * one max order every ~1,250 ticks compressed, ~7,500 full; before SM-241 one every 2 h sold only 192k items
+     * and ended at day5/day1 0.992).
      *
-     * @return {day-1 average price, day-5 average price, average price of the last idle hour, anchor at the end}
+     * @return {day-1 average price, day-5 average price, average price of the last idle hour, anchor at the end,
+     *         items sold}
      */
     private double[] t213Supplier(T213Anchor a, int c) {
         try (T207Env env = t213Env(a, c)) {
             env.items.setBalance(10_000_000L * env.sf);
-            int day = TICKS_PER_DAY / c, every = 2 * 72_000 / c, hour = 72_000 / c;
+            double capacity = NetFlowPlugin.flowBand(env.settings.naturalAbundance, env.vol.flow.getMarketSettings(itemID),
+                    env.vol.getBookEFold(itemID)).capacity();
+            double tauTicks = ServerMarket.netFlowHalfLifeSeconds() / Math.log(2) / ServerMarket.TICK_SECONDS;
+            int every = (int) Math.max(1, Math.round(env.maxOrder * tauTicks / (T213_G3_FLOW_EXPONENT * capacity)));
+            int day = TICKS_PER_DAY / c, hour = 72_000 / c;
+            double held0 = env.held();
             double[] daySum = new double[7];
             int[] dayN = new int[7];
             double lastHour = 0;
@@ -1972,7 +1997,8 @@ public class PluginTestSuite extends TestSuite {
                     if (t >= 7 * day - hour) { lastHour += p; lastHourN++; }
                 }
             }
-            return new double[]{daySum[0] / dayN[0], daySum[4] / dayN[4], lastHour / lastHourN, env.vol.flow.getAnchorMultiplier(itemID)};
+            return new double[]{daySum[0] / dayN[0], daySum[4] / dayN[4], lastHour / lastHourN, env.vol.flow.getAnchorMultiplier(itemID),
+                    held0 - env.held()};
         } finally {
             harnessRefill = false;
         }
@@ -2043,8 +2069,8 @@ public class PluginTestSuite extends TestSuite {
         double d = 160;
         boolean decline = on[1] <= 0.9 * on[0];
         boolean kept = Math.log(on[2] / d) <= 0.5 * Math.log(on[1] / d);
-        String row = String.format(Locale.ROOT, "%s: day1 %.2f day5 %.2f (%.3f) idleEnd %.2f anchor %.4f kept %.2f", name, on[0], on[1],
-                on[1] / on[0], on[2], on[3], Math.log(on[2] / d) / Math.log(on[1] / d));
+        String row = String.format(Locale.ROOT, "%s: day1 %.2f day5 %.2f (%.3f) idleEnd %.2f anchor %.4f kept %.2f sold %.0f", name, on[0],
+                on[1], on[1] / on[0], on[2], on[3], Math.log(on[2] / d) / Math.log(on[1] / d), on[4]);
         if (withOff) {
             double[] off = t213Supplier(T213Anchor.OFF, c);
             row += String.format(Locale.ROOT, "; off: day1 %.2f day5 %.2f idleEnd %.2f", off[0], off[1], off[2]);
