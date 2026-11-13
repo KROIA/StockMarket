@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.testing;
 
 import dev.architectury.event.events.common.CommandRegistrationEvent;
+import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.stockmarket.StockMarketMod;
@@ -22,6 +23,7 @@ public final class DevBootstrap {
 
     /** Called once from {@code StockMarketModBackend} during mod setup: registers the test commands. */
     public static void init() {
+        AsynchronousRequestResponseSystem.register(FixtureTestRequest.INSTANCE); // BS-269: test-only fixture steps from a trusted slave
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) ->
                 TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", "stockmarket",
                         StockMarketCommands.isSlaveServer()));
