@@ -289,7 +289,10 @@ public class FixtureTestRequest extends GenericRequest<FixtureTestRequest.Input,
     public void encodeOutput(RegistryFriendlyByteBuf buf, Output out) {
         buf.writeBoolean(out.ok());
         buf.writeLong(out.value());
-        buf.writeCollection(out.orders(), (b, r) -> {
+        // VarInt size + loop instead of writeCollection/readList (gone in 26.3): same wire format, every MC version
+        buf.writeVarInt(out.orders().size());
+        for (OrderRow r : out.orders()) {
+            FriendlyByteBuf b = buf;
             writeNullableLong(b, r.orderId());
             b.writeUUID(r.player());
             b.writeShort(r.itemId());
@@ -299,8 +302,10 @@ public class FixtureTestRequest extends GenericRequest<FixtureTestRequest.Input,
             b.writeLong(r.price());
             writeNullableLong(b, r.limitPrice());
             writeNullableLong(b, r.finalStatus() == null ? null : r.finalStatus().longValue());
-        });
-        buf.writeCollection(out.alerts(), (b, r) -> {
+        }
+        buf.writeVarInt(out.alerts().size());
+        for (AlertRow r : out.alerts()) {
+            FriendlyByteBuf b = buf;
             b.writeLong(r.id());
             b.writeLong(r.ts());
             b.writeUtf(r.kind());
@@ -308,14 +313,18 @@ public class FixtureTestRequest extends GenericRequest<FixtureTestRequest.Input,
             writeNullableLong(b, r.itemId());
             writeNullableLong(b, r.amount());
             writeNullableString(b, r.orderIds());
-        });
+        }
     }
 
     @Override
     public Output decodeOutput(RegistryFriendlyByteBuf buf) {
         boolean ok = buf.readBoolean();
         long value = buf.readLong();
-        List<OrderRow> orders = buf.readList(b -> {
+        // VarInt size + loop instead of readList (gone in 26.3): same wire format, every MC version
+        int orderCount = buf.readVarInt();
+        List<OrderRow> orders = new ArrayList<>(orderCount);
+        for (int i = 0; i < orderCount; i++) {
+            FriendlyByteBuf b = buf;
             Long orderId = readNullableLong(b);
             UUID player = b.readUUID();
             short itemId = b.readShort();
@@ -325,11 +334,16 @@ public class FixtureTestRequest extends GenericRequest<FixtureTestRequest.Input,
             long price = b.readLong();
             Long limitPrice = readNullableLong(b);
             Long status = readNullableLong(b);
-            return new OrderRow(orderId, player, itemId, amount, time, finishTime, price, limitPrice,
-                    status == null ? null : status.intValue());
-        });
-        List<AlertRow> alerts = buf.readList(b -> new AlertRow(b.readLong(), b.readLong(), b.readUtf(),
-                readNullableString(b), readNullableLong(b), readNullableLong(b), readNullableString(b)));
+            orders.add(new OrderRow(orderId, player, itemId, amount, time, finishTime, price, limitPrice,
+                    status == null ? null : status.intValue()));
+        }
+        int alertCount = buf.readVarInt();
+        List<AlertRow> alerts = new ArrayList<>(alertCount);
+        for (int i = 0; i < alertCount; i++) {
+            FriendlyByteBuf b = buf;
+            alerts.add(new AlertRow(b.readLong(), b.readLong(), b.readUtf(),
+                    readNullableString(b), readNullableLong(b), readNullableLong(b), readNullableString(b)));
+        }
         return new Output(ok, value, orders, alerts);
     }
 
