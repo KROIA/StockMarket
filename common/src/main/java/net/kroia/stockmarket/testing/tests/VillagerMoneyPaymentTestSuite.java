@@ -16,7 +16,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.npc.ClientSideMerchant;
-import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.npc.Villager; // mc<=1.21.10
+//import net.minecraft.world.entity.npc.villager.Villager; // mc>=1.21.11
 import net.minecraft.world.inventory.MerchantContainer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
