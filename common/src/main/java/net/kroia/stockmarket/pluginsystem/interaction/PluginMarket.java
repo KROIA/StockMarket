@@ -27,10 +27,11 @@ public class PluginMarket implements IPluginMarket
         return serverMarket.getItemID();
     }
 
+    /** {@inheritDoc} {@code MarketSettings.maxOrderVolume} is stored in real items, so it is returned as-is. */
     @Override
     public double getMaxRealOrderVolume()
     {
-        return serverMarket.getMaxRealOrderVolume();
+        return serverMarket.getSettings().maxOrderVolume;
     }
 
     /*@Override

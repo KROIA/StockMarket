@@ -95,12 +95,20 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
         needsRebuild = true;
     }
 
-    @Override
-    protected void render() {
+    /**
+     * Applies a pending {@link #updateRecords} now, as the next frame does ({@link #render()} calls it).
+     * Public as a test seam (SM-275): tests rebuild the rows without a render context.
+     */
+    public void applyPendingRecords() {
         if (needsRebuild) {
             needsRebuild = false;
             rebuildRecordList(pendingRecords);
         }
+    }
+
+    @Override
+    protected void render() {
+        applyPendingRecords();
         long now = System.currentTimeMillis();
         if (!refreshGuard.isInFlight() && now - lastRefreshMs > AUTO_REFRESH_INTERVAL_MS && currentMarketID != null) {
             lastRefreshMs = now;
