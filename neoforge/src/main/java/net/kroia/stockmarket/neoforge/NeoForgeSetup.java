@@ -16,6 +16,7 @@ public class NeoForgeSetup {
     @SubscribeEvent
     public static void commonSetup(FMLCommonSetupEvent event) {
         // BankSystemModBackend..LOGGER.info("[NeoForgeSetup] Common setup for server.");
+        StockMarketMod.neoForgeCommonSetupFired = true;
         StockMarketModBackend.onServerSetup();
     }
 
@@ -23,6 +24,7 @@ public class NeoForgeSetup {
     @SubscribeEvent
     public static void clientSetup(FMLClientSetupEvent event) {
         //BankSystemModBackend.LOGGER.info("[NeoForgeSetup] Client setup.");
+        StockMarketMod.neoForgeClientSetupFired = true;
         StockMarketModBackend.onClientSetup();
     }
 

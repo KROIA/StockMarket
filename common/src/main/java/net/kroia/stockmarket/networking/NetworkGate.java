@@ -5,6 +5,9 @@ import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.stockmarket.StockMarketMod;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Server-side network permission gate for <b>mutating</b> StockMarket RPCs
  * (T-123).
@@ -46,6 +49,11 @@ import net.kroia.stockmarket.StockMarketMod;
 public final class NetworkGate {
 
     private NetworkGate() {}
+
+    /** MU-160: at most one "untrusted slave" warning per (slave, request type) in this interval. */
+    private static final long UNTRUSTED_LOG_INTERVAL_MS = 5 * 60_000L;
+    /** MU-160: key "slaveID/requestType" -> {time of the last logged warning, rejections suppressed since}. */
+    private static final Map<String, long[]> UNTRUSTED_LOG = new ConcurrentHashMap<>();
 
     /**
      * Returns {@code true} iff a mutating call is allowed to proceed on the
@@ -143,8 +151,11 @@ public final class NetworkGate {
                 return false;
             }
             if (!sbm.isSlaveServerTrusted(slaveID)) {
-                warn(requestType, "Rejected call from UNTRUSTED slave '" + slaveID
-                        + "' — ask an admin to run /banksystem trust " + slaveID);
+                long suppressed = untrustedRejectionToLog(slaveID + "/" + requestType, System.currentTimeMillis());
+                if (suppressed >= 0)
+                    warn(requestType, "Rejected call from UNTRUSTED slave '" + slaveID
+                            + "' — ask an admin to run /banksystem trust " + slaveID
+                            + (suppressed > 0 ? " (" + suppressed + " more suppressed)" : ""));
                 return false;
             }
             return true;
@@ -152,6 +163,27 @@ public final class NetworkGate {
             warn(requestType, "Failed to consult BankSystem trust state (slave='" + slaveID + "'): " + e);
             return false;
         }
+    }
+
+    /**
+     * MU-160: throttles the "untrusted slave" warning. The first rejection of a key is logged, then at most one per
+     * {@link #UNTRUSTED_LOG_INTERVAL_MS}; the rejections in between are only counted.
+     *
+     * @param key   "slaveID/requestType"
+     * @param nowMs current time in ms
+     * @return -1 to stay quiet, otherwise the number of rejections suppressed since the last logged one
+     */
+    private static long untrustedRejectionToLog(String key, long nowMs) {
+        long[] result = {-1};
+        UNTRUSTED_LOG.compute(key, (k, state) -> {
+            if (state != null && nowMs - state[0] < UNTRUSTED_LOG_INTERVAL_MS) {
+                state[1]++;
+                return state;
+            }
+            result[0] = state == null ? 0 : state[1];
+            return new long[]{nowMs, 0};
+        });
+        return result[0];
     }
 
     private static void warn(String requestType, String msg) {

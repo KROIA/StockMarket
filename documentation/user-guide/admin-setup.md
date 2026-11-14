@@ -105,16 +105,18 @@ For new servers, start with **Use Case 1** across the board. Once you have a sta
 
 ## Permissions (LuckPerms)
 
-StockMarket admin commands and functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player or group. Without a permission mod, or when the permission mod leaves a node unset, each node requires operator level 2 (same as before).
+StockMarket admin commands and functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player or group. Without a permission mod, or when the permission mod leaves a node unset, each node requires operator level 2, except the nodes marked *admin mode* below.
+
+The commands marked *admin mode* are for StockMarket admins (`/stockmarket op`), not for server operators: every player sees them, and they only run for a player with StockMarket admin mode, whether the player is an operator or not. Others get the "admin only" message. Their nodes are open to every player by default, so a permission mod can only take them away: set the node to `false` to hide the command, even from a StockMarket admin. From the console and from command blocks these commands need operator level 2, as before.
 
 | Node | Grants |
 |------|--------|
 | `stockmarket.admin.command.op` | `/stockmarket op` and `/stockmarket deop` (StockMarket admin mode of a player) |
-| `stockmarket.admin.command.manage` | `/stockmarket manage` (the player must also have StockMarket admin mode) |
-| `stockmarket.admin.command.preset` | `/stockmarket preset ...` |
-| `stockmarket.admin.command.news` | `/stockmarket news ...` |
+| `stockmarket.admin.command.manage` | `/stockmarket manage` (*admin mode*) |
+| `stockmarket.admin.command.preset` | `/stockmarket preset ...` (*admin mode*) |
+| `stockmarket.admin.command.news` | `/stockmarket news ...` admin subcommands (*admin mode*) |
 | `stockmarket.admin.command.backup` | `/stockmarket backup ...` |
-| `stockmarket.admin.command.market` | `/stockmarket open <market>`, `/stockmarket close <market>` and `/stockmarket <market> remove` |
+| `stockmarket.admin.command.market` | `/stockmarket open <market>`, `/stockmarket close <market>` and `/stockmarket <market> remove` (*admin mode*) |
 | `stockmarket.admin.command.exportrecipes` | `/stockmarket exportrecipes` (dev builds only) |
 | `stockmarket.admin.command.devtest` | `/stockmarket devTestScreen` (dev builds only) |
 | `modutilities.command.discord` | `/stockmarket discord status` and `/stockmarket discord reload` (a ModUtilities node, also used by `/modutilities discord` and `/banksystem discord`; without a permission mod it requires operator level 3) |
@@ -131,7 +133,7 @@ The wildcard is resolved by LuckPerms itself (its `apply-wildcards` option, on b
 
 Notes:
 
-* The management GUI and the other in-game admin functions are gated by **StockMarket admin mode** (`/stockmarket op`), not by a node. The node `stockmarket.admin.command.op` controls who may switch admin mode on or off. Admin mode is stored on the master server, so it also works for players on slave servers.
+* The management GUI, the *admin mode* commands and the other in-game admin functions are gated by **StockMarket admin mode** (`/stockmarket op`), not by operator level. The node `stockmarket.admin.command.op` (operator level 2) controls who may switch admin mode on or off. Admin mode is stored on the master server, so it also works for players on slave servers.
 * Nodes are only checked for players online on the server that runs the check. The console and command blocks always use operator level 2.
 * Command nodes are checked when a player's command list is sent. After changing a node for an online player, they may need to rejoin before the command shows up or disappears.
 
@@ -248,6 +250,7 @@ StockMarket keeps price candles, order history and other trade data in an SQLite
 | `/stockmarket backup status` | Shows whether the writes are paused and for how many seconds. |
 
 * The commands need the permission `stockmarket.admin.command.backup` (operator level 2 without a permission mod) and only work on the master server. They work from the console, so a backup script can use them (for example through RCON).
+* While the server runs, two helper files `stockdata.db-wal` and `stockdata.db-shm` sit next to `stockdata.db`. During a backup pause, and after a clean server stop, `stockdata.db` alone is complete, because pending changes are written into it first. After a crash, keep the `-wal` file together with `stockdata.db`: it holds the latest changes.
 * A pause ends by itself after **120 seconds**, with a warning in the log, so a forgotten `resume` cannot stop the market data for good. Copy the database within that time.
 * Trading goes on during the pause. Saving to the database, and loading chart and order history (which also goes through the database queue), wait until it ends.
 * The [order origin record](#order-origin-record) `stockmarket_diagnostics.db` is not paused by these commands, and a restore does not need it.
@@ -267,3 +270,18 @@ The table `OrderOrigin` has one row per player order the master accepted:
 * Bot orders are not recorded. The account, item, amounts and time of an order are not repeated here; look them up in the order history or the BankSystem transaction ledger under the same reference.
 * Only the master writes the file; it is created when the master starts.
 * Gameplay never reads it. You can delete it while the server is stopped; it is created again at the next start.
+
+The table `TradeAlert` in the same file has one row per trading alert (profit alert and pump-and-dump detector), so a copy of the world shows what the server flagged and when. Worlds from before this table get it at the next master start.
+
+| Column | Content |
+|---|---|
+| `ts` | When the alert was raised (Unix time in milliseconds) |
+| `kind` | `profit` (profit alert), `pump_dump_pump` (market buy that pushed the price while the player's own sell order rested above), `pump_dump_cycle` (quick buy-then-sell profit), `other` |
+| `player_uuid` | The flagged player |
+| `account_number` | The bank account of the flagged order; empty for `profit`, which counts all of a player's accounts |
+| `item_id` | The market's item ID; empty for `profit`, which counts all markets |
+| `amount` | The value that crossed the threshold, in the mod's internal raw units: the profit for `profit` and `pump_dump_cycle`, the price rise for `pump_dump_pump` |
+| `window_ms` | The time window in milliseconds (`PROFIT_ALERT_WINDOW_MINUTES` or `PUMP_DUMP_CYCLE_MINUTES`); empty for `pump_dump_pump` |
+| `threshold` | The threshold that was exceeded: money for `profit` and `pump_dump_cycle`, percent for `pump_dump_pump` |
+| `text` | The alert text as written to the server log |
+| `order_ids` | Comma-separated order IDs: the buy and then the player's resting sell orders for `pump_dump_pump`, the sell for `pump_dump_cycle`; empty for `profit` |

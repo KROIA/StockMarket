@@ -563,6 +563,8 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             }
         }
 
+        // SM-325: both migrations below belong to save-data step 1 (StockMarketDataMigration, pre-2.2.0 -> 2.2.0),
+        // but need live plugin objects, so they run here at load, each guarded by its own NBT flag.
         // One-time NewsPlugin migration for worlds saved before the news system existed
         // (T-071, user decision: auto-create enabled). Only runs when the save carries no
         // "newsPluginAutoCreateDone" flag — i.e. the world was last saved by a pre-news

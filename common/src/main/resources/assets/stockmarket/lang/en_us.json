@@ -300,7 +300,7 @@
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED": "Replace emeralds for unlisted items",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED.tooltip": "Also convert emerald trades of items WITHOUT a market into money,\nusing the emerald market price (emerald count × emerald price, no margin).\nThe price is rounded to 2 significant digits; discounts are capped at 20%.\nRequires an emerald market; otherwise these trades stay emerald-based.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.USE_PRESET_PRICES_FOR_VILLAGERS": "Use preset prices for villagers",
-  "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.USE_PRESET_PRICES_FOR_VILLAGERS.tooltip": "Only active when \"Replace emeralds for unlisted items\" is on.\nPrices converted trades from the item's default price in the market presets,\neven if no market exists for it, instead of the emerald price.\nItems without a preset price keep their emerald trades.",
+  "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.USE_PRESET_PRICES_FOR_VILLAGERS.tooltip": "Only active when \"Replace emeralds for unlisted items\" is on.\nPrices converted trades from the item's default price in the market presets,\neven if no market exists for it, instead of the emerald price.\nItems without a preset price use the emerald price and get no villager discount.",
   "gui.stockmarket.news_screen.title": "Market News",
   "gui.stockmarket.news_screen.masthead": "The Market Times",
   "gui.stockmarket.news_screen.toast_checkbox": "Enable news popups",
@@ -473,6 +473,8 @@
   "gui.stockmarket.display_config_screen.no_pair": "No pair (Item/Money mode)",
   "gui.stockmarket.display_config_screen.no_markets": "No markets available",
   "message.stockmarket.command_admin_only": "This command is only for StockMarket admins!",
+  "message.stockmarket.command_slave_untrusted": "This server is not trusted by the master, so StockMarket admin commands are disabled here. Ask an admin to run /banksystem trust <slaveID> on the master.",
+  "message.stockmarket.command_player_name_ambiguous": "Several StockMarket users are named %s (old records from a UUID change). Ask the player to join once, then run the command again.",
   "message.stockmarket.command_player_not_found": "No UUID found for player: %s",
   "message.stockmarket.command_admin_mode_enabled": "StockMarket admin mode ON for player: %s",
   "message.stockmarket.command_admin_mode_disabled": "StockMarket admin mode OFF for player: %s",
@@ -533,7 +535,7 @@
   "gui.stockmarket.net_flow_plugin.capacity_volatility_scale.tooltip": "Volatility scale used for the flow capacity\n(capacity = sensitivity x abundance / (1 + scale)).\nMatch it to the Volatility plugin's scale to keep the\npre-split behaviour. Default: 0.3",
   "gui.stockmarket.net_flow_plugin.theta_cap_enabled.tooltip": "If enabled, the lasting price shift of a trade is capped\nat 'Permanent Impact' times its impact on the default\norder book. Default: on",
   "gui.stockmarket.net_flow_plugin.saturation_enabled.tooltip": "If enabled, flow beyond the price limits is not stored,\nso returning from a limit needs no extra counter-trading.\nDefault: on",
-  "gui.stockmarket.net_flow_plugin.anchor_enabled.tooltip": "If enabled, lasting net trading slowly moves the price the\nflow is measured from (the anchor), so part of a sustained\ntrend stays after the flow has faded. An admin flow reset\nresets the anchor. If disabled, the anchor is the default price.\nDefault: off",
+  "gui.stockmarket.net_flow_plugin.anchor_enabled.tooltip": "If enabled, lasting net trading slowly moves the price the\nflow is measured from (the anchor), so part of a sustained\ntrend stays after the flow has faded. An admin flow reset\nresets the anchor. If disabled, the anchor is the default price.\nDefault: on",
   "gui.stockmarket.net_flow_plugin.anchor_time_days.tooltip": "Time constant of the anchor in days: higher = slower and a\nsmaller lasting part (2 days keeps about 18% of each flow).\nValues below 1 day let quick dump-and-rebuy trades profit.\nDefault: 2",
   "gui.stockmarket.net_flow_plugin.anchor_max_move_per_day.tooltip": "Largest anchor move per day in log units\n(0.1 = about 10% per day), limits saturated flows.\nDefault: 0.1",
   "gui.stockmarket.net_flow_plugin.anchor_min_mult.tooltip": "Lowest anchor as a multiple of the default price.\nMust be between 0 and 1, otherwise the default is used.\nDefault: 0.25",
@@ -591,5 +593,9 @@
   "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "linear ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "log slot ↑ %s (partial slot above linear)",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot": "log slot %s: %s – %s",
-  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "ask ceiling ↑ %s (no default asks above)"
+  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "ask ceiling ↑ %s (no default asks above)",
+  "gui.stockmarket.load_refused.title": "StockMarket did not load this world",
+  "gui.stockmarket.load_refused.too_new": "This world was saved by a newer version of StockMarket (data version %1$s, this version supports up to %2$s), so it was not loaded. Update StockMarket to open it. Nothing was changed.",
+  "gui.stockmarket.load_refused.migration_failed": "Upgrading this world's StockMarket data to the new version failed, so the world was not loaded. Part of the data may already be upgraded. A backup of the StockMarket data from before the upgrade was saved here:\n%s\nThe reason is in the log file (logs/latest.log). Fix the cause and open the world again to continue the upgrade, or restore the backup.",
+  "gui.stockmarket.load_refused.migration_failed_no_backup": "Upgrading this world's StockMarket data to the new version failed before anything was changed, so the world was not loaded. The reason is in the log file (logs/latest.log)."
 }

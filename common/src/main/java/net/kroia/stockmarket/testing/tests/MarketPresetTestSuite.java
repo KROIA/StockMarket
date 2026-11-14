@@ -2,13 +2,19 @@ package net.kroia.stockmarket.testing.tests;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.preset.DefaultPresets;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 
 import java.util.HashSet;
 import java.util.List;
@@ -46,6 +52,8 @@ public class MarketPresetTestSuite extends TestSuite {
         // T-166 max order volume
         addTest("max_order_volume_derived_default", this::test_maxOrderVolume_derivedDefault);
         addTest("max_order_volume_forward_merge", this::test_maxOrderVolume_forwardMerge);
+        // SM-279: a market created from a preset (in game, master only)
+        addTest("market_from_preset_gets_abundance_and_max_volume", this::test_marketFromPreset);
     }
 
     /** Presets (incl. all default presets) derive maxOrderVolume from their abundance. */
@@ -256,5 +264,52 @@ public class MarketPresetTestSuite extends TestSuite {
                 original.getNaturalAbundance(), updated.getNaturalAbundance());
         if (!r.passed()) return r;
         return pass("Preset replacement in category works via list.set()");
+    }
+
+    /**
+     * SM-279 (T-185): a market created on the master for an item with a preset gets that preset's natural abundance
+     * and max order volume (the x10 preset abundances end up in the market, and with them the derived default max
+     * order volume). Uses the first preset whose item has a registered ItemID and no market yet; the market is
+     * deleted afterwards and the item filters are restored (createMarket allow-lists the item). In game on a master
+     * only; skips offline and on a slave.
+     */
+    private TestResult test_marketFromPreset() {
+        StockMarketModBackend.ServerInstances backend = StockMarketModBackend.getServerInstances();
+        if (backend == null || backend.MARKET_MANAGER == null || backend.MARKET_MANAGER.isSlave() || backend.PRESET_MANAGER == null)
+            return skip("master only (in game)");
+        ISyncServerMarketManager manager = backend.MARKET_MANAGER.getSync();
+        MarketPreset preset = null;
+        ItemID itemID = null;
+        for (MarketPresetCategory cat : backend.PRESET_MANAGER.getCategories()) {
+            for (MarketPreset p : cat.getPresets()) {
+                if (!p.hasRegisteredItemID())
+                    continue;
+                ItemID id = new ItemID(p.getRegisteredItemIDShort());
+                if (!manager.marketExists(id) && backend.PRESET_MANAGER.getPreset(id) == p) {
+                    preset = p;
+                    itemID = id;
+                    break;
+                }
+            }
+            if (preset != null)
+                break;
+        }
+        if (preset == null)
+            return skip("every preset item already has a market (or none is registered)");
+
+        TestFixture fixture = new TestFixture("PresetMarket");
+        fixture.setBackend(backend); // snapshots the item filters createMarket changes
+        try {
+            IServerMarket market = manager.createMarket(itemID);
+            TestResult r = assertNotNull("market created for preset " + preset.getItemId(), market);
+            if (!r.passed()) return r;
+            MarketSettings settings = market.getSettings();
+            r = assertEquals("abundance of preset " + preset.getItemId(), preset.getNaturalAbundance(), settings.naturalAbundance);
+            if (!r.passed()) return r;
+            return assertEquals("max order volume of preset " + preset.getItemId(), preset.getMaxOrderVolume(), settings.maxOrderVolume);
+        } finally {
+            manager.deleteMarket(itemID);
+            fixture.cleanup();
+        }
     }
 }
