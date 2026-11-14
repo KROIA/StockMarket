@@ -78,8 +78,8 @@ public class PortSmokeTestSuite extends TestSuite {
         if (!r.passed()) return r;
         for (ResourceLocation id : ids) { // mc<=1.21.10
         //for (Identifier id : ids) { // mc>=1.21.11
-            r = assertTrue("recipe missing from RecipeManager: " + id, server.getRecipeManager().byKey(id).isPresent()); // mc<=1.21.1
-            //r = assertTrue("recipe missing from RecipeManager: " + id, server.getRecipeManager().byKey(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.RECIPE, id)).isPresent()); // mc>=1.21.2
+            //r = assertTrue("recipe missing from RecipeManager: " + id, server.getRecipeManager().byKey(id).isPresent()); // mc<=1.21.1
+            r = assertTrue("recipe missing from RecipeManager: " + id, server.getRecipeManager().byKey(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.RECIPE, id)).isPresent()); // mc>=1.21.2
             if (!r.passed()) return r;
         }
         return pass(ids.size() + " recipes loaded: " + ids);
@@ -180,10 +180,10 @@ public class PortSmokeTestSuite extends TestSuite {
 
     /** Three free positions in a row (along the display's right direction for NORTH = WEST) high above spawn. */
     private static BlockPos[] displayRow(ServerLevel level) {
-        BlockPos spawn = level.getSharedSpawnPos(); // mc<=1.21.8
-        //BlockPos spawn = level.getRespawnData().pos(); // mc>=1.21.9
-        BlockPos start = new BlockPos(spawn.getX(), level.getMaxBuildHeight() - 8, spawn.getZ()); // mc<=1.21.1
-        //BlockPos start = new BlockPos(spawn.getX(), level.getMaxY() - 7, spawn.getZ()); // mc>=1.21.2
+        //BlockPos spawn = level.getSharedSpawnPos(); // mc<=1.21.8
+        BlockPos spawn = level.getRespawnData().pos(); // mc>=1.21.9
+        //BlockPos start = new BlockPos(spawn.getX(), level.getMaxBuildHeight() - 8, spawn.getZ()); // mc<=1.21.1
+        BlockPos start = new BlockPos(spawn.getX(), level.getMaxY() - 7, spawn.getZ()); // mc>=1.21.2
         return new BlockPos[]{start, start.west(), start.west(2)};
     }
 
@@ -259,8 +259,8 @@ public class PortSmokeTestSuite extends TestSuite {
 
             CompoundTag tag = ctrl.saveWithoutMetadata(level.registryAccess());
             StockMarketDisplayBlockEntity copy = new StockMarketDisplayBlockEntity(row[0], display);
-            copy.loadWithComponents(tag, level.registryAccess()); // mc<=1.21.5
-            //copy.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), tag)); // mc>=1.21.6
+            //copy.loadWithComponents(tag, level.registryAccess()); // mc<=1.21.5
+            copy.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), tag)); // mc>=1.21.6
 
             r = assertEquals("display type", StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, copy.getDisplayType());
             if (!r.passed()) return r;
