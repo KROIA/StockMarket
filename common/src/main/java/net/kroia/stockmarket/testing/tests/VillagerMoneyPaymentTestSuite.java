@@ -16,8 +16,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.npc.ClientSideMerchant;
-import net.minecraft.world.entity.npc.Villager; // mc<=1.21.10
-//import net.minecraft.world.entity.npc.villager.Villager; // mc>=1.21.11
+//import net.minecraft.world.entity.npc.Villager; // mc<=1.21.10
+import net.minecraft.world.entity.npc.villager.Villager; // mc>=1.21.11
 import net.minecraft.world.inventory.MerchantContainer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -534,9 +534,9 @@ public class VillagerMoneyPaymentTestSuite extends TestSuite {
         ServerPlayer player = server.getPlayerList().getPlayers().get(0);
         if (!ItemIDManager.getItemID(moneyStack(5000, 1)).isValid())
             return skip("money ItemIDs not synced yet");
-        Villager villager = EntityType.VILLAGER.create(server.overworld()); // never added to the world // mc<=1.21.1
+        //Villager villager = EntityType.VILLAGER.create(server.overworld()); // never added to the world // mc<=1.21.1
         //Villager villager = EntityType.VILLAGER.create(server.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=1.21.2 mc<=26.1
-        //Villager villager = net.minecraft.world.entity.EntityTypes.VILLAGER.create(server.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=26.2
+        Villager villager = net.minecraft.world.entity.EntityTypes.VILLAGER.create(server.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=26.2
         if (villager == null)
             return fail("villager not created");
 
