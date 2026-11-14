@@ -327,9 +327,9 @@ double getPrice()
 Returns the current market price.
 
 ```java
-double getMaxRealOrderVolume()
+default double getMaxRealOrderVolume() { return 0; }
 ```
-Returns the market's max order size: the most items a single player order may buy or sell. `0` = unlimited. Bot orders are not limited by it. *(2.2.0)*
+Returns the market's max order size: the most items a single player order may buy or sell, in real items (whole item count, not backend units). `0` = no limit. Bot orders are not limited by it. The built-in market returns the market's `MarketSettings.maxOrderVolume`; the default implementation returns `0`, so a custom `IPluginMarket` doesn't have to implement it. Code that reads it must treat `0` as "no limit", never as a size to divide by or scale with. *(2.2.0)*
 
 ### Market Metadata
 

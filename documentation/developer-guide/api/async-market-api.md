@@ -259,7 +259,6 @@ The master-side market, server-thread only. Highlights (see the Javadoc for the 
 
 | Method | Notes |
 |---|---|
-| `getMaxRealOrderVolume()` | Max items per player order, `0` = unlimited (2.2.0) |
 | `putOrder(Order)`, `cancelOrder(UUID, long, Order.Type, long, long)`, `getLimitOrders()` | |
 | `isUnderMaintenance()`, `setMaintenance(boolean)` | Renamed from `isMarketOpen()`/`setMarketOpen()` in 2.2.0, inverted meaning |
 | `isTradingOpen()`, `getTradingState()` | `MarketSettings.TradingState`: `OPEN`, `CLOSED`, `MAINTENANCE` (maintenance wins) |
@@ -267,7 +266,7 @@ The master-side market, server-thread only. Highlights (see the Javadoc for the 
 | `getNetPlayerItemFlow()`, `setNetPlayerItemFlow(long)`, `resetNetPlayerItemFlow()` | Real net flow in raw units, positive = players net-sold |
 | `getFadedNetPlayerItemFlow()`, `setFadedNetPlayerItemFlow(double)` | Faded copy, half-life `NET_FLOW_HALF_LIFE_MINUTES` (2.2.0) |
 | `resetVirtualOrderbook()`, `clearVirtualOrderbook()` | |
-| `getSettings()`, `setSettings(MarketSettings)` | |
+| `getSettings()`, `setSettings(MarketSettings)` | `getSettings().maxOrderVolume`: max items per player order, `0` = unlimited (2.2.0) |
 
 Methods prefixed `test_` are internal hooks; do not call them from addon code.
 

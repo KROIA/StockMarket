@@ -231,16 +231,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         return itemID;
     }
-    /**
-     * {@inheritDoc}
-     * <p>{@link MarketSettings#maxOrderVolume} is already stored in real items, so it is returned
-     * as-is (no raw-to-real conversion, that would divide it by the item fraction scale factor).
-     */
-    @Override
-    public double getMaxRealOrderVolume()
-    {
-        return settings.maxOrderVolume;
-    }
     @Override
     public ItemID getItemIDAsync() {
         return itemID;
