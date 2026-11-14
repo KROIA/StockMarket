@@ -219,7 +219,7 @@ public final class AdminFlagSync {
         CompletableFuture<Boolean> write = LuckPermsBridge.setNode(player, StockMarketPermissions.ADMIN, admin);
         write.thenAccept(ok -> {
             if (!ok)
-                onServerThread(() -> ServerStockMarketCommandHandler.sendMessage(executor, Component.literal(
+                onServerThread(() -> ServerStockMarketCommandHandler.sendFailure(executor, Component.literal(
                         "Failed to write the LuckPerms node '" + StockMarketPermissions.ADMIN + "' for " + playerName
                         + " (see the server log). The StockMarket flag was changed, but the next LuckPerms change of that node overwrites it.")));
         });
@@ -232,7 +232,7 @@ public final class AdminFlagSync {
                     if (deopFollowUp(effective) != DeopFollowUp.RESTORE_AND_NOTE)
                         return;
                     applyFlag(player, true, "still granted by a LuckPerms group after deop");
-                    ServerStockMarketCommandHandler.sendMessage(executor,
+                    ServerStockMarketCommandHandler.sendFailure(executor,
                             Component.translatable("message.stockmarket.still_admin_via_luckperms_group", playerName));
                 }));
     }

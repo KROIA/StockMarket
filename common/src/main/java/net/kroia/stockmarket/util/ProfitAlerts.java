@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.util;
 
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -53,7 +54,9 @@ public final class ProfitAlerts {
         ServerPlayer online = ServerPlayerUtilities.getOnlinePlayer(player);
         String name = online != null ? online.getName().getString() : player.toString();
         String amount = String.format(Locale.ROOT, "%.2f", profit);
-        TradeAlerts.raise("Player " + name + " (" + player + ") realized " + amount
+        TradeAlerts.raise(new TradeAlerts.Row(TradeAlerts.Row.KIND_PROFIT, player, null, null,
+                        MarketManager.convertToRawAmountStatic(profit), windowMinutes * 60_000L, threshold, null),
+                "Player " + name + " (" + player + ") realized " + amount
                         + " trading profit within " + windowMinutes + " min (threshold " + threshold + ")",
                 Component.translatable("message.stockmarket.alert.profit", name, amount, windowMinutes));
     }

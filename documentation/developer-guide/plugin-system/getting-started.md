@@ -102,6 +102,8 @@ If your plugin has configurable settings, create a `PluginGuiElement<TSettings, 
 
 The pattern: Label + TextBox for each setting, plus an Apply button that sends a typed settings object to the server. Override `customSettingsCodec()` to return the same codec used by the server plugin so the framework can decode incoming settings automatically.
 
+Since 2.2.0 `PluginGuiElement` also has helpers for the "Apply to all" and "Defaults" buttons the built-in plugins show (`confirmApplyToAllMarkets`, `createDefaultsButton`, `setSettingTooltip`); see [Apply to All Markets and Defaults](api-reference.md#apply-to-all-markets-and-defaults-220).
+
 ```java
 package com.example.myplugin;
 

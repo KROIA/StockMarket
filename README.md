@@ -360,7 +360,7 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 | /stockmarket alerts on\|off | Turn trading alert chat messages on or off for yourself (master only, saved) — see [Trading alerts](documentation/user-guide/admin-setup.md#turning-chat-alerts-off) | :heavy_check_mark: |
 | /stockmarket discord status\|reload | Show or reload the Discord webhook routing — see [Discord feed](documentation/user-guide/admin-setup.md#discord-feed) | :heavy_check_mark: (op level 3) |
 
-`/stockmarket op`, `deop`, `preset add`, `alerts` and `backup` only work on the master server. Each admin command has its own permission node — see [Permissions (LuckPerms)](documentation/user-guide/admin-setup.md#permissions-luckperms).
+`/stockmarket manage`, `preset`, the `news` admin subcommands, `open`, `close` and `<market> remove` need StockMarket admin mode (see below), not operator level. `/stockmarket op`, `deop`, `preset add`, `alerts` and `backup` only work on the master server. Each admin command has its own permission node — see [Permissions (LuckPerms)](documentation/user-guide/admin-setup.md#permissions-luckperms).
 
 
 
@@ -434,7 +434,7 @@ Computes each market's flow-driven [price equilibrium](#price-equilibrium): sust
 | Flow Sensitivity | How many items (per unit of the market's Abundance) players must net-sell to lower the equilibrium price to ~37%. Higher values make the market more inert. Default: 2000. |
 | Min Price Multiplier | Lower clamp for the equilibrium as a fraction of the anchor. Default: 0.05. |
 | Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the anchor. Default: 3. |
-| Long-term Anchor | Lets lasting trends slowly move the price the flow is measured from. Off by default. Anchor time 2 days, at most 0.1 per day, within 0.25x-4x the default price. |
+| Long-term Anchor | Lets lasting trends slowly move the price the flow is measured from. On by default. Anchor time 2 days, at most 0.1 per day, within 0.25x-4x the default price. |
 
 Full reference with all settings, formulas and tuning advice: [NetFlowPlugin](documentation/user-guide/plugin-system/plugins/net-flow-plugin.md).
 
@@ -505,7 +505,7 @@ Villager (and wandering trader) trade offers for **market-listed items** no long
 * Only offers whose traded item exists on the stock market are repriced (component-aware, so e.g. specific enchanted books can have their own markets). A trade where the villager sells requires a market for the sold item; a trade where the villager buys requires a market for every item it asks for.
 * Items **without** a market keep their normal vanilla emerald trades. If a market is created for such an item later, the offer converts to currency pricing on the next price refresh; if a market is deleted, affected offers return to their original emerald form.
 * **Optional emerald replacement:** with `REPLACE_EMERALDS_FOR_UNLISTED` turned on and an **emerald market** present, trades of items *without* a market are converted to currency as well, valued at `emerald count × emerald market price`, with **no** buy/sell margin. The emerald price is rounded to 2 significant digits (e.g. 12.34 → 12.00, 0.54 → 0.54, never below the smallest money unit), so offers do not change with every small market move. Trades of market-listed items still use the item's own market price. Without an emerald market, or with the option off, these trades stay emerald-based; turning the option off (or deleting the emerald market) restores them.
-* **Preset prices for villagers:** with `USE_PRESET_PRICES_FOR_VILLAGERS` also turned on, converted trades use the item's **default price from the market presets** (same rounding, no margin) instead of the emerald price, even if no market exists for the item. No emerald market is needed. An item without a preset price keeps its emerald trade; it never falls back to the emerald price.
+* **Preset prices for villagers:** with `USE_PRESET_PRICES_FOR_VILLAGERS` also turned on, converted trades use the item's **default price from the market presets** (same rounding, no margin) instead of the emerald price, even if no market exists for the item. No emerald market is needed. An item without a preset price falls back to the emerald price (emerald market required) and gets no villager discount.
 * **Discounts:** villager discounts (reputation, Hero of the Village, cured zombies) still apply to money trades, but are capped at **20%** of the undiscounted price. The discount counts whole cost items, so a price paid with fewer than five notes or coins gets no discount.
 * Villager trades never touch the stock market: they place no orders and do not change the net flow or the market price.
 * Prices refresh automatically on the configured interval (default 20 real minutes ≈ one Minecraft day).
@@ -526,7 +526,7 @@ Edit these in-game via `/stockmarket manage` → **Mod Settings** → **Villager
 | `VILLAGER_BUY_MARGIN` | `0.8` | Multiplier on the market price when the villager **buys** from the player (villager pays below market). |
 | `VILLAGER_SELL_MARGIN` | `1.2` | Multiplier on the market price when the villager **sells** to the player (villager charges above market). |
 | `REPLACE_EMERALDS_FOR_UNLISTED` | `false` | Also convert emerald trades of items **without** a market into currency, priced via the emerald market (`emerald count × rounded emerald price`, no margin). Only active while an emerald market exists. No restart needed: villagers update on their next interaction after the change. |
-| `USE_PRESET_PRICES_FOR_VILLAGERS` | `false` | Only used while `REPLACE_EMERALDS_FOR_UNLISTED` is on: price converted trades from the item's preset default price (rounded, no margin) instead of the emerald price, even without a market. Items without a preset price stay emerald-based. No restart needed. |
+| `USE_PRESET_PRICES_FOR_VILLAGERS` | `false` | Only used while `REPLACE_EMERALDS_FOR_UNLISTED` is on: price converted trades from the item's preset default price (rounded, no margin) instead of the emerald price, even without a market. Items without a preset price use the emerald price and get no villager discount. No restart needed. |
 
 ### Paying with money
 When an offer's price is BankSystem money, the trade accepts **any combination of denominations** — the price is matched by value, not by exact note type. A 20.00 cost can be paid with 1×20, 2×10, 4×5, 20×1, or even a single 50 note:
