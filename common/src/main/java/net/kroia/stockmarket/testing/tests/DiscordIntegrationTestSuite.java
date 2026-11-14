@@ -471,8 +471,8 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         CommandSourceStack base = server.createCommandSourceStack().withSource(capture);
         int result;
         try {
-            result = server.getCommands().getDispatcher().execute("stockmarket discord status", base.withPermission(3)); // mc<=1.21.10
-            //result = server.getCommands().getDispatcher().execute("stockmarket discord status", base.withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(3)))); // mc>=1.21.11
+            //result = server.getCommands().getDispatcher().execute("stockmarket discord status", base.withPermission(3)); // mc<=1.21.10
+            result = server.getCommands().getDispatcher().execute("stockmarket discord status", base.withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(3)))); // mc>=1.21.11
         } catch (CommandSyntaxException e) {
             return fail("level 3 could not run it: " + e.getMessage());
         }
@@ -484,8 +484,8 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         replies.clear();
         boolean refused;
         try {
-            server.getCommands().getDispatcher().execute("stockmarket discord status", base.withPermission(0)); // mc<=1.21.10
-            //server.getCommands().getDispatcher().execute("stockmarket discord status", base.withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0)))); // mc>=1.21.11
+            //server.getCommands().getDispatcher().execute("stockmarket discord status", base.withPermission(0)); // mc<=1.21.10
+            server.getCommands().getDispatcher().execute("stockmarket discord status", base.withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0)))); // mc>=1.21.11
             refused = false;
         } catch (CommandSyntaxException e) {
             refused = true;
