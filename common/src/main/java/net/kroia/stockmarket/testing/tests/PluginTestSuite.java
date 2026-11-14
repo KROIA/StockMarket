@@ -181,6 +181,8 @@ public class PluginTestSuite extends TestSuite {
         addTest("netFlow_golden_equivalence", this::test_netFlowGolden);
         addTest("equilibriumChannel_rollsOver", this::test_equilibriumChannel);
         addTest("netFlow_migration_splitsVolatility", this::test_netFlowMigration);
+        addTest("netFlow_migration_movesOldDefaults", this::test_netFlowMigrationOldDefaults);
+        addTest("netFlow_migration_retryKeepsOldFlow", this::test_netFlowMigrationRetryKeepsOldFlow);
         // T-213 anchor tuning (run only with -Dstockmarket.t213=tune|full); the gates: T213Gate*TestSuite
         registerT213Tests();
         // Trend accumulation
@@ -2224,6 +2226,114 @@ public class PluginTestSuite extends TestSuite {
             dispose(m);
             dispose(m2);
             dispose(m3);
+        }
+    }
+
+    /** SM-327: a Volatility save entry with the given per-market NBT entry under pluginData.marketData. */
+    private CompoundTag savedVolatility(CompoundTag marketEntry) {
+        CompoundTag vol = savedPlugin(net.kroia.stockmarket.pluginsystem.Plugins.VOLATILITY_PLUGIN.getPluginTypeID(),
+                UUID.randomUUID(), true, false);
+        itemID.save(marketEntry);
+        ListTag md = new ListTag();
+        md.add(marketEntry);
+        CompoundTag pd = new CompoundTag();
+        pd.put("marketData", md);
+        vol.put("pluginData", pd);
+        return vol;
+    }
+
+    /** SM-327: the first NetFlowPlugin of a manager, null if none. */
+    private static NetFlowPlugin firstNetFlow(ServerPluginManager m) {
+        for (ServerPlugin p : m.getPlugins().values()) if (p instanceof NetFlowPlugin f) return f;
+        return null;
+    }
+
+    /**
+     * SM-327: the split moves flow settings still at the 2.1.2 defaults (sensitivity 500, max 20x, as 2.1.2 saved
+     * them for every market) to the 2.2.0 defaults; per field, so a value the admin changed stays.
+     */
+    private TestResult test_netFlowMigrationOldDefaults() {
+        ServerPluginManager m = new ServerPluginManager();
+        try {
+            CompoundTag me = new CompoundTag();
+            me.putFloat("volatilityScale", 0.3f);
+            me.putBoolean("flowInfluenceEnabled", true);
+            me.putFloat("flowSensitivity", 500f);
+            me.putFloat("minPriceMult", 0.05f);
+            me.putFloat("maxPriceMult", 20f);
+            m.load(managerSave(savedVolatility(me)));
+            NetFlowPlugin flow = firstNetFlow(m);
+            if (flow == null) return fail("no NetFlowPlugin created");
+            TestResult r = assertEquals("untouched 2.1.2 defaults -> 2.2.0 defaults",
+                    NetFlowPlugin.Settings.createDefault(), flow.getMarketSettings(itemID));
+            if (!r.passed()) return r;
+            r = assertEquals("admin max kept, sensitivity moved", new NetFlowPlugin.Settings(true, 2000f, 0.05f, 8f, 0.5f),
+                    NetFlowPlugin.moveOldDefaults(new NetFlowPlugin.Settings(true, 500f, 0.05f, 8f, 0.5f)));
+            if (!r.passed()) return r;
+            return assertEquals("admin sensitivity kept, max moved", new NetFlowPlugin.Settings(true, 1200f, 0.05f, 3f, 0.5f),
+                    NetFlowPlugin.moveOldDefaults(new NetFlowPlugin.Settings(true, 1200f, 0.05f, 20f, 0.5f)));
+        } finally {
+            dispose(m);
+        }
+    }
+
+    /**
+     * SM-327: a split that fails (truncated old settings bytes) and is saved before the retry keeps the old flow
+     * settings and flow state in the Volatility save; the next load splits with them. Once the split succeeded,
+     * the Volatility save no longer carries the old flow keys.
+     */
+    private TestResult test_netFlowMigrationRetryKeepsOldFlow() {
+        ServerPluginManager m = new ServerPluginManager(), m2 = new ServerPluginManager();
+        try {
+            CompoundTag me = new CompoundTag();
+            me.putFloat("flowSensitivity", 1500f);
+            me.putFloat("maxPriceMult", 4f);
+            me.putDouble("satFlow", 321.5);
+            me.putDouble("lastFaded", 300.0);
+            CompoundTag vol = savedVolatility(me);
+            // scale + flowEnabled, then cut off: the legacy decode throws, the Volatility codec reads only the scale
+            ByteBuf buf = Unpooled.buffer();
+            buf.writeFloat(0.4f).writeBoolean(true);
+            byte[] bytes = new byte[buf.readableBytes()];
+            buf.readBytes(bytes);
+            buf.release();
+            ListTag csm = new ListTag();
+            CompoundTag ce = new CompoundTag();
+            itemID.save(ce);
+            ce.putByteArray("settingsData", bytes);
+            csm.add(ce);
+            vol.put("customSettingsMap", csm);
+
+            m.load(managerSave(vol));
+            if (firstNetFlow(m) != null) return fail("the truncated payload must fail the split");
+            java.util.Map<String, ListTag> save = new java.util.HashMap<>();
+            m.save(save);
+            dispose(m);
+
+            m2.load(save);
+            NetFlowPlugin flow = firstNetFlow(m2);
+            if (flow == null) return fail("the retry must split");
+            TestResult r = assertEquals("retry uses the kept settings",
+                    new NetFlowPlugin.Settings(true, 1500f, 0.05f, 4f, 0.5f).withCapacityVolatilityScale(0.4f),
+                    flow.getMarketSettings(itemID));
+            if (!r.passed()) return r;
+            r = assertEquals("retry uses the kept satFlow", 321.5, flow.getSaturatedFlow(itemID));
+            if (!r.passed()) return r;
+
+            java.util.Map<String, ListTag> save2 = new java.util.HashMap<>();
+            m2.save(save2);
+            ListTag plugins = save2.get("plugins");
+            for (int i = 0; i < plugins.size(); i++) {
+                CompoundTag pt = net.kroia.modutilities.NbtCompat.getCompound(plugins, i);
+                if (!(m2.getPlugins().get(net.kroia.modutilities.NbtCompat.getUUID(pt, "instanceID")) instanceof VolatilityPlugin)) continue;
+                CompoundTag e = net.kroia.modutilities.NbtCompat.getCompound(net.kroia.modutilities.NbtCompat.getList(
+                        net.kroia.modutilities.NbtCompat.getCompound(pt, "pluginData"), "marketData", 10), 0);
+                if (e.contains("flowSensitivity") || e.contains("satFlow")) return fail("old flow keys must go after the split");
+            }
+            return pass("failed split + save keeps the old flow data; the retry uses it; dropped after success");
+        } finally {
+            dispose(m);
+            dispose(m2);
         }
     }
 
