@@ -16,7 +16,8 @@ import net.kroia.stockmarket.villagertrading.VillagerTradeManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -63,18 +64,22 @@ public class PortSmokeTestSuite extends TestSuite {
     private TestResult test_recipesLoaded() {
         MinecraftServer server = getServer();
         if (server == null) return skip("no server");
-        List<ResourceLocation> ids = new ArrayList<>();
+        List<ResourceLocation> ids = new ArrayList<>(); // mc<=1.21.10
+        //List<Identifier> ids = new ArrayList<>(); // mc>=1.21.11
         server.getResourceManager().listResources("recipe", p -> p.getPath().endsWith(".json"))
                 .keySet().forEach(file -> {
                     if (!file.getNamespace().equals(StockMarketMod.MOD_ID)) return;
                     String path = file.getPath();
-                    ids.add(ResourceLocation.fromNamespaceAndPath(file.getNamespace(),
+                    ids.add(ResourceLocation.fromNamespaceAndPath(file.getNamespace(), // mc<=1.21.10
+                    //ids.add(Identifier.fromNamespaceAndPath(file.getNamespace(), // mc>=1.21.11
                             path.substring("recipe/".length(), path.length() - ".json".length())));
                 });
         TestResult r = assertTrue("no stockmarket recipe JSON found in the server resources (folder renamed?)", !ids.isEmpty());
         if (!r.passed()) return r;
-        for (ResourceLocation id : ids) {
-            r = assertTrue("recipe missing from RecipeManager: " + id, server.getRecipeManager().byKey(id).isPresent());
+        for (ResourceLocation id : ids) { // mc<=1.21.10
+        //for (Identifier id : ids) { // mc>=1.21.11
+            r = assertTrue("recipe missing from RecipeManager: " + id, server.getRecipeManager().byKey(id).isPresent()); // mc<=1.21.1
+            //r = assertTrue("recipe missing from RecipeManager: " + id, server.getRecipeManager().byKey(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.RECIPE, id)).isPresent()); // mc>=1.21.2
             if (!r.passed()) return r;
         }
         return pass(ids.size() + " recipes loaded: " + ids);
@@ -175,8 +180,10 @@ public class PortSmokeTestSuite extends TestSuite {
 
     /** Three free positions in a row (along the display's right direction for NORTH = WEST) high above spawn. */
     private static BlockPos[] displayRow(ServerLevel level) {
-        BlockPos spawn = level.getSharedSpawnPos();
-        BlockPos start = new BlockPos(spawn.getX(), level.getMaxBuildHeight() - 8, spawn.getZ());
+        BlockPos spawn = level.getSharedSpawnPos(); // mc<=1.21.8
+        //BlockPos spawn = level.getRespawnData().pos(); // mc>=1.21.9
+        BlockPos start = new BlockPos(spawn.getX(), level.getMaxBuildHeight() - 8, spawn.getZ()); // mc<=1.21.1
+        //BlockPos start = new BlockPos(spawn.getX(), level.getMaxY() - 7, spawn.getZ()); // mc>=1.21.2
         return new BlockPos[]{start, start.west(), start.west(2)};
     }
 
@@ -252,7 +259,8 @@ public class PortSmokeTestSuite extends TestSuite {
 
             CompoundTag tag = ctrl.saveWithoutMetadata(level.registryAccess());
             StockMarketDisplayBlockEntity copy = new StockMarketDisplayBlockEntity(row[0], display);
-            copy.loadWithComponents(tag, level.registryAccess());
+            copy.loadWithComponents(tag, level.registryAccess()); // mc<=1.21.5
+            //copy.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), tag)); // mc>=1.21.6
 
             r = assertEquals("display type", StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, copy.getDisplayType());
             if (!r.passed()) return r;
