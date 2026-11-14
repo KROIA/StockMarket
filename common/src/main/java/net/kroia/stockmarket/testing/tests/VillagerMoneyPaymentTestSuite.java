@@ -534,8 +534,8 @@ public class VillagerMoneyPaymentTestSuite extends TestSuite {
         ServerPlayer player = server.getPlayerList().getPlayers().get(0);
         if (!ItemIDManager.getItemID(moneyStack(5000, 1)).isValid())
             return skip("money ItemIDs not synced yet");
-        Villager villager = EntityType.VILLAGER.create(server.overworld()); // never added to the world // mc<=1.21.1
-        //Villager villager = EntityType.VILLAGER.create(server.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=1.21.2 mc<=26.1
+        //Villager villager = EntityType.VILLAGER.create(server.overworld()); // never added to the world // mc<=1.21.1
+        Villager villager = EntityType.VILLAGER.create(server.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=1.21.2 mc<=26.1
         //Villager villager = net.minecraft.world.entity.EntityTypes.VILLAGER.create(server.overworld(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // never added to the world // mc>=26.2
         if (villager == null)
             return fail("villager not created");

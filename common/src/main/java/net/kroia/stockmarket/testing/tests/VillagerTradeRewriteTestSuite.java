@@ -1019,8 +1019,8 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         boolean oldReplace = settings.REPLACE_EMERALDS_FOR_UNLISTED.get();
         boolean oldPreset = settings.USE_PRESET_PRICES_FOR_VILLAGERS.get();
         MobEffectInstance oldHero = player.getEffect(MobEffects.HERO_OF_THE_VILLAGE);
-        Villager villager = EntityType.VILLAGER.create(player.level()); // mc<=1.21.1
-        //Villager villager = EntityType.VILLAGER.create(player.level(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // mc>=1.21.2 mc<=26.1
+        //Villager villager = EntityType.VILLAGER.create(player.level()); // mc<=1.21.1
+        Villager villager = EntityType.VILLAGER.create(player.level(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // mc>=1.21.2 mc<=26.1
         //Villager villager = net.minecraft.world.entity.EntityTypes.VILLAGER.create(player.level(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // mc>=26.2
         if (villager == null) {
             return fail("could not create a villager");
