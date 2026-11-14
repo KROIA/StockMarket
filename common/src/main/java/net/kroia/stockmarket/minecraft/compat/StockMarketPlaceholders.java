@@ -16,6 +16,7 @@ import net.kroia.modutilities.placeholder.PlaceholderRegistry;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.MultiServerUtils;
@@ -60,6 +61,13 @@ public final class StockMarketPlaceholders {
      * markets it cannot resolve (see {@link #withoutUnresolvableMarkets}); no placeholder is registered for them.
      */
     private static final String PORTFOLIO_PART_PREFIX = "portfolio_part_";
+    /**
+     * SM-247: prefix of the per-market open-order rows the master adds to a player's values: key = prefix + the
+     * ItemID shorts of the markets the orders touch, joined by {@code _} (one market for an order book order, buy
+     * and sell market for a pending inter-market order), value = order count. A slave leaves out every row with a
+     * market it cannot resolve (see {@link #withoutUnresolvableMarkets}); no placeholder is registered for them.
+     */
+    private static final String OPEN_ORDERS_PART_PREFIX = "open_orders_part_";
 
     private static volatile StockMarketModBackend.ServerInstances BACKEND;
 
@@ -210,16 +218,17 @@ public final class StockMarketPlaceholders {
         });
         serverValues = Map.copyOf(values);
 
-        // 2. open-order counts, one pass over all order books
-        Map<UUID, Integer> openOrders = new HashMap<>();
+        // 2. open-order counts per player and market, one pass over all order books
+        Map<UUID, Map<String, Integer>> openOrders = new HashMap<>();
         for (ItemID id : smm.getAvailableMarketIDs()) {
             ServerMarket market = smm.getServerMarket(id);
             if (market == null)
                 continue;
+            String key = openOrdersPartKey(id);
             for (Order order : market.getLimitOrders()) {
                 UUID owner = order.getExecutorPlayerUUID();
                 if (!order.isBotOrder() && owner != null)
-                    openOrders.merge(owner, 1, Integer::sum);
+                    openOrders.computeIfAbsent(owner, k -> new HashMap<>()).merge(key, 1, Integer::sum);
             }
         }
 
@@ -230,7 +239,9 @@ public final class StockMarketPlaceholders {
             wanted.add(player.getUUID());
         IServerBankManager bankManager = backend.BANK_SYSTEM_API.getServerBankManager().getSync();
         for (UUID uuid : wanted) {
-            int orders = openOrders.getOrDefault(uuid, 0) + smm.getPendingInterMarketOrdersForPlayer(uuid).size();
+            Map<String, Integer> orders = new HashMap<>(openOrders.getOrDefault(uuid, Map.of()));
+            for (InterMarketOrder order : smm.getPendingInterMarketOrdersForPlayer(uuid))
+                orders.merge(openOrdersPartKey(order.getBuyItemID(), order.getSellItemID()), 1, Integer::sum);
             Map<ItemID, Long> parts = bankManager == null ? Map.of() : portfolioParts(bankManager, smm, uuid);
             playerValues.put(uuid, playerValueMap(orders, parts));
         }
@@ -278,52 +289,99 @@ public final class StockMarketPlaceholders {
     }
 
     /**
+     * SM-247: the key of an open-order count row, see {@link #playerValueMap}.
+     *
+     * @param markets the markets the counted orders touch: one for an order book order, buy and sell market for an
+     *                inter-market order
+     * @return the markets' ItemID shorts joined by {@code _}
+     */
+    public static String openOrdersPartKey(ItemID... markets) {
+        StringBuilder key = new StringBuilder();
+        for (ItemID market : markets) {
+            if (!key.isEmpty())
+                key.append('_');
+            key.append(market.getShort());
+        }
+        return key.toString();
+    }
+
+    /**
      * (Master) Builds a player's placeholder values. The portfolio is the sum of all {@code parts}; each part is
      * also stored as a {@link #PORTFOLIO_PART_PREFIX} row so a slave can leave out markets it cannot resolve
-     * (T-240, see {@link #withoutUnresolvableMarkets}).
+     * (T-240, see {@link #withoutUnresolvableMarkets}). The open-order count is the sum of all {@code openOrders},
+     * each also stored as an {@link #OPEN_ORDERS_PART_PREFIX} row for the same reason (SM-247).
      *
-     * @param openOrders the player's open order count
+     * @param openOrders {@link #openOrdersPartKey} of the markets -> the player's open orders on them
      * @param parts      market -> its share of the portfolio value in raw money units
      * @return placeholder name -> value (immutable)
      */
-    public static Map<String, String> playerValueMap(int openOrders, Map<ItemID, Long> parts) {
+    public static Map<String, String> playerValueMap(Map<String, Integer> openOrders, Map<ItemID, Long> parts) {
         Map<String, String> values = new HashMap<>();
         long portfolio = 0;
         for (Map.Entry<ItemID, Long> part : parts.entrySet()) {
             portfolio += part.getValue();
             values.put(PORTFOLIO_PART_PREFIX + part.getKey().getShort(), String.valueOf(part.getValue()));
         }
-        values.put("open_orders", String.valueOf(openOrders));
-        values.put("open_orders_raw", String.valueOf(openOrders));
+        int orders = 0;
+        for (Map.Entry<String, Integer> part : openOrders.entrySet()) {
+            orders += part.getValue();
+            values.put(OPEN_ORDERS_PART_PREFIX + part.getKey(), String.valueOf(part.getValue()));
+        }
+        putOpenOrders(values, orders);
         putPortfolio(values, portfolio);
         return Map.copyOf(values);
     }
 
     /**
-     * (Slave) T-240: the player's values with the portfolio summed again without the markets this server cannot
-     * resolve (items only the master has, see {@link MultiServerUtils#isMarketResolvableOnThisServer}), so the
-     * portfolio matches the markets the slave shows. Lookup only, never registers an ItemID.
+     * (Slave) T-240 / SM-247: the player's values with the portfolio and the open-order count summed again without
+     * the markets this server cannot resolve (items only the master has, see
+     * {@link MultiServerUtils#isMarketResolvableOnThisServer}), so both match the markets the slave shows. An
+     * inter-market order is left out if either of its markets cannot be resolved. Lookup only, never registers an
+     * ItemID.
      *
-     * @param values a player's values from the master, with {@link #PORTFOLIO_PART_PREFIX} rows
-     * @return {@code values} itself if every market resolves here, otherwise a copy with the reduced portfolio
+     * @param values a player's values from the master, with {@link #PORTFOLIO_PART_PREFIX} and
+     *               {@link #OPEN_ORDERS_PART_PREFIX} rows
+     * @return {@code values} itself if every market resolves here, otherwise a copy with the reduced values
      */
     public static Map<String, String> withoutUnresolvableMarkets(Map<String, String> values) {
         long portfolio = 0;
+        int orders = 0;
         boolean hidden = false;
         for (Map.Entry<String, String> entry : values.entrySet()) {
-            if (!entry.getKey().startsWith(PORTFOLIO_PART_PREFIX))
-                continue;
-            ItemID marketID = new ItemID(Short.parseShort(entry.getKey().substring(PORTFOLIO_PART_PREFIX.length())));
-            if (MultiServerUtils.isMarketResolvableOnThisServer(marketID))
-                portfolio += Long.parseLong(entry.getValue());
-            else
-                hidden = true;
+            String key = entry.getKey();
+            if (key.startsWith(PORTFOLIO_PART_PREFIX)) {
+                if (allResolvable(key.substring(PORTFOLIO_PART_PREFIX.length())))
+                    portfolio += Long.parseLong(entry.getValue());
+                else
+                    hidden = true;
+            } else if (key.startsWith(OPEN_ORDERS_PART_PREFIX)) {
+                if (allResolvable(key.substring(OPEN_ORDERS_PART_PREFIX.length())))
+                    orders += Integer.parseInt(entry.getValue());
+                else
+                    hidden = true;
+            }
         }
         if (!hidden)
             return values; // the master's strings, unchanged
         Map<String, String> filtered = new HashMap<>(values);
         putPortfolio(filtered, portfolio);
+        putOpenOrders(filtered, orders);
         return filtered;
+    }
+
+    /** @return true if every market in an {@link #openOrdersPartKey} (or a single short) resolves on this server */
+    private static boolean allResolvable(String marketShorts) {
+        for (String market : marketShorts.split("_")) {
+            if (!MultiServerUtils.isMarketResolvableOnThisServer(new ItemID(Short.parseShort(market))))
+                return false;
+        }
+        return true;
+    }
+
+    /** Writes the open-order count and its raw variant into {@code values}. */
+    private static void putOpenOrders(Map<String, String> values, int orders) {
+        values.put("open_orders", String.valueOf(orders));
+        values.put("open_orders_raw", String.valueOf(orders));
     }
 
     /** Writes the formatted and raw portfolio value into {@code values}. */

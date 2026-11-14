@@ -34,6 +34,8 @@ import java.util.function.ToLongFunction;
  * is on — then they are converted without margins at the rounded emerald
  * market price, or at the rounded preset default price with
  * {@code USE_PRESET_PRICES_FOR_VILLAGERS} (see {@link #convertedPriceRaw}).
+ * With preset prices on, an item without a preset price falls back to the
+ * rounded emerald market price and gets no discount at all.
  * Offers are restored to emerald form when their pricing basis disappears or
  * the feature/option is disabled. Discounts on rewritten offers are capped at
  * {@link #MAX_DISCOUNT_PERCENT} ({@link #capDiscounts}).
@@ -83,10 +85,14 @@ public final class VillagerTradeRewriter {
     /**
      * Result of rewriting a single offer.
      *
-     * @param offer   the rewritten currency-form offer
-     * @param clamped whether the currency fit was capacity-clamped
+     * @param offer      the rewritten currency-form offer
+     * @param clamped    whether the currency fit was capacity-clamped
+     * @param noDiscount whether the offer gets no discount at all: preset prices
+     *                   are on but a traded item has no preset price, so the
+     *                   offer fell back to the emerald price
+     *                   ({@link #capDiscounts} removes every discount)
      */
-    public record RewriteResult(MerchantOffer offer, boolean clamped) {
+    public record RewriteResult(MerchantOffer offer, boolean clamped, boolean noDiscount) {
     }
 
     /**
@@ -254,6 +260,7 @@ public final class VillagerTradeRewriter {
                 // Market-listed item (possibly newly listed): currency form.
                 offers.set(i, result.offer());
                 original.setRewritten(true);
+                original.setNoDiscount(result.noDiscount());
                 changed = true;
                 if (result.clamped() && !entry.isClampFlagged(i)) {
                     entry.flagClamped(i);
@@ -270,6 +277,7 @@ public final class VillagerTradeRewriter {
                 // converts the offer again on a later reprice.
                 offers.set(i, restoreOffer(original.offer(), offers.get(i)));
                 original.setRewritten(false);
+                original.setNoDiscount(false);
                 changed = true;
             }
             // else: emerald-form offer for an unlisted item — leave untouched.
@@ -296,6 +304,7 @@ public final class VillagerTradeRewriter {
             }
             offers.set(i, restoreOffer(original.offer(), offers.get(i)));
             original.setRewritten(false);
+            original.setNoDiscount(false);
         }
     }
 
@@ -357,7 +366,8 @@ public final class VillagerTradeRewriter {
      * keep the original multiplier and the live demand, so vanilla discounts
      * apply. For every rewritten offer the total discount is capped at
      * {@link #MAX_DISCOUNT_PERCENT} by {@link #capDiscounts}, which runs after
-     * {@code Villager.updateSpecialPrices()}.
+     * {@code Villager.updateSpecialPrices()}; a preset-price fallback offer
+     * ({@link RewriteResult#noDiscount}) gets no discount at all.
      * <p>
      * {@code uses} and {@code demand} are copied from the <b>live</b> offer so
      * partially used offers stay partially used; {@code maxUses}/{@code xp} come
@@ -408,6 +418,7 @@ public final class VillagerTradeRewriter {
         // emerald cost via the emerald market.
         long moneyRaw;
         float priceMultiplier;
+        boolean noDiscount = false;
         long resultPriceRaw = priceLookup.applyAsLong(result);
         if (resultPriceRaw > 0) {
             // Listed item: market price x sell margin; multiplier 0 (no demand/reputation).
@@ -420,8 +431,9 @@ public final class VillagerTradeRewriter {
             if (moneyRaw <= 0) {
                 return null;
             }
+            noDiscount = isPresetFallback(table, result);
             // Original multiplier: vanilla demand and reputation discounts apply,
-            // the total discount is capped by capDiscount().
+            // the total discount is capped by capDiscount() (removed for noDiscount).
             priceMultiplier = original.getPriceMultiplier();
         }
 
@@ -452,7 +464,7 @@ public final class VillagerTradeRewriter {
 
         MerchantOffer offer = new MerchantOffer(newCostA, newCostB, result.copy(),
                 live.getUses(), original.getMaxUses(), original.getXp(), priceMultiplier, live.getDemand());
-        return new RewriteResult(offer, fit.clamped());
+        return new RewriteResult(offer, fit.clamped(), noDiscount);
     }
 
     /**
@@ -473,6 +485,7 @@ public final class VillagerTradeRewriter {
         // emerald pricing, unless the emerald-replacement option converts the
         // emerald payout via the emerald market.
         long moneyRaw;
+        boolean noDiscount = false;
         long priceA = priceLookup.applyAsLong(costA.itemStack());
         long priceB = costB.isPresent() ? priceLookup.applyAsLong(costB.get().itemStack()) : 0L;
         if (priceA > 0 && (costB.isEmpty() || priceB > 0)) {
@@ -488,6 +501,7 @@ public final class VillagerTradeRewriter {
             if (moneyRaw <= 0) {
                 return null;
             }
+            noDiscount = isPresetFallback(table, costs);
         }
 
         // The payout must fit into the single result stack.
@@ -501,7 +515,7 @@ public final class VillagerTradeRewriter {
         MerchantOffer offer = new MerchantOffer(costA, costB, fit.stacks().get(0),
                 live.getUses(), original.getMaxUses(), original.getXp(),
                 original.getPriceMultiplier(), live.getDemand());
-        return new RewriteResult(offer, fit.clamped());
+        return new RewriteResult(offer, fit.clamped(), noDiscount);
     }
 
     /**
@@ -509,12 +523,13 @@ public final class VillagerTradeRewriter {
      * item has no market ({@code VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED}).
      * No buy/sell margin is applied (the market spread does not concern villagers).
      * <ul>
-     *   <li>Preset prices on ({@link VillagerTradePriceTable#usePresetPrices()}):
-     *       sum over {@code items} of {@code rounded preset price × count}. If any
-     *       item has no preset price the offer is not converted; there is
-     *       deliberately no fallback to the emerald price.</li>
-     *   <li>Otherwise: {@code emeralds × rounded emerald market price}; not
-     *       converted without an emerald market.</li>
+     *   <li>Preset prices on ({@link VillagerTradePriceTable#usePresetPrices()})
+     *       and every item has one: sum over {@code items} of
+     *       {@code rounded preset price × count}.</li>
+     *   <li>Otherwise (preset prices off, or any item without a preset price):
+     *       {@code emeralds × rounded emerald market price}; not converted
+     *       without an emerald market. A preset-price fallback offer gets no
+     *       discount ({@link #isPresetFallback}).</li>
      * </ul>
      *
      * @param table       the current price table (option flags, preset prices)
@@ -528,23 +543,48 @@ public final class VillagerTradeRewriter {
         if (!table.replaceEmeraldsForUnlisted()) {
             return 0L;
         }
-        if (table.usePresetPrices()) {
-            ToLongFunction<ItemStack> presetLookup = presetLookup(table);
-            long total = 0L;
-            for (ItemStack item : items) {
-                long presetRaw = presetLookup.applyAsLong(item);
-                if (presetRaw <= 0) {
-                    return 0L; // no preset price: the trade stays in emeralds
-                }
-                total += roundReferencePriceRaw(presetRaw) * item.getCount();
-            }
-            return total;
+        long presetRaw = presetPriceRaw(table, items);
+        if (presetRaw > 0) {
+            return presetRaw;
         }
         long emeraldRaw = priceLookup.applyAsLong(new ItemStack(Items.EMERALD));
         if (emeraldRaw <= 0) {
             return 0L; // no emerald market: the trade stays in emeralds
         }
         return roundReferencePriceRaw(emeraldRaw) * emeralds;
+    }
+
+    /**
+     * Sum of the rounded preset prices of {@code items} (× count).
+     *
+     * @param table the current price table
+     * @param items the traded item stacks
+     * @return the raw preset price, or {@code 0} when preset prices are off or
+     *         any item has no preset price
+     */
+    private static long presetPriceRaw(VillagerTradePriceTable table, ItemStack... items) {
+        if (!table.usePresetPrices()) {
+            return 0L;
+        }
+        ToLongFunction<ItemStack> presetLookup = presetLookup(table);
+        long total = 0L;
+        for (ItemStack item : items) {
+            long presetRaw = presetLookup.applyAsLong(item);
+            if (presetRaw <= 0) {
+                return 0L;
+            }
+            total += roundReferencePriceRaw(presetRaw) * item.getCount();
+        }
+        return total;
+    }
+
+    /**
+     * Whether a converted offer fell back from preset prices to the emerald
+     * price because a traded item has no preset price. Such offers get no
+     * discount at all ({@link RewriteResult#noDiscount}).
+     */
+    private static boolean isPresetFallback(VillagerTradePriceTable table, ItemStack... items) {
+        return table.usePresetPrices() && presetPriceRaw(table, items) <= 0;
     }
 
     /**
@@ -603,12 +643,10 @@ public final class VillagerTradeRewriter {
     }
 
     /**
-     * Applies {@link #capDiscount} to every offer of the villager that this
-     * rewriter converted to currency form (sidecar flag {@code rewritten}).
-     * Called by {@code VillagerMixin} at the end of
+     * Applies {@link #capDiscounts(MerchantOffers, VillagerTradeData.VillagerEntry)}
+     * to the villager's offers. Called by {@code VillagerMixin} at the end of
      * {@code Villager.updateSpecialPrices}, right after vanilla applied the
-     * discounts for the player opening the trade menu. Offers still in emerald
-     * form keep their full vanilla discounts.
+     * discounts for the player opening the trade menu.
      *
      * @param villager the villager whose trade menu is opening (server side)
      */
@@ -623,12 +661,33 @@ public final class VillagerTradeRewriter {
         if (entry == null) {
             return;
         }
-        MerchantOffers offers = villager.getOffers();
+        capDiscounts(villager.getOffers(), entry);
+    }
+
+    /**
+     * Caps the discount of every offer this rewriter converted to currency form
+     * (sidecar flag {@code rewritten}) with {@link #capDiscount}. Offers flagged
+     * {@code noDiscount} (preset-price fallback) lose every discount instead:
+     * {@code specialPriceDiff} is raised to at least 0, so reputation, cured
+     * zombies and Hero of the Village give nothing, while bad reputation and
+     * demand price increases stay. Offers still in emerald form keep their full
+     * vanilla discounts.
+     *
+     * @param offers the villager's live offers, after {@code updateSpecialPrices} (mutated in place)
+     * @param entry  the villager's sidecar entry
+     */
+    public static void capDiscounts(MerchantOffers offers, VillagerTradeData.VillagerEntry entry) {
         int count = Math.min(offers.size(), entry.size());
         for (int i = 0; i < count; i++) {
             VillagerTradeData.OriginalOffer original = entry.get(i);
-            if (!original.isPassthrough() && original.isRewritten()) {
-                capDiscount(offers.get(i));
+            if (original.isPassthrough() || !original.isRewritten()) {
+                continue;
+            }
+            MerchantOffer offer = offers.get(i);
+            if (original.isNoDiscount()) {
+                offer.setSpecialPriceDiff(Math.max(0, offer.getSpecialPriceDiff()));
+            } else {
+                capDiscount(offer);
             }
         }
     }

@@ -13,7 +13,7 @@ MarketInterface (per subscribed market)
     '-- IPluginOrderBook (market.oderBook) -- orderbook volume, virtual volume, order reads
     | changes queued in caches
     v
-Market Engine -- receives all changes atomically at finalize
+Market Engine -- receives all changes atomically after finalize
 ```
 
 Plugins interact with markets exclusively through `MarketInterface` objects. Each `MarketInterface` wraps two API surfaces:
@@ -35,7 +35,9 @@ init()  -->  update(markets)  -->  finalize(markets)  -->  deInit()
 |---|---|---|
 | `init()` | Plugin manager starts | One-time setup |
 | `update(List<MarketInterface>)` | Every tick, for enabled plugins | Read market state, queue changes via caches |
-| `finalize(List<MarketInterface>)` | Every tick, after all plugins update | Post-processing after caches apply |
+| `finalize(List<MarketInterface>)` | Every tick, after all plugins update | Post-processing on the queued values, before the caches apply |
+
+Since 2.2.0 both get only the subscribed markets that are inside their trading hours (markets under maintenance included). Enabled plugins run in the order of the plugin list, which admins change on the Plugin Management screen; see [Built-in Plugins](api-reference.md#built-in-plugins) for the default order.
 | `deInit()` | Plugin manager stops | Cleanup |
 
 Additional event callbacks:
@@ -49,13 +51,13 @@ Additional event callbacks:
 
 ## Batched Cache Pattern
 
-Plugins never modify markets directly. When you call `market.market.setTargetPrice(...)` or `market.oderBook.setRawVolume(...)`, the change is queued in a per-market cache. After **all** enabled plugins have finished their `update()` calls, the framework applies every queued change atomically. This prevents mid-update inconsistencies between plugins.
+Plugins never modify markets directly. When you call `market.market.setTargetPrice(...)` or `market.oderBook.setRawVolume(...)`, the change is queued in a per-market cache. After **all** enabled plugins have finished their `update()` and `finalize()` calls, the framework applies every queued change atomically. This prevents mid-update inconsistencies between plugins.
 
 The sequence each tick:
 
 1. **Update phase** -- all enabled plugins call `update()`. Each plugin reads the current market state and queues changes through the `MarketInterface`.
-2. **Apply phase** -- the framework applies all queued changes from all plugins to the market engine.
-3. **Finalize phase** -- all enabled plugins call `finalize()`. The market state now reflects all changes. Plugins can do post-processing here.
+2. **Finalize phase** -- all enabled plugins call `finalize()`. Reads like `getTargetPrice()` return the values queued this tick, so a plugin can modify the combined result here (the NewsPlugin multiplies the target price in `finalize()`). Do not call `setTargetPrice()` in `finalize()`; it would overwrite such modifiers.
+3. **Apply phase** -- the framework applies all queued changes from all plugins to the market engine.
 
 ## Capabilities
 
@@ -77,6 +79,7 @@ The sequence each tick:
 | Define per-market type-safe custom settings | `ServerPlugin.customSettingsCodec()`, `provideDefaultCustomSettings()`, `onCustomSettingsApplied()` |
 | Persist state across server restarts | `ServerPlugin.save(CompoundTag)`, `load(CompoundTag)` |
 | Custom inline or full-screen GUI | `PluginGuiElement` subclass, registered via `PluginRegistryObject.setGuiElementFactory()` |
+| "Apply to all" and "Defaults" buttons in the settings GUI | `PluginGuiElement.confirmApplyToAllMarkets()`, `sendCustomSettingsToAllMarkets()`, `createDefaultsButton()` |
 | Draw overlays on candlestick chart | Override `PluginGuiElement.setCandlestickChart()`, register `CandlestickChart.Overlay` |
 | Draw overlays on orderbook histogram | Override `PluginGuiElement.setOrderbookVolumeHistogram()`, register `OrderbookVolumeHistogram.Overlay` |
 

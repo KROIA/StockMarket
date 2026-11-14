@@ -4,13 +4,21 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.market.PriceHistoryCache;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.util.PriceHistoryData;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class ClientMarketTestSuite extends TestSuite {
 
@@ -33,6 +41,7 @@ public class ClientMarketTestSuite extends TestSuite {
         addTest("candle_delta_index_restore", this::test_candleDeltaIndexRestore);
         addTest("subscribe_idempotent", this::test_subscribeToMarketPriceUpdate_idempotent);
         addTest("unsubscribe_no_subscription", this::test_unsubscribeFromMarketPriceUpdate_noSubscription);
+        addTest("trading_hours_apply_to_all_markets", this::test_tradingHoursApplyToAllMarkets); // SM-279
     }
 
     /**
@@ -222,5 +231,80 @@ public class ClientMarketTestSuite extends TestSuite {
         } finally {
             ClientMarket.setCandleUseGameTime(original);
         }
+    }
+
+    /**
+     * SM-279 (T-184): the request path of the Market Settings "apply trading hours to all markets" button
+     * ({@code MarketSettingsWidget.applyTradingHoursToAllMarkets} calls {@link ClientMarket#setTradingHoursAsync} on
+     * every available market). Calls it on every ClientMarket of this client (two scratch markets added so there
+     * is something to apply to), waits for all answers and checks every one succeeded and every ServerMarket has the
+     * window. The widget itself is not driven. sp only (client and master in this JVM); the player gets StockMarket
+     * admin mode for the test if needed. Every market's window, the admin flag and the scratch markets are restored.
+     */
+    private TestResult test_tradingHoursApplyToAllMarkets() {
+        StockMarketModBackend.ServerInstances server = StockMarketModBackend.getServerInstances();
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (server == null || client == null || client.MARKET_MANAGER == null || server.MARKET_MANAGER == null
+                || server.MARKET_MANAGER.isSlave() || getServer() == null)
+            return skip("sp only (client and master in this JVM)");
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null)
+            return skip("no client player");
+        UUID player = mc.player.getUUID();
+        ISyncServerMarketManager manager = server.MARKET_MANAGER.getSync();
+        final int open = 0, close = 1439;
+
+        TestFixture fixture = new TestFixture("ApplyHoursToAll");
+        fixture.setBackend(server);
+        boolean wasAdmin = manager.isStockmarketAdmin(player);
+        Map<ItemID, int[]> before = new LinkedHashMap<>();
+        try {
+            ItemID a = fixture.createMarket("a").getItemID();
+            ItemID b = fixture.createMarket("b").getItemID();
+            if (!pumpUntil(() -> client.MARKET_MANAGER.getMarket(a) != null && client.MARKET_MANAGER.getMarket(b) != null, 10_000))
+                return fail("the client did not list the scratch markets");
+            if (!wasAdmin)
+                manager.setStockmarketAdminMode(player, true);
+
+            List<CompletableFuture<Boolean>> futures = onClient(mc, () -> {
+                List<CompletableFuture<Boolean>> sent = new ArrayList<>();
+                for (ItemID id : client.MARKET_MANAGER.getAvailableMarkets()) {
+                    ClientMarket market = client.MARKET_MANAGER.getMarket(id);
+                    IServerMarket serverMarket = manager.getMarket(id);
+                    if (market == null || serverMarket == null)
+                        continue;
+                    before.put(id, new int[]{serverMarket.getSettings().tradingOpenMinute, serverMarket.getSettings().tradingCloseMinute});
+                    sent.add(market.setTradingHoursAsync(open, close));
+                }
+                return sent;
+            });
+            await(CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])), 10_000);
+            long succeeded = futures.stream().filter(f -> Boolean.TRUE.equals(f.join())).count();
+            TestResult r = assertEquals("every market answered success", (long) before.size(), succeeded);
+            if (!r.passed()) return r;
+            for (ItemID id : before.keySet()) {
+                IServerMarket serverMarket = manager.getMarket(id);
+                r = assertEquals("window of market " + id, List.of(open, close), serverMarket == null ? null
+                        : List.of(serverMarket.getSettings().tradingOpenMinute, serverMarket.getSettings().tradingCloseMinute));
+                if (!r.passed()) return r;
+            }
+            return pass("window applied to all " + before.size() + " markets");
+        } finally {
+            before.forEach((id, window) -> {
+                IServerMarket serverMarket = manager.getMarket(id);
+                if (serverMarket != null)
+                    serverMarket.setTradingHours(window[0], window[1]);
+            });
+            if (!wasAdmin)
+                manager.setStockmarketAdminMode(player, false);
+            fixture.cleanup();
+        }
+    }
+
+    /** Runs {@code body} on the client thread (the client API's thread) and waits for it. */
+    private <T> T onClient(net.minecraft.client.Minecraft mc, java.util.function.Supplier<T> body) {
+        if (mc.isSameThread())
+            return body.get();
+        return await(mc.submit(body), 10_000);
     }
 }
