@@ -6,6 +6,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.market.CrossRateMarket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
@@ -18,6 +19,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 public class ClientMarketManager implements IClientMarketManager
@@ -30,8 +32,21 @@ public class ClientMarketManager implements IClientMarketManager
     private final IAsyncMarketManager asyncMarketManager;
     /** Reads BankSystem's item fraction scale factor; the client bank manager in production, a fake in tests. */
     private final Supplier<CompletableFuture<Integer>> factorRead;
+    /**
+     * Tells the open StockMarket screen that markets changed (SM-310): the kind and the market, or a null market
+     * when a {@link #requestMarkets()} answer added several at once. A no-op or counter in tests.
+     */
+    private final BiConsumer<MarketChangedPacket.Kind, @Nullable ItemID> marketsChangedListener;
 
     private final Map<ItemID, ClientMarket> clientMarkets = new HashMap<>();
+
+    /**
+     * SM-320: markets whose ADDED notice is waiting for the item fraction scale factor read (a server round trip).
+     * A REMOVED that arrives in that window finds no ClientMarket to drop, so it clears the entry here instead,
+     * and the late ADDED completion then does not create a ClientMarket for the already deleted market (it would
+     * stay listed until the next {@link #requestMarkets()}).
+     */
+    private final Set<ItemID> pendingAdds = new HashSet<>();
 
     /** Composite key for caching cross-rate market instances. */
     private record CrossRateKey(ItemID haveItemID, ItemID wantItemID) {}
@@ -42,12 +57,15 @@ public class ClientMarketManager implements IClientMarketManager
     public ClientMarketManager()
     {
         this(AsyncMarketManager.createClientManager(),
-                () -> BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync());
+                () -> BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync(),
+                StockMarketClientHooks::notifyScreenMarketsChanged);
     }
-    private ClientMarketManager(IAsyncMarketManager asyncMarketManager, Supplier<CompletableFuture<Integer>> factorRead)
+    private ClientMarketManager(IAsyncMarketManager asyncMarketManager, Supplier<CompletableFuture<Integer>> factorRead,
+                                BiConsumer<MarketChangedPacket.Kind, @Nullable ItemID> marketsChangedListener)
     {
         this.asyncMarketManager = asyncMarketManager;
         this.factorRead = factorRead;
+        this.marketsChangedListener = marketsChangedListener;
     }
 
     /**
@@ -61,7 +79,23 @@ public class ClientMarketManager implements IClientMarketManager
     public static ClientMarketManager createForTesting(IAsyncMarketManager asyncMarketManager,
                                                        Supplier<CompletableFuture<Integer>> factorRead)
     {
-        return new ClientMarketManager(asyncMarketManager, factorRead);
+        return createForTesting(asyncMarketManager, factorRead, () -> {});
+    }
+
+    /**
+     * Test seam (SM-304): like {@link #createForTesting(IAsyncMarketManager, Supplier)}, plus a listener that
+     * replaces the open-screen notification (the real one touches the client GUI, absent on a dedicated server).
+     *
+     * @param asyncMarketManager   replaces the client's market manager
+     * @param factorRead           replaces BankSystem's item fraction scale factor read
+     * @param marketsChangedListener runs whenever the open screen would be told that markets changed
+     * @return the manager
+     */
+    public static ClientMarketManager createForTesting(IAsyncMarketManager asyncMarketManager,
+                                                       Supplier<CompletableFuture<Integer>> factorRead,
+                                                       Runnable marketsChangedListener)
+    {
+        return new ClientMarketManager(asyncMarketManager, factorRead, (kind, id) -> marketsChangedListener.run());
     }
 
 
@@ -157,21 +191,24 @@ public class ClientMarketManager implements IClientMarketManager
             {
                 if(response == null) // not sent; must not be read as "the server has no markets" (that prunes all)
                     throw new IllegalStateException("Markets request could not be sent");
-                info("Markets request response received with "+response.size()+" markets");
+                boolean added = false;
                 for(ItemID itemID : response) {
-                    createClientMarket(itemID, factor);
+                    added |= createClientMarket(itemID, factor);
                 }
                 // Prune cached markets the server no longer reports (deleted markets).
                 // Without this the cache only ever grows, so a market deleted on the
                 // server would remain selectable in every market list forever
-                // (until relog). Acts as a safety net alongside MarketRemovedPacket.
+                // (until relog). Acts as a safety net alongside MarketChangedPacket REMOVED.
                 List<ItemID> staleMarkets = clientMarkets.keySet().stream()
                         .filter(cached -> !response.contains(cached))
                         .toList();
                 for(ItemID staleID : staleMarkets) {
-                    info("Removing stale ClientMarket (no longer on server): " + staleID);
                     onMarketRemoved(staleID);
                 }
+                // SM-304: a screen opened before this answer (e.g. the TradeScreen whose constructor
+                // started this request) built its lists from the old cache; let it refresh them.
+                if(added)
+                    marketsChangedListener.accept(MarketChangedPacket.Kind.ADDED, null);
                 return response;
             }));
     }
@@ -212,13 +249,12 @@ public class ClientMarketManager implements IClientMarketManager
     {
         return asyncMarketManager.createMarketAsync(itemID).thenCompose(market -> {
             if (market != null) {
-                info("Market created on server for: " + itemID);
                 return factorRead.get().handle((factor, failure) -> {
                     if (failure != null)
                         warn("Market " + itemID + " was created, but reading the item fraction scale factor failed ("
                                 + failure + "); the next market list request loads it");
-                    else
-                        createClientMarket(itemID, factor);
+                    else if (createClientMarket(itemID, factor))
+                        marketsChangedListener.accept(MarketChangedPacket.Kind.ADDED, itemID); // the ADDED packet may arrive after this; it is then a no-op
                     return true;
                 });
             }
@@ -238,10 +274,9 @@ public class ClientMarketManager implements IClientMarketManager
     {
         return asyncMarketManager.deleteMarketAsync(marketID).thenApply(success -> {
             if (success) {
-                info("Market deleted on server for: " + marketID);
                 // Remove the local client market, its stream subscription and any
                 // cross-rate markets referencing it. The server additionally broadcasts
-                // a MarketRemovedPacket to all clients (including this one) — the
+                // a MarketChangedPacket REMOVED to all clients (including this one) — the
                 // cleanup is idempotent, so handling it twice is harmless.
                 onMarketRemoved(marketID);
             } else {
@@ -259,7 +294,7 @@ public class ClientMarketManager implements IClientMarketManager
      * <p>
      * This is the client-side half of the market-deletion propagation:
      * the master server's {@code ServerMarketManager.deleteMarket} broadcasts a
-     * {@code MarketRemovedPacket} to every connected client (relayed through slave
+     * {@code MarketChangedPacket} REMOVED to every connected client (relayed through slave
      * servers in a multi-server setup), whose handler calls this method on the
      * client main thread. It drops the cached {@link ClientMarket}, force-stops its
      * price stream so no orphaned subscription keeps polling the server, and evicts
@@ -273,11 +308,51 @@ public class ClientMarketManager implements IClientMarketManager
             // Stop the price stream even if GUI elements are still subscribed —
             // the server-side market is gone, the stream can never deliver again.
             removedMarket.forceStopMarketPriceStream();
-            info("Removed ClientMarket for deleted market: " + marketID);
         }
         // Cross-rate markets derived from the deleted market are now dead as well.
         crossRateMarkets.entrySet().removeIf(entry ->
                 entry.getKey().haveItemID().equals(marketID) || entry.getKey().wantItemID().equals(marketID));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Client half of the market-change propagation (SM-310): the master's {@code ServerMarketManager}
+     * broadcasts a {@code MarketChangedPacket} (relayed through slaves), whose handler calls this. For ADDED the
+     * ClientMarket needs the item fraction scale factor, so it is created when that read completes; a failed read
+     * leaves the market to the next {@link #requestMarkets()}.
+     */
+    @Override
+    public void onMarketChanged(ItemID marketID, MarketChangedPacket.Kind kind)
+    {
+        switch (kind) {
+            case ADDED -> {
+                pendingAdds.add(marketID);
+                factorRead.get().whenComplete((factor, failure) -> {
+                    if (!pendingAdds.remove(marketID))
+                        return; // SM-320: REMOVED arrived while the read was pending; the market is gone
+                    if (failure != null || factor == null) {
+                        warn("Market " + marketID + " was created on the server, but reading the item fraction scale factor failed ("
+                                + failure + "); the next market list request loads it");
+                        return;
+                    }
+                    if (createClientMarket(marketID, factor))
+                        marketsChangedListener.accept(kind, marketID);
+                });
+            }
+            case REMOVED -> {
+                pendingAdds.remove(marketID); // SM-320: cancels an ADDED still waiting for its factor read
+                onMarketRemoved(marketID);
+                marketsChangedListener.accept(kind, marketID);
+            }
+            default -> {
+                ClientMarket market = clientMarkets.get(marketID);
+                if (market == null)
+                    return; // not listed here (unresolvable item, or not loaded yet); requestMarkets loads it
+                market.applyStateChange(kind);
+                marketsChangedListener.accept(kind, marketID);
+            }
+        }
     }
 
     /**
@@ -300,7 +375,13 @@ public class ClientMarketManager implements IClientMarketManager
         return crossRate;
     }
 
-    private void createClientMarket(ItemID itemID, int itemFractionScaleFactor)
+    /**
+     * Creates and caches the ClientMarket for {@code itemID} unless it is cached already or its item
+     * cannot be resolved on this side.
+     *
+     * @return true if a new ClientMarket was added
+     */
+    private boolean createClientMarket(ItemID itemID, int itemFractionScaleFactor)
     {
         ClientMarket clientMarket = clientMarkets.get(itemID);
         if(clientMarket == null)
@@ -317,14 +398,11 @@ public class ClientMarketManager implements IClientMarketManager
                 // — the CandlestickChart's selectCandleTimeDeltaByIndex fires
                 // a single-delta request on first view / delta switch when its
                 // cache is empty (see T-136).
-                info("Created ClientMarket with ID: " + itemID);
+                return true;
             }
-            else
-            {
-                // Expected on a slave without the item's mod, so not an error
-                info("No ClientMarket for " + itemID + ": its item cannot be resolved here");
-            }
+            // else: expected on a slave without the item's mod, not an error
         }
+        return false;
     }
 
     @Override
