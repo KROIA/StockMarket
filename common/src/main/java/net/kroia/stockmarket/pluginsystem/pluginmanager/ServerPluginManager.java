@@ -4,6 +4,7 @@ import net.kroia.modutilities.NbtCompat;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
@@ -575,6 +576,9 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         }
         // T-213: split the pre-T-213 VolatilityPlugins (flow model inside) into NetFlowPlugin + VolatilityPlugin.
         netFlowMigrationDone = readManagerFlag(listTags, "netFlowPluginMigrationDone") || migrateNetFlowPlugins(pluginsTag);
+        // SM-327: the Volatility plugins keep the old flow data in their save only until the split has succeeded
+        if (netFlowMigrationDone)
+            for (ServerPlugin p : plugins.values()) if (p instanceof VolatilityPlugin v) v.dropLegacyFlowData();
         return success;
     }
 
@@ -606,7 +610,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
                 UUID volID = pluginTag.contains("instanceID") ? NbtCompat.getUUID(pluginTag, "instanceID") : null;
                 if (volID == null || !(plugins.get(volID) instanceof VolatilityPlugin vol)) continue; // not loaded
                 NetFlowPlugin flow = (NetFlowPlugin) addPlugin(Plugins.NET_FLOW_PLUGIN);
-                if (flow == null) return rollbackNetFlowMigration(created, "failed to instantiate the NetFlowPlugin");
+                if (flow == null) return rollbackNetFlowMigration(created, "failed to instantiate the NetFlowPlugin", null);
                 created.add(flow);
                 moveBefore(flow.getInstanceID(), volID);
                 flow.setAutoSubscribeNewMarkets(vol.getAutoSubscribeNewMarkets());
@@ -643,16 +647,18 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
                         if (marketTag.contains("satFlow") && marketTag.contains("lastFaded"))
                             flow.restoreFlowState(marketID, NbtCompat.getDouble(marketTag, "satFlow"), NbtCompat.getDouble(marketTag, "lastFaded"));
                     }
-                    flow.replaceCustomSettings(marketID, s);
+                    flow.replaceCustomSettings(marketID, NetFlowPlugin.moveOldDefaults(s)); // SM-327
                 }
                 flow.setEnabled(vol.isEnabled());
             }
         } catch (Exception e) {
-            return rollbackNetFlowMigration(created, "failed: " + e);
+            return rollbackNetFlowMigration(created, "failed", e);
         }
+        // SM-327: StockMarketMod.LOGGER, not info(): this manager's loggerEnabled is always false, so info() is silent
         if (!created.isEmpty())
-            info("T-213: split " + created.size() + " VolatilityPlugin(s): the net-flow price model now runs in a"
-                    + " NetFlowPlugin placed before each, with the same markets and settings.");
+            StockMarketMod.LOGGER.info(getLogPrefix() + "T-213: split " + created.size() + " VolatilityPlugin(s): the"
+                    + " net-flow price model now runs in a NetFlowPlugin placed before each, with the same markets and"
+                    + " settings (unchanged 2.1.2 defaults moved to the new ones).");
         return true;
     }
 
@@ -666,10 +672,11 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         }
     }
 
-    /** Removes the NetFlowPlugins a failed migration created, logs why, returns false. */
-    private boolean rollbackNetFlowMigration(List<ServerPlugin> created, String why) {
+    /** Removes the NetFlowPlugins a failed migration created, logs why (always, see SM-327), returns false. */
+    private boolean rollbackNetFlowMigration(List<ServerPlugin> created, String why, @Nullable Throwable cause) {
         for (ServerPlugin p : created) removePlugin(p);
-        warn("migrateNetFlowPlugins(): " + why + "; no NetFlowPlugin created, retrying on the next load");
+        StockMarketMod.LOGGER.error(getLogPrefix() + "migrateNetFlowPlugins(): " + why
+                + "; no NetFlowPlugin created, the old flow settings are kept and the next load retries", cause);
         return false;
     }
 
