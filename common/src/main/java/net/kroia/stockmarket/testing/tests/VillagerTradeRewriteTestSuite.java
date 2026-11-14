@@ -29,8 +29,8 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.village.ReputationEventType;
-import net.minecraft.world.entity.npc.Villager; // mc<=1.21.10
-//import net.minecraft.world.entity.npc.villager.Villager; // mc>=1.21.11
+//import net.minecraft.world.entity.npc.Villager; // mc<=1.21.10
+import net.minecraft.world.entity.npc.villager.Villager; // mc>=1.21.11
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -1019,8 +1019,8 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         boolean oldReplace = settings.REPLACE_EMERALDS_FOR_UNLISTED.get();
         boolean oldPreset = settings.USE_PRESET_PRICES_FOR_VILLAGERS.get();
         MobEffectInstance oldHero = player.getEffect(MobEffects.HERO_OF_THE_VILLAGE);
-        Villager villager = EntityType.VILLAGER.create(player.level()); // mc<=1.21.1
-        //Villager villager = EntityType.VILLAGER.create(player.level(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // mc>=1.21.2 mc<=26.1
+        //Villager villager = EntityType.VILLAGER.create(player.level()); // mc<=1.21.1
+        Villager villager = EntityType.VILLAGER.create(player.level(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // mc>=1.21.2 mc<=26.1
         //Villager villager = net.minecraft.world.entity.EntityTypes.VILLAGER.create(player.level(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // mc>=26.2
         if (villager == null) {
             return fail("could not create a villager");
