@@ -79,6 +79,13 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
 
     private static final Random random = new Random();
     private final Map<ItemID, MarketData> marketData = new HashMap<>();
+    /**
+     * SM-327: each market's loaded "marketData" entry, written back under the current keys on save. A pre-T-213
+     * entry also holds the old flow settings and flow state the NetFlowPlugin split reads; if the split fails and
+     * the world is saved before the retry, they would otherwise be lost. Cleared by {@link #dropLegacyFlowData()}
+     * once the split has succeeded.
+     */
+    private final Map<ItemID, CompoundTag> legacyMarketTags = new HashMap<>();
 
     public VolatilityPlugin()
     {
@@ -161,7 +168,8 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         // Save per-market price generator state so random walks persist across restarts
         ListTag marketsTag = new ListTag();
         for (Map.Entry<ItemID, MarketData> entry : marketData.entrySet()) {
-            CompoundTag marketTag = new CompoundTag();
+            CompoundTag legacy = legacyMarketTags.get(entry.getKey());
+            CompoundTag marketTag = legacy != null ? legacy.copy() : new CompoundTag(); // SM-327: keep the old flow keys
             entry.getKey().save(marketTag);
             CompoundTag generatorTag = new CompoundTag();
             entry.getValue().priceGenerator.save(generatorTag);
@@ -178,7 +186,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         // Restore per-market price generator state (marketData map is already populated
         // because subscribeToMarket() is called before load() in ServerPluginManager).
         // T-213: pre-T-213 saves also carry the flow keys (flowSensitivity, satFlow, ...); the
-        // NetFlowPlugin migration reads them, this plugin ignores them.
+        // NetFlowPlugin migration reads them, this plugin ignores them but keeps them for save (SM-327).
         if (tag.contains("marketData")) {
             ListTag marketsTag = NbtCompat.getList(tag, "marketData", 10);
             for (int i = 0; i < marketsTag.size(); i++) {
@@ -187,6 +195,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                 if (marketID != null && marketID.isValid()) {
                     MarketData data = marketData.get(marketID);
                     if (data != null) {
+                        legacyMarketTags.put(marketID, marketTag.copy());
                         if (marketTag.contains("priceGenerator")) {
                             data.priceGenerator.load(NbtCompat.getCompound(marketTag, "priceGenerator"));
                         }
@@ -197,6 +206,11 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             }
         }
         return true;
+    }
+
+    /** SM-327: called after the NetFlowPlugin split has succeeded; later saves write only this plugin's own keys. */
+    public void dropLegacyFlowData() {
+        legacyMarketTags.clear();
     }
 
     @Override

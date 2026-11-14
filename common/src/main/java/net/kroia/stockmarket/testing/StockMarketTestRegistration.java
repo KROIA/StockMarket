@@ -132,6 +132,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new net.kroia.stockmarket.testing.tests.DocumentationLinkTestSuite()); // SM-276
         TestRegistry.register(new net.kroia.stockmarket.testing.tests.FixtureHooksTestSuite()); // BS-269 (trusted slave only)
         TestRegistry.register(new net.kroia.stockmarket.testing.tests.AuditFixtureSuite()); // BS-269 (opt-in, trusted slave only)
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.Upgrade212TestSuite()); // SM-328 (opt-in, master only)
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());
