@@ -177,6 +177,9 @@ public class StockMarketTestCategories {
     public static final TestCategory VILLAGER_REWRITE = new TestCategory(
             "stockmarket", "sm_villager_rewrite", "Villager trade offer rewrite tests", MASTER_ONLY, true);
 
+    public static final TestCategory DATA_MIGRATION = new TestCategory(
+            "stockmarket", "sm_data_migration", "SM-325: save-data version, step 1 (pre-2.2.0 -> 2.2.0) on a temp world: conversion, re-run safety, fresh world, newer save refused", BOTH, false);
+
     public static final TestCategory MOD_SETTINGS = new TestCategory(
             "stockmarket", "sm_mod_settings", "Mod settings JSON round-trip and sanitize-bounds tests", BOTH, false);
 
@@ -208,4 +211,19 @@ public class StockMarketTestCategories {
     // T-246: the slave-masterdown autotest cell (run_matrix --configs slave-masterdown); skips in every other cell.
     public static final TestCategory MASTER_DOWN = new TestCategory(
             "stockmarket", "sm_master_down", "Slave with its master down: StockMarket screens and the StockMarket block refuse with the StockMarket message (slave-masterdown cell only)", SLAVE_ONLY, true);
+
+    // SM-288: port smoke checks, every cell (master and slave).
+    public static final TestCategory PORT_SMOKE = new TestCategory(
+            "stockmarket", "sm_port_smoke", "Port smoke checks: recipes loaded, NeoForge mod-bus setup fired, villager sidecar save/reload, display block merge/split/break and block entity save/load", BOTH, true);
+
+    // SM-313: client integration API for BankSystem (embedded chart, open trade screen); chart tests need a client (sp cells).
+    public static final TestCategory CLIENT_INTEGRATION = new TestCategory(
+            "stockmarket", "sm_client_integration", "Client integration API: embedded price chart subscription balance, unknown markets, trade screen initial market and OpenUIPacket market round trip", BOTH, true);
+    public static final TestCategory PICKER_REGISTRATION = new TestCategory("stockmarket", "sm_picker_registration", "SM-273: a not-yet-registered plain item gets an ItemID through the picker's server path and its market is created (master, trusted slave); an untrusted slave stays lookup-only", BOTH, true);
+    public static final TestCategory DOCUMENTATION = new TestCategory("stockmarket", "sm_docs", "SM-276: relative links, images and anchors in README.md and documentation/ resolve; plugin SVGs are well-formed with a size (offline)", BOTH, false);
+    // BS-269: the master-side fixture hooks (FixtureTestRequest), driven from a trusted slave.
+    public static final TestCategory FIXTURE_HOOKS = new TestCategory("stockmarket", "sm_fixture_hooks", "BS-269: a trusted slave makes the master change a market setting and restore it, place a bot order, detach plugins, backfill candles and read back a filled order", SLAVE_ONLY, true);
+
+    // BS-269: opt-in driver of the generated audit fixture (slave-trusted cell, run only with --only).
+    public static final TestCategory AUDIT_FIXTURE = new TestCategory("stockmarket", "sm_audit_fixture", "BS-269 (opt-in): drives the whole audit-fixture story from a trusted slave and adds the StockMarket market cases B1-B8 and the market part of story E to the answer key", SLAVE_ONLY, true);
 }

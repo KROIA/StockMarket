@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.StringJoiner;
 import java.util.UUID;
 
 /**
@@ -85,7 +86,10 @@ public final class PumpDumpDetector {
         if (Double.isNaN(profit)) return;
         String name = playerName(player);
         String amount = String.format(Locale.ROOT, "%.2f", profit);
-        TradeAlerts.raise("Pump-and-dump cycle: player " + name + " (" + player + ") sold " + market.getName()
+        TradeAlerts.raise(new TradeAlerts.Row(TradeAlerts.Row.KIND_CYCLE, player, order.getBankAccountNr(), market,
+                        MarketManager.convertToRawAmountStatic(profit), windowMs, (double) threshold,
+                        Long.toString(order.getOrderID())),
+                "Pump-and-dump cycle: player " + name + " (" + player + ") sold " + market.getName()
                         + " bought within " + minutes + " min for " + amount + " profit (threshold " + threshold + ")",
                 Component.translatable("message.stockmarket.alert.pump_dump_cycle", name, market.getName(), amount, minutes));
     }
@@ -170,10 +174,14 @@ public final class PumpDumpDetector {
         if (percent == null || !isPriceMove(startPrice, endPrice, percent)) return;
         for (Order buy : buys) {
             UUID player = buy.getExecutorPlayerUUID();
-            if (player == null || !hasOwnSellAbove(player, startPrice, sellBook)) continue;
+            if (player == null) continue;
+            String sells = ownSellsAbove(player, startPrice, sellBook);
+            if (sells.isEmpty()) continue;
             String name = playerName(player);
             String move = String.format(Locale.ROOT, "%.1f", (endPrice - startPrice) * 100.0 / startPrice);
-            TradeAlerts.raise("Pump-and-dump pump: player " + name + " (" + player + ") market-bought " + market.getName()
+            TradeAlerts.raise(new TradeAlerts.Row(TradeAlerts.Row.KIND_PUMP, player, buy.getBankAccountNr(), market,
+                            endPrice - startPrice, null, (double) percent, buy.getOrderID() + "," + sells),
+                    "Pump-and-dump pump: player " + name + " (" + player + ") market-bought " + market.getName()
                             + " moving the price " + move + "% (" + startPrice + " -> " + endPrice
                             + " raw, threshold " + percent + "%) with an own sell order resting above " + startPrice,
                     Component.translatable("message.stockmarket.alert.pump_dump_pump", name, market.getName(), move));
@@ -194,13 +202,14 @@ public final class PumpDumpDetector {
      * @param player     the buyer
      * @param startPrice price before the buy (raw)
      * @param sellBook   resting real sell limit orders
-     * @return true if the player has an own SELL order resting above {@code startPrice}
+     * @return comma-separated IDs of the player's own SELL orders resting above {@code startPrice}, "" if none
      */
-    public static boolean hasOwnSellAbove(UUID player, long startPrice, Collection<Order> sellBook) {
+    public static String ownSellsAbove(UUID player, long startPrice, Collection<Order> sellBook) {
+        StringJoiner ids = new StringJoiner(",");
         for (Order o : sellBook)
             if (player.equals(o.getExecutorPlayerUUID()) && o.isSellOrder() && o.getStartPrice() > startPrice)
-                return true;
-        return false;
+                ids.add(Long.toString(o.getOrderID()));
+        return ids.toString();
     }
 
     private static String playerName(UUID player) {

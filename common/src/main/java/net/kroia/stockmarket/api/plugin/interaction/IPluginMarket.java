@@ -12,10 +12,15 @@ public interface IPluginMarket {
 
 
     /**
-     * Gets the maximum volume a player is allowed to place in a single order on this market.
-     * @return the limit in real items; 0 = unlimited
+     * Gets the market's max order size: the most items a single player order may buy or sell on
+     * this market. Bot orders are not limited by it; plugins may use it to size their own orders
+     * relative to what players can trade.
+     *
+     * <p>The default returns 0, so implementations that don't know a limit report "no limit".
+     *
+     * @return the limit in real items (whole item count, not raw backend units); 0 = no limit
      */
-    double getMaxRealOrderVolume();
+    default double getMaxRealOrderVolume() { return 0; }
 
 
     /**
