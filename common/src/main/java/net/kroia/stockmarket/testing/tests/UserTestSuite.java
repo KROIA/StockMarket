@@ -278,8 +278,8 @@ public class UserTestSuite extends TestSuite {
                 StockMarketPermissions.canUseFlagGatedCommand(console, StockMarketPermissions.COMMAND_MARKET));
         if (!r.passed()) return r;
         return assertFalse("level-0 non-player source is refused",
-                StockMarketPermissions.canUseFlagGatedCommand(console.withPermission(0), StockMarketPermissions.COMMAND_MARKET)); // mc<=1.21.10
-                //StockMarketPermissions.canUseFlagGatedCommand(console.withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))), StockMarketPermissions.COMMAND_MARKET)); // mc>=1.21.11
+                //StockMarketPermissions.canUseFlagGatedCommand(console.withPermission(0), StockMarketPermissions.COMMAND_MARKET)); // mc<=1.21.10
+                StockMarketPermissions.canUseFlagGatedCommand(console.withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))), StockMarketPermissions.COMMAND_MARKET)); // mc>=1.21.11
     }
 
     /**
@@ -301,8 +301,8 @@ public class UserTestSuite extends TestSuite {
         boolean before = manager.isStockmarketAdmin(uuid);
         try {
             manager.setStockmarketAdminMode(uuid, flag);
-            CommandSourceStack source = player.createCommandSourceStack().withPermission(opLevel); // mc<=1.21.10
-            //CommandSourceStack source = player.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(opLevel))); // mc>=1.21.11
+            //CommandSourceStack source = player.createCommandSourceStack().withPermission(opLevel); // mc<=1.21.10
+            CommandSourceStack source = player.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(opLevel))); // mc>=1.21.11
             TestResult r = assertTrue("player passes the requires check",
                     StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_MARKET));
             if (!r.passed()) return r;
@@ -362,8 +362,8 @@ public class UserTestSuite extends TestSuite {
             }
 
             java.util.List<net.minecraft.network.chat.Component> messages = new java.util.ArrayList<>();
-            CommandSourceStack source = player.createCommandSourceStack().withPermission(0).withSource(capture(messages)); // mc<=1.21.10
-            //CommandSourceStack source = player.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))).withSource(capture(messages)); // mc>=1.21.11
+            //CommandSourceStack source = player.createCommandSourceStack().withPermission(0).withSource(capture(messages)); // mc<=1.21.10
+            CommandSourceStack source = player.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))).withSource(capture(messages)); // mc>=1.21.11
             TestResult r = assertTrue("level-0 player passes the requires check",
                     StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_MANAGE));
             if (!r.passed()) return r;
@@ -405,14 +405,14 @@ public class UserTestSuite extends TestSuite {
         if (root == null) return skip("/stockmarket not registered");
         List<ServerPlayer> players = getServer().getPlayerList().getPlayers();
         if (players.isEmpty()) return skip("no online player");
-        CommandSourceStack level0 = players.get(0).createCommandSourceStack().withPermission(0); // mc<=1.21.10
-        //CommandSourceStack level0 = players.get(0).createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))); // mc>=1.21.11
+        //CommandSourceStack level0 = players.get(0).createCommandSourceStack().withPermission(0); // mc<=1.21.10
+        CommandSourceStack level0 = players.get(0).createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))); // mc>=1.21.11
         for (String literal : new String[]{"op", "deop", "backup"}) {
             com.mojang.brigadier.tree.CommandNode<CommandSourceStack> node = root.getChild(literal);
             TestResult r = assertNotNull("/stockmarket " + literal + " registered", node);
             if (!r.passed()) return r;
-            boolean at0 = node.canUse(level0), at2 = node.canUse(level0.withPermission(2)); // mc<=1.21.10
-            //boolean at0 = node.canUse(level0), at2 = node.canUse(level0.withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(2)))); // mc>=1.21.11
+            //boolean at0 = node.canUse(level0), at2 = node.canUse(level0.withPermission(2)); // mc<=1.21.10
+            boolean at0 = node.canUse(level0), at2 = node.canUse(level0.withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(2)))); // mc>=1.21.11
             if (at0 && at2)
                 return skip("a permission mod grants the player /stockmarket " + literal);
             r = assertFalse("level-0 player cannot use /stockmarket " + literal, at0);
@@ -433,8 +433,8 @@ public class UserTestSuite extends TestSuite {
         TestResult r = assertNotNull("/stockmarket manage registered", manage);
         if (!r.passed()) return r;
         return assertTrue("level-0 player can use /stockmarket manage",
-                manage.canUse(players.get(0).createCommandSourceStack().withPermission(0))); // mc<=1.21.10
-                //manage.canUse(players.get(0).createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))))); // mc>=1.21.11
+                //manage.canUse(players.get(0).createCommandSourceStack().withPermission(0))); // mc<=1.21.10
+                manage.canUse(players.get(0).createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))))); // mc>=1.21.11
     }
 
     private com.mojang.brigadier.tree.CommandNode<CommandSourceStack> stockmarketNode() {

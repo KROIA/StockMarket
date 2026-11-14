@@ -371,8 +371,8 @@ public class StockMarketModBackend implements StockMarketAPI {
             return;
         }
         singleplayerRefusal = refusal;
-        server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc<=1.21.1
-        //server.schedule(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc>=1.21.2
+        //server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc<=1.21.1
+        server.schedule(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc>=1.21.2
     }
 
     private static void onBankSystemSetupComplete()
