@@ -212,7 +212,7 @@ Definitions are validated on every load (`/stockmarket news reload` or server st
 
 ## Admin Commands
 
-All news commands live under `/stockmarket news`. The subcommands require operator permission level 2 **and** StockMarket admin status (`/stockmarket op`), same as the other management commands. They work identically on master and slave servers -- slave-issued commands are routed to the master automatically (tab completion of event ids is only available on the master; `stop` still suggests `all` on slaves).
+All news commands live under `/stockmarket news`. The subcommands require StockMarket admin status (`/stockmarket op`), same as the other management commands; operator level is not needed (from the console: operator level 2). See [Permissions](../admin-setup.md#permissions-luckperms). They work identically on master and slave servers -- slave-issued commands are routed to the master automatically (tab completion of event ids is only available on the master; `stop` still suggests `all` on slaves).
 
 | Command | Description | Admin only |
 |---------|-------------|------------|
@@ -275,7 +275,7 @@ Servers upgrading from earlier versions have a single `world/data/StockMarket/Ne
 2. Verified on disk with rebuilt sidecars.
 3. **Deleted** -- only after every chunk exists on disk. A `WARN` line in the server log records the migration.
 
-If both the legacy single file **and** an already-populated `history/` directory exist (interrupted migration or manual tampering), the safe branch runs: the old file is left in place, an `ERROR` is logged, and the news system continues with the on-disk chunks. Investigate the folder before manually deleting the legacy file.
+If both the legacy single file **and** an already-populated `history/` directory exist (for example after manual tampering), the safe branch runs: the old file is left in place, an `ERROR` is logged, and the news system continues with the on-disk chunks. Investigate the folder before manually deleting the legacy file.
 
 ### Picture Garbage Collection
 

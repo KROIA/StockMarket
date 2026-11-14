@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.request;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.data.filter.UUIDFilter;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
@@ -11,11 +12,15 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * Fetches the requesting player's own completed/cancelled order records from the SQL database.
@@ -100,8 +105,29 @@ public class OrderHistoryRequest extends StockMarketGenericRequest<OrderHistoryR
         return InputData.STREAM_CODEC.decode(buf);
     }
 
+    /** SM-309: a slave side drops records on markets it cannot resolve, see {@link #withoutHiddenMarkets}. */
     @Override
     public OutputData decodeOutput(RegistryFriendlyByteBuf buf) {
-        return OutputData.STREAM_CODEC.decode(buf);
+        return new OutputData(withoutHiddenMarkets(OutputData.STREAM_CODEC.decode(buf).records()));
+    }
+
+    /**
+     * SM-309: leaves out records on markets this side hides ({@link MultiServerUtils#isMarketHiddenHere}: a slave
+     * or a client on a slave cannot resolve the item). A hidden leg of an inter-market trade drops the whole
+     * trade. The master and its clients get the list unchanged.
+     *
+     * @param records history records as the master sent them
+     * @return the records this side may show
+     */
+    public static List<OrderRecordStruct> withoutHiddenMarkets(List<OrderRecordStruct> records) {
+        Set<UUID> hiddenGroups = new HashSet<>();
+        for (OrderRecordStruct record : records)
+            if (record.interMarketGroupID() != null && MultiServerUtils.isMarketHiddenHere(new ItemID(record.itemID())))
+                hiddenGroups.add(record.interMarketGroupID());
+        return records.stream()
+                .filter(r -> r.interMarketGroupID() == null
+                        ? !MultiServerUtils.isMarketHiddenHere(new ItemID(r.itemID()))
+                        : !hiddenGroups.contains(r.interMarketGroupID()))
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 }
