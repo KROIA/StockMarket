@@ -23,7 +23,12 @@ import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.PacketTap;
 import net.kroia.stockmarket.testing.TestFixture;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -106,6 +111,9 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         addTest("marketBuy_noLiquidity_unlocksMoney", this::test_marketBuy_noLiquidity_unlocksMoney);
         addTest("marketSell_partialFill_unlocksRemainderItems", this::test_marketSell_partialFill_unlocksRemainderItems);
         addTest("marketBuy_partialFill_unlocksRemainderMoney", this::test_marketBuy_partialFill_unlocksRemainderMoney);
+        // SM-278: the T-173 chat line telling the player how much of a market order filled
+        addTest("marketSell_partialFill_messagesPlayer", () -> test_partialFill_messagesPlayer(false));
+        addTest("marketBuy_partialFill_messagesPlayer", () -> test_partialFill_messagesPlayer(true));
 
         // T-166: max order size + global per-player trade cooldown
         addTest("maxOrder_oversizeRejected", this::test_maxOrder_oversizeRejected);
@@ -755,6 +763,74 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         }
     }
 
+    private static final String PARTIAL_FILL_KEY = "message.stockmarket.order_status.market_order_partially_filled";
+
+    /**
+     * SM-278: a partly filled player MARKET order sends its owner the {@code market_order_partially_filled}
+     * chat line (ServerMarket#notifyMarketOrderNotFullyFilled) with the filled amount, the requested amount
+     * and the item. Needs a real online player (sp, or mp with the client on this master); skips otherwise.
+     * The order runs on a scratch account the player is a member of; the system chat packets sent to the
+     * player are read through a {@link PacketTap}.
+     *
+     * @param buy true for a market buy against one resting sell, false for a market sell against one resting buy
+     */
+    private TestResult test_partialFill_messagesPlayer(boolean buy) {
+        MinecraftServer server = getServer();
+        if (server == null || server.getPlayerList().getPlayers().isEmpty())
+            return skip("no player online on this server");
+        ServerPlayer player = server.getPlayerList().getPlayers().get(0);
+
+        return withLimits(0, 0, () -> {
+            PacketTap tap = PacketTap.open(server, player);
+            if (tap == null)
+                return skip("the player has no network connection");
+            putMarketInNoLiquidityState();
+            try {
+                // Counterparty: one resting LIMIT of volume 1 on the opposite side (the only liquidity).
+                UUID other = UUID.randomUUID();
+                IServerBankAccount otherAcc = freshAccount(buy ? "MsgSeller" : "MsgBuyer", 10000000, 1000, other);
+                CreateOrderRequest.OutputData rest = executeRequest(new CreateOrderRequest.InputData(
+                        itemID, otherAcc.getAccountNumber(), Order.Type.LIMIT, buy ? -1.0 : 1.0, 100.0), other);
+                if (rest.status != CreateOrderRequest.Status.CREATED)
+                    return fail("Setup: resting LIMIT expected CREATED, got: " + rest.status);
+
+                // The real player: MARKET order of 3 on a scratch account it is a member of.
+                IServerBankAccount acc = fixture.createBankAccount(buy ? "MsgBuyPlayer" : "MsgSellPlayer");
+                acc.addUser(new User(player.getUUID(), player.getName().getString()), BankPermission.getAllPermissions());
+                acc.createBank(itemID, 0);
+                acc.createBank(moneyID, 0);
+                acc.getBank(itemID).setBalance(1000);
+                acc.getBank(moneyID).setBalance(10000000);
+                CreateOrderRequest.OutputData mkt = executeRequest(new CreateOrderRequest.InputData(
+                        itemID, acc.getAccountNumber(), Order.Type.MARKET, buy ? 3.0 : -3.0, 0.0), player.getUUID());
+                if (mkt.status != CreateOrderRequest.Status.CREATED)
+                    return fail("Expected CREATED, got: " + mkt.status);
+
+                serverMarket.update();
+                pumpUntil(() -> tap.findTranslatable(PARTIAL_FILL_KEY) != null, 3000);
+                TranslatableContents tc = tap.findTranslatable(PARTIAL_FILL_KEY);
+                if (tc == null)
+                    return fail("no " + PARTIAL_FILL_KEY + " message reached the player, got " + tap.systemMessages());
+
+                Object[] args = tc.getArgs();
+                TestResult r = assertEquals("message argument count", 3, args.length);
+                if (!r.passed()) return r;
+                double filled = Double.parseDouble(String.valueOf(args[0]));
+                r = assertTrue("filled amount " + args[0] + " is between 0 and 3", filled > 0 && filled < 3);
+                if (!r.passed()) return r;
+                r = assertEquals("requested amount", "3.00", String.valueOf(args[1]));
+                if (!r.passed()) return r;
+                String item = args[2] instanceof Component c ? c.getString() : String.valueOf(args[2]);
+                r = assertEquals("item name", itemID.getStack().getHoverName().getString(), item);
+                if (!r.passed()) return r;
+                return pass("Partly filled market " + (buy ? "buy" : "sell") + " told the player: " + args[0] + " of 3.00 " + item);
+            } finally {
+                tap.close();
+                restoreVirtualOrderbookEnabled();
+            }
+        });
+    }
+
     private TestResult test_putOrderFails_unlocksMoneyBuy() {
         try {
             // Put the market under maintenance so putOrder returns false
@@ -873,7 +949,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
     // ── T-215: OrderOrigin rows in stockmarket_diagnostics.db ────────────────
 
     /**
-     * The file holds only Meta and OrderOrigin (no BankSystem tables); OrderOrigin has exactly ref, origin_server_uid,
+     * The file holds only Meta, OrderOrigin and TradeAlert (no BankSystem tables); OrderOrigin has exactly ref, origin_server_uid,
      * origin_name; master rows get the own uid, slave rows the slave's.
      */
     private TestResult test_orderOrigin_columnsAndFirstRowWins() {
@@ -899,12 +975,12 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             }
             TestResult r = assertEquals("columns", List.of("ref", "origin_server_uid", "origin_name"), columns);
             if (!r.passed()) return r;
-            List<String> tables = new ArrayList<>(); // no TransferJournal / NoteFlow from BankSystem's schema
+            List<String> tables = new ArrayList<>(); // no TransferJournal / NoteFlow from BankSystem's schema; TradeAlert is SM-316
             try (Connection c = DiagnosticsDatabase.connect(file); Statement st = c.createStatement();
                  ResultSet rs = st.executeQuery("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")) {
                 while (rs.next()) tables.add(rs.getString(1));
             }
-            r = assertEquals("tables", List.of("Meta", "OrderOrigin"), tables);
+            r = assertEquals("tables", List.of("Meta", "OrderOrigin", "TradeAlert"), tables);
             if (!r.passed()) return r;
             r = assertEquals("master row", self + "|", originRow(file, "sm:order:1"));
             if (!r.passed()) return r;
@@ -912,7 +988,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             if (!r.passed()) return r;
             r = assertEquals("unknown slave row", "null|unknown-slave", originRow(file, "sm:order:3"));
             if (!r.passed()) return r;
-            return pass("Meta + OrderOrigin only, 3 columns, uid per origin, first row of a ref wins");
+            return pass("Meta + OrderOrigin + TradeAlert only, 3 columns, uid per origin, first row of a ref wins");
         } catch (Exception e) {
             return fail("Exception: " + e);
         } finally {

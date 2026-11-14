@@ -28,6 +28,10 @@ public final class StockMarketMod {
         }
     }
 
+    /** Set by NeoForgeSetup's mod-bus handlers when they run (SM-288 port smoke test). Unused on Fabric/Quilt. */
+    public static volatile boolean neoForgeCommonSetupFired = false;
+    public static volatile boolean neoForgeClientSetupFired = false;
+
     private static StockMarketModBackend backend;
 
     public static void init() {

@@ -5,6 +5,8 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
@@ -48,6 +50,28 @@ public class MultiServerUtils {
             UNRESOLVABLE_FOR_TESTING.remove(marketID);
     }
 
+    /**
+     * SM-309: whether this side hides markets it cannot resolve: a slave server, or a client connected to a
+     * slave (its item registry is the slave's). The master and its own clients hide nothing, so an admin can
+     * still remove broken markets there.
+     *
+     * @param marketID the market's item
+     * @return true if the market must be left out of results received here
+     */
+    public static boolean isMarketHiddenHere(@Nullable ItemID marketID)
+    {
+        return isSlaveSide() && !isMarketResolvableOnThisServer(marketID);
+    }
+
+    /** @return true on a slave server, or on a client whose server reported that it is not the master */
+    private static boolean isSlaveSide()
+    {
+        if (MultiServerManager.isSlave())
+            return true;
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        return client != null && client.SETTINGS != null && !client.SETTINGS.isMasterServer();
+    }
+
     public static boolean checkConnectionToMaster()
     {
         return MultiServerManager.isRunning() && MultiServerManager.isSlave();
@@ -59,7 +83,7 @@ public class MultiServerUtils {
         // T-159: translatable so the client resolves it in the player's language
         ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
         if (player != null)
-            player.sendSystemMessage(Component.translatable("message.stockmarket.slave_not_connected"));
+            player.sendSystemMessage(Component.translatable("message.stockmarket.slave_not_connected").withStyle(ChatFormatting.RED)); // SM-312: refusals are red
         return false;
     }
 

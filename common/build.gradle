@@ -45,6 +45,10 @@ dependencies {
     // Offline unit tests (T-223): ModUtilities' testing.OfflineTests runs the TestSuites as JUnit DynamicTests.
     testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
+    // SM-325: DataMigrationTestSuite migrates a SQLite file offline (in game BankSystem provides the driver).
+    testRuntimeOnly('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
 }
 
 // `gradlew :common:test` runs the test suites that need no game (TestSuite.needsGame() == false), see

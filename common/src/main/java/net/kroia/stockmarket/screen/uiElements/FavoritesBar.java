@@ -143,6 +143,8 @@ public class FavoritesBar extends StockMarketGuiElement {
 
         currencyIcon = new ItemView();
         currencyIcon.setEnabled(false);
+        // Open the item tooltip to the LEFT of the mouse (TOP_RIGHT anchors the tooltip's right edge at the cursor)
+        currencyIcon.setTooltipPositionAlignment(Alignment.TOP_RIGHT);
         balanceFrame.addChild(currencyIcon);
         currencyBalanceLabel = new Label("--");
         currencyBalanceLabel.setTextFontScale(0.7f);
@@ -150,6 +152,7 @@ public class FavoritesBar extends StockMarketGuiElement {
 
         marketItemIcon = new ItemView();
         marketItemIcon.setEnabled(false);
+        marketItemIcon.setTooltipPositionAlignment(Alignment.TOP_RIGHT); // tooltip opens left, see currencyIcon
         balanceFrame.addChild(marketItemIcon);
         marketItemBalanceLabel = new Label("--");
         marketItemBalanceLabel.setTextFontScale(0.7f);

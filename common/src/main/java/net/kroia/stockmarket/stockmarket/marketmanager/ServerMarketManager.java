@@ -18,7 +18,7 @@ import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
-import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
@@ -29,6 +29,7 @@ import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -188,6 +189,9 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                     pluginManager.autoSubscribeNewMarket(marketID);
                 }
             }
+            // SM-304: tell every client (and slave players) about the new market. Sent only
+            // for a real creation and after markets.put, so a racing requestMarkets sees it too.
+            MarketChangedPacket.broadcast(marketID, MarketChangedPacket.Kind.ADDED);
         }
         return m;
     }
@@ -243,6 +247,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 pluginManager.autoSubscribeNewMarket(marketID);
             }
         }
+        MarketChangedPacket.broadcast(marketID, MarketChangedPacket.Kind.ADDED); // SM-304, see createMarket(ItemID)
         return m;
     }
 
@@ -257,10 +262,10 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         ServerMarket market = markets.get(marketID);
         if (market == null) return false;
 
-        // Close market: cancels player orders and inter-market orders via callback
-        if (!market.isUnderMaintenance()) {
-            market.setMaintenance(true);
-        }
+        // Close market: cancels and refunds every player order (book and input buffers) and the
+        // inter-market orders via callback. SM-269: also when the market already is under
+        // maintenance (e.g. loaded that way), otherwise clear() below would drop locked orders.
+        market.setMaintenance(true);
 
         // Clear remaining orders (bot orders that survived close)
         market.getOrderbook().clear();
@@ -284,7 +289,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         // Clients react by purging their cached ClientMarket (which otherwise only
         // grows and would keep the deleted market selectable in the trade screen)
         // and by deselecting the market in any open GUI.
-        MarketRemovedPacket.broadcast(marketID);
+        broadcastStates.remove(marketID);
+        MarketChangedPacket.broadcast(marketID, MarketChangedPacket.Kind.REMOVED);
         return true;
     }
     @Override
@@ -301,7 +307,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
      *   <li><b>Delete alias-keyed duplicates:</b> for every alias in the group that has
      *       an entry in {@code markets}, call {@link #deleteMarket(ItemID)} — which
      *       cancels the market's open player orders, refunds their locked funds,
-     *       unsubscribes it from plugins, and broadcasts {@code MarketRemovedPacket}.</li>
+     *       unsubscribes it from plugins, and broadcasts {@code MarketChangedPacket} REMOVED.</li>
      *   <li><b>Canonical-keyed market is left completely alone.</b> If a market for
      *       {@code canonicalID} exists, it is not a duplicate — it stays untouched.</li>
      *   <li><b>Never re-key.</b> An alias-keyed market is deleted outright rather than
@@ -353,7 +359,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             {
                 if (!markets.containsKey(alias))
                     continue;
-                int refunded = countRefundableOrders(alias);
+                // SM-269: cancel here (deleteMarket then finds none) to log the real count
+                int refunded = markets.get(alias).cancelAllPlayerOrdersAndBuffers();
                 deleteMarket(alias);
                 if (deletedSummary.length() > 0) deletedSummary.append(", ");
                 deletedSummary.append(alias).append(" (refunded ").append(refunded).append(" order(s))");
@@ -367,24 +374,6 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         }
     }
 
-    /**
-     * Counts the player limit orders on the given market that will be refunded when
-     * {@link #deleteMarket(ItemID)} closes it. Bot orders are excluded — they never
-     * had bank reservations. Used only for the merge consolidation log line.
-     */
-    private int countRefundableOrders(ItemID marketID)
-    {
-        ServerMarket market = markets.get(marketID);
-        if (market == null)
-            return 0;
-        int count = 0;
-        for (net.kroia.stockmarket.stockmarket.market.core.order.Order order : market.getLimitOrders())
-        {
-            if (!order.isBotOrder())
-                count++;
-        }
-        return count;
-    }
 
 
 
@@ -415,14 +404,40 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             user = new User(playerUUID, playerName);
             userMap.put(playerUUID, user);
             net.kroia.stockmarket.util.AdminFlagSync.onUserAdded(playerUUID); // LuckPerms grant of a new user
-            return;
         }
-        if(!user.getName().equals(playerName))
+        else if(!user.getName().equals(playerName))
         {
             // Use createWithChangedName to preserve admin status and preferences
             user = User.createWithChangedName(user, playerName);
             userMap.put(playerUUID, user);
         }
+        markOtherUsersNamedStale(playerUUID, playerName);
+    }
+
+    /**
+     * SM-264: when a player joins with a name another stored user (different UUID) still holds, e.g. after a server
+     * switched between online and offline mode, the other record is renamed to {@code "<name> (old <uuid prefix>)"}
+     * so that name lookups ({@link #getPlayerUUID}) resolve to the player who is actually playing. Only the name
+     * changes: admin flag, preferences and all other data of the old record stay as they are, and the old record
+     * gets its name back if its UUID ever joins again.
+     *
+     * @param currentUUID the UUID that just joined with {@code playerName}
+     * @param playerName  the joining player's name
+     */
+    private void markOtherUsersNamedStale(UUID currentUUID, String playerName) {
+        for (User other : java.util.List.copyOf(userMap.values())) {
+            if (!other.getUUID().equals(currentUUID) && other.getName().equals(playerName))
+                userMap.put(other.getUUID(), User.createWithChangedName(other, staleName(playerName, other.getUUID())));
+        }
+    }
+
+    /**
+     * @param name the name the stale record held
+     * @param uuid the stale record's UUID
+     * @return the stale name; contains a space, so it can never be a real player name
+     */
+    public static String staleName(String name, UUID uuid) {
+        return name + " (old " + uuid.toString().substring(0, 8) + ")";
     }
     /**
      * Removes a StockMarket user (admin flag and preferences). Used by test cleanup to drop fake users again;
@@ -468,17 +483,40 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
 
 
+    /**
+     * SM-264: resolves a name to a StockMarket user. A player online on this server wins; otherwise the stored users
+     * are searched. If several stored users hold the name (see {@link #isUserNameAmbiguous}), this returns null
+     * instead of guessing.
+     */
     @Override
     public @Nullable UUID getPlayerUUID(String playerName)
     {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        ServerPlayer online = server == null ? null : server.getPlayerList().getPlayerByName(playerName);
+        if (online != null && userMap.containsKey(online.getUUID()))
+            return online.getUUID();
+        UUID found = null;
         for(User user : userMap.values())
         {
             if(user.getName().equals(playerName))
             {
-                return user.getUUID();
+                if (found != null)
+                    return null; // ambiguous
+                found = user.getUUID();
             }
         }
-        return null;
+        return found;
+    }
+
+    /**
+     * SM-264: tells "unknown name" apart from "several stored users share the name" after
+     * {@link #getPlayerUUID} returned null.
+     *
+     * @param playerName the exact stored name
+     * @return true if more than one stored user holds this name
+     */
+    public boolean isUserNameAmbiguous(String playerName) {
+        return userMap.values().stream().filter(u -> u.getName().equals(playerName)).count() > 1;
     }
 
 
@@ -835,7 +873,38 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         for (ServerMarket m : markets.values())
         {
             m.updateTradingHours(currentTradingMinute);
+            broadcastStateChanges(m);
         }
+    }
+
+    /**
+     * SM-310: last open/maintenance state broadcast per market, as {@link #STATE_OPEN}/{@link #STATE_MAINTENANCE}
+     * bits. A market's first entry is recorded silently (clients learn the initial state from the price stream).
+     */
+    private final Map<ItemID, Integer> broadcastStates = new HashMap<>();
+    private static final int STATE_OPEN = 1, STATE_MAINTENANCE = 2;
+
+    /**
+     * SM-310: broadcasts a {@link MarketChangedPacket} for each open/closed and maintenance edge of
+     * {@code market} since the last tick. Runs at the end of every tick after the trading hours were
+     * applied, so one place catches every source: schedule, manual override, admin maintenance toggle,
+     * settings panel, BankSystem open/close.
+     *
+     * @param market the market to check
+     */
+    private void broadcastStateChanges(ServerMarket market)
+    {
+        int state = (market.isTradingOpen() ? STATE_OPEN : 0) | (market.isUnderMaintenance() ? STATE_MAINTENANCE : 0);
+        Integer last = broadcastStates.put(market.getItemID(), state);
+        if (last == null || last == state)
+            return;
+        int changed = last ^ state;
+        if ((changed & STATE_MAINTENANCE) != 0)
+            MarketChangedPacket.broadcast(market.getItemID(), (state & STATE_MAINTENANCE) != 0
+                    ? MarketChangedPacket.Kind.MAINTENANCE_ON : MarketChangedPacket.Kind.MAINTENANCE_OFF);
+        if ((changed & STATE_OPEN) != 0)
+            MarketChangedPacket.broadcast(market.getItemID(), (state & STATE_OPEN) != 0
+                    ? MarketChangedPacket.Kind.OPENED : MarketChangedPacket.Kind.CLOSED);
     }
 
     /**
@@ -1044,6 +1113,20 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
 
     /**
+     * SM-269: cancels and refunds the player orders still buffered for matching in every market.
+     * The input buffers are not saved, so this runs at shutdown before the final save.
+     *
+     * @return the number of cancelled orders
+     */
+    public int cancelBufferedPlayerOrders()
+    {
+        int count = 0;
+        for (ServerMarket m : markets.values())
+            count += m.cancelBufferedPlayerOrders();
+        return count;
+    }
+
+    /**
      * T-191: writes a ledger row for every open player order (resting limit orders of all markets and
      * pending inter-market orders) whose fill state changed since its last row. Runs every
      * {@link OrderLedger#SWEEP_INTERVAL_TICKS} ticks ({@link OrderLedger#PERIODIC}) and on server
@@ -1159,7 +1242,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             return;
         }
 
-        moneyBank.deposit(balance);
+        // SM-318: no RAW_CHANGE row for this refund; the leg TRADE rows (logInterMarketLegs) net out to it.
+        BACKEND_INSTANCES.BANK_SYSTEM_API.getLedger().callerLogs(() -> moneyBank.deposit(balance));
         order.setTransactionMoneyBalance(0);
     }
 
@@ -1239,6 +1323,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 // (the ones a player can drag); allows re-placing this volume (see MoveCredit).
                 long remainingHave = -order.getSellOrder().getRemainingVolume();
                 it.remove();
+                order.getBuyOrder().markCancelledByPlayer(); // SM-317: final_status in OrderHistory (both legs)
                 onInterMarketOrderCanceled(order);
                 if (order.getCrossRateLimit() > 0)
                     grantMoveCredit(playerUUID, order.getSellItemID(), order.getBuyItemID(), remainingHave);

@@ -140,6 +140,9 @@ public class PluginTestSuite extends TestSuite {
 
         // Network gates
         addTest("reorder_nonAdmin_getsNoPluginList", this::test_reorder_nonAdmin_getsNoPluginList);
+        // SM-277: legacy save key, Apply-to-all custom settings request path
+        addTest("genericData_legacySubscriptionOrder_loads", this::test_genericData_legacySubscriptionOrder_loads);
+        addTest("customSettings_applyToAllMarkets_viaClientRequest", this::test_customSettings_applyToAllMarkets_viaClientRequest);
 
         // Logging
         addTest("errorLogging_gatedByLoggerEnabled", this::test_errorLogging_gatedByLoggerEnabled);
@@ -985,33 +988,19 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /**
-     * replays the pattern of a reported server exploit (#89) (rapid buy / short wait / sell cycles) with and without
-     * the mitigations (faded flow + target rate limit at their defaults vs. half-life 0 and no rate
-     * limit). Asserts that with the defaults the rapid pattern makes no profit beyond a small bound
-     * and reports a patient variant (60 s hold) plus each mitigation alone.
-     * <p>
-     * Bound: 0.5% of the bought volume valued at the default price.
+     * Replays the pattern of a reported server exploit (#89): 20 rapid cycles of 5 max buys, 1 s wait, sell back,
+     * with the mitigations at their defaults. Asserts the pattern makes no profit (SM-262: bound 0). What protects
+     * now (the T-208 bot reference anchor and the #96 fair-price depth) is asserted by t208_noProfit_diamond/dirt
+     * and the T213_G1 gate, so the former mitigation on/off replays are gone.
      */
     private TestResult test_pumpReplay_noProfit() {
         try {
-            float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
-            float move = TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
-            int cycles = 20, orders = 5, rapidWait = 20, patientCycles = 5, patientWait = 1200;
-            ReplayResult rapidOn = replay(hl, move, cycles, orders, rapidWait);
-            ReplayResult rapidOff = replay(0f, 0f, cycles, orders, rapidWait);
-            ReplayResult patientOn = replay(hl, move, patientCycles, orders, patientWait);
-            ReplayResult patientOff = replay(0f, 0f, patientCycles, orders, patientWait);
-            ReplayResult patientFadeOnly = replay(hl, 0f, patientCycles, orders, patientWait);
-            ReplayResult patientRateOnly = replay(0f, move, patientCycles, orders, patientWait);
-            String report = "rapid ON: " + rapidOn + " | rapid OFF: " + rapidOff
-                    + " | patient ON: " + patientOn + " | patient OFF: " + patientOff
-                    + " | patient fade-only: " + patientFadeOnly + " | patient rate-only: " + patientRateOnly;
-            StockMarketMod.LOGGER.info("[#89 replay] {}", report);
-            double bought = (double) cycles * orders * MarketSettings.defaultMaxOrderVolume(50) * 160;
-            double bound = 0.005 * bought;
-            if (rapidOn.profit() > bound)
-                return fail("Rapid replay with mitigations made " + rapidOn.profit() + " > bound " + bound + ". " + report);
-            return pass(report);
+            ReplayResult rapid = replay(backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue(),
+                    TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND, 20, 5, 20);
+            StockMarketMod.LOGGER.info("[#89 replay] {}", rapid);
+            if (rapid.profit() > 0)
+                return fail("Rapid replay made a profit of " + rapid.profit() + ". " + rapid);
+            return pass(rapid.toString());
         } catch (Exception e) {
             return fail("Exception: " + e);
         }
@@ -1728,11 +1717,12 @@ public class PluginTestSuite extends TestSuite {
     // Captured on the pre-T-213 code (cfd6ad3c, flow inside VolatilityPlugin). The refactor (NetFlowPlugin +
     // VolatilityPlugin, anchor off) must reproduce them bit for bit.
     // #96: re-captured after the default depth moved to the fair price (deliberate behaviour change).
+    // SM-241: pump hash re-captured, the bot keeps its reference on same-direction fills (deliberate behaviour change).
 
     /** Golden hash of the scripted flow series over all {@link #GOLDEN_SCALES} x flow x calculator x maxMult configs. */
     private static final long GOLDEN_SCRIPT_HASH = 0x7ca4b1a5d1bba416L;
     /** Golden hash of the t208 diamond_default pump30 price path (volatility scale 0, book refill on). */
-    private static final long GOLDEN_PUMP_HASH = 0xcdb3103aa5ffe147L;
+    private static final long GOLDEN_PUMP_HASH = 0xcaf42eca64243b03L;
     /** Volatility scales of the golden configs (they enter the flow capacity as 1 + scale). */
     private static final float[] GOLDEN_SCALES = {0f, 0.3f, 1.5f};
 
@@ -1961,14 +1951,39 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /**
-     * G3 timber supplier: one max-order market sell every 2 h for 5 days, then 2 idle days (compressed by c).
+     * SM-241: steady-state flow exponent g the G3 supplier is sized for ({@code g = F_ss / capacity}). Derivation
+     * (continuous model, times in days, τ_f = half-life / ln 2 = 0.361 d, τ_A = 2 d, anchor rate cap 0.1/d):
+     * the faded flow ramps as {@code F = g C (1 - e^(-t/τ_f))}, the flow exponent is {@code f = -F / C} and the
+     * anchor integrates {@code da/dt = f / τ_A} (cap not reached while {@code g / τ_A < 0.1}), so
+     * {@code ln p = a + f}. Averaged over day 1 that is {@code -0.79 g}, over day 5 {@code -3.07 g}:
+     * {@code ln(day5 / day1) ~ -2.28 g}. The gate's 0.9 needs g &gt;= 0.046; 0.07 expects day5/day1 ~0.85.
+     * The bot's lag behind the falling target scales with the selling rate in both days, so it about cancels in
+     * the ratio. The same model gives 0.9915 for the pre-SM-241 supplier (g 0.0036; measured 0.992).
+     * After the 2 idle days the flow has faded and the anchor (~-2.5 g) keeps ~0.73 of the day-5 log drop (needs 0.5).
+     */
+    private static final double T213_G3_FLOW_EXPONENT = 0.07;
+
+    /**
+     * G3 timber supplier: one max-order market sell every {@code every} ticks for 5 days, then 2 idle days (compressed
+     * by c). SM-241: {@code every} is derived from the market so the faded flow settles at
+     * {@link #T213_G3_FLOW_EXPONENT} x capacity: a steady sell rate r (items/tick) fades to {@code F_ss = r τ_f}
+     * ({@code τ_f} = half-life / ln 2 in ticks), so {@code every = maxOrder x τ_f / (g x capacity)}, capacity from
+     * the live {@link NetFlowPlugin#flowBand} (θ-capped by the default book, ~3.8M items at the diamond defaults:
+     * one max order every ~1,250 ticks compressed, ~7,500 full; before SM-241 one every 2 h sold only 192k items
+     * and ended at day5/day1 0.992).
      *
-     * @return {day-1 average price, day-5 average price, average price of the last idle hour, anchor at the end}
+     * @return {day-1 average price, day-5 average price, average price of the last idle hour, anchor at the end,
+     *         items sold}
      */
     private double[] t213Supplier(T213Anchor a, int c) {
         try (T207Env env = t213Env(a, c)) {
             env.items.setBalance(10_000_000L * env.sf);
-            int day = TICKS_PER_DAY / c, every = 2 * 72_000 / c, hour = 72_000 / c;
+            double capacity = NetFlowPlugin.flowBand(env.settings.naturalAbundance, env.vol.flow.getMarketSettings(itemID),
+                    env.vol.getBookEFold(itemID)).capacity();
+            double tauTicks = ServerMarket.netFlowHalfLifeSeconds() / Math.log(2) / ServerMarket.TICK_SECONDS;
+            int every = (int) Math.max(1, Math.round(env.maxOrder * tauTicks / (T213_G3_FLOW_EXPONENT * capacity)));
+            int day = TICKS_PER_DAY / c, hour = 72_000 / c;
+            double held0 = env.held();
             double[] daySum = new double[7];
             int[] dayN = new int[7];
             double lastHour = 0;
@@ -1983,7 +1998,8 @@ public class PluginTestSuite extends TestSuite {
                     if (t >= 7 * day - hour) { lastHour += p; lastHourN++; }
                 }
             }
-            return new double[]{daySum[0] / dayN[0], daySum[4] / dayN[4], lastHour / lastHourN, env.vol.flow.getAnchorMultiplier(itemID)};
+            return new double[]{daySum[0] / dayN[0], daySum[4] / dayN[4], lastHour / lastHourN, env.vol.flow.getAnchorMultiplier(itemID),
+                    held0 - env.held()};
         } finally {
             harnessRefill = false;
         }
@@ -2054,8 +2070,8 @@ public class PluginTestSuite extends TestSuite {
         double d = 160;
         boolean decline = on[1] <= 0.9 * on[0];
         boolean kept = Math.log(on[2] / d) <= 0.5 * Math.log(on[1] / d);
-        String row = String.format(Locale.ROOT, "%s: day1 %.2f day5 %.2f (%.3f) idleEnd %.2f anchor %.4f kept %.2f", name, on[0], on[1],
-                on[1] / on[0], on[2], on[3], Math.log(on[2] / d) / Math.log(on[1] / d));
+        String row = String.format(Locale.ROOT, "%s: day1 %.2f day5 %.2f (%.3f) idleEnd %.2f anchor %.4f kept %.2f sold %.0f", name, on[0],
+                on[1], on[1] / on[0], on[2], on[3], Math.log(on[2] / d) / Math.log(on[1] / d), on[4]);
         if (withOff) {
             double[] off = t213Supplier(T213Anchor.OFF, c);
             row += String.format(Locale.ROOT, "; off: day1 %.2f day5 %.2f idleEnd %.2f", off[0], off[1], off[2]);
@@ -2461,9 +2477,9 @@ public class PluginTestSuite extends TestSuite {
     private static void t208Write(String stage) throws java.io.IOException {
         java.nio.file.Path dir = t208Dir();
         List<java.util.Map<String, Object>> rows = T208_ROWS.getOrDefault(stage, List.of());
-        java.nio.file.Files.writeString(dir.resolve(stage + "_rows.csv"), toCsv(rows));
+        t208WriteFile(dir.resolve(stage + "_rows.csv"), toCsv(rows));
         List<java.util.Map<String, Object>> cps = T208_CHECKPOINTS.get(stage);
-        if (cps != null) java.nio.file.Files.writeString(dir.resolve(stage + "_checkpoints.csv"), toCsv(cps));
+        if (cps != null) t208WriteFile(dir.resolve(stage + "_checkpoints.csv"), toCsv(cps));
         long ticks = 0;
         double wall = 0, maxExploit = Double.NEGATIVE_INFINITY;
         int exploitRows = 0;
@@ -2494,7 +2510,52 @@ public class PluginTestSuite extends TestSuite {
                 """, stage, tests.size(), rows.size(), ticks, wall, wall > 0 ? ticks / wall : 0, exploitRows,
                 exploitRows > 0 ? String.format(Locale.ROOT, "%.4f", maxExploit) : "null", maxExploit <= 0,
                 stage, cps != null ? "\"" + stage + "_checkpoints.csv\"" : "null");
-        java.nio.file.Files.writeString(dir.resolve(stage + "_summary.json"), json);
+        t208WriteFile(dir.resolve(stage + "_summary.json"), json);
+    }
+
+    /**
+     * SM-321: writes a T-208 report file through a temp file in the same folder and a move into place, with 3 tries
+     * 200 ms apart (Windows: an editor, indexer or antivirus can hold the target open or memory-mapped). The files
+     * are diagnostics that no assertion reads back, so a final failure only logs a warning.
+     *
+     * @param target  the report file
+     * @param content its full text
+     * @return true if the file was written
+     */
+    private static boolean t208WriteFile(java.nio.file.Path target, String content) {
+        java.nio.file.Path tmp = null;
+        for (int attempt = 1; ; attempt++) {
+            try {
+                if (tmp == null) tmp = java.nio.file.Files.createTempFile(target.getParent(), target.getFileName() + ".", ".tmp");
+                java.nio.file.Files.writeString(tmp, content);
+                try {
+                    java.nio.file.Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                            java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                    java.nio.file.Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                return true;
+            } catch (java.io.IOException e) {
+                boolean last = attempt >= 3;
+                if (!last) {
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        last = true;
+                    }
+                }
+                if (last) {
+                    StockMarketMod.LOGGER.warn("[T-208] could not write {} after {} tries: {}", target, attempt, e.toString());
+                    try {
+                        if (tmp != null) java.nio.file.Files.deleteIfExists(tmp);
+                    } catch (java.io.IOException ignored) {
+                        // a leftover .tmp is harmless
+                    }
+                    return false;
+                }
+            }
+        }
     }
 
     /** CSV of rows with the union of their keys as the header (missing cells empty). */
@@ -2635,7 +2696,9 @@ public class PluginTestSuite extends TestSuite {
                 for (int i = 0; i < r.profit().length; i++) csv.append(",p").append(i + 1).append("_items");
                 csv.append('\n').append(body);
             }
-            java.nio.file.Files.writeString(t208Dir().resolve("chart_" + chart + ".csv"), csv.toString());
+            // the chart file is this test's whole output, so a failed write fails the test
+            if (!t208WriteFile(t208Dir().resolve("chart_" + chart + ".csv"), csv.toString()))
+                return fail("could not write chart_" + chart + ".csv (see log)");
             return pass("chart_" + chart + ".csv" + (lastLine != null ? lastLine : ""));
         } catch (Exception e) {
             return fail("Exception: " + e);
@@ -2735,8 +2798,8 @@ public class PluginTestSuite extends TestSuite {
      */
     private static boolean harnessRefill = false;
     /**
-     * T-213: anchor override of every {@link HarnessModel}: null = the NetFlowPlugin default (G5: the existing
-     * replays run with it), false = off (the golden equivalence), true = on.
+     * T-213: anchor override of every {@link HarnessModel}: null = the NetFlowPlugin default (on since SM-319,
+     * so the existing replays run with the anchor on: G5), false = off (the golden equivalence), true = on.
      */
     private static Boolean harnessAnchor = null;
 
@@ -3671,7 +3734,8 @@ public class PluginTestSuite extends TestSuite {
      * T-208 {@link TargetPriceBot#stepReference} invariants (pure, default settings): after a spike to S
      * the reference stays in [T, S], swings to a trough below its centre and then a peak above it, mirrors
      * a dump of the same log size, and is within 10% of the excess after 5 reversion times. A fill towards
-     * T (a ping) keeps the centre; a fill further away resets it.
+     * T (a ping) keeps the centre; SM-241: so does a fill further away on the same side (it only moves the
+     * anchor), while a fill on the other side of T starts a new spike.
      */
     private TestResult test_targetPriceBot_referenceInvariants() {
         TargetPriceBot.Settings s = TargetPriceBot.Settings.createDefault();
@@ -3701,7 +3765,7 @@ public class PluginTestSuite extends TestSuite {
         if (!trough || !peak) return fail("Expected a trough below the centre, then a peak (trough " + trough + ", peak " + peak + ")");
         double left = up.active() ? up.y() - lnT : 0;
         if (Math.abs(left) > 0.1 * excess) return fail("Not within 10% of the excess after 5 reversion times: " + left);
-        // A ping towards T keeps the centre and the velocity; a push further away resets the centre.
+        // A ping towards T keeps the centre and the velocity; SM-241: a push further away keeps them too.
         TargetPriceBot.Reference r = TargetPriceBot.anchorReference(TargetPriceBot.Reference.IDLE, lnT, lnT + excess, s, maxMove);
         for (int i = 0; i < 40; i++) r = TargetPriceBot.stepReference(r, lnT, s, maxMove, dt);
         double lnPing = Math.log(165);
@@ -3709,8 +3773,11 @@ public class PluginTestSuite extends TestSuite {
         if (ping.c() != r.c() || ping.v() != r.v() || ping.anchor() != lnPing || ping.y() > lnPing)
             return fail("A ping towards T must keep the centre and only move the anchor: " + r + " -> " + ping);
         TargetPriceBot.Reference push = TargetPriceBot.anchorReference(r, lnT, Math.log(175), s, maxMove);
-        if (push.c() != Math.log(175) - lnT || push.y() != Math.log(175))
-            return fail("A push further away must reset the centre: " + push);
+        if (push.c() != r.c() || push.v() != r.v() || push.y() != r.y() || push.anchor() != Math.log(175))
+            return fail("A push further away (same side) must keep the centre and only move the anchor: " + r + " -> " + push);
+        TargetPriceBot.Reference flip = TargetPriceBot.anchorReference(r, lnT, Math.log(150), s, maxMove);
+        if (flip.c() != Math.log(150) - lnT || flip.y() != Math.log(150))
+            return fail("A fill on the other side of T must start a new spike: " + flip);
         return pass(String.format(Locale.ROOT, "Stays in [T, S], trough then peak, dump mirrored, %.2e (log) left after 5 tau", left));
     }
 
@@ -4063,11 +4130,11 @@ public class PluginTestSuite extends TestSuite {
         }
     }
 
-    /** #96: a fill anchors the bot's reference inside [E x 5%, E x 3] (the NetFlowPlugin's default clamps) only. */
+    /** #96: a fill anchors the bot's reference inside [E x 25%, E x 3] only (SM-241: the bot's own floor). */
     private TestResult test_targetPriceBot_referenceAnchorBand() {
         TestResult r = assertEquals("inside the band", 150.0, TargetPriceBot.referenceAnchorPrice(150, 160));
         if (!r.passed()) return r;
-        r = assertEquals("below: lower edge", 160 * (double) NetFlowPlugin.DEFAULT_MIN_PRICE_MULT, TargetPriceBot.referenceAnchorPrice(0.01, 160));
+        r = assertEquals("below: lower edge", 160 * (double) TargetPriceBot.BOT_MIN_PRICE_MULT, TargetPriceBot.referenceAnchorPrice(0.01, 160));
         if (!r.passed()) return r;
         r = assertEquals("above: upper edge", 160 * (double) NetFlowPlugin.DEFAULT_MAX_PRICE_MULT, TargetPriceBot.referenceAnchorPrice(5000, 160));
         if (!r.passed()) return r;
@@ -4321,6 +4388,83 @@ public class PluginTestSuite extends TestSuite {
             manager.cancelInterMarketOrdersForMarket(want.getItemID());
             want.test_clearOrderbook();
             want.test_clearIncomingOrderBuffers();
+        }
+    }
+
+    // ── SM-277 ───────────────────────────────────────────────────────────────
+
+    /** SM-277: an old save with the removed {@code subscriptionOrder} key still loads, the other fields keep their values. */
+    private TestResult test_genericData_legacySubscriptionOrder_loads() {
+        UUID id = UUID.randomUUID();
+        CompoundTag tag = new CompoundTag();
+        new net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData(id).save(tag);
+        tag.putString("name", "legacy");
+        tag.putBoolean("enabled", false);
+        tag.putInt("subscriptionOrder", 3);
+        var loaded = new net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData(UUID.randomUUID());
+        TestResult r = assertTrue("loads", loaded.load(tag));
+        if (!r.passed()) return r;
+        return assertEquals("fields kept", List.of(id, "legacy", false), List.of(loaded.getInstanceID(), loaded.getName(), loaded.isEnabled()));
+    }
+
+    /**
+     * SM-277: the request path of a plugin screen's "apply to all markets" ({@code PluginGuiElement
+     * .sendCustomSettingsToAllMarkets} -> {@code requestUpdateCustomSettings} -> {@code PluginCustomSettingsRequest},
+     * once per subscribed market). Sends one VolatilityPlugin settings payload from this JVM's client for every market
+     * the plugin is subscribed to and checks every answer succeeded and every market's settings on the server equal
+     * the payload. The GUI loop itself is not driven (the subscribed list is read on the server, the GUI reads the
+     * same list from its sync data). sp only (client and master in one JVM); the player gets StockMarket admin mode
+     * for the test if needed. Every market's previous settings and the admin flag are restored.
+     */
+    private TestResult test_customSettings_applyToAllMarkets_viaClientRequest() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null || client.PLUGIN_MANAGER == null || pluginManager == null)
+            return skip("sp only (client and master in this JVM)");
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null)
+            return skip("no client player");
+        VolatilityPlugin plugin = null;
+        for (ServerPlugin<?, ?> p : pluginManager.getPlugins().values())
+            if (p instanceof VolatilityPlugin v && !v.getSubscribedMarkets().isEmpty()) {
+                plugin = v;
+                break;
+            }
+        if (plugin == null)
+            return skip("no VolatilityPlugin with a subscribed market");
+        UUID player = mc.player.getUUID();
+        var manager = backend.MARKET_MANAGER.getSync();
+        boolean wasAdmin = manager.isStockmarketAdmin(player);
+        List<ItemID> markets = List.copyOf(plugin.getSubscribedMarkets());
+        java.util.Map<ItemID, VolatilityPlugin.Settings> before = new java.util.HashMap<>();
+        for (ItemID id : markets)
+            before.put(id, plugin.getCustomSettings(id));
+        VolatilityPlugin.Settings payload = new VolatilityPlugin.Settings(0.4321f);
+        ByteBuf buf = Unpooled.buffer();
+        VolatilityPlugin.Settings.CODEC.encode(buf, payload);
+        byte[] bytes = new byte[buf.readableBytes()];
+        buf.readBytes(bytes);
+        buf.release();
+        UUID instanceID = plugin.getInstanceID();
+        try {
+            if (!wasAdmin)
+                manager.setStockmarketAdminMode(player, true);
+            java.util.function.Supplier<List<java.util.concurrent.CompletableFuture<net.kroia.stockmarket.networking.request.PluginCustomSettingsRequest.OutputData>>> send = () ->
+                    markets.stream().map(id -> client.PLUGIN_MANAGER.requestUpdateCustomSettings(instanceID, id, bytes)).toList();
+            var futures = mc.isSameThread() ? send.get() : await(mc.submit(send), 10_000);
+            await(java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0])), 10_000);
+            for (int i = 0; i < markets.size(); i++) {
+                TestResult r = assertTrue("request for market " + markets.get(i) + " succeeded", futures.get(i).join().success());
+                if (!r.passed()) return r;
+                r = assertEquals("settings of market " + markets.get(i), payload, plugin.getCustomSettings(markets.get(i)));
+                if (!r.passed()) return r;
+            }
+            return pass("payload applied to all " + markets.size() + " subscribed markets");
+        } finally {
+            for (var e : before.entrySet())
+                if (e.getValue() != null)
+                    plugin.replaceCustomSettings(e.getKey(), e.getValue());
+            if (!wasAdmin)
+                manager.setStockmarketAdminMode(player, false);
         }
     }
 }
