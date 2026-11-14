@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen;
 
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.*;
@@ -424,14 +425,14 @@ public class ManagementScreen extends StockMarketGuiScreen {
             newsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
             listView.addChild(newsButton);
 
-            // Master-only: button that opens the Mod Settings screen (edits the
-            // server's settings.json in-game). Only the master server loads/owns
-            // settings.json, so the button is hidden on slave servers — the flag
-            // is synced at join via PlayerJoinSyncPacket/ClientSettings. The server
-            // additionally enforces op level 2 + master status in ModSettingsRequest.
-            if (isMasterServer()) {
+            // Button that opens the Mod Settings screen (edits the server's
+            // settings.json in-game). Shown only if ModSettingsScreen.canOpen():
+            // master server (synced at join via PlayerJoinSyncPacket/ClientSettings)
+            // and operator level 2; the admin flag is implied by being on this screen.
+            // The server enforces op level 2 + admin flag + master in ModSettingsRequest.
+            if (ModSettingsScreen.canOpen()) {
                 Button modSettingsButton = new Button(Texts.MOD_SETTINGS.getString(),
-                        () -> setScreen(new ModSettingsScreen(parent)));
+                        () -> ModSettingsScreen.open(parent));
                 modSettingsButton.setHeight(elementHeight);
                 modSettingsButton.setHoverTooltipSupplier(Texts.MOD_SETTINGS_TOOLTIP::getString);
                 modSettingsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
@@ -497,6 +498,18 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
         public void refreshMarketList() {
             loadMarketGrid();
+        }
+
+        /**
+         * SM-310: sets the maintenance marker of one market's grid icon.
+         *
+         * @param marketID    the market; null or not in the grid: nothing happens
+         * @param maintenance true if the market is under maintenance
+         */
+        void setMarketMaintenance(@Nullable ItemID marketID, boolean maintenance) {
+            for (MarketItemView view : allMarketItems)
+                if (view.marketID.equals(marketID))
+                    view.setMaintenance(maintenance);
         }
 
         public void refreshMarketStates() {
@@ -758,6 +771,27 @@ public class ManagementScreen extends StockMarketGuiScreen {
     }
 
     /**
+     * {@inheritDoc}
+     * SM-304: a market was created (possibly by another admin, a slave or BankSystem);
+     * reload the market grid so it appears. The selection is kept.
+     * SM-310: a market entered or left maintenance (possibly by another admin or BankSystem);
+     * update its grid marker and, if it is selected, the maintenance checkbox.
+     */
+    @Override
+    public void onMarketsChanged(MarketChangedPacket.Kind kind, @Nullable ItemID marketID) {
+        switch (kind) {
+            case ADDED -> overviewTab.refreshMarketList();
+            case MAINTENANCE_ON, MAINTENANCE_OFF -> {
+                boolean maintenance = kind == MarketChangedPacket.Kind.MAINTENANCE_ON;
+                overviewTab.setMarketMaintenance(marketID, maintenance);
+                if (marketID != null && marketID.equals(selectedMarketID))
+                    overviewTab.getCurrentMarketManagerWidget().setMaintenanceCheckBoxChecked(maintenance);
+            }
+            default -> {} // OPENED/CLOSED: the grid shows only maintenance
+        }
+    }
+
+    /**
      * Builds a placeholder ItemStack for a market whose {@link ItemID} can no longer
      * be resolved to an item ("broken" market). This happens when the registered item
      * template dangles or drifts — e.g. items with volatile data components such as
@@ -867,6 +901,12 @@ public class ManagementScreen extends StockMarketGuiScreen {
         @Override
         public void onMarketRemoved(ItemID removedMarketID) {
             parentScreen.onMarketRemoved(removedMarketID);
+        }
+
+        /** SM-304/SM-310: forwarded to the covered ManagementScreen, like {@link #onMarketRemoved}. */
+        @Override
+        public void onMarketsChanged(MarketChangedPacket.Kind kind, @Nullable ItemID marketID) {
+            parentScreen.onMarketsChanged(kind, marketID);
         }
     }
 }

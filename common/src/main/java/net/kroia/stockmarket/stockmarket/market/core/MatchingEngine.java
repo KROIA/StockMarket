@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.stockmarket.market.core;
 
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.function.Consumer;
+import java.util.function.LongFunction;
 
 public class MatchingEngine
 {
@@ -136,8 +138,8 @@ public class MatchingEngine
                 long cost = Math.round((double) fillPotential * price / SF);
                 // Update counterparty order: receives items (+fillPotential), pays money (-cost)
                 buyOrder.edit(fillPotential, -cost);
-                other.itemBank.deposit(fillPotential);
-                other.moneyBank.withdrawLockedPrefered(cost);
+                settle(other.itemBank::deposit, fillPotential);
+                settle(other.moneyBank::withdrawLockedPrefered, cost);
                 // Flow: the resting buyer received +fillPotential items on THIS market → demand.
                 market.addPlayerItemFlow(fillPotential);
 
@@ -282,8 +284,8 @@ public class MatchingEngine
 
                 long cost = Math.round((double) fillPotential * price / SF);
                 sellOrder.edit(fillPotential, -cost);
-                other.itemBank.withdrawLockedPrefered(-fillPotential);
-                other.moneyBank.deposit(-cost);
+                settle(other.itemBank::withdrawLockedPrefered, -fillPotential);
+                settle(other.moneyBank::deposit, -cost);
                 // Flow: fillPotential is negative here — the resting seller GAVE items
                 // away on THIS market → supply.
                 market.addPlayerItemFlow(fillPotential);
@@ -579,7 +581,7 @@ public class MatchingEngine
                 {
                     IServerBank wantItemBank = playerBankAccount.getOrCreateBank(order.getBuyItemID());
                     if (wantItemBank != null)
-                        wantItemBank.deposit(consumed.volumeConsumed());
+                        settle(wantItemBank::deposit, consumed.volumeConsumed());
                 }
 
                 if (consumed.volumeConsumed() > 0)
@@ -704,11 +706,28 @@ public class MatchingEngine
     {
         if (haveItemBank == null || sold <= 0)
             return;
-        BankStatus status = haveItemBank.withdrawLocked(sold);
+        BankStatus status = settle(haveItemBank::withdrawLocked, sold);
         // Should not fail: the caller checked getLockedBalance() >= requested volume >= sold.
         if (status != BankStatus.SUCCESS && BACKEND_INSTANCES != null)
             BACKEND_INSTANCES.LOGGER.error("[MatchingEngine] Inter-market sell: could not withdraw "
                     + sold + " sold locked have-items: " + status);
+    }
+
+    /**
+     * SM-318: runs one trade-settlement bank call inside BankSystem's {@code callerLogs} scope, so the
+     * master writes no RAW_CHANGE row for it. Every settlement call here belongs to a player order fill
+     * that {@code Order.edit} records and {@code OrderLedger} writes as a TRADE row; without the scope
+     * each fill would be logged twice. Only the bank call is wrapped, never the order callbacks, so
+     * listeners that move money on their own still get their rows. On a slave the scope does nothing
+     * (the matching engine runs on the master only).
+     *
+     * @param bankCall the bound bank method, e.g. {@code bank::deposit}
+     * @param amount   raw amount passed to it
+     * @return the bank call's status
+     */
+    private static BankStatus settle(LongFunction<BankStatus> bankCall, long amount)
+    {
+        return BankSystemMod.getAPI().getLedger().callerLogs(() -> bankCall.apply(amount));
     }
 
     /** Tiny value-holder to return two banks together. */
@@ -1003,8 +1022,8 @@ public class MatchingEngine
                 buyOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 trackPlayerFill(buyOrder, fillPotential);
-                other.itemBank.deposit(fillPotential);
-                other.moneyBank.withdrawLockedPrefered(cost);
+                settle(other.itemBank::deposit, fillPotential);
+                settle(other.moneyBank::withdrawLockedPrefered, cost);
                 orderVolume += fillPotential;
                 itemDelta   -= fillPotential;
                 moneyDelta  += cost;
@@ -1171,8 +1190,8 @@ public class MatchingEngine
                 sellOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 trackPlayerFill(sellOrder, fillPotential);
-                other.itemBank.withdrawLockedPrefered(-fillPotential);
-                other.moneyBank.deposit(-cost);
+                settle(other.itemBank::withdrawLockedPrefered, -fillPotential);
+                settle(other.moneyBank::deposit, -cost);
                 orderVolume    += fillPotential;
                 itemDelta      -= fillPotential;
                 moneyDelta     += cost;
@@ -1404,9 +1423,9 @@ public class MatchingEngine
                             long itemDelta, long moneyDelta, Order order)
     {
         if(itemBank != null)
-            itemBank.withdrawLockedPrefered(-itemDelta);  // itemDelta is negative → withdraw positive
+            settle(itemBank::withdrawLockedPrefered, -itemDelta);  // itemDelta is negative → withdraw positive
         if(moneyBank != null)
-            moneyBank.deposit(moneyDelta);
+            settle(moneyBank::deposit, moneyDelta);
         trackPlayerFill(order, itemDelta);
         if(order.isFilled())
             orderConsumed(order);
@@ -1434,15 +1453,15 @@ public class MatchingEngine
             {
                 long fromFree = Math.min(cost, Math.max(0, moneyBank.getBalance()));
                 if (fromFree > 0)
-                    moneyBank.withdraw(fromFree);
+                    settle(moneyBank::withdraw, fromFree);
                 if (cost > fromFree)
-                    moneyBank.withdrawLockedPrefered(cost - fromFree);
+                    settle(moneyBank::withdrawLockedPrefered, cost - fromFree);
             }
             else
-                moneyBank.withdrawLockedPrefered(cost);
+                settle(moneyBank::withdrawLockedPrefered, cost);
         }
         if(itemBank != null)
-            itemBank.deposit(itemDelta);
+            settle(itemBank::deposit, itemDelta);
         trackPlayerFill(order, itemDelta);
         if(order.isFilled())
             orderConsumed(order);

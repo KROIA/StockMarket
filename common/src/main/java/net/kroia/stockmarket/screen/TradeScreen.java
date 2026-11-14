@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.screen.custom.BankAccountSelectionScreen;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
@@ -194,6 +195,12 @@ public class TradeScreen extends StockMarketGuiScreen {
     private @Nullable ItemID pairWantMarketID = null;
 
     /**
+     * SM-304: market count the market lists were last built from. tick() refreshes the lists when the
+     * cache size differs, for adds this screen was not told about (e.g. while a popup covered it).
+     */
+    private int knownMarketCount = 0;
+
+    /**
      * Issue #81: markets whose (ref-counted) price stream THIS screen currently holds one
      * subscription on. Never call subscribe/unsubscribe directly — use
      * {@link #syncPriceSubscriptions()} so each market is held at most once.
@@ -209,7 +216,11 @@ public class TradeScreen extends StockMarketGuiScreen {
     private long lastPriceRefreshMs = 0;
     private static final long PRICE_REFRESH_INTERVAL_MS = 500;
 
-    public TradeScreen()
+    /**
+     * @param preselect market to open on (SM-313, e.g. from BankSystem's company screen), or null for the
+     *                  last used market. Ignored if it is not in the market list.
+     */
+    public TradeScreen(@Nullable ItemID preselect)
     {
         super(Texts.TITLE);
 
@@ -418,9 +429,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         List<ItemID> markets = getAvailableMarkets();
         PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
 
-        ItemID initialMarket = prefs.getLastMarketID();
-        if (initialMarket == null || !markets.contains(initialMarket)) {
-            initialMarket = markets.isEmpty() ? null : markets.getFirst();
+        ItemID initialMarket = pickInitialMarket(preselect, prefs.getLastMarketID(), markets);
+        // SM-313: a preselected market opens in its own group tab (applied to the selectors below),
+        // so the favorites bar shows it. Set here, not by a switchMarket after init (double subscription).
+        if (initialMarket != null && initialMarket.equals(preselect)) {
+            activeMarketGroup = ShareVisualHelpers.isCompanyShare(initialMarket)
+                    ? PairSelectorWidget.Tab.COMPANIES : PairSelectorWidget.Tab.COMMODITIES;
         }
 
         if (initialMarket != null) {
@@ -453,6 +467,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         // Build favorites bar with all markets and current selection
         favoritesBar.rebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
+        knownMarketCount = markets.size();
 
         // T-155: apply the shared market group to both selectors and highlight the
         // active segmented-control button (with per-group counts).
@@ -517,8 +532,33 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     public static void openScreen()
     {
-        TradeScreen screen = new TradeScreen();
+        openScreen(null);
+    }
+
+    /**
+     * Opens the trade screen on a market (SM-313).
+     *
+     * @param preselect the market to show, or null (or an unlisted market) for the last used one
+     */
+    public static void openScreen(@Nullable ItemID preselect)
+    {
+        TradeScreen screen = new TradeScreen(preselect);
         net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
+    }
+
+    /**
+     * Picks the market the screen opens on (SM-313).
+     *
+     * @param preselect  the requested market, or null
+     * @param lastMarket the player's last used market, or null
+     * @param markets    the markets the screen lists
+     * @return {@code preselect} if listed, else {@code lastMarket} if listed, else the first market, else null
+     */
+    public static @Nullable ItemID pickInitialMarket(@Nullable ItemID preselect, @Nullable ItemID lastMarket, List<ItemID> markets)
+    {
+        if (preselect != null && markets.contains(preselect)) return preselect;
+        if (lastMarket != null && markets.contains(lastMarket)) return lastMarket;
+        return markets.isEmpty() ? null : markets.getFirst();
     }
 
     @Override
@@ -536,7 +576,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                 } else {
                     // Safety net: the market vanished from the client cache (deleted on
                     // the server) but this screen was not notified directly — e.g. the
-                    // MarketRemovedPacket arrived while a popup covered this screen.
+                    // MarketChangedPacket REMOVED arrived while a popup covered this screen.
                     // Re-validate and fall back gracefully.
                     handleMarketRemoved(currentMarketID);
                 }
@@ -547,6 +587,10 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
             if (pairWantMarketID != null && getMarket(pairWantMarketID) == null) {
                 handleMarketRemoved(pairWantMarketID);
+            }
+            // SM-304 safety net: markets added while this screen was not notified directly
+            if (getAvailableMarkets().size() != knownMarketCount) {
+                refreshMarketLists();
             }
         }
 
@@ -1036,6 +1080,40 @@ public class TradeScreen extends StockMarketGuiScreen {
     }
 
     /**
+     * {@inheritDoc}
+     * SM-304: a market was created on the server, or this screen's constructor-started
+     * {@code requestMarkets()} answered with markets the cache did not have yet: rebuild the lists.
+     * SM-310: open/closed/maintenance changes need nothing here; the displayed markets' price
+     * streams carry their trading state and {@link #tick()} applies it.
+     */
+    @Override
+    public void onMarketsChanged(MarketChangedPacket.Kind kind, @Nullable ItemID marketID) {
+        if (kind == MarketChangedPacket.Kind.ADDED)
+            refreshMarketLists();
+    }
+
+    /**
+     * SM-304: rebuilds the market lists from the current client cache without touching the
+     * selection, pair legs or favorites. If nothing is selected in money mode (the cache was
+     * empty when the screen opened), selects the last used market or the first one, like the
+     * constructor. An open pair-selector dropdown is re-filled too (SM-310); a closed one reads the
+     * cache when it opens.
+     */
+    private void refreshMarketLists() {
+        List<ItemID> markets = getAvailableMarkets();
+        knownMarketCount = markets.size();
+        PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+        if (currentMarketID == null && !isPairMode && !markets.isEmpty()) {
+            ItemID last = prefs.getLastMarketID();
+            switchMarket(last != null && markets.contains(last) ? last : markets.getFirst()); // also rebuilds the favorites bar
+        } else {
+            favoritesBar.scheduleRebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
+        }
+        refreshMarketGroupButtons();
+        pairSelectorWidget.refreshDropdown();
+    }
+
+    /**
      * Removes every reference this screen holds to a market that no longer exists.
      * Idempotent — safe to call again for an already-handled market.
      * <ul>
@@ -1466,9 +1544,7 @@ public class TradeScreen extends StockMarketGuiScreen {
      * @param result the server response for the create-order request
      */
     private void logOrderResult(CreateOrderRequest.OutputData result) {
-        if (result.status == CreateOrderRequest.Status.CREATED) {
-            info("Order created");
-        } else {
+        if (result.status != CreateOrderRequest.Status.CREATED) {
             warn("Order rejected: " + result.status);
             // Tell the player why: the market is outside its trading hours.
             if (result.status == CreateOrderRequest.Status.MARKET_CLOSED)
@@ -1583,7 +1659,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .whenComplete((result, error) -> {
                     if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
-                    info("Inter-market buy: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
                 });
@@ -1602,7 +1677,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .whenComplete((result, error) -> {
                     if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
-                    info("Inter-market sell: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
                 });
@@ -1625,7 +1699,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .whenComplete((result, error) -> {
                     if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
-                    info("Inter-market buy limit: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
                 });
@@ -1646,7 +1719,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .whenComplete((result, error) -> {
                     if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
-                    info("Inter-market sell limit: " + (result.success ? "OK" : result.errorMessage));
                     if (!result.success) showInterMarketError(result.errorMessage);
                     else startTradeCooldown(input.haveItemID()); // T-179
                 });

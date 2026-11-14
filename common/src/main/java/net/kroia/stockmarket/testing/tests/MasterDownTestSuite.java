@@ -7,9 +7,12 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.modutilities.testing.autotest.AutoTest;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.block.custom.StockMarketBlock;
+import net.kroia.stockmarket.minecraft.item.StockMarketItems;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
+import net.kroia.stockmarket.testing.PacketTap;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.MultiServerUtils;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.contents.TranslatableContents;
@@ -48,6 +51,8 @@ public class MasterDownTestSuite extends TestSuite {
         addTest("can_interact_false", this::test_canInteractFalse);
         addTest("open_ui_refuses_master_screens", this::test_openUiRefusesMasterScreens);
         addTest("block_use_refuses_with_sm_message", this::test_blockUseRefuses);
+        addTest("newspaper_use_refuses_with_sm_message", this::test_newspaperRefuses);
+        addTest("news_command_refuses_with_sm_message", this::test_newsCommandRefuses);
     }
 
     /** @return a skip result outside the slave-masterdown cell, or null when the test should run. */
@@ -125,5 +130,50 @@ public class MasterDownTestSuite extends TestSuite {
         if (!(block.getNoMasterMessage().getContents() instanceof TranslatableContents tc))
             return fail("getNoMasterMessage() is not translatable");
         return assertEquals("refusal message key", SM_MESSAGE_KEY, tc.getKey());
+    }
+
+    /** SM-285: using the newspaper item is refused: the SM "not connected" chat line, no OpenUIPacket. */
+    private TestResult test_newspaperRefuses() {
+        return refusesNewsScreen("newspaper use", p ->
+                StockMarketItems.NEWSPAPER.get().use(p.level(), p, InteractionHand.MAIN_HAND));
+    }
+
+    /** SM-285: {@code /stockmarket news} run by the player is refused the same way. */
+    private TestResult test_newsCommandRefuses() {
+        return refusesNewsScreen("/stockmarket news", p -> {
+            try {
+                getServer().getCommands().getDispatcher().execute("stockmarket news", p.createCommandSourceStack());
+            } catch (CommandSyntaxException e) {
+                throw new IllegalStateException("command did not parse: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * Runs {@code action} as the autotest player and checks what the server sent that player (through a
+     * {@link PacketTap}): the StockMarket "not connected" chat line and no {@link OpenUIPacket}, so no screen opens.
+     *
+     * @param label  what was done, for messages
+     * @param action the player action that would open the news screen
+     */
+    private TestResult refusesNewsScreen(String label, java.util.function.Consumer<ServerPlayer> action) {
+        TestResult s = skipUnlessMasterDown();
+        if (s != null) return s;
+        ServerPlayer p = player();
+        if (p == null) return fail("no player on the slave");
+        try (PacketTap tap = PacketTap.open(getServer(), p)) {
+            if (tap == null) return fail("no network connection for the player");
+            try {
+                action.accept(p);
+            } catch (RuntimeException e) {
+                return fail(label + " threw: " + e.getMessage());
+            }
+            pumpUntil(() -> tap.findTranslatable(SM_MESSAGE_KEY) != null, 3000);
+            TestResult r = assertNotNull(label + ": " + SM_MESSAGE_KEY + " sent, got " + tap.systemMessages(),
+                    tap.findTranslatable(SM_MESSAGE_KEY));
+            if (!r.passed()) return r;
+            pump(250); // a screen request would go out right after the check; give it time to show up
+            return assertFalse(label + ": no OpenUIPacket sent", tap.sawPayload(OpenUIPacket.class));
+        }
     }
 }
