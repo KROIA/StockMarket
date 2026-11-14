@@ -40,7 +40,7 @@ class StockMarketOfflineTests {
         // Since 26.1 item data components are bound only when a world loads (DataComponentInitializers). Offline there
         // is none, so bind the vanilla defaults here, or new ItemStack(item) throws "Components not bound yet".
         //net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(net.minecraft.data.registries.VanillaRegistries.createLookup()).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply); // mc>=26.1 mc<=26.2
-        //net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(net.minecraft.data.registries.VanillaRegistries.createWorldLookup()).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply); // mc>=26.3
+        net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(net.minecraft.data.registries.VanillaRegistries.createWorldLookup()).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply); // mc>=26.3
         // Without a world BankSystem's ItemID table is empty, so every ItemID is invalid and NBT loads drop it.
         // Seed it as a world would have it: ItemID n = the n-th vanilla item (1..about 1300).
         Map<ItemID, ItemStack> table = new HashMap<>();
