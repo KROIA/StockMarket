@@ -796,7 +796,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
                 // The real player: MARKET order of 3 on a scratch account it is a member of.
                 IServerBankAccount acc = fixture.createBankAccount(buy ? "MsgBuyPlayer" : "MsgSellPlayer");
-                acc.addUser(new User(player.getUUID(), player.getGameProfile().getName()), BankPermission.getAllPermissions());
+                acc.addUser(new User(player.getUUID(), player.getName().getString()), BankPermission.getAllPermissions());
                 acc.createBank(itemID, 0);
                 acc.createBank(moneyID, 0);
                 acc.getBank(itemID).setBalance(1000);
