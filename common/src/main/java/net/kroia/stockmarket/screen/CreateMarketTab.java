@@ -347,7 +347,6 @@ public class CreateMarketTab extends StockMarketGuiElement {
             CompletableFuture<Void> future = itemIDFuture.thenCompose(registeredID ->
                 getMarketManager().requestCreateMarket(registeredID).thenAccept(success -> {
                     if (success) {
-                        info("Created market for " + preset.getItemId());
                         anyCreated.set(true);
                         Minecraft.getInstance().execute(() -> {
                             selectedPresets.remove(key);

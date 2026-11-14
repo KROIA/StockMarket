@@ -9,7 +9,8 @@
     "MerchantMenuMixin",
     "MerchantOfferMixin",
     "MerchantResultSlotMixin",
-    "VillagerMixin"
+    "VillagerMixin",
+    "ConnectionAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

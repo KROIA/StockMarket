@@ -148,27 +148,16 @@ public class InterMarketOrder implements ServerSaveable
         return result;
     }
 
+    /**
+     * Builds the OrderHistory rows of both legs of this finished order. SM-317: both legs carry the status of
+     * the whole order, taken from the buy leg ({@link #isFilled()}); the sell leg's target is only an estimate.
+     * A player cancel marks the buy leg ({@link Order#markCancelledByPlayer()}).
+     */
     public HistoricalRecordPair getHistoricalRecord()
     {
-        OrderRecordStruct buyRecord = new OrderRecordStruct(
-                buyOrder.getItemID().getShort(),
-                buyOrder.getBankAccountNr(),
-                buyOrder.getExecutorPlayerUUID(),
-                buyOrder.getType().ordinal(),
-                buyOrder.getFilledVolume(),
-                buyOrder.getAverageExecutionPrice(),
-                buyOrder.getTime(),
-                interMarketGroupID);
-        OrderRecordStruct sellRecord = new OrderRecordStruct(
-                sellOrder.getItemID().getShort(),
-                sellOrder.getBankAccountNr(),
-                sellOrder.getExecutorPlayerUUID(),
-                sellOrder.getType().ordinal(),
-                sellOrder.getFilledVolume(),
-                sellOrder.getAverageExecutionPrice(),
-                sellOrder.getTime(),
-                interMarketGroupID);
-        return new HistoricalRecordPair(buyRecord, sellRecord);
+        int status = buyOrder.getFinalStatus();
+        return new HistoricalRecordPair(buyOrder.toHistoricalRecord(interMarketGroupID, null, status),
+                sellOrder.toHistoricalRecord(interMarketGroupID, null, status));
     }
 
 
