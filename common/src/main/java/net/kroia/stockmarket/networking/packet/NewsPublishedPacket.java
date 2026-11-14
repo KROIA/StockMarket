@@ -25,7 +25,7 @@ import org.jetbrains.annotations.NotNull;
  * slave players who joined mid-event) are covered by the paginated
  * {@code NewsHistoryRequest} the newspaper screen fires on open.
  * <p>
- * <b>Propagation design (cloned from {@link MarketRemovedPacket}):</b>
+ * <b>Propagation design (cloned from {@link MarketChangedPacket}):</b>
  * <ul>
  *   <li>Publishing always happens on the master server: the NewsPlugin builds the
  *       {@link NewsRecord} and hands it to the {@code ServerNewsPublisher}, which

@@ -2,6 +2,7 @@ package net.kroia.stockmarket.testing;
 
 import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.stockmarket.testing.tests.ActiveOrdersRequestTestSuite;
+import net.kroia.stockmarket.testing.tests.ClientIntegrationTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientMarketTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientSettingsSyncTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientNewsCacheTestSuite;
@@ -40,6 +41,7 @@ import net.kroia.stockmarket.testing.tests.OrderTestSuite;
 import net.kroia.stockmarket.testing.tests.OrderbookTestSuite;
 import net.kroia.stockmarket.testing.tests.PIDTestSuite;
 import net.kroia.stockmarket.testing.tests.PlaceholderNamingTestSuite;
+import net.kroia.stockmarket.testing.tests.PortSmokeTestSuite;
 import net.kroia.stockmarket.testing.tests.PluginTestSuite;
 import net.kroia.stockmarket.testing.tests.PumpDumpDetectorTestSuite;
 import net.kroia.stockmarket.testing.tests.PriceHistoryCacheTestSuite;
@@ -105,6 +107,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new NetFlowPluginTestSuite());
         TestRegistry.register(new VolatilityPluginTestSuite());
         TestRegistry.register(new ModSettingsTestSuite());
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.DataMigrationTestSuite()); // SM-325
         TestRegistry.register(new NewsSystemTestSuite());
         TestRegistry.register(new NewsPluginTestSuite());
         TestRegistry.register(new NewsAdminTestSuite());
@@ -123,6 +126,12 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new MarketVisibilityTestSuite()); // T-237: markets hidden on a slave that cannot resolve their item
         TestRegistry.register(new ClientSettingsSyncTestSuite()); // T-140: initial chart window sync (master + slave)
         TestRegistry.register(new MasterDownTestSuite()); // T-246: slave-masterdown cell only (T-245 screen refusal)
+        TestRegistry.register(new PortSmokeTestSuite()); // SM-288: per-version port smoke checks
+        TestRegistry.register(new ClientIntegrationTestSuite()); // SM-313: client API for BankSystem's company screen
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.ItemPickerRegistrationTestSuite()); // SM-273
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.DocumentationLinkTestSuite()); // SM-276
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.FixtureHooksTestSuite()); // BS-269 (trusted slave only)
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.AuditFixtureSuite()); // BS-269 (opt-in, trusted slave only)
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());

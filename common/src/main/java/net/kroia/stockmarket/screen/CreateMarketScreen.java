@@ -91,11 +91,8 @@ public class CreateMarketScreen extends StockMarketGuiScreen {
      * @param item the selected item stack
      */
     private void onItemSelected(ItemStack item) {
-        info("Item selected for market creation: " + item.getDisplayName().getString());
         ItemID.getOrRegisterFromItemStackClientSide(item).thenAccept(itemID -> {
-            info("ItemID resolved: " + itemID);
             getMarketManager().requestCreateMarket(itemID).thenAccept(success -> {
-                info("Market creation result: " + success);
                 if (success) {
                     // Schedule screen change on the render thread
                     net.minecraft.client.Minecraft.getInstance().execute(() -> {

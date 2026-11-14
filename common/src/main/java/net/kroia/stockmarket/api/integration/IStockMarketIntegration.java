@@ -80,13 +80,13 @@ public interface IStockMarketIntegration {
      * <ul>
      *   <li>cancels every open <i>player</i> order, refunding any locked balances
      *       via the banking system (bot orders are left intact);</li>
-     *   <li>hides the market from the client trade screen — it is filtered out of
-     *       {@code GetAvailablePairsRequest} while closed.</li>
+     *   <li>rejects new player orders while closed. The market stays listed on the
+     *       client trade screen, which shows an "Under Maintenance" banner.</li>
      * </ul>
      * Price history is preserved and the order book is emptied of player orders.
-     * Reopening the market ({@code open=true}) makes it reappear on the trade
-     * screen with an empty book. If no market exists for {@code subject}, this is
-     * a no-op.
+     * Reopening the market ({@code open=true}) lets players trade again, starting
+     * from a book without player orders. If no market exists for {@code subject},
+     * this is a no-op.
      * <p>
      * Server-thread only.
      *

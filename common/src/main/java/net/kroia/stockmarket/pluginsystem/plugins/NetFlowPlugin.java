@@ -82,10 +82,10 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, NetFlowP
     public static final boolean DEFAULT_SATURATION_ENABLED = true;
 
     /**
-     * T-213: the long-term anchor is off by default until the T-213 exploit gates G1-G5 (no round trip
-     * profits, the anchor only keeps part of a sustained one-sided flow) decide otherwise.
+     * T-213 / SM-319: the long-term anchor is on by default. Used for new markets and for payloads without the
+     * anchor field (pre-T-213 saves and their migration); a saved anchorEnabled is kept as it is.
      */
-    public static final boolean DEFAULT_ANCHOR_ENABLED = false;
+    public static final boolean DEFAULT_ANCHOR_ENABLED = true;
     /**
      * T-213: anchor time constant τ_A in days. With the flow's 8.66 h fade time an impulse leaves about
      * τ_fade / τ_A (~18%) in the anchor. Values below 1 day let a fast dump-and-rebuy profit (τ_A must stay
