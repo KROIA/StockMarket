@@ -25,6 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -70,7 +71,7 @@ public class VillagerTradeManager {
     /** Sidecar file name inside the DataManager folder {@code <world>/data/StockMarket/}. */
     public static final String DATA_FILE = "villager_trades.nbt";
 
-    /** File of releases up to 2.1.x (vanilla SavedData in {@code <world>/data/}); migrated once. */
+    /** File of releases up to 2.1.x (vanilla SavedData in {@code <world>/data/}); moved by save-data step 1 (SM-325). */
     private static final String LEGACY_FILE = "stockmarket_villager_trades.dat";
 
     /** File access in the DataManager folder, same format (compressed NBT) as the DataManager files. */
@@ -257,8 +258,8 @@ public class VillagerTradeManager {
     }
 
     /**
-     * Loads the sidecar from {@code <world>/data/StockMarket/villager_trades.nbt},
-     * after moving a pre-2.2.0 file there once (see {@link #migrateLegacyFile}).
+     * Loads the sidecar from {@code <world>/data/StockMarket/villager_trades.nbt}.
+     * A pre-2.2.0 file was moved there by save-data step 1 before the server started (see {@link #migrateLegacyFile}).
      * A missing or unreadable file yields an empty sidecar.
      *
      * @param server the starting server (master or slave)
@@ -266,7 +267,6 @@ public class VillagerTradeManager {
     public void load(MinecraftServer server) {
         Path file = dataFile(server);
         StockMarketMod.LOGGER.info("[VillagerTradeManager] Villager trade data file: {}", file.toAbsolutePath().normalize());
-        migrateLegacyFile(server.getWorldPath(LevelResource.ROOT), file);
         CompoundTag tag = Files.exists(file) ? persistence.readDataCompound(file) : null;
         savedData = tag != null ? VillagerTradeData.load(tag, server.registryAccess()) : new VillagerTradeData();
         savedDataPruned = false;
@@ -283,7 +283,7 @@ public class VillagerTradeManager {
         if (data == null || !data.isDirty()) {
             return;
         }
-        if (writeAtomic(dataFile(server), data.save(new CompoundTag(), server.registryAccess()))) {
+        if (writeAtomic(persistence, dataFile(server), data.save(new CompoundTag(), server.registryAccess()))) {
             data.clearDirty();
         }
     }
@@ -300,11 +300,12 @@ public class VillagerTradeManager {
     /**
      * Writes {@code tag} to a temp file next to {@code target}, then moves it over the target.
      *
+     * @param persistence the file access used to write the compressed NBT
      * @param target the file to write
      * @param tag    the content
      * @return {@code true} on success; failures are logged and leave the previous file untouched
      */
-    private boolean writeAtomic(Path target, CompoundTag tag) {
+    private static boolean writeAtomic(DataPersistence persistence, Path target, CompoundTag tag) {
         Path temp = target.resolveSibling(target.getFileName() + ".tmp");
         try {
             Files.createDirectories(target.getParent());
@@ -320,32 +321,48 @@ public class VillagerTradeManager {
     }
 
     /**
-     * One-time move of the villager trade file of releases up to 2.1.x. Those used vanilla
-     * SavedData at {@code <world>/data/stockmarket_villager_trades.dat}: a gzip NBT whose
-     * {@code data} compound has the same format as {@link #DATA_FILE}. Minecraft 26.1's world
-     * upgrade leaves that file where it is; the {@code data/minecraft/} candidate covers a vanilla
-     * move into the namespaced folder. Only runs while {@code target} is missing, never overwrites,
-     * and keeps the old file when reading or writing fails.
+     * The places a villager trade file of releases up to 2.1.x can be in. Those used vanilla SavedData at
+     * {@code <world>/data/stockmarket_villager_trades.dat}; the {@code data/minecraft/} candidate covers Minecraft
+     * 26.1's move into the namespaced folder. Also listed in the save-data backup (SM-325).
      *
-     * @param world  the world root folder
-     * @param target the new sidecar file
+     * @param world the world root folder
+     * @return the candidate files, existing or not
      */
-    private void migrateLegacyFile(Path world, Path target) {
-        if (Files.exists(target)) {
-            return;
-        }
+    public static List<Path> legacyFiles(Path world) {
         Path[] candidates = {
                 world.resolve("data").resolve(LEGACY_FILE),
                 //world.resolve("data").resolve("minecraft").resolve(LEGACY_FILE), // mc>=26.1
         };
-        for (Path source : candidates) {
+        return List.of(candidates);
+    }
+
+    /**
+     * Part of save-data step 1 (SM-325, runs before the server loads anything): moves the villager trade file of
+     * releases up to 2.1.x (see {@link #legacyFiles}) to {@code target}. Its {@code data} compound has the same
+     * format as {@link #DATA_FILE}. Safe to run again: only runs while {@code target} is missing, never overwrites,
+     * writes the new file before it deletes the old one. An unreadable old file is logged and kept.
+     *
+     * @param world  the world root folder
+     * @param target the new sidecar file ({@code <world>/data/StockMarket/villager_trades.nbt})
+     * @throws IOException if the new file cannot be written
+     */
+    public static void migrateLegacyFile(Path world, Path target) throws IOException {
+        if (Files.exists(target)) {
+            return;
+        }
+        DataPersistence persistence = new DataPersistence(
+                DataPersistence.JsonFormat.PRETTY, DataPersistence.NbtFormat.COMPRESSED, DataManager.BASE_PATH);
+        for (Path source : legacyFiles(world)) {
             if (!Files.isRegularFile(source)) {
                 continue;
             }
             CompoundTag root = persistence.readDataCompound(source);
-            if (root == null || !writeAtomic(target, NbtCompat.getCompound(root, "data"))) {
-                StockMarketMod.LOGGER.error("[VillagerTradeManager] Could not migrate villager trade data from {}; the old file is kept", source);
+            if (root == null) {
+                StockMarketMod.LOGGER.error("[VillagerTradeManager] Could not read the old villager trade data {}; the file is kept", source);
                 return;
+            }
+            if (!writeAtomic(persistence, target, NbtCompat.getCompound(root, "data"))) {
+                throw new IOException("could not write the villager trade data " + target);
             }
             try {
                 Files.delete(source);

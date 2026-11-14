@@ -24,6 +24,7 @@ import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
 import net.kroia.stockmarket.util.MultiServerUtils;
+import net.kroia.stockmarket.util.SlaveTrustCache;
 import net.kroia.stockmarket.util.StockMarketPermissions;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
@@ -80,11 +81,11 @@ public class StockMarketCommands {
     private static int setAlerts(CommandSourceStack source, boolean enabled) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         if (!isMaster())
-            player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+            source.sendFailure(Component.translatable("message.stockmarket.command_master_only"));
         else if (net.kroia.stockmarket.util.TradeAlerts.setAlertsEnabled(player.getUUID(), enabled))
             player.sendSystemMessage(Component.translatable(enabled ? "message.stockmarket.alerts.on" : "message.stockmarket.alerts.off"));
         else
-            player.sendSystemMessage(Component.translatable("message.stockmarket.alerts.failed"));
+            source.sendFailure(Component.translatable("message.stockmarket.alerts.failed"));
         return Command.SINGLE_SUCCESS;
     }
 
@@ -139,7 +140,7 @@ public class StockMarketCommands {
                             if (isMaster())
                                 masterHandler().stockmarket_setStockmarketAdminMode(player.getUUID(), true);
                             else
-                                player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+                                source.sendFailure(Component.translatable("message.stockmarket.command_master_only"));
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -150,7 +151,7 @@ public class StockMarketCommands {
                                     if (isMaster())
                                         masterHandler().stockmarket_setStockmarketAdminMode_user(player.getUUID(), toPlayer, true);
                                     else
-                                        player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+                                        source.sendFailure(Component.translatable("message.stockmarket.command_master_only"));
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -163,7 +164,7 @@ public class StockMarketCommands {
                             if (isMaster())
                                 masterHandler().stockmarket_setStockmarketAdminMode(player.getUUID(), false);
                             else
-                                player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+                                source.sendFailure(Component.translatable("message.stockmarket.command_master_only"));
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -174,7 +175,7 @@ public class StockMarketCommands {
                                     if (isMaster())
                                         masterHandler().stockmarket_setStockmarketAdminMode_user(player.getUUID(), toPlayer, false);
                                     else
-                                        player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
+                                        source.sendFailure(Component.translatable("message.stockmarket.command_master_only"));
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -187,11 +188,11 @@ public class StockMarketCommands {
                         .then(Commands.literal("off").executes(context -> setAlerts(context.getSource(), false)))
                 )
                 .then(Commands.literal("manage")
-                        .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_MANAGE, StockMarketPermissions.FALLBACK_LEVEL))
+                        .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_MANAGE)) // SM-266: admin flag checked in runAsAdmin
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
-                            handler().stockmarket_manage_async(player.getUUID());
+                            runAsAdmin(source, () -> OpenUIPacket.sendToClient(player, OpenUIPacket.GUIType.MANAGEMENT));
                             return Command.SINGLE_SUCCESS;
                         })
 
@@ -224,20 +225,20 @@ public class StockMarketCommands {
                 // captured stack, which is how a preset's display name is represented; without
                 // it the preset keeps the item's normal hover name.
                 .then(Commands.literal("preset")
-                        .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_PRESET, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like the other management commands
+                        .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_PRESET)) // SM-266: admin flag checked in runAsAdmin
                         .then(Commands.literal("add")
                                 .then(Commands.argument("category", StringArgumentType.string())
                                         .suggests((context, builder) -> getPresetCategoryNamesSuggestion(builder))
                                         .executes(context -> {
-                                            addHeldItemPreset(context.getSource(),
-                                                    StringArgumentType.getString(context, "category"), null);
+                                            String category = StringArgumentType.getString(context, "category");
+                                            runAsAdmin(context.getSource(), () -> addHeldItemPreset(context.getSource(), category, null));
                                             return Command.SINGLE_SUCCESS;
                                         })
                                         .then(Commands.argument("name", StringArgumentType.string())
                                                 .executes(context -> {
-                                                    addHeldItemPreset(context.getSource(),
-                                                            StringArgumentType.getString(context, "category"),
-                                                            StringArgumentType.getString(context, "name"));
+                                                    String category = StringArgumentType.getString(context, "category");
+                                                    String name = StringArgumentType.getString(context, "name");
+                                                    runAsAdmin(context.getSource(), () -> addHeldItemPreset(context.getSource(), category, name));
                                                     return Command.SINGLE_SUCCESS;
                                                 })
                                         )
@@ -273,7 +274,7 @@ public class StockMarketCommands {
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.literal("reload")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .executes(context -> {
                                     executeNewsAdminOp(context.getSource(),
                                             NewsAdminRequest.Op.RELOAD, null, null);
@@ -281,7 +282,7 @@ public class StockMarketCommands {
                                 })
                         )
                         .then(Commands.literal("trigger")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         .suggests((context, builder) -> getNewsEventIdsSuggestion(builder))
                                         .executes(context -> {
@@ -301,7 +302,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("list")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .executes(context -> {
                                     executeNewsAdminOp(context.getSource(),
                                             NewsAdminRequest.Op.LIST, null, null);
@@ -309,7 +310,7 @@ public class StockMarketCommands {
                                 })
                         )
                         .then(Commands.literal("stop")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         .suggests((context, builder) -> getActiveNewsEventIdsSuggestion(builder, true))
                                         .executes(context -> {
@@ -324,7 +325,7 @@ public class StockMarketCommands {
                         // which cancels the event — skipping the last phase ends it
                         // normally (reversal:none bakes like a natural completion).
                         .then(Commands.literal("skipphase")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         // Active ids only — no "all" keyword for skipphase.
                                         .suggests((context, builder) -> getActiveNewsEventIdsSuggestion(builder, false))
@@ -336,7 +337,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("info")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         .suggests((context, builder) -> getNewsEventIdsSuggestion(builder))
                                         .executes(context -> {
@@ -347,7 +348,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("enable")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         // Only disabled ids are useful enable targets
                                         .suggests((context, builder) -> getNewsEventIdsSuggestionFiltered(builder, false))
@@ -359,7 +360,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("disable")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         // Only enabled ids are useful disable targets
                                         .suggests((context, builder) -> getNewsEventIdsSuggestionFiltered(builder, true))
@@ -371,7 +372,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("resetcooldown")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         .suggests((context, builder) -> getNewsEventIdsSuggestion(builder))
                                         .executes(context -> {
@@ -386,7 +387,7 @@ public class StockMarketCommands {
                         // per-value sentinel / resetAll flag), so slave routing and the
                         // admin audit work exactly like the other news admin commands.
                         .then(Commands.literal("scheduler")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .then(Commands.literal("show")
                                         .executes(context -> {
                                             executeNewsSchedulerOp(context.getSource(),
@@ -436,7 +437,7 @@ public class StockMarketCommands {
                         // travels in the eventId field; "key" mode is flagged via the
                         // (otherwise unused) market field — see NewsAdminRequest.
                         .then(Commands.literal("registry")
-                                .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_NEWS, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like preset
+                                .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_NEWS)) // SM-266: admin flag checked in runAsAdmin
                                 .then(Commands.literal("list")
                                         .executes(context -> {
                                             executeNewsAdminOp(context.getSource(),
@@ -561,7 +562,7 @@ public class StockMarketCommands {
                 // the generic <market> argument below, and market names are suggested quoted
                 // (or as numeric IDs), so "open"/"close" never collide with a market name.
                 .then(Commands.literal("open")
-                        .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_MARKET, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only
+                        .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_MARKET)) // SM-266: admin flag checked in runAsAdmin
                         .then(Commands.argument("market", StringArgumentType.string())
                                 .suggests((context, builder) -> getMarketNamesSuggestion(builder))
                                 .executes(context -> {
@@ -571,7 +572,7 @@ public class StockMarketCommands {
                         )
                 )
                 .then(Commands.literal("close")
-                        .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_MARKET, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only
+                        .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_MARKET)) // SM-266: admin flag checked in runAsAdmin
                         .then(Commands.argument("market", StringArgumentType.string())
                                 .suggests((context, builder) -> getMarketNamesSuggestion(builder))
                                 .executes(context -> {
@@ -587,7 +588,7 @@ public class StockMarketCommands {
                 // ItemStack — so even "broken" markets whose item can no longer be resolved
                 // (e.g. items with volatile data components) can be deleted.
                 .then(Commands.argument("market", StringArgumentType.string())
-                        .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_MARKET, StockMarketPermissions.FALLBACK_LEVEL)) // Admin-only, like the other management commands
+                        .requires(source -> StockMarketPermissions.canUseFlagGatedCommand(source, StockMarketPermissions.COMMAND_MARKET)) // SM-266: admin flag checked in runAsAdmin
                         .suggests((context, builder) -> getMarketNamesSuggestion(builder))
                         .then(Commands.literal("remove")
                                 .executes(context -> {
@@ -602,6 +603,70 @@ public class StockMarketCommands {
                 // Status shows every mod's Discord routing; on a slave it says the master sends the posts.
                 .then(DiscordWebhooks.command())
         );
+    }
+
+    /**
+     * SM-266: the single StockMarket-admin gate of the flag-gated admin commands ({@code manage}, {@code preset},
+     * {@code news} admin subcommands, {@code open|close <market>}, {@code <market> remove}; see
+     * {@link StockMarketPermissions#FLAG_GATED_NODES}). Every one of them routes through here, so the check runs once.
+     * <ul>
+     *   <li>Non-player sources (console, command blocks) already passed the op-level {@code requires} check and run
+     *       {@code action} right away.</li>
+     *   <li>A player runs {@code action} only if they have the StockMarket admin flag ({@code /stockmarket op}), server
+     *       op or not. The flag lives on the master, so on a slave this asks the master
+     *       ({@code isStockmarketAdminAsync}); a slave without a master connection fails fast with the "not
+     *       connected" message. Without the flag the player gets {@link #adminRefusalKey()}; if the master gives
+     *       no answer, {@code message.stockmarket.command_async_failed}.</li>
+     * </ul>
+     *
+     * @param source the command source
+     * @param action the command's actual work; always runs on the server main thread
+     * @return future resolving to {@code true} if {@code action} ran
+     */
+    public static CompletableFuture<Boolean> runAsAdmin(CommandSourceStack source, Runnable action) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            action.run();
+            return CompletableFuture.completedFuture(true);
+        }
+        if (!MultiServerUtils.canInteractWithStockMarket(player.getUUID()))
+            return CompletableFuture.completedFuture(false);
+        MinecraftServer server = source.getServer();
+        CompletableFuture<Boolean> ran = new CompletableFuture<>();
+        // On the master the future is already complete and server.execute runs inline on the main thread.
+        BACKEND_INSTANCES.MARKET_MANAGER.getAsync().isStockmarketAdminAsync(player.getUUID())
+                .whenComplete((isAdmin, failure) -> server.execute(() -> {
+                    if (failure != null) {
+                        BACKEND_INSTANCES.LOGGER.error("[StockMarketCommands] Admin check failed for " + player.getName().getString(), failure);
+                        source.sendFailure(Component.translatable("message.stockmarket.command_async_failed", player.getName().getString()));
+                        ran.complete(false);
+                    } else if (player.hasDisconnected()) {
+                        ran.complete(false); // logged off while waiting for the master
+                    } else if (!Boolean.TRUE.equals(isAdmin)) {
+                        source.sendFailure(Component.translatable(adminRefusalKey()));
+                        ran.complete(false);
+                    } else {
+                        action.run();
+                        ran.complete(true);
+                    }
+                }));
+        return ran;
+    }
+
+    /**
+     * SM-312: the message key a player gets when {@link #runAsAdmin} refuses them. The master answers an untrusted
+     * slave's admin-flag read empty (T-239, {@code NetworkGate}), so there even a flagged admin is refused; telling
+     * them "admins only" would be misleading. On a slave the master has reported as untrusted
+     * ({@link SlaveTrustCache}) the player gets {@code message.stockmarket.command_slave_untrusted} instead. While the
+     * trust state is unknown (cache empty) the generic message stays.
+     *
+     * @return {@code message.stockmarket.command_slave_untrusted} on a known-untrusted slave, otherwise
+     *         {@code message.stockmarket.command_admin_only}
+     */
+    public static String adminRefusalKey() {
+        return isSlaveServer() && Boolean.FALSE.equals(SlaveTrustCache.get())
+                ? "message.stockmarket.command_slave_untrusted"
+                : "message.stockmarket.command_admin_only";
     }
 
     /**
@@ -786,7 +851,7 @@ public class StockMarketCommands {
     private static void removeMarket(CommandSourceStack source, String marketArg)
     {
         MinecraftServer server = source.getServer();
-        resolveMarket(source, marketArg, target ->
+        runAsAdmin(source, () -> resolveMarket(source, marketArg, target ->
                 BACKEND_INSTANCES.MARKET_MANAGER.getAsync().deleteMarketAsync(target).thenAccept(success ->
                         server.execute(() -> {
                             if (success)
@@ -795,7 +860,7 @@ public class StockMarketCommands {
                             else
                                 source.sendFailure(Component.translatable(
                                         "message.stockmarket.command_market_remove_failed", target.getName()));
-                        })));
+                        }))));
     }
 
     /**
@@ -814,7 +879,7 @@ public class StockMarketCommands {
     private static void setTradingOverride(CommandSourceStack source, String marketArg, boolean open)
     {
         MinecraftServer server = source.getServer();
-        resolveMarket(source, marketArg, target ->
+        runAsAdmin(source, () -> resolveMarket(source, marketArg, target ->
                 BACKEND_INSTANCES.MARKET_MANAGER.getAsync().getMarketAsync(target)
                         .thenCompose(market -> market == null
                                 ? CompletableFuture.completedFuture(false)
@@ -827,7 +892,7 @@ public class StockMarketCommands {
                             else
                                 source.sendFailure(Component.translatable(
                                         "message.stockmarket.command_market_trading_failed", target.getName()));
-                        })));
+                        }))));
     }
 
     /**
@@ -946,14 +1011,9 @@ public class StockMarketCommands {
             source.sendFailure(Component.translatable("message.stockmarket.command_news_not_player"));
             return;
         }
-        // On a slave without a master connection the request could never be answered —
-        // fail fast with the standard "not connected" console message.
-        if (!MultiServerUtils.canInteractWithStockMarket(player.getUUID())) {
-            return;
-        }
-
+        // runAsAdmin also fails fast on a slave without a master connection.
         MinecraftServer server = source.getServer();
-        BACKEND_INSTANCES.NETWORKING.NEWS_ADMIN_REQUEST
+        runAsAdmin(source, () -> BACKEND_INSTANCES.NETWORKING.NEWS_ADMIN_REQUEST
                 .sendFromServerCommand(player, op, eventId, market, enabled)
                 .whenComplete((response, throwable) -> server.execute(() -> {
                     if (throwable != null || response == null) {
@@ -969,7 +1029,7 @@ public class StockMarketCommands {
                     for (String line : response.lines()) {
                         source.sendSuccess(() -> Component.literal(line), false);
                     }
-                }));
+                })));
     }
 
     /** The scheduler override keys accepted by {@code /stockmarket news scheduler set|reset} (T-082). */
@@ -1028,14 +1088,9 @@ public class StockMarketCommands {
             source.sendFailure(Component.translatable("message.stockmarket.command_news_not_player"));
             return;
         }
-        // On a slave without a master connection the request could never be answered —
-        // fail fast with the standard "not connected" console message.
-        if (!MultiServerUtils.canInteractWithStockMarket(player.getUUID())) {
-            return;
-        }
-
+        // runAsAdmin also fails fast on a slave without a master connection.
         MinecraftServer server = source.getServer();
-        BACKEND_INSTANCES.NETWORKING.NEWS_ADMIN_REQUEST
+        runAsAdmin(source, () -> BACKEND_INSTANCES.NETWORKING.NEWS_ADMIN_REQUEST
                 .sendSchedulerFromServerCommand(player, change)
                 .whenComplete((response, throwable) -> server.execute(() -> {
                     if (throwable != null || response == null) {
@@ -1050,7 +1105,7 @@ public class StockMarketCommands {
                     for (String line : response.lines()) {
                         source.sendSuccess(() -> Component.literal(line), false);
                     }
-                }));
+                })));
     }
 
     /**

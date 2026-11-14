@@ -6,7 +6,7 @@ the first consumer, but this API is fully mod-agnostic — nothing here is
 BankSystem-specific.
 
 - **Package:** `net.kroia.stockmarket.api`
-- **StockMarket version:** 2.1.0+
+- **StockMarket version:** 2.1.0+ (client-side integration, §9: 2.2.0+)
 - **Minecraft:** 1.21.1 · **Java:** 21
 
 ---
@@ -59,7 +59,8 @@ if (integration == null) {
 
 - `getIntegration()` returns non-null only on the **server side** (dedicated or
   integrated), and only **after the server has started**. On a pure-client JVM it
-  returns `null`.
+  returns `null`. For client-side helpers (open the trade screen, embed a price chart)
+  see [§9](#9-client-side-integration-220).
 - **Every method on `IStockMarketIntegration` is server-thread only.** If you are
   on another thread, marshal onto the server thread yourself before calling.
 - The instance is a lazily-cached singleton that survives server stop/start
@@ -90,7 +91,7 @@ subject. All price/abundance/flag values come from `cfg`.
 |---|---|---|---|---|
 | `virtualOrderbookEnabled` | `boolean` | Whether the market's synthetic (virtual) orderbook is active. When `false`, the market behaves as **empty** in the matching engine — only real player orders provide liquidity. | `true` | — |
 | `defaultPrice` | `float` | Initial market price. | `1.0` | **display units** (same units as `MarketPreset.defaultPrice`); converted to raw amounts internally. |
-| `naturalAbundance` | `float` | Natural abundance used by the default orderbook volume-distribution plugin. | `10.0` | abundance units |
+| `naturalAbundance` | `float` | Natural abundance used by the default orderbook volume-distribution plugin. Since 2.2.0 it also sets the market's default **max player order size** (see below). | `100.0` | abundance units |
 | `ignorePluginAutosubscribe` | `boolean` | When `true`, the new market is **skipped** by the create-time plugin auto-subscribe pass. Admins can still subscribe plugins manually afterwards. | `false` | — |
 
 > The record may gain **additive** fields in future versions. Always build
@@ -100,8 +101,23 @@ subject. All price/abundance/flag values come from `cfg`.
 ### `MarketConfig.defaults()`
 
 Returns a commodity-style config: virtual orderbook enabled, price `1.0`,
-abundance `10.0`, plugin auto-subscribe active. Equivalent to
-`new MarketConfig(true, 1.0f, 10.0f, false)`.
+abundance `100.0`, plugin auto-subscribe active. Equivalent to
+`new MarketConfig(true, 1.0f, 100.0f, false)`. (Before 2.2.0 the abundance was `10.0`.)
+
+### Max order size (2.2.0)
+
+A new market's max player order size (`MarketSettings.maxOrderVolume`, real items) is
+derived from `naturalAbundance`:
+
+```
+maxOrderVolume = max(f, round(f x naturalAbundance))     f = Mod Setting MAX_ORDER_VOLUME_FACTOR (default 64)
+```
+
+So `MarketConfig.defaults()` gives 6,400 items per order, and an abundance of `0` gives
+`f` items (64 with the default setting). Bot orders are not limited. To change the
+limit after creation, edit the market's settings (`ISyncServerMarket.getSettings()` /
+`setSettings(MarketSettings)` on the master, or the Market Settings screen); `0` means
+unlimited. Source: `MarketSettings.defaultMaxOrderVolume(float, long)`.
 
 ---
 
@@ -133,7 +149,7 @@ if (integration == null) return;
 MarketConfig shareConfig = new MarketConfig(
         /* virtualOrderbookEnabled   */ false,   // no synthetic orderbook liquidity
         /* defaultPrice              */ 100.0f,  // starting share price (display units)
-        /* naturalAbundance          */ 0.0f,    // unused when no volume-distribution plugin
+        /* naturalAbundance          */ 0.0f,    // no book depth; max order size = 64 items (see "Max order size")
         /* ignorePluginAutosubscribe */ true     // no default/custom plugins auto-subscribe
 );
 
@@ -174,7 +190,7 @@ Preconditions are checked in order: already-exists → blacklisted → create.
 
 | `Status` | Meaning |
 |---|---|
-| `SUCCESS` | Market created. `reason()` is `null`. |
+| `SUCCESS` | Market created. `reason()` is `null`. Since 2.2.0 connected clients get the new market pushed and see it without reopening their screen. |
 | `ALREADY_EXISTS` | A market for `subject` already exists — **no-op**. Makes `openMarket` naturally **idempotent**: safe to call again without side effects. |
 | `ITEM_BLACKLISTED` | The subject item is blacklisted in the banking system and cannot be traded. `reason()` may explain. |
 | `FAILED` | Creation failed for another reason (e.g. the underlying manager returned null). Inspect `reason()` for a short human-readable explanation. |
@@ -226,8 +242,8 @@ void    setMarketOpen(@NotNull ItemID subject, boolean open);
 boolean isMarketOpen(@NotNull ItemID subject);
 ```
 
-- `setMarketOpen(subject, true)` — ends maintenance; players can trade again. It reappears on
-  the client trade screen with an empty order book.
+- `setMarketOpen(subject, true)` — ends maintenance; players can trade again, starting from
+  an order book without player orders.
 - `setMarketOpen(subject, false)` — puts the market into maintenance mode.
 - `isMarketOpen(subject)` — `true` iff a market exists for `subject` **and** it is
   currently not under maintenance. Returns `false` if the market is under maintenance **or** if no market
@@ -239,27 +255,28 @@ If no market exists for `subject`, `setMarketOpen` is a **no-op**. All methods a
 > **⚠️ WARNING — maintenance is DESTRUCTIVE.** `setMarketOpen(subject, false)`:
 > - **cancels every open _player_ order**, refunding any locked balances via the
 >   banking system (bot orders are left intact);
-> - **hides the market from the client trade screen** — it is filtered out of the
->   available trading pairs (`GetAvailablePairsRequest`) while under maintenance;
+> - **rejects new player orders** — the market stays listed on the client trade screen,
+>   which shows an "Under Maintenance" banner; only the pair list of
+>   `GetAvailablePairsRequest` leaves it out while under maintenance;
 > - **cancels inter-market orders** that reference the market.
 >
 > Bots keep trading on a market under maintenance.
 >
 > Price history is **preserved** and the order book is emptied of player orders.
-> Reopening with `setMarketOpen(subject, true)` makes the market reappear with an
-> **empty** order book — cancelled orders are **not** restored.
+> Reopening with `setMarketOpen(subject, true)` lets players trade again on an order
+> book **without player orders** — cancelled orders are **not** restored.
 
 ```java
 IStockMarketIntegration integration = StockMarketMod.getAPI().getIntegration();
 if (integration == null) return;
 
-// Enter maintenance (cancels + refunds all open player orders, hides from trade screen).
+// Enter maintenance (cancels + refunds all open player orders, rejects new ones).
 integration.setMarketOpen(subject, false);
 
 // Query current state.
 boolean open = integration.isMarketOpen(subject);   // false while under maintenance
 
-// End maintenance (market reappears with an empty order book).
+// End maintenance (players can trade again; no player orders in the book).
 integration.setMarketOpen(subject, true);
 ```
 
@@ -268,8 +285,8 @@ integration.setMarketOpen(subject, true);
 Two different operations — do not confuse them:
 
 - **`setMarketOpen(subject, false)`** — **reversible maintenance mode**. The market keeps
-  existing (price history intact); it is only hidden and its player orders are
-  cancelled+refunded. Reopen it any time with `setMarketOpen(subject, true)`.
+  existing (price history intact); it only rejects player orders, and its open player
+  orders are cancelled+refunded. Reopen it any time with `setMarketOpen(subject, true)`.
 - **`closeMarket(subject)`** — **permanent delete** (see §6). The market is
   removed entirely (unsubscribed from all plugins, deleted, removal broadcast to
   clients). There is no "reopen"; you must `openMarket` again to recreate it.
@@ -344,3 +361,58 @@ be rejected as blacklisted.
 
 **Idempotency.** Re-calling `openMarket` for an existing subject returns
 `ALREADY_EXISTS` and does nothing — safe for retry/setup-on-startup flows.
+
+---
+
+## 9. Client-side integration (2.2.0)
+
+`net.kroia.stockmarket.api.integration.StockMarketClientIntegration` is a static helper for
+another mod's **client** code, for example a screen that shows a company share. BankSystem
+calls it by reflection, so its class name, method names and signatures do not change.
+
+Unlike `IStockMarketIntegration` (server thread, master only), it works on any client, also
+on a slave server: it uses the player's own server and the client market cache. All methods
+are **client thread only** (the render thread, e.g. a button handler or `init()`).
+
+```java
+static boolean openTradeScreen(@NotNull ItemID market)
+```
+
+Opens the StockMarket trade screen with `market` selected, without the StockMarket block.
+The server still checks every order.
+
+- Returns `false` and sends nothing if the client market cache has no market for `market`:
+  no market exists, it was deleted, a slave cannot resolve its item, the master was down when
+  the player joined, or the player is not in a world.
+- Otherwise sends a request to the player's server and returns `true`; the screen opens when
+  the server answers. A slave without a master connection refuses and the player gets a
+  "not connected" chat message instead. A closed market or one under maintenance opens
+  normally and shows its banner.
+
+```java
+static @NotNull GuiElement createPriceChart(@NotNull ItemID market)
+```
+
+Creates a live candlestick chart of `market` to embed in your own screen (a ModUtilities
+`GuiElement`; the object is a `DisplayCandlestickChart` and implements `AutoCloseable`).
+
+- It subscribes to the market's live prices if the market is in the client cache. Otherwise it
+  stays empty and retries on every render, so it fills in once the market appears.
+- It unsubscribes on `close()` and when it is removed from its GUI, and reconnects on the next
+  render if it is shown again.
+- Its zoom and position are stored apart from the trade screen's; the first time it starts
+  from the player's trade screen view of that market.
+- **Call `((AutoCloseable) chart).close()` in your screen's `removed()`**, otherwise the price
+  subscription stays open for the rest of the session. Calling it twice is harmless.
+
+```java
+// In a ModUtilities GuiScreen of your mod (only reached when StockMarket is loaded, see §8)
+GuiElement chart = StockMarketClientIntegration.createPriceChart(shareItem);
+addElement(chart);
+// ...
+@Override
+public void removed() {
+    try { ((AutoCloseable) chart).close(); } catch (Exception ignored) {}
+    super.removed();
+}
+```
