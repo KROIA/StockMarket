@@ -226,4 +226,7 @@ public class StockMarketTestCategories {
 
     // BS-269: opt-in driver of the generated audit fixture (slave-trusted cell, run only with --only).
     public static final TestCategory AUDIT_FIXTURE = new TestCategory("stockmarket", "sm_audit_fixture", "BS-269 (opt-in): drives the whole audit-fixture story from a trusted slave and adds the StockMarket market cases B1-B8 and the market part of story E to the answer key", SLAVE_ONLY, true);
+
+    // SM-328: opt-in check of the save-data upgrade on a real 2.1.2 world (run with --only and --world).
+    public static final TestCategory UPGRADE_212 = new TestCategory("stockmarket", "sm_upgrade_212", "SM-328 (opt-in): a world saved by 2.1.2 after the upgrade: data version marker, one backup zip, markets kept, a NetFlowPlugin before each old VolatilityPlugin with the old flow settings (moved defaults), split flag saved", MASTER_ONLY, true);
 }

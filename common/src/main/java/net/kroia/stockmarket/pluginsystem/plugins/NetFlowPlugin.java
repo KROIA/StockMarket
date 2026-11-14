@@ -327,6 +327,31 @@ public class NetFlowPlugin extends ServerPlugin<NetFlowPlugin.Settings, NetFlowP
                 s.anchorMinMult(), s.anchorMaxMult());
     }
 
+    /** SM-327: flow sensitivity default of the releases up to 2.1.2 (VolatilityPlugin), now {@link #DEFAULT_FLOW_SENSITIVITY}. */
+    static final float OLD_DEFAULT_FLOW_SENSITIVITY = 500f;
+    /** SM-327: max price multiplier default of the releases up to 2.1.2 (VolatilityPlugin), now {@link #DEFAULT_MAX_PRICE_MULT}. */
+    static final float OLD_DEFAULT_MAX_PRICE_MULT = 20f;
+
+    /**
+     * SM-327 migration: releases up to 2.1.2 saved every flow setting for every market, also the ones nobody
+     * changed, so an untouched market would keep the old pump-friendly defaults forever. Each field that is
+     * exactly its 2.1.2 default and whose default changed (flow sensitivity 500 -&gt; 2000, max price multiplier
+     * 20 -&gt; 3) gets the new default; checked per field, so a value the admin changed is kept even if the other
+     * one moves. The other carried-over fields have the same default in 2.2.0 (flow on, min multiplier 0.05,
+     * capacity volatility scale 0.3) or did not exist in 2.1.2.
+     *
+     * @param s the migrated settings
+     * @return {@code s} with the unchanged old defaults replaced
+     */
+    public static Settings moveOldDefaults(Settings s) {
+        return new Settings(s.flowEnabled(),
+                s.flowSensitivity() == OLD_DEFAULT_FLOW_SENSITIVITY ? DEFAULT_FLOW_SENSITIVITY : s.flowSensitivity(),
+                s.minPriceMult(),
+                s.maxPriceMult() == OLD_DEFAULT_MAX_PRICE_MULT ? DEFAULT_MAX_PRICE_MULT : s.maxPriceMult(),
+                s.permanentImpact(), s.capacityVolatilityScale(), s.thetaCapEnabled(), s.saturationEnabled(),
+                s.anchorEnabled(), s.anchorTimeDays(), s.anchorMaxMovePerDay(), s.anchorMinMult(), s.anchorMaxMult());
+    }
+
     /** Per-market state. */
     static class MarketData {
         Settings settings = Settings.createDefault();
