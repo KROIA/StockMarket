@@ -118,7 +118,7 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
-import net.kroia.stockmarket.pluginsystem.plugins.PriceFloorPlugin;
+import com.example.plugins.PriceFloorPlugin;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
@@ -226,6 +226,8 @@ public class ExamplePlugins {
 ## Example 2: TradingHoursPlugin
 
 Restricts trading to configurable hours. Outside trading hours, the plugin freezes the market by continuously setting the target price to the current price, preventing drift.
+
+> Since 2.2.0 every market has built-in [trading hours](../../user-guide/trading-hours.md) that reject orders outside the window, and plugins do not get closed markets in `update`/`finalize` at all. Use the built-in feature for real trading hours; this example only shows time-based plugin logic.
 
 **Demonstrates:** time-based logic, custom settings with StreamCodec (two integers), runtime data streaming with StreamCodec (current hour + trading status), save/load.
 
@@ -395,7 +397,7 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
-import net.kroia.stockmarket.pluginsystem.plugins.TradingHoursPlugin;
+import com.example.plugins.TradingHoursPlugin;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
@@ -760,7 +762,7 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
-import net.kroia.stockmarket.pluginsystem.plugins.LiquidityProviderPlugin;
+import com.example.plugins.LiquidityProviderPlugin;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;

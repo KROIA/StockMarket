@@ -30,6 +30,7 @@ asynchronous calls follow since 2.2.0.
 | Create, query, close a market or switch maintenance from another mod | `IStockMarketIntegration` via `StockMarketMod.getAPI().getIntegration()` — see the [Market Creation API](market-creation-api.md) | Master server (or single server), server thread |
 | Change prices, place bot orders, shape the order book | A market plugin — see the [Plugin System guide](../plugin-system/overview.md) and the [plugin API reference](../plugin-system/api-reference.md) | Master server, plugin update loop |
 | Read markets, prices and orders, or place orders for the local player in a client-side addon (HUD, screen) | The client managers from `StockMarketModBackend.getClientInstances()` (§6) | Client |
+| Open the trade screen for a market or embed a live price chart in your own screen | `StockMarketClientIntegration` — see the [Market Creation API, §9](market-creation-api.md#9-client-side-integration-220) | Client |
 | Understand how StockMarket itself talks between client, slave and master | The sync/async interfaces in this page (§2-§5) | Master, slave and client |
 
 The market manager of a running server (`IMarketManager`) is **not** handed out to other
@@ -273,7 +274,7 @@ Methods prefixed `test_` are internal hooks; do not call them from addon code.
 ### Order rejection codes
 
 `CreateOrderRequest.Status` is the answer of a player order (`ClientMarket.createOrder()`).
-2.2.0 appended three values; the ordinal is the wire format, so the old values keep their
+2.2.0 appended four values; the ordinal is the wire format, so the old values keep their
 numbers:
 
 | Status | Meaning | `OutputData.detail` |
@@ -281,6 +282,7 @@ numbers:
 | `MARKET_CLOSED` | Market under maintenance or outside its trading hours. Checked before any funds are locked | `0` |
 | `ORDER_TOO_LARGE` | The amount is above the market's max order size | the limit in items |
 | `TRADING_TOO_FAST` | The player's trade cooldown has not run out | remaining ms |
+| `ACCOUNT_FROZEN` | The bank account is frozen by a BankSystem admin. Checked after the account membership check and before any funds are locked | `0` |
 
 ---
 
@@ -315,6 +317,7 @@ fetch it again instead of caching it.
 | `requestCreateMarket(ItemID)` | Admin only. `CompletableFuture<Boolean>`: `true` once the server created the market, even if loading it into the local cache got no answer (the next `requestMarkets()` loads it); `false` otherwise |
 | `requestDeleteMarket(ItemID)` | Admin only |
 | `getCrossRateMarket(have, want)` | `IPriceDataProvider` for a pair chart (`want price / have price`) |
+| `onMarketRemoved(ItemID)`, `onMarketChanged(ItemID, MarketChangedPacket.Kind)` | Called by StockMarket when the server pushes a market change (2.2.0: `ADDED`, `REMOVED`, `OPENED`, `CLOSED`, `MAINTENANCE_ON`, `MAINTENANCE_OFF`); do not call yourself. New and deleted markets reach the cache without a `requestMarkets()` |
 
 ### `ClientMarket` — placing an order for the local player
 
@@ -353,6 +356,11 @@ are **deprecated** since 2.2.0: despite their name they place **market** orders.
 
 `ClientMarket` also implements `IPriceDataProvider` (candles, current price, paging of older
 history) for charts.
+
+`ClientMarket.getTradingState()` returns `MarketSettings.TradingState` (`OPEN`, `CLOSED`,
+`MAINTENANCE`): from the market's price stream while one runs, else from the last state change
+the server pushed. Unknown counts as `OPEN`, so controls never stay disabled; the server still
+rejects orders on a closed market.
 
 ---
 

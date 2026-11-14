@@ -110,12 +110,12 @@ Called once when the plugin manager stops. Perform cleanup.
 ```java
 abstract void update(List<MarketInterface> markets)
 ```
-Called every tick for enabled plugins. Read market state and queue changes through the `MarketInterface` objects.
+Called every tick for enabled plugins. Read market state and queue changes through the `MarketInterface` objects. Since 2.2.0 `markets` holds only the subscribed markets that are inside their trading hours; markets under maintenance are included (bots keep trading there). `getMarketInterfaces()` still returns all subscribed markets. See [`isMarketOpen()`](#market-state).
 
 ```java
 abstract void finalize(List<MarketInterface> markets)
 ```
-Called every tick after all caches have been applied. Use for post-processing.
+Called every tick after all enabled plugins ran `update`, with the same market list. The queued changes are applied to the markets only after all `finalize` calls, so reads such as `getTargetPrice()` return this tick's queued values. Use it for modifiers that must see every plugin's `update` result, for example the NewsPlugin, which multiplies the target price here. Do not call `setTargetPrice` in `finalize`: it would overwrite such modifiers.
 
 ### Events (abstract -- must implement)
 
@@ -211,6 +211,11 @@ Override to react when settings are applied to a specific market. Called after d
 final @Nullable TSettings getCustomSettings(ItemID marketID)
 ```
 Returns the current settings for the given market, or null if no settings exist for that market.
+
+```java
+public final void replaceCustomSettings(ItemID marketID, @NotNull TSettings settings)
+```
+Replaces the settings of one market from inside the plugin, for example to persist a value the plugin derived at runtime. Stores them in the per-market map (what gets saved and synced to the GUI) and calls `onCustomSettingsApplied(marketID, settings)`. *(2.2.0)*
 
 ```java
 final byte[] encodeCustomSettings(ItemID marketID)
@@ -695,6 +700,53 @@ protected void onCustomSettingsResponse(boolean success, @Nullable ItemID market
 ```
 Override to handle the server's response to a settings update. `success` is true if the server applied the settings. `marketID` identifies which market the response is for. `confirmedSettings` contains the server's confirmed decoded settings object.
 
+### Apply to All Markets and Defaults *(2.2.0)*
+
+Helpers for the "Apply to all" and "Defaults" buttons the built-in plugin GUIs show. Use them to give your settings form the same behaviour.
+
+```java
+protected final void sendCustomSettingsToAllMarkets(TSettings settings)
+```
+Sends `settings` to every market currently subscribed to this plugin, one `sendCustomSettings` call per market, so each confirmation arrives separately in `onCustomSettingsResponse`. Does nothing before sync data arrived.
+
+```java
+protected final void confirmApplyToAllMarkets(TSettings settings)
+```
+Opens a confirmation popup that warns that the settings of all subscribed markets will be overwritten. On confirm it calls `sendCustomSettingsToAllMarkets(settings)`; on cancel nothing is sent and the previous screen is shown again. Pass the values read from your form at click time.
+
+```java
+protected @Nullable TSettings defaultSettings()
+```
+Override to return the settings a newly subscribed market gets (usually the same as the server plugin's `provideDefaultCustomSettings()`). Default: `null` = no "Defaults" button.
+
+```java
+protected void showSettings(TSettings settings)
+```
+Override to fill your settings form with `settings` without sending anything. Called by the "Defaults" button; the user then applies them with Apply (one market) or Apply to all. Default: no-op.
+
+```java
+protected final @Nullable Button createDefaultsButton()
+```
+Creates the "Defaults" button (fills the form with `defaultSettings()` through `showSettings`, sends nothing). Returns `null` if `defaultSettings()` returns `null`. Add the button to your layout yourself.
+
+```java
+public static void setSettingTooltip(Component tooltip, GuiElement... elements)
+```
+Attaches a hover tooltip to setting controls (typically a label and its input). The tooltip opens to the left, because plugin settings sit at the right side of their screens.
+
+`PluginGuiElement.ApplyAllTexts` (protected) holds the shared translated texts: `APPLY_ALL`, `APPLY_ALL_TOOLTIP`, `CONFIRM_TITLE`, `DEFAULTS`, `DEFAULTS_TOOLTIP`.
+
+```java
+// In your PluginGuiElement subclass
+Button applyAll = new Button(ApplyAllTexts.APPLY_ALL.getString(),
+        () -> confirmApplyToAllMarkets(readSettingsFromForm()));
+setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAll);
+addChild(applyAll);
+
+Button defaults = createDefaultsButton();   // null if defaultSettings() returns null
+if (defaults != null) addChild(defaults);
+```
+
 ### Active Market
 
 ```java
@@ -751,6 +803,11 @@ protected IClientPluginManager getPluginManager()
 Returns the client-side plugin manager.
 
 ```java
+public static boolean isMarketVisible(@Nullable ItemID marketID)
+```
+Whether a market may be shown on this client. On a slave server, markets whose item the slave cannot resolve (the item's mod exists only on the master) are hidden; the master shows every market. Filter market lists in your GUI with it. *(2.2.0)*
+
+```java
 protected void info(String msg)
 protected void error(String msg)
 protected void warn(String msg)
@@ -758,7 +815,7 @@ protected void debug(String msg)
 ```
 Logging methods.
 
-**Layout constants:** `padding` (4), `spacing` (4), `defaultElementHeight` (20).
+**Layout constants:** `padding` (4), `spacing` (4), `defaultElementHeight` (20), `hoverToolTipFontSize` (0.8).
 
 ---
 
@@ -1059,6 +1116,78 @@ private void renderVolumeOverlay(OrderbookVolumeHistogram histogram) {
     }
 }
 ```
+
+---
+
+## Built-in Plugins
+
+`net.kroia.stockmarket.pluginsystem.Plugins` registers the built-in plugins. Each `PluginRegistryObject` uses the plugin's class name as its type ID. Their settings records and `DEFAULT_*` constants are public, so an addon can read the defaults or build settings, for example for `ServerPlugin.replaceCustomSettings`. What each setting does in game is described in the [user guide](../../user-guide/plugin-system/overview.md); this section covers what an addon plugin needs to know.
+
+| Registry object | Plugin class (`pluginsystem.plugins`) | Settings type |
+|---|---|---|
+| `NET_FLOW_PLUGIN` *(2.2.0)* | `NetFlowPlugin` | `NetFlowPlugin.Settings` |
+| `VOLATILITY_PLUGIN` | `VolatilityPlugin` | `VolatilityPlugin.Settings` |
+| `TARGET_PRICE_BOT_PLUGIN` | `TargetPriceBot` | `TargetPriceBot.Settings` |
+| `DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN` | `DefaultOrderbookVolumeDistributionPlugin` | `DefaultOrderbookVolumeDistributionPlugin.Settings` |
+| `NEWS_PLUGIN` | `NewsPlugin` | `NewsPlugin.Settings` |
+
+**Execution order.** Plugins run in the order of the plugin list (admins move them up and down on the Plugin Management screen). A fresh world creates NetFlowPlugin, VolatilityPlugin, DefaultOrderbookVolumeDistributionPlugin, TargetPriceBot, NewsPlugin in this order. A plugin that writes the target price should check `isTargetPriceSetThisTick()` if it must not overwrite an earlier plugin.
+
+**How the price is formed (2.2.0).** The NetFlowPlugin turns the players' net flow into a fair price and publishes it with `setEquilibriumPrice`. The VolatilityPlugin reads it and sets the target price to `equilibrium x (1 + noise x volatilityScale)`. The TargetPriceBot trades against the virtual order book to move the price towards that target. Without a NetFlowPlugin on the market, `getEquilibriumPrice()` is the default price.
+
+### NetFlowPlugin *(2.2.0)*
+
+Moves the equilibrium price with the players' net item flow: selling lowers it, buying raises it. Each tick, for every market with a virtual order book, it publishes `equilibrium = anchor x e^f` through `setEquilibriumPrice`, where `f = clamp(-flow / capacity, ln minPriceMult, ln maxPriceMult)` and `capacity = flowSensitivity x naturalAbundance / (1 + capacityVolatilityScale)` (with the θ cap: at least the default book's depth / `permanentImpact`). It also sets the target price to the equilibrium, but only if no plugin did this tick. It only reads the market's flow counters, never writes them.
+
+`NetFlowPlugin.Settings` is a record with these fields; the defaults are public constants of `NetFlowPlugin`:
+
+| Field | Default constant | Default | Valid range (else the default) |
+|---|---|---|---|
+| `flowEnabled` | `DEFAULT_FLOW_ENABLED` | `true` | false = the equilibrium stays at the anchor |
+| `flowSensitivity` | `DEFAULT_FLOW_SENSITIVITY` | `2000` | items per unit of abundance for a factor-e move; <= 0 turns the flow off |
+| `minPriceMult` | `DEFAULT_MIN_PRICE_MULT` | `0.05` | (0, 1), lowest equilibrium as a fraction of the anchor |
+| `maxPriceMult` | `DEFAULT_MAX_PRICE_MULT` | `3.0` | > 1, highest equilibrium as a multiple of the anchor |
+| `permanentImpact` (θ) | `DEFAULT_PERMANENT_IMPACT` | `0.5` | (0, 1] |
+| `capacityVolatilityScale` | `DEFAULT_CAPACITY_VOLATILITY_SCALE` | `0.3` | |
+| `thetaCapEnabled` | `DEFAULT_THETA_CAP_ENABLED` | `true` | |
+| `saturationEnabled` | `DEFAULT_SATURATION_ENABLED` | `true` | |
+| `anchorEnabled` | `DEFAULT_ANCHOR_ENABLED` | **`true`** | long-term anchor on or off |
+| `anchorTimeDays` | `DEFAULT_ANCHOR_TIME_DAYS` | `2` | > 0 |
+| `anchorMaxMovePerDay` | `DEFAULT_ANCHOR_MAX_MOVE_PER_DAY` | `0.1` | >= 0, in ln units per day |
+| `anchorMinMult` | `DEFAULT_ANCHOR_MIN_MULT` | `0.25` | (0, 1), lowest anchor as a fraction of the default price |
+| `anchorMaxMult` | `DEFAULT_ANCHOR_MAX_MULT` | `4` | > 1, highest anchor as a multiple of the default price |
+
+- The **long-term anchor is on by default**. It applies to new markets and to saved settings that have no anchor field; a saved `anchorEnabled` is kept. With the anchor off, the anchor is the default price.
+- Build settings with `Settings.createDefault()` and the `with...` copy methods (`withPermanentImpact`, `withCapacityVolatilityScale`, `withToggles`, `withAnchor`, `withAnchorEnabled`). The compact constructor replaces invalid θ and anchor values with the defaults.
+- Pure static helpers: `computeEquilibriumPrice(...)`, `flowExponent(...)`, `flowBand(...)`, `capacity(...)`, `stepAnchor(...)`, `bookEFoldDepth(...)`.
+- Per-market read-outs of a running instance: `getEquilibrium(ItemID)` (NaN until the first update), `getAnchorMultiplier(ItemID)`, `getSaturatedFlow(ItemID)`, `getMarketSettings(ItemID)`, `getBookEFold(ItemID)`.
+- `IAsyncMarket.resetNetPlayerItemFlowAsync()` (the **Reset** button next to Net Flow) also resets the anchor to the default price.
+
+### TargetPriceBot
+
+Trades against the virtual order book to move the market price towards the target price (`getPreviousTargetPrice()`, the value the price plugins set last tick). It acts every 5th tick and skips markets without a virtual order book. A PID controller sets how hard it pushes; the order size is the virtual volume between the price and its target (`IPluginOrderBook.getRealVirtualVolumeToPrice`), so it never trades past its target. One order is at most `maxOrderVolumeFactor` times the market's max player order size.
+
+`TargetPriceBot.Settings`: `pidP`, `pidI`, `pidD`, `pidRate`, `maxOrderVolumeFactor`, `maxTargetMovePerSecond`, `reversionTimeSeconds`, `oscillationPeriodSeconds`, `oscillationDamping`, `oscillationAmplitude`. Defaults: `DEFAULT_PID_P` 0.5, `DEFAULT_PID_I` 0.1, `DEFAULT_PID_D` 0, `DEFAULT_PID_RATE` 0.1, `DEFAULT_MAX_ORDER_VOLUME_FACTOR` 10, `DEFAULT_MAX_TARGET_MOVE_PER_SECOND` 0.005 (0.5 % per second), `DEFAULT_REVERSION_TIME_SECONDS` 600, `DEFAULT_OSCILLATION_PERIOD_SECONDS` 60, `DEFAULT_OSCILLATION_DAMPING` 0.3, `DEFAULT_OSCILLATION_AMPLITUDE` 0.15. `Settings.createDefault()` and `withReference(...)` build them.
+
+**Reference after a player trade (2.2.0).** The bot does not snap the price back after a player trade. A player fill (a change of the market's net flow counter) anchors the bot's **reference**, its setpoint, at the price the player left. The reference then returns to the target over `reversionTimeSeconds`, with a small damped swing. It never goes past the target or beyond the anchor.
+
+- **Band:** the anchor price is clamped to `[E x BOT_MIN_PRICE_MULT, E x NetFlowPlugin.DEFAULT_MAX_PRICE_MULT]`, where E is the market's `getEquilibriumPrice()` (the default price without a NetFlowPlugin). `BOT_MIN_PRICE_MULT` is `0.25`, so a dump below 25 % of E only anchors the reference at 25 % of E: the bot leans the price back into the band instead of following the dump down. The upper edge is 3 times E. The band uses these fixed constants, not the market's own NetFlowPlugin settings. `TargetPriceBot.referenceAnchorPrice(price, equilibrium)` returns the clamped price.
+- **Continued trades in the same direction** (for example a player who keeps selling) only move the anchor to the new price. They keep the reference and its return in progress, so the return does not restart and steady selling or buying is still pulled back towards the target. A fill on the other side of the target starts a new return.
+- `reversionTimeSeconds <= 0` turns the reference off: the bot then follows the target only through the `maxTargetMovePerSecond` rate limit.
+- **Gap guard:** for up to `GAP_GUARD_MAX_BLOCK_SECONDS` (60) after a player fill, the bot does not trade through an almost empty stretch of the book (`crossesEmptyGap`, window `GAP_WINDOW_FRACTION` = 1 % of the price).
+- Pure static helpers: `anchorReference(...)`, `stepReference(...)`, `referenceAnchorPrice(...)`, `limitTargetMove(...)`, `botOrderVolumeLimit(...)`, `crossesEmptyGap(...)`.
+
+### VolatilityPlugin
+
+Sets the target price to `equilibrium x (1 + noise x volatilityScale)`, a random walk around `getEquilibriumPrice()`. Since 2.2.0 it no longer contains the flow model (that moved to the NetFlowPlugin); `VolatilityPlugin.Settings` has only `volatilityScale` (default `DEFAULT_VOLATILITY_SCALE` = 0.3).
+
+### DefaultOrderbookVolumeDistributionPlugin
+
+Fills the virtual order book and registers the default volume distribution. `Settings` fields: `volumeScale`, `speed`, `accumulationRate`, `decumulationRate`, `resetVolume`, and since 2.2.0 the trend accumulation fields `trendPeriodMinutes`, `trendGain`, `trendMaxFactor` (defaults `DEFAULT_TREND_PERIOD_MINUTES` 10, `DEFAULT_TREND_GAIN` 10, `DEFAULT_TREND_MAX_FACTOR` 4) and the round-price cluster fields `roundLevelScale`, `roundLevelWidth`, `roundLevelRange` (defaults `DEFAULT_ROUND_LEVEL_SCALE` 1, `DEFAULT_ROUND_LEVEL_WIDTH` 0.03, `DEFAULT_ROUND_LEVEL_RANGE` 1.1). Copy helpers: `withTrend(...)`, `withRoundLevels(...)`.
+
+### NewsPlugin
+
+Publishes news events and multiplies the target price while they run; a permanent event changes the market's default price (`setDefaultRealPrice`). `NewsPlugin.Settings(newsEnabled, sensitivity)`, defaults `DEFAULT_NEWS_ENABLED` (`true`) and `DEFAULT_SENSITIVITY` (1.0). The combined news factor is clamped to `[MIN_COMBINED_FACTOR, MAX_COMBINED_FACTOR]` = [0.1, 10].
 
 ---
 
