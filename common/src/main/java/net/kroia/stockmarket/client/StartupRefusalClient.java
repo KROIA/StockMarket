@@ -40,7 +40,8 @@ public final class StartupRefusalClient {
                     ? Component.translatable("gui.stockmarket.load_refused.migration_failed_no_backup")
                     : Component.translatable("gui.stockmarket.load_refused.migration_failed", refusal.args().get(0));
         };
-        mc.disconnect(new AlertScreen(() -> mc.setScreen(new SelectWorldScreen(new TitleScreen())),
+        // ClientCompat.setScreen: Minecraft.setScreen is gone in 26.2+, this works on every MC version
+        mc.disconnect(new AlertScreen(() -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(new SelectWorldScreen(new TitleScreen())),
                 Component.translatable("gui.stockmarket.load_refused.title"), message), false);
     }
 }
