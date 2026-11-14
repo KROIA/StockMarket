@@ -593,5 +593,9 @@
   "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "linear ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "Log-Slot ↑ %s (Teil-Slot über linear)",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot": "Log-Slot %s: %s – %s",
-  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "Ask-Obergrenze ↑ %s (keine Standard-Asks darüber)"
+  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "Ask-Obergrenze ↑ %s (keine Standard-Asks darüber)",
+  "gui.stockmarket.load_refused.title": "StockMarket hat diese Welt nicht geladen",
+  "gui.stockmarket.load_refused.too_new": "Diese Welt wurde von einer neueren StockMarket-Version gespeichert (Datenversion %1$s, diese Version unterstützt bis %2$s), deshalb wurde sie nicht geladen. Aktualisiere StockMarket, um sie zu öffnen. Es wurde nichts verändert.",
+  "gui.stockmarket.load_refused.migration_failed": "Die Aktualisierung der StockMarket-Daten dieser Welt auf die neue Version ist fehlgeschlagen, deshalb wurde die Welt nicht geladen. Ein Teil der Daten kann bereits aktualisiert sein. Eine Sicherung der StockMarket-Daten von vor der Aktualisierung wurde hier gespeichert:\n%s\nDer Grund steht in der Logdatei (logs/latest.log). Behebe die Ursache und öffne die Welt erneut, um die Aktualisierung fortzusetzen, oder stelle die Sicherung wieder her.",
+  "gui.stockmarket.load_refused.migration_failed_no_backup": "Die Aktualisierung der StockMarket-Daten dieser Welt auf die neue Version ist fehlgeschlagen, bevor etwas verändert wurde, deshalb wurde die Welt nicht geladen. Der Grund steht in der Logdatei (logs/latest.log)."
 }

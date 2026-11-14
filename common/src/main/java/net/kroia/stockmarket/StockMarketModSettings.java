@@ -1,6 +1,5 @@
 package net.kroia.stockmarket;
 
-import com.google.gson.JsonObject;
 import net.kroia.modutilities.PermissionCompat;
 
 import net.kroia.banksystem.BankSystemMod;
@@ -8,7 +7,6 @@ import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
-import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.kroia.stockmarket.util.ClientSettings;
 import net.kroia.stockmarket.util.SlaveTrustCache;
@@ -79,7 +77,7 @@ public class StockMarketModSettings extends ModSettings {
          * and sent on the master only).
          */
         public final Setting<Boolean> ALERTS_DEFAULT_ON = registerSetting("ALERTS_DEFAULT_ON", true, Boolean.class);
-        // SYNC_ADMIN_FLAG_WITH_PERMISSION moved to Integrations (T-217, see migrateIntegrations).
+        // SYNC_ADMIN_FLAG_WITH_PERMISSION moved to Integrations (T-217, converted by StockMarketDataMigration).
        // public final Setting<Integer> ADMIN_PERMISSION_LEVEL = registerSetting("ADMIN_PERMISSION_LEVEL",2, Integer.class);
 
         public Utilities() { super("Utilities"); }
@@ -203,7 +201,7 @@ public class StockMarketModSettings extends ModSettings {
          * trade keeps its (bounded, see VolatilityPlugin {@code permanentImpact}) effect on the
          * equilibrium for hours instead of snapping back within minutes; steady demand still counts: a
          * constant net rate R holds the faded flow at R x 519 min (half-life / ln 2). Worlds that still
-         * hold the old default 10 are moved to 360 once on load ({@code DataManager.migrateNetFlowHalfLife()}).
+         * hold the old default 10 are moved to 360 once by save-data step 1 ({@code StockMarketDataMigration}, SM-325).
          * <p>
          * Read live every tick (decay in {@code ServerMarket.update()}) — no restart required.
          * <p>
@@ -388,7 +386,7 @@ public class StockMarketModSettings extends ModSettings {
      * T-217: optional integrations with other mods / services, shown in the Mod Settings screen as
      * one collapsible on/off section each (same layout as BankSystem's Integrations group).
      * Takes {@code SYNC_ADMIN_FLAG_WITH_PERMISSION} from {@link Utilities}; older settings.json files
-     * are migrated once by {@link #migrateIntegrations(JsonObject)}.
+     * were converted by save-data step 1 ({@code StockMarketDataMigration}, SM-325).
      * <p>
      * Only the master loads these values; slaves keep the defaults, so every gate below is decided
      * on the master (see the propagation notes in {@code ModSettingsRequest}).
@@ -419,29 +417,6 @@ public class StockMarketModSettings extends ModSettings {
         public Integrations() { super("Integrations"); }
     }
 
-    /**
-     * T-217: one-time move of the pre-Integrations key {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION}
-     * into {@link #INTEGRATIONS}. Works on the raw settings.json root because the old key is no longer
-     * registered. Idempotent without a marker: a file that already has an {@code Integrations} group is
-     * left alone, and the caller re-saves when this returns true, which writes that group and drops the
-     * old key.
-     *
-     * @param root the parsed settings.json root object
-     * @return true if the old value was copied into INTEGRATIONS (the caller must save the file)
-     */
-    public boolean migrateIntegrations(JsonObject root)
-    {
-        if (root.has(INTEGRATIONS.getName()))
-            return false;
-        JsonObject utilities = root.get(UTILITIES.getName()) instanceof JsonObject o ? o : null;
-        String key = INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.getName();
-        if (utilities == null || !utilities.has(key))
-            return false;
-        JsonObject moved = new JsonObject();
-        moved.add(key, utilities.get(key));
-        new SettingsStore().fromJson(INTEGRATIONS, moved);
-        return true;
-    }
 
 
     /*public static final class Networking extends SettingsGroup

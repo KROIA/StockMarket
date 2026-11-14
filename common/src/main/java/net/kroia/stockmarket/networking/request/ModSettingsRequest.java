@@ -344,8 +344,8 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   master — no propagation needed. Changing it does NOT touch existing markets.
         // * ServerMarket.NET_FLOW_HALF_LIFE_MINUTES (#89, default 360 since T-208): read live every
         //   tick in ServerMarket.update() on the master; markets only live there — no propagation
-        //   needed. The one-shot 10 -> 360 migration (DataManager.migrateNetFlowHalfLife) also runs
-        //   only on the master's world load.
+        //   needed. The one-shot 10 -> 360 change of older settings.json files is part of save-data
+        //   step 1 (StockMarketDataMigration, SM-325).
         // * ServerMarket.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES / VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER
         //   (T-198): read live by the master's VirtualOrderbook (every tick / window move / depth
         //   read); markets only live on the master — no propagation needed.

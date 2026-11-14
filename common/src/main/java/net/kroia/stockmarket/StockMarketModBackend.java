@@ -2,6 +2,7 @@ package net.kroia.stockmarket;
 
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.client.ClientTickEvent;
+import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
@@ -28,6 +29,8 @@ import net.kroia.stockmarket.minecraft.compat.StockMarketPlaceholders;
 import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.data.OrderOriginLog;
+import net.kroia.stockmarket.data.StockMarketDataMigration;
+import net.kroia.modutilities.persistence.DataMigration;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
@@ -199,6 +202,8 @@ public class StockMarketModBackend implements StockMarketAPI {
                 net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart::new);
 
         EventRegistration.init();
+        // SM-325: once per JVM (constructor), so it also works on NeoForge where onServerSetup runs without a server.
+        LifecycleEvent.SERVER_BEFORE_START.register(StockMarketModBackend::onServerBeforeStart);
         // AdminFlagSync.init() (LuckPerms listener) runs at server start, see onBankSystemSetupComplete (T-217).
         if (StockMarketMod.ENABLE_DEV_FEATURES) {
             invokeDevBootstrap("init", new Class<?>[0]);
@@ -221,6 +226,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(StockMarketModBackend::onPlayerJoinClientSide);
         ClientPlayerEvent.CLIENT_PLAYER_RESPAWN.register(StockMarketModBackend::onPlayerRespawnClientSide);
         ClientTickEvent.CLIENT_LEVEL_POST.register(StockMarketModBackend::onClientTickEvent);
+        // SM-325: explanation screen after the data migration refused a singleplayer world (runs without a level).
+        ClientTickEvent.CLIENT_POST.register(net.kroia.stockmarket.client.StartupRefusalClient::onClientTick);
 
         Plugins.clientSetup();
     }
@@ -283,8 +290,99 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
 
     }
+    /**
+     * SM-325: why the data migration refused a world.
+     *
+     * @param kind       which screen text the singleplayer client shows
+     * @param logMessage the full explanation for the server log
+     * @param args       arguments of the screen text: TOO_NEW = saved and supported data version;
+     *                   MIGRATION_FAILED = the backup zip path, empty when no backup was made
+     */
+    public record StartupRefusal(Kind kind, String logMessage, List<String> args) {
+        public enum Kind { TOO_NEW, MIGRATION_FAILED }
+    }
+
+    /** SM-325: refusal found at SERVER_BEFORE_START, consumed by {@link #onBankSystemSetupComplete}; null = start normally. */
+    private static volatile @Nullable StartupRefusal pendingMigrationRefusal = null;
+
+    /** SM-325: set on the integrated server's thread when it refuses the world, consumed by the client tick (same JVM). */
+    private static volatile @Nullable StartupRefusal singleplayerRefusal = null;
+
+    /** @return the refusal the singleplayer client still has to show, or {@code null} */
+    public static @Nullable StartupRefusal getSingleplayerRefusal() {
+        return singleplayerRefusal;
+    }
+
+    /** Called by the client once it has shown the refusal screen. */
+    public static void clearSingleplayerRefusal() {
+        singleplayerRefusal = null;
+    }
+
+    /**
+     * SM-325: upgrades older StockMarket world data ({@link StockMarketDataMigration}) once per server start, before
+     * anything opens a StockMarket file; master, slave and singleplayer alike. The server can't be stopped cleanly
+     * this early, so a failure is kept and {@link #onBankSystemSetupComplete} refuses the start before it opens
+     * any file (same approach as BankSystem's BS-274).
+     *
+     * @param server the server that is about to start
+     */
+    private static void onServerBeforeStart(MinecraftServer server) {
+        pendingMigrationRefusal = null;
+        singleplayerRefusal = null;
+        java.nio.file.Path worldRoot = server.getWorldPath(LevelResource.ROOT);
+        Set<java.nio.file.Path> zipsBefore = StockMarketDataMigration.backupZips(worldRoot);
+        try {
+            StockMarketDataMigration.migrate(worldRoot);
+        } catch (DataMigration.DataVersionTooNewException e) {
+            pendingMigrationRefusal = new StartupRefusal(StartupRefusal.Kind.TOO_NEW,
+                    "The saved StockMarket data version " + e.savedVersion + " is newer than this "
+                    + "StockMarket (v" + StockMarketMod.VERSION + ") supports (" + e.supportedVersion + "). This world "
+                    + "was saved by a newer StockMarket: update StockMarket. Nothing was loaded or changed.",
+                    List.of(Integer.toString(e.savedVersion), Integer.toString(e.supportedVersion)));
+        } catch (java.io.IOException | RuntimeException e) {
+            StockMarketMod.LOGGER.error("[StockMarket] Data migration failed", e);
+            // DataMigration does not return the backup path on failure: the zip this start made is the one that is new.
+            java.nio.file.Path zip = StockMarketDataMigration.backupZips(worldRoot).stream()
+                    .filter(p -> !zipsBefore.contains(p)).findFirst().orElse(null);
+            pendingMigrationRefusal = new StartupRefusal(StartupRefusal.Kind.MIGRATION_FAILED,
+                    "Upgrading the StockMarket data of this world failed, so StockMarket does not "
+                    + "start on half-upgraded data. " + e.getMessage()
+                    + (e.getCause() != null ? " Cause: " + e.getCause() : "")
+                    + (zip != null ? " Backup of the StockMarket data from before the upgrade: " + zip.toAbsolutePath()
+                            + ". Fix the cause and restart (the upgrade continues), or restore the backup."
+                            : " Nothing was changed. Fix the cause and restart."),
+                    zip != null ? List.of(zip.toAbsolutePath().normalize().toString()) : List.of());
+        }
+    }
+
+    /**
+     * SM-325: stops the server because the data migration refused the world. Nothing of StockMarket was loaded,
+     * so nothing is saved at the stop.
+     *
+     * In singleplayer the client then shows the reason (see {@code client.StartupRefusalClient}).
+     *
+     * @param server  the starting server
+     * @param refusal the reason
+     */
+    private static void refuseStartup(MinecraftServer server, StartupRefusal refusal) {
+        StockMarketMod.LOGGER.error("[StockMarket] StockMarket refused to load this world. Stopping the server.\n{}", refusal.logMessage());
+        if (server.isDedicatedServer()) {
+            server.halt(false);
+            return;
+        }
+        singleplayerRefusal = refusal;
+        server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc<=1.21.1
+        //server.schedule(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc>=1.21.2
+    }
+
     private static void onBankSystemSetupComplete()
     {
+        StartupRefusal migrationRefusal = pendingMigrationRefusal;
+        if (migrationRefusal != null) { // SM-325: before anything below opens a StockMarket file
+            pendingMigrationRefusal = null;
+            refuseStartup(UtilitiesPlatform.getServer(), migrationRefusal);
+            return;
+        }
         SERVER_INSTANCES =  new ServerInstances();
         SERVER_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
         SERVER_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
@@ -872,6 +970,8 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
+        if (SERVER_INSTANCES == null) // SM-325: start refused by the data migration, the server is stopping
+            return;
         SERVER_INSTANCES.MARKET_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         PlayerJoinSyncPacket.send(player);
     }

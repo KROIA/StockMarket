@@ -275,7 +275,7 @@ Servers upgrading from earlier versions have a single `world/data/StockMarket/Ne
 2. Verified on disk with rebuilt sidecars.
 3. **Deleted** -- only after every chunk exists on disk. A `WARN` line in the server log records the migration.
 
-If both the legacy single file **and** an already-populated `history/` directory exist (interrupted migration or manual tampering), the safe branch runs: the old file is left in place, an `ERROR` is logged, and the news system continues with the on-disk chunks. Investigate the folder before manually deleting the legacy file.
+If both the legacy single file **and** an already-populated `history/` directory exist (for example after manual tampering), the safe branch runs: the old file is left in place, an `ERROR` is logged, and the news system continues with the on-disk chunks. Investigate the folder before manually deleting the legacy file.
 
 ### Picture Garbage Collection
 

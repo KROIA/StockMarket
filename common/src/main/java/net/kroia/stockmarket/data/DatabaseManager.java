@@ -176,8 +176,7 @@ public class DatabaseManager {
         try {
             executeSqlFile("/sql/MarketPrice.sql");
             executeSqlFile("/sql/OrderHistory.sql");
-            connection.commit();
-            migrateSchema(connection);
+            connection.commit(); // SM-325: the SQL files hold every column; older databases are migrated by data step 1
             return true;
         }
         catch(SQLException | IOException e){
@@ -187,62 +186,106 @@ public class DatabaseManager {
     }
 
     /**
-     * Adds columns introduced after the initial schema. Idempotent: each {@code ALTER} fails
-     * silently (and is rolled back) when its column already exists, so it is safe to run on every
-     * start and on a database created from the current SQL files.
+     * SM-325: adds the columns that older releases' databases lack. Part of save-data step 1
+     * ({@link StockMarketDataMigration}), no longer run on every open: a database created by
+     * {@link #createDatabase} already has every column (resources/sql/*.sql). Idempotent: each column
+     * is added only when {@code PRAGMA table_info} does not list it, and a missing table is skipped
+     * (the next open creates it with the full schema).
      * <p>
      * Public and static so tests can migrate an isolated (in-memory) legacy database.
      *
-     * @param connection an open connection with auto-commit disabled
+     * @param connection an open connection with auto-commit disabled; committed at the end
+     * @throws SQLException if a column cannot be added
      */
-    public static void migrateSchema(Connection connection) {
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("ALTER TABLE MarketPrice ADD COLUMN traded_volume REAL NOT NULL DEFAULT 0");
-            connection.commit();
-        } catch (SQLException ignored) {
-            // Column already exists — expected for new databases
-            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
-        }
-        // T-218: in-game time (overworld day time) at candle start. Existing rows get -1 (legacy,
-        // no game time). Older mod versions name their INSERT columns explicitly, so they keep
-        // writing (game_time = -1) after a downgrade.
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("ALTER TABLE MarketPrice ADD COLUMN game_time INTEGER NOT NULL DEFAULT -1");
-            connection.commit();
-        } catch (SQLException ignored) {
-            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
-        }
-
-        // Inter-market group UUID columns for linking cross-market trade records
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("ALTER TABLE OrderHistory ADD COLUMN intermarket_group_one INTEGER NOT NULL DEFAULT 0");
-            connection.commit();
-        } catch (SQLException ignored) {
-            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
-        }
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("ALTER TABLE OrderHistory ADD COLUMN intermarket_group_two INTEGER NOT NULL DEFAULT 0");
-            connection.commit();
-        } catch (SQLException ignored) {
-            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
-        }
+    public static void migrateSchema(Connection connection) throws SQLException {
+        addColumnIfMissing(connection, "MarketPrice", "traded_volume", "REAL NOT NULL DEFAULT 0");
+        // T-218: in-game time (overworld day time) at candle start; existing rows get -1 (no game time)
+        addColumnIfMissing(connection, "MarketPrice", "game_time", "INTEGER NOT NULL DEFAULT -1");
+        // inter-market group UUID columns for linking cross-market trade records
+        addColumnIfMissing(connection, "OrderHistory", "intermarket_group_one", "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(connection, "OrderHistory", "intermarket_group_two", "INTEGER NOT NULL DEFAULT 0");
         // T-191: persisted order ID (ledger ref sm:order:<id>); NULL for older rows and inter-market legs
+        addColumnIfMissing(connection, "OrderHistory", "order_id", "INTEGER");
+        // SM-317: finish time, limit price, wanted volume and final status of the order; NULL for older rows
+        for (String column : new String[]{"finish_time", "limit_price", "target_volume", "final_status"})
+            addColumnIfMissing(connection, "OrderHistory", column, "INTEGER");
+        connection.commit();
+    }
+
+    /**
+     * SM-325: {@code ALTER TABLE <table> ADD COLUMN <column> <type>} unless the column exists or the table is missing.
+     *
+     * @param connection the open connection
+     * @param table      the table name
+     * @param column     the column name
+     * @param type       the column type and constraints
+     * @throws SQLException if the table cannot be read or the column cannot be added
+     */
+    private static void addColumnIfMissing(Connection connection, String table, String column, String type) throws SQLException {
         try (Statement stmt = connection.createStatement()) {
-            stmt.execute("ALTER TABLE OrderHistory ADD COLUMN order_id INTEGER");
-            connection.commit();
-        } catch (SQLException ignored) {
-            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
+            boolean tableExists = false;
+            try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + table + ")")) {
+                while (rs.next()) {
+                    tableExists = true;
+                    if (column.equalsIgnoreCase(rs.getString("name")))
+                        return;
+                }
+            }
+            if (tableExists)
+                stmt.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
         }
-        // SM-317: finish time, limit price, wanted volume and final status of the order; NULL for older rows.
-        // Older mod versions name their INSERT columns explicitly, so they keep writing (NULL) after a downgrade.
-        for (String column : new String[]{"finish_time", "limit_price", "target_volume", "final_status"}) {
-            try (Statement stmt = connection.createStatement()) {
-                stmt.execute("ALTER TABLE OrderHistory ADD COLUMN " + column + " INTEGER");
-                connection.commit();
-            } catch (SQLException ignored) {
-                try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
+    }
+
+    /**
+     * SM-325: runs {@link #migrateSchema(Connection)} on a database file that is not open, for save-data step 1.
+     * Does nothing when the file does not exist.
+     *
+     * @param dbFile the database file, e.g. {@code <world>/data/StockMarket/Database/stockdata.db}
+     * @throws SQLException if the driver is missing or the migration fails
+     */
+    public static void migrateSchema(Path dbFile) throws SQLException {
+        if (!Files.isRegularFile(dbFile))
+            return;
+        if (!registerDriver())
+            throw new SQLException("SQLite JDBC driver not available");
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + dbFile.toAbsolutePath())) {
+            connection.setAutoCommit(false);
+            migrateSchema(connection);
+        }
+    }
+
+    /** True once the SQLite driver is registered with {@link DriverManager} (once per JVM). */
+    private static boolean driverRegistered = false;
+
+    /**
+     * Registers the SQLite JDBC driver with {@link DriverManager} through a {@link DriverShim}, once per JVM.
+     * Mod class loaders are not visible to DriverManager, hence the shim.
+     *
+     * @return true if the driver is registered
+     */
+    public static synchronized boolean registerDriver() {
+        if (driverRegistered)
+            return true;
+        Class<?> driverClass;
+        try {
+            driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
+        } catch (ClassNotFoundException e) {
+            try {
+                driverClass = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
+            } catch (ClassNotFoundException e2) {
+                StockMarketMod.LOGGER.error("Failed to register JDBC driver", e2);
+                return false;
             }
         }
+        try {
+            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
+            DriverManager.registerDriver(new DriverShim(driver));
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.error("Failed to register JDBC driver", e);
+            return false;
+        }
+        driverRegistered = true;
+        return true;
     }
 
 
@@ -265,7 +308,8 @@ public class DatabaseManager {
     }
 
     /**
-     * Opens {@value #FILE_NAME} in the world's database folder and creates/migrates its tables.
+     * Opens {@value #FILE_NAME} in the world's database folder and creates missing tables (older databases
+     * get their new columns from save-data step 1, SM-325).
      * <p>
      * SM-307: the connection uses WAL journal mode, {@code synchronous=NORMAL} and a
      * {@link #BUSY_TIMEOUT_MS} busy timeout (same settings as BankSystem's DiagnosticsDatabase).
@@ -286,32 +330,8 @@ public class DatabaseManager {
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         Path dbPath = worldPath.resolve(DATABASE_PATH);
         String url = "jdbc:sqlite:" + Path.of(String.valueOf(dbPath.toAbsolutePath()), FILE_NAME);
-        Class<?> driverClass = null;
-        Exception exception = null;
-        try{
-            driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-        }catch(ClassNotFoundException e)
-        {
-            exception = e;
-        }
-        if(exception != null)
-        {
-            try{
-                driverClass = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            }catch(ClassNotFoundException e)
-            {
-                StockMarketMod.LOGGER.error("Failed to register JDBC driver", e);
-                return;
-            }
-        }
-        try {
-            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
-            DriverManager.registerDriver(new DriverShim(driver));
-        } catch (Exception e) {
-            StockMarketMod.LOGGER.error("Failed to register JDBC driver", e);
+        if (!registerDriver())
             return;
-        }
-
         try {
 
             StockMarketMod.LOGGER.info("Database path: {}", dbPath.toAbsolutePath());

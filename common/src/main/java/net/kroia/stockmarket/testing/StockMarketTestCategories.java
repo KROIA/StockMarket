@@ -177,6 +177,9 @@ public class StockMarketTestCategories {
     public static final TestCategory VILLAGER_REWRITE = new TestCategory(
             "stockmarket", "sm_villager_rewrite", "Villager trade offer rewrite tests", MASTER_ONLY, true);
 
+    public static final TestCategory DATA_MIGRATION = new TestCategory(
+            "stockmarket", "sm_data_migration", "SM-325: save-data version, step 1 (pre-2.2.0 -> 2.2.0) on a temp world: conversion, re-run safety, fresh world, newer save refused", BOTH, false);
+
     public static final TestCategory MOD_SETTINGS = new TestCategory(
             "stockmarket", "sm_mod_settings", "Mod settings JSON round-trip and sanitize-bounds tests", BOTH, false);
 

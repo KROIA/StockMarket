@@ -593,5 +593,9 @@
   "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "linear ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "log slot ↑ %s (partial slot above linear)",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot": "log slot %s: %s – %s",
-  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "ask ceiling ↑ %s (no default asks above)"
+  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "ask ceiling ↑ %s (no default asks above)",
+  "gui.stockmarket.load_refused.title": "StockMarket did not load this world",
+  "gui.stockmarket.load_refused.too_new": "This world was saved by a newer version of StockMarket (data version %1$s, this version supports up to %2$s), so it was not loaded. Update StockMarket to open it. Nothing was changed.",
+  "gui.stockmarket.load_refused.migration_failed": "Upgrading this world's StockMarket data to the new version failed, so the world was not loaded. Part of the data may already be upgraded. A backup of the StockMarket data from before the upgrade was saved here:\n%s\nThe reason is in the log file (logs/latest.log). Fix the cause and open the world again to continue the upgrade, or restore the backup.",
+  "gui.stockmarket.load_refused.migration_failed_no_backup": "Upgrading this world's StockMarket data to the new version failed before anything was changed, so the world was not loaded. The reason is in the log file (logs/latest.log)."
 }

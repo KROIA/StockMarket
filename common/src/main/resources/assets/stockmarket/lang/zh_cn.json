@@ -591,5 +591,9 @@
   "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "线性 ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "对数槽 ↑ %s（线性区上方的部分槽）",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot": "对数槽 %s：%s – %s",
-  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "卖单上限 ↑ %s（上方无默认卖单）"
+  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "卖单上限 ↑ %s（上方无默认卖单）",
+  "gui.stockmarket.load_refused.title": "StockMarket 未加载此世界",
+  "gui.stockmarket.load_refused.too_new": "此世界由更新版本的 StockMarket 保存（数据版本 %1$s，此版本最高支持 %2$s），因此未加载。请更新 StockMarket 后再打开。未做任何更改。",
+  "gui.stockmarket.load_refused.migration_failed": "将此世界的 StockMarket 数据升级到新版本失败，因此未加载该世界。部分数据可能已升级。升级前的 StockMarket 数据备份已保存在：\n%s\n原因请查看日志文件（logs/latest.log）。排除问题后重新打开世界以继续升级，或恢复备份。",
+  "gui.stockmarket.load_refused.migration_failed_no_backup": "将此世界的 StockMarket 数据升级到新版本失败，未做任何更改，因此未加载该世界。原因请查看日志文件（logs/latest.log）。"
 }

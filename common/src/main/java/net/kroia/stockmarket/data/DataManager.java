@@ -6,7 +6,6 @@ import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
-import net.kroia.modutilities.setting.Setting;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.StockMarketModSettings;
@@ -49,18 +48,17 @@ public class DataManager extends DataPersistence {
 
     private static final String MARKET_MANAGER_FOLDER = "MarketManager";
     private static final String PLUGIN_MANAGER_FOLDER = "PluginManager";
-    private static final String NEWS_FOLDER = "News";
+    static final String NEWS_FOLDER = "News";
     /**
-     * Pre-T-110 single-file news history location (kept as a constant so the T-110
-     * migration in {@link net.kroia.stockmarket.news.NewsHistoryChunkStore} can find
-     * and consume it). New installs never (re-)create this file.
+     * Pre-T-110 single-file news history location, converted to chunks by save-data
+     * step 1 ({@link StockMarketDataMigration}). New installs never (re-)create this file.
      */
-    private static final String NEWS_HISTORY_LEGACY_FILE = "history.nbt";
+    static final String NEWS_HISTORY_LEGACY_FILE = "history.nbt";
     /** T-110 chunked history subfolder ({@code News/history/NNN.nbt} + sidecars). */
-    private static final String NEWS_HISTORY_FOLDER = "history";
+    static final String NEWS_HISTORY_FOLDER = "history";
     private static final String NEWS_REGISTRY_FILE = "registry.nbt";
     private static final String NEWS_PICTURES_FOLDER = "pictures";
-    private static final String SETTINGS_FILE = "settings.json";
+    static final String SETTINGS_FILE = "settings.json";
     private static final String PRESET_DIR = "StockMarket/market_presets";
 
     public static Path getPresetPath() {
@@ -151,10 +149,7 @@ public class DataManager extends DataPersistence {
         setLevelSavePath(server.getWorldPath(LevelResource.ROOT));
 
         boolean success = true;
-        success &= loadSettings();
-        // Before any other migration: the first settings save writes the Integrations group and drops the old key.
-        migrateIntegrations();
-        migrateNetFlowHalfLife();
+        success &= loadSettings(); // older settings.json files were converted by save-data step 1 (SM-325)
         success &= loadMarketManager();
         success &= loadPluginManager();
         success &= loadPresets();
@@ -301,87 +296,6 @@ public class DataManager extends DataPersistence {
     }
 
 
-    /**
-     * T-217: moves {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION} of an older settings.json into the
-     * Integrations group ({@link StockMarketModSettings#migrateIntegrations}) and saves the file at once.
-     * Runs right after {@link #loadSettings()} and before anything else saves the settings, otherwise the
-     * save would write a default Integrations group and drop the old key. No-op for a missing file.
-     */
-    private void migrateIntegrations()
-    {
-        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
-            return;
-        Path path = getAbsoluteSavePath(SETTINGS_FILE);
-        try {
-            if(!Files.exists(path))
-                return;
-            com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(Files.readString(path)).getAsJsonObject();
-            if(BACKEND_INSTANCES.SERVER_SETTINGS.migrateIntegrations(root) && saveSettings())
-                info("Moved SYNC_ADMIN_FLAG_WITH_PERMISSION (" + BACKEND_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get()
-                        + ") from Utilities into the Integrations group of settings.json");
-        } catch (Exception e) {
-            error("Could not migrate settings.json into the Integrations group", e);
-        }
-    }
-
-    /** T-208: marker file (world StockMarket data folder) of the one-shot net-flow half-life migration. */
-    public static final String NET_FLOW_HALF_LIFE_MARKER = "NetFlowHalfLife360.marker";
-    /** T-208: the old default {@code NET_FLOW_HALF_LIFE_MINUTES} that the migration replaces. */
-    public static final float OLD_NET_FLOW_HALF_LIFE_MINUTES = 10f;
-
-    /**
-     * T-208: one-shot migration of {@code MARKET.NET_FLOW_HALF_LIFE_MINUTES} from the old default
-     * 10 min to the new default (360 min). Runs right after {@link #loadSettings()}; a marker file
-     * ({@link #NET_FLOW_HALF_LIFE_MARKER}) makes it run once per world, so a value set later (even 10)
-     * is kept. Saves the settings file at once when the value changed.
-     */
-    private void migrateNetFlowHalfLife()
-    {
-        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
-            return;
-        Path marker = getAbsoluteSavePath(NET_FLOW_HALF_LIFE_MARKER);
-        Setting<Float> halfLife = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES;
-        try {
-            if(Files.exists(marker))
-                return;
-            if(migrateNetFlowHalfLife(halfLife, marker)) {
-                createSaveFolder();
-                saveSettings();
-                info("Net flow half-life migrated from the old default " + OLD_NET_FLOW_HALF_LIFE_MINUTES
-                        + " to " + halfLife.get() + " minutes (marker " + NET_FLOW_HALF_LIFE_MARKER + ")");
-            } else {
-                info("Net flow half-life kept at " + halfLife.get() + " minutes (marker " + NET_FLOW_HALF_LIFE_MARKER + " written)");
-            }
-        } catch (Exception e) {
-            error("Could not run the net flow half-life migration (marker " + marker + ")", e);
-        }
-    }
-
-    /**
-     * T-208: the pure half-life migration step, testable without a world. Does nothing when the
-     * marker exists. Otherwise sets the setting to its default when it holds exactly the old default
-     * ({@code |v - 10| < 1e-3}), and always writes the marker.
-     *
-     * @param halfLife the {@code NET_FLOW_HALF_LIFE_MINUTES} setting to migrate
-     * @param marker   the marker file; its parent folders are created
-     * @return true if the value was changed
-     * @throws java.io.IOException if the marker cannot be written
-     */
-    public static boolean migrateNetFlowHalfLife(Setting<Float> halfLife, Path marker) throws java.io.IOException
-    {
-        if(Files.exists(marker))
-            return false;
-        Float v = halfLife.get();
-        boolean change = v != null && Math.abs(v - OLD_NET_FLOW_HALF_LIFE_MINUTES) < 1e-3f;
-        if(change)
-            halfLife.set(halfLife.getDefaultValue());
-        if(marker.getParent() != null)
-            Files.createDirectories(marker.getParent());
-        Files.writeString(marker, "NET_FLOW_HALF_LIFE_MINUTES migrated from the old default 10 to 360 (T-208)."
-                + " Delete this file to run the migration again.\n");
-        return change;
-    }
-
     public boolean savePresets()
     {
         if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.PRESET_MANAGER == null) {
@@ -430,9 +344,7 @@ public class DataManager extends DataPersistence {
         // History (T-110): chunks are persisted on every append; nothing to flush
         // here. We still (re)wire the directory to keep the chunk store aligned
         // with the current world save in case the save path shifted.
-        newsHistory.setDirectory(
-                folderPath.resolve(NEWS_HISTORY_FOLDER),
-                folderPath.resolve(NEWS_HISTORY_LEGACY_FILE));
+        newsHistory.setDirectory(folderPath.resolve(NEWS_HISTORY_FOLDER), null);
         boolean success = true;
         CompoundTag registryTag = new CompoundTag();
         newsWorldRegistry.save(registryTag);
@@ -446,9 +358,8 @@ public class DataManager extends DataPersistence {
 
     /**
      * Restores the news history from {@code world/data/StockMarket/News/history/}
-     * (T-110). Migrates the pre-T-110 single-file {@code history.nbt} into chunks
-     * on first load — see {@link net.kroia.stockmarket.news.NewsHistoryChunkStore}
-     * for the migration contract (safe conservative branch when both layouts exist).
+     * (T-110). The pre-T-110 single-file {@code history.nbt} was converted into chunks
+     * by save-data step 1 ({@link StockMarketDataMigration}).
      * An empty directory is not an error (first run / pre-news world) — the empty
      * history is kept. The entry cap is applied lazily on the next append (see
      * {@link NewsHistory#setMaxEntries}).
@@ -468,14 +379,10 @@ public class DataManager extends DataPersistence {
         // simply starts empty (requirements re-evaluate against a blank memory).
         loadNewsRegistry(newsFolder);
 
-        // Chunked history load (T-110). The chunk store handles: fresh worlds
-        // (empty history/), pre-T-110 migration (legacy history.nbt present, no
-        // history/ chunks), interrupted-migration recovery (both present → safe
-        // conservative branch, keep old file, use chunks), and per-chunk sidecar
-        // rebuild on corruption. See NewsHistoryChunkStore Javadoc for details.
-        newsHistory.setDirectory(
-                newsFolder.resolve(NEWS_HISTORY_FOLDER),
-                newsFolder.resolve(NEWS_HISTORY_LEGACY_FILE));
+        // Chunked history load (T-110). The chunk store handles fresh worlds (empty
+        // history/) and per-chunk sidecar rebuild on corruption. The pre-T-110
+        // history.nbt was converted by save-data step 1 (SM-325), so no legacy file here.
+        newsHistory.setDirectory(newsFolder.resolve(NEWS_HISTORY_FOLDER), null);
 
         // T-112 self-heal: before the load-time GC drops "orphan" store files,
         // rebuild any hash the history references but the store no longer holds

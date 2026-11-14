@@ -107,6 +107,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new NetFlowPluginTestSuite());
         TestRegistry.register(new VolatilityPluginTestSuite());
         TestRegistry.register(new ModSettingsTestSuite());
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.DataMigrationTestSuite()); // SM-325
         TestRegistry.register(new NewsSystemTestSuite());
         TestRegistry.register(new NewsPluginTestSuite());
         TestRegistry.register(new NewsAdminTestSuite());
