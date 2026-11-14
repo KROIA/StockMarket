@@ -189,8 +189,15 @@ public final class NewsHistoryChunkStore {
         Path dir = directory;
         if (dir == null) return;
 
-        // Migration path (single-file → chunked). Idempotent by design.
-        migrateFromSingleFileIfNeeded(dir, oldSingleFile);
+        // Migration path (single-file → chunked). Idempotent by design. The server runs it in save-data
+        // step 1 (SM-325) and passes null here; tests still pass the legacy file.
+        if (oldSingleFile != null) {
+            try {
+                migrateLegacyFile(dir, oldSingleFile);
+            } catch (IOException e) {
+                StockMarketMod.LOGGER.error("[NewsHistoryChunkStore] Migration of '{}' failed, it is kept", oldSingleFile, e);
+            }
+        }
 
         if (!Files.isDirectory(dir)) return;
         loadSidecars(dir);
@@ -209,10 +216,18 @@ public final class NewsHistoryChunkStore {
      * Migrates the pre-T-110 single-file layout to chunks if the conditions apply:
      * old file exists, chunk directory is missing or empty of chunk files. On
      * conflict (both present) leaves the old file alone and continues with the
-     * chunks (safe conservative branch).
+     * chunks (safe conservative branch). Part of save-data step 1 (SM-325).
+     * <p>
+     * Safe to run again after a crash: the chunks are written into a sibling
+     * {@code <dir>.migrating} folder that is moved to {@code dir} only when complete,
+     * and the old file is deleted last. An unreadable old file is logged and kept.
+     *
+     * @param dir           the chunk directory ({@code News/history})
+     * @param oldSingleFile the pre-T-110 {@code News/history.nbt}
+     * @throws IOException if the chunks cannot be written or moved into place (the old file is kept)
      */
-    private void migrateFromSingleFileIfNeeded(Path dir, @Nullable Path oldSingleFile) {
-        if (oldSingleFile == null || !Files.isRegularFile(oldSingleFile)) return;
+    public static void migrateLegacyFile(Path dir, Path oldSingleFile) throws IOException {
+        if (!Files.isRegularFile(oldSingleFile)) return;
         boolean chunksExist = hasAnyChunkFile(dir);
         if (chunksExist) {
             StockMarketMod.LOGGER.error(
@@ -244,56 +259,32 @@ public final class NewsHistoryChunkStore {
             if (record != null) loaded.add(record);
         }
 
-        // Ensure the target directory exists.
-        try {
-            Files.createDirectories(dir);
-        } catch (IOException e) {
-            StockMarketMod.LOGGER.error(
-                    "[NewsHistoryChunkStore] Failed to create chunk directory '{}' — leaving legacy '{}' in place",
-                    dir, oldSingleFile, e);
-            return;
-        }
+        // Write into a fresh staging folder (a crashed earlier run may have left a partial one).
+        Path staging = dir.resolveSibling(dir.getFileName() + ".migrating");
+        deleteRecursive(staging);
+        Files.createDirectories(staging);
 
         // Split into 100-record chunks (oldest → chunk 0, newest → highest index).
         int chunkCount = (loaded.size() + CHUNK_SIZE - 1) / CHUNK_SIZE;
-        List<Path> writtenChunkFiles = new ArrayList<>(chunkCount);
-        List<Path> writtenSidecarFiles = new ArrayList<>(chunkCount);
         for (int chunkIdx = 0; chunkIdx < chunkCount; chunkIdx++) {
             int from = chunkIdx * CHUNK_SIZE;
             int to = Math.min(from + CHUNK_SIZE, loaded.size());
             List<NewsRecord> slice = loaded.subList(from, to);
-            Path chunkFile = dir.resolve(formatIndex(chunkIdx) + CHUNK_SUFFIX);
-            Path sidecarFile = dir.resolve(formatIndex(chunkIdx) + SIDECAR_SUFFIX);
-            if (!writeChunkFile(chunkFile, slice)) {
-                StockMarketMod.LOGGER.error(
-                        "[NewsHistoryChunkStore] Migration aborted: could not write chunk '{}'. Leaving legacy '{}' in place.",
-                        chunkFile.getFileName(), oldSingleFile);
-                return;
-            }
-            if (!writeSidecarFile(sidecarFile, slice)) {
-                StockMarketMod.LOGGER.error(
-                        "[NewsHistoryChunkStore] Migration aborted: could not write sidecar '{}'. Leaving legacy '{}' in place.",
-                        sidecarFile.getFileName(), oldSingleFile);
-                return;
-            }
-            writtenChunkFiles.add(chunkFile);
-            writtenSidecarFiles.add(sidecarFile);
+            Path chunkFile = staging.resolve(formatIndex(chunkIdx) + CHUNK_SUFFIX);
+            Path sidecarFile = staging.resolve(formatIndex(chunkIdx) + SIDECAR_SUFFIX);
+            // Verify each written file exists and is non-empty before dropping the legacy file.
+            if (!writeChunkFile(chunkFile, slice) || !fileWrittenAndNonEmpty(chunkFile))
+                throw new IOException("could not write news history chunk " + chunkFile);
+            if (!writeSidecarFile(sidecarFile, slice) || !fileWrittenAndNonEmpty(sidecarFile))
+                throw new IOException("could not write news history sidecar " + sidecarFile);
         }
 
-        // Verify each written chunk exists and is non-empty on disk before dropping
-        // the legacy file (a light-weight fsync check — the OS may still buffer,
-        // but Files.size > 0 + Files.exists rules out empty/missing artifacts).
-        for (int i = 0; i < writtenChunkFiles.size(); i++) {
-            if (!fileWrittenAndNonEmpty(writtenChunkFiles.get(i))
-                    || !fileWrittenAndNonEmpty(writtenSidecarFiles.get(i))) {
-                StockMarketMod.LOGGER.error(
-                        "[NewsHistoryChunkStore] Migration verification failed for chunk index {}. Leaving legacy '{}' in place.",
-                        i, oldSingleFile);
-                return;
-            }
-        }
+        // dir holds no chunk file here. An empty leftover folder is removed; a non-empty one makes
+        // Files.delete throw (DirectoryNotEmptyException), so nothing in it is ever lost.
+        if (Files.isDirectory(dir)) Files.delete(dir);
+        Files.move(staging, dir, StandardCopyOption.ATOMIC_MOVE);
 
-        // All chunks written and verified — safe to delete the legacy file.
+        // All chunks in place — safe to delete the legacy file.
         try {
             Files.deleteIfExists(oldSingleFile);
         } catch (IOException e) {
@@ -305,6 +296,15 @@ public final class NewsHistoryChunkStore {
         StockMarketMod.LOGGER.warn(
                 "[NewsHistoryChunkStore] Migrated legacy history.nbt to chunk layout: {} record(s) → {} chunk(s) in '{}'.",
                 loaded.size(), chunkCount, dir);
+    }
+
+    /** Deletes a file or folder tree if it exists. */
+    private static void deleteRecursive(Path path) throws IOException {
+        if (!Files.exists(path)) return;
+        try (java.util.stream.Stream<Path> walk = Files.walk(path)) {
+            for (Path p : (Iterable<Path>) walk.sorted(java.util.Comparator.reverseOrder())::iterator)
+                Files.delete(p);
+        }
     }
 
     /** @return true when {@code dir} contains at least one {@code NNN.nbt} chunk file */

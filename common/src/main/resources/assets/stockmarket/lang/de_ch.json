@@ -300,7 +300,7 @@
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED": "Smaragd bi nöd glistete Items ersetze",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED.tooltip": "Wandlet au Smaragd-Aagebot vo Items OHNI Markt in Gäld um,\nbasierend uf em Smaragd-Marktpriis (Smaragdaazahl × Smaragdpriis, ohni Marge).\nDe Priis wird uf 2 signifikanti Stelle grundet; Rabatt höchstens 20%.\nBruucht en Smaragd-Markt; susch bliibed die Aagebot bi Smaragd.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.USE_PRESET_PRICES_FOR_VILLAGERS": "Preset-Priis für Dorfbewohner bruuche",
-  "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.USE_PRESET_PRICES_FOR_VILLAGERS.tooltip": "Nur aktiv, wenn \"Smaragd bi nöd glistete Items ersetze\" aa isch.\nRechnet umgwandleti Aagebot mit em Standardpriis vom Item us de Markt-Presets,\nau wenn's kein Markt defür git, statt mit em Smaragdpriis.\nItems ohni Preset-Priis bhaltet ihri Smaragd-Aagebot.",
+  "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.USE_PRESET_PRICES_FOR_VILLAGERS.tooltip": "Nur aktiv, wenn \"Smaragd bi nöd glistete Items ersetze\" aa isch.\nRechnet umgwandleti Aagebot mit em Standardpriis vom Item us de Markt-Presets,\nau wenn's kein Markt defür git, statt mit em Smaragdpriis.\nItems ohni Preset-Priis nämed de Smaragdpriis und überchömed kein Dorfbewohner-Rabatt.",
   "gui.stockmarket.news_screen.title": "Marktnachrichte",
   "gui.stockmarket.news_screen.masthead": "The Market Times",
   "gui.stockmarket.news_screen.toast_checkbox": "News-Popups aktiviere",
@@ -473,6 +473,8 @@
   "gui.stockmarket.display_config_screen.no_pair": "Kei Paar (Item/Gäld-Modus)",
   "gui.stockmarket.display_config_screen.no_markets": "Kei Märt verfüegbar",
   "message.stockmarket.command_admin_only": "Dä Befehl isch nur für StockMarket-Admins!",
+  "message.stockmarket.command_slave_untrusted": "Dä Server ischt vom Master nöd vertroischwirdig ychgstuft, drum sind StockMarket-Admin-Befehl do deaktiviert. En Admin muess uf em Master /banksystem trust <slaveID> ussfüehre.",
+  "message.stockmarket.command_player_name_ambiguous": "Mehreri StockMarket-Benutzer heissed %s (alti Iiträg nach emne UUID-Wächsel). Lah de Spieler eimal biträte und füehr de Befehl denn nomal us.",
   "message.stockmarket.command_player_not_found": "Kei UUID für Spieler gfunde: %s",
   "message.stockmarket.command_admin_mode_enabled": "StockMarket-Adminmodus II für Spieler: %s",
   "message.stockmarket.command_admin_mode_disabled": "StockMarket-Adminmodus US für Spieler: %s",
@@ -533,7 +535,7 @@
   "gui.stockmarket.net_flow_plugin.capacity_volatility_scale.tooltip": "Volatilitätsskala für d Flusskapazität\n(Kapazität = Empfindlichkeit x Häufigkeit / (1 + Skala)).\nGliich wie d Skala vom Volatilitäts-Plugin wähle, zum s\nbisherige Verhalte z bhalte. Standard: 0.3",
   "gui.stockmarket.net_flow_plugin.theta_cap_enabled.tooltip": "Wenn aktiviert, wird di bliibendi Priisverschiebig vomene\nHandel uf 'Dauerhafti Priiswirkig' mal sini Wirkig ufs\nStandard-Orderbuech begränzt. Standard: aa",
   "gui.stockmarket.net_flow_plugin.saturation_enabled.tooltip": "Wenn aktiviert, wird Fluss jensiits vo de Priisgränze nöd\ngspeicheret; de Wäg zrugg vo nere Gränze bruucht kei\nzuesätzliche Gegehandel. Standard: aa",
-  "gui.stockmarket.net_flow_plugin.anchor_enabled.tooltip": "Wenn aktiviert, verschiebt aahaltende Netto-Handel langsam\nde Priis, vo dem us de Fluss gmässe wird (de Anker);\nen Teil vomene aahaltende Trend blibt, wenn de Fluss\nabklunge isch. En Admin-Flussreset setzt de Anker zrugg.\nWenn deaktiviert, isch de Anker de Standardpriis. Standard: us",
+  "gui.stockmarket.net_flow_plugin.anchor_enabled.tooltip": "Wenn aktiviert, verschiebt aahaltende Netto-Handel langsam\nde Priis, vo dem us de Fluss gmässe wird (de Anker);\nen Teil vomene aahaltende Trend blibt, wenn de Fluss\nabklunge isch. En Admin-Flussreset setzt de Anker zrugg.\nWenn deaktiviert, isch de Anker de Standardpriis. Standard: aa",
   "gui.stockmarket.net_flow_plugin.anchor_time_days.tooltip": "Ziitkonstante vom Anker in Täg: höcher = langsamer und\nchliinere bliibende Aateil (2 Täg bhalted ca. 18% vo jedem\nFluss). Wärt under 1 Tag mached schnells Verchaufe und\nZruggchaufe profitabel. Standard: 2",
   "gui.stockmarket.net_flow_plugin.anchor_max_move_per_day.tooltip": "Grösschti Ankerbewegig pro Tag in Log-Iiheite\n(0.1 = ca. 10% pro Tag), begränzt gsättigti Flüss.\nStandard: 0.1",
   "gui.stockmarket.net_flow_plugin.anchor_min_mult.tooltip": "Niedrigste Anker als Vielfachs vom Standardpriis.\nMues zwüsched 0 und 1 sii, suscht gilt de Standardwert.\nStandard: 0.25",
@@ -591,5 +593,9 @@
   "gui.stockmarket.orderbook_volume_histogram.border.linear_hi": "linear ↑ %s",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot_above": "Log-Slot ↑ %s (Teil-Slot über linear)",
   "gui.stockmarket.orderbook_volume_histogram.border.log_slot": "Log-Slot %s: %s – %s",
-  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "Ask-Obergrenze ↑ %s (keine Standard-Asks darüber)"
+  "gui.stockmarket.orderbook_volume_histogram.border.ask_ceiling": "Ask-Obergrenze ↑ %s (keine Standard-Asks darüber)",
+  "gui.stockmarket.load_refused.title": "StockMarket hat diese Welt nicht geladen",
+  "gui.stockmarket.load_refused.too_new": "Diese Welt wurde von einer neueren StockMarket-Version gespeichert (Datenversion %1$s, diese Version unterstützt bis %2$s), deshalb wurde sie nicht geladen. Aktualisiere StockMarket, um sie zu öffnen. Es wurde nichts verändert.",
+  "gui.stockmarket.load_refused.migration_failed": "Die Aktualisierung der StockMarket-Daten dieser Welt auf die neue Version ist fehlgeschlagen, deshalb wurde die Welt nicht geladen. Ein Teil der Daten kann bereits aktualisiert sein. Eine Sicherung der StockMarket-Daten von vor der Aktualisierung wurde hier gespeichert:\n%s\nDer Grund steht in der Logdatei (logs/latest.log). Behebe die Ursache und öffne die Welt erneut, um die Aktualisierung fortzusetzen, oder stelle die Sicherung wieder her.",
+  "gui.stockmarket.load_refused.migration_failed_no_backup": "Die Aktualisierung der StockMarket-Daten dieser Welt auf die neue Version ist fehlgeschlagen, bevor etwas verändert wurde, deshalb wurde die Welt nicht geladen. Der Grund steht in der Logdatei (logs/latest.log)."
 }
