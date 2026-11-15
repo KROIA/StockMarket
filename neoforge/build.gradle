@@ -97,8 +97,8 @@ if ((findProperty('with_luckperms') ?: 'false').toBoolean()) {
         }
     }
     dependencies {
-        modLocalRuntime "maven.modrinth:luckperms:${rootProject.luckperms_neoforge_version}" // mc<=1.21.11
-        //localRuntime "maven.modrinth:luckperms:${rootProject.luckperms_neoforge_version}" // mc>=26.1
+        //modLocalRuntime "maven.modrinth:luckperms:${rootProject.luckperms_neoforge_version}" // mc<=1.21.11
+        localRuntime "maven.modrinth:luckperms:${rootProject.luckperms_neoforge_version}" // mc>=26.1
     }
 }
 
