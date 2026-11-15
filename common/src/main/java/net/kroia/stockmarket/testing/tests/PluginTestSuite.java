@@ -146,6 +146,9 @@ public class PluginTestSuite extends TestSuite {
 
         // Logging
         addTest("errorLogging_gatedByLoggerEnabled", this::test_errorLogging_gatedByLoggerEnabled);
+        // SM-329: plugin manager logger switch (request path, save data, old saves)
+        addTest("pluginManagerLogger_setViaClientRequest", this::test_pluginManagerLogger_setViaClientRequest);
+        addTest("pluginManagerLogger_loadsFromSave_oldSaveOff", this::test_pluginManagerLogger_loadsFromSave);
 
         // TargetPriceBot scenarios
         addTest("targetPriceBot_noOvershootAfterWindup", this::test_targetPriceBot_noOvershootAfterWindup);
@@ -4576,5 +4579,83 @@ public class PluginTestSuite extends TestSuite {
             if (!wasAdmin)
                 manager.setStockmarketAdminMode(player, false);
         }
+    }
+
+    // ── SM-329 ───────────────────────────────────────────────────────────────
+
+    /**
+     * SM-329: the request path of the Plugin management screen's "Plugin manager logger" checkbox
+     * ({@code requestPluginManagerLogger} -> {@code PluginManagerLoggerRequest}). Sets the switch on, then off, from
+     * this JVM's client and checks each answer, the master's state and the "loggerEnabled" flag the manager writes
+     * into its save data; a read-only request (null) returns the current state. sp only (client and master in one
+     * JVM); the player gets StockMarket admin mode for the test if needed. The previous state is restored.
+     */
+    private TestResult test_pluginManagerLogger_setViaClientRequest() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null || client.PLUGIN_MANAGER == null || pluginManager == null)
+            return skip("sp only (client and master in this JVM)");
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null)
+            return skip("no client player");
+        UUID player = mc.player.getUUID();
+        var manager = backend.MARKET_MANAGER.getSync();
+        boolean wasAdmin = manager.isStockmarketAdmin(player);
+        boolean before = pluginManager.isLoggerEnabled();
+        try {
+            if (!wasAdmin)
+                manager.setStockmarketAdminMode(player, true);
+            for (Boolean value : new Boolean[]{true, false, null}) {
+                java.util.function.Supplier<java.util.concurrent.CompletableFuture<Boolean>> send =
+                        () -> client.PLUGIN_MANAGER.requestPluginManagerLogger(value);
+                var future = mc.isSameThread() ? send.get() : await(mc.submit(send), 10_000);
+                Boolean answer = await(future, 10_000);
+                boolean expected = value != null ? value : false; // the read follows the "off" step
+                TestResult r = assertEquals("answer for " + value, (Boolean) expected, answer);
+                if (!r.passed()) return r;
+                r = assertEquals("master state after " + value, expected, pluginManager.isLoggerEnabled());
+                if (!r.passed()) return r;
+                java.util.Map<String, ListTag> saved = new java.util.HashMap<>();
+                pluginManager.save(saved);
+                CompoundTag flags = net.kroia.modutilities.NbtCompat.getCompound(saved.get("managerData"), 0);
+                r = assertEquals("saved loggerEnabled after " + value, expected, net.kroia.modutilities.NbtCompat.getBoolean(flags, "loggerEnabled"));
+                if (!r.passed()) return r;
+            }
+            return pass("set on, set off and read back via the client request; state and save data follow");
+        } finally {
+            pluginManager.setLoggerEnabled(before);
+            if (!wasAdmin)
+                manager.setStockmarketAdminMode(player, false);
+        }
+    }
+
+    /**
+     * SM-329: a fresh manager restores the switch from its save data; a save without the "loggerEnabled" flag
+     * (written before SM-329) loads with the switch off. The saves hold one plugin entry of an unknown type, so no
+     * plugin is created (an empty list would create the defaults) and both migration flags are set.
+     */
+    private TestResult test_pluginManagerLogger_loadsFromSave() {
+        for (Boolean flag : new Boolean[]{null, true, false}) {
+            CompoundTag unknownPlugin = new CompoundTag();
+            unknownPlugin.putString("pluginTypeID", "sm329_unknown_plugin_type");
+            ListTag plugins = new ListTag();
+            plugins.add(unknownPlugin);
+            CompoundTag flags = new CompoundTag();
+            flags.putBoolean("newsPluginAutoCreateDone", true);
+            flags.putBoolean("netFlowPluginMigrationDone", true);
+            if (flag != null) flags.putBoolean("loggerEnabled", flag);
+            ListTag managerData = new ListTag();
+            managerData.add(flags);
+            java.util.Map<String, ListTag> save = new java.util.HashMap<>();
+            save.put("plugins", plugins);
+            save.put("managerData", managerData);
+
+            ServerPluginManager fresh = new ServerPluginManager();
+            fresh.load(save);
+            TestResult r = assertEquals("loggerEnabled after loading flag " + flag, flag != null && flag, fresh.isLoggerEnabled());
+            if (!r.passed()) return r;
+            r = assertTrue("no plugin created", fresh.getPlugins().isEmpty());
+            if (!r.passed()) return r;
+        }
+        return pass("missing flag loads off, true/false load as saved");
     }
 }

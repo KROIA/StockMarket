@@ -186,6 +186,8 @@
   "gui.stockmarket.plugin_management_screen.add_plugin_title": "Plugin hinzufügen",
   "gui.stockmarket.plugin_management_screen.debug_markers": "Orderbuch-Debugmarker",
   "gui.stockmarket.plugin_management_screen.debug_markers.tooltip": "Zeigt das Layout des virtuellen\nOrderbuchs in der Volumenanzeige:\nGrenzen des linearen Arrays und der\nNeuzentrierung, Log-Raster-Grenzen\nund die Ask-Obergrenze. Für den Preis\nmit der Maus auf eine Linie zeigen.",
+  "gui.stockmarket.plugin_management_screen.manager_logger": "Plugin-Manager-Logger",
+  "gui.stockmarket.plugin_management_screen.manager_logger.tooltip": "Schreibt die eigenen Meldungen des Plugin-Managers\n(Laden, Migrationen, unbekannte Plugin-Typen, Fehler)\nin das Server-Log. Wird sofort übernommen und gespeichert.",
   "gui.stockmarket.plugin_management_screen.delete_plugin": "x",
   "gui.stockmarket.plugin_management_screen.subscribe_close": "Schließen",
   "gui.stockmarket.create_market_tab.title": "Märkte erstellen",

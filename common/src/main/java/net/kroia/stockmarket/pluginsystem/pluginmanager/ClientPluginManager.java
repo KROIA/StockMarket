@@ -112,6 +112,11 @@ public class ClientPluginManager implements IClientPluginManager {
     }
 
     @Override
+    public CompletableFuture<Boolean> requestPluginManagerLogger(@Nullable Boolean enable) {
+        return AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_MANAGER_LOGGER_REQUEST, enable);
+    }
+
+    @Override
     public CompletableFuture<List<PluginSyncData>> requestReorderPlugin(UUID instanceID, int direction) {
         PluginReorderRequest.InputData input = new PluginReorderRequest.InputData(instanceID, direction);
         // thenApply, so a failed request fails the returned future (the cached list stays as it was).
