@@ -53,6 +53,30 @@ StockMarket 2.2.0 is built for **Fabric** and **NeoForge**. Required:
 
 Optional: [JEI](https://www.curseforge.com/minecraft/mc-mods/jei) — see [JEI Integration](#jei-integration).
 
+### LuckPerms (optional)
+
+LuckPerms is not required. If you use it, these are the LuckPerms builds tested with each Minecraft version.
+Use a LuckPerms build made for your Minecraft and loader version: a build for another version can crash the server at start.
+
+| Minecraft | LuckPerms (Fabric) | LuckPerms (NeoForge) |
+|---|---|---|
+| 1.21.1  | 5.4.140 | 5.4.149 or newer (older builds kick joining players) |
+| 1.21.2  | 5.4.145 | 5.4.149 |
+| 1.21.3  | 5.4.145 | 5.4.149 |
+| 1.21.4  | 5.4.150 | 5.4.158 |
+| 1.21.5  | 5.5.4   | not available (see below) |
+| 1.21.6  | 5.5.10  | 5.5.10 |
+| 1.21.7  | 5.5.10  | 5.5.10 |
+| 1.21.8  | 5.5.10  | 5.5.10 |
+| 1.21.9  | 5.5.17  | 5.5.17 |
+| 1.21.10 | 5.5.17  | 5.5.17 |
+| 1.21.11 | 5.5.21  | 5.5.21 |
+| 26.1.2  | 5.5.85  | 5.5.85 |
+| 26.2    | 5.5.85  | 5.5.85 |
+| 26.3    | 5.5.85  | 5.5.87 |
+
+**NeoForge 1.21.5:** no published LuckPerms build starts on NeoForge 21.5.101. LuckPerms 5.4.158 and 5.5.0 crash at server start, also without this mod. Run that server without LuckPerms; permission checks then use the normal permission levels.
+
 ---
 ## Downloads
 <!--
