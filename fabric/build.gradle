@@ -91,9 +91,11 @@ if ((findProperty('with_luckperms') ?: 'false').toBoolean()) {
         }
     }
     dependencies {
-        modLocalRuntime "maven.modrinth:luckperms:${rootProject.luckperms_fabric_version}"
+        modLocalRuntime "maven.modrinth:luckperms:${rootProject.luckperms_fabric_version}" // mc<=1.21.11
+        //localRuntime "maven.modrinth:luckperms:${rootProject.luckperms_fabric_version}" // mc>=26.1
         // LuckPerms needs fabric-permissions-api; ModUtilities ships it jar-in-jar, which the dev run does not load
-        modLocalRuntime "me.lucko:fabric-permissions-api:${rootProject.fabric_permissions_api_version}"
+        modLocalRuntime "me.lucko:fabric-permissions-api:${rootProject.fabric_permissions_api_version}" // mc<=1.21.11
+        //localRuntime "me.lucko:fabric-permissions-api:${rootProject.fabric_permissions_api_version}" // mc>=26.1
     }
 }
 
