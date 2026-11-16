@@ -1733,11 +1733,12 @@ public class PluginTestSuite extends TestSuite {
     // VolatilityPlugin, anchor off) must reproduce them bit for bit.
     // #96: re-captured after the default depth moved to the fair price (deliberate behaviour change).
     // SM-241: pump hash re-captured, the bot keeps its reference on same-direction fills (deliberate behaviour change).
+    // SM-334: pump hash re-captured, the bot ramps its orders from the available volume (deliberate behaviour change).
 
     /** Golden hash of the scripted flow series over all {@link #GOLDEN_SCALES} x flow x calculator x maxMult configs. */
     private static final long GOLDEN_SCRIPT_HASH = 0x7ca4b1a5d1bba416L;
     /** Golden hash of the t208 diamond_default pump30 price path (volatility scale 0, book refill on). */
-    private static final long GOLDEN_PUMP_HASH = 0xcaf42eca64243b03L;
+    private static final long GOLDEN_PUMP_HASH = 0xb2c2f7df4f6cf55fL;
     /** Volatility scales of the golden configs (they enter the flow capacity as 1 + scale). */
     private static final float[] GOLDEN_SCALES = {0f, 0.3f, 1.5f};
 
@@ -4378,10 +4379,14 @@ public class PluginTestSuite extends TestSuite {
                 bot.setLoggerEnabled(false);
                 bot.onMarketSubscribed(itemID);
                 applySettings(bot, TargetPriceBot.Settings.CODEC, TargetPriceBot.Settings.createDefault().withReference(0, 60, 0.3f, 0.15f).withAvailableVolumeLevels(levels));
-                // first bot step seeds the flow, then one simulated player fill
+                // The first bot step seeds the flow. A fresh bot has seen no fill, so it is fully ramped and may
+                // already trade towards the target here: undo that (book and price back to the start), then one
+                // simulated player fill. Everything measured below happens after the fill.
                 for (int t = 0; t < 5; t++) { bot.update(markets); cache.apply(); serverMarket.update(); }
-                if (serverMarket.getCurrentMarketPrice() != p1)
-                    return fail("Harness: the bot traded before the fill" + out);
+                serverMarket.test_clearOrderbook();
+                serverMarket.test_clearIncomingOrderBuffers();
+                serverMarket.test_setCurrentMarketPrice(p1);
+                serverMarket.test_resetVirtualOrderBookVolume();
                 market.setNetPlayerItemFlow(market.getNetPlayerItemFlow() - 1);
 
                 long prev = serverMarket.getCurrentMarketPrice();
