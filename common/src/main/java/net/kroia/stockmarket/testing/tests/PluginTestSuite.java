@@ -3910,7 +3910,7 @@ public class PluginTestSuite extends TestSuite {
      */
     private TestResult test_targetPriceBot_referenceCodecNbt() {
         TargetPriceBot.Settings original = TargetPriceBot.Settings.createDefault().withReference(300f, 45f, 0.5f, 0.2f)
-                .withAvailableVolumeLevels(7);
+                .withAvailableVolumeLevels(7).withMaxRampFraction(1.5f);
         ByteBuf buf = Unpooled.buffer();
         try {
             TargetPriceBot.Settings.CODEC.encode(buf, original);
@@ -3931,6 +3931,16 @@ public class PluginTestSuite extends TestSuite {
             r = assertEquals("levels 0 become the default", TargetPriceBot.DEFAULT_AVAILABLE_VOLUME_LEVELS,
                     original.withAvailableVolumeLevels(0).availableVolumeLevels());
             if (!r.passed()) return r;
+            // SM-334: an 11-field payload (before maxRampFraction) gets its default; <= 0 / NaN become the default
+            buf.clear();
+            buf.writeFloat(0.5f).writeFloat(0.1f).writeFloat(0f).writeFloat(0.1f).writeFloat(10f).writeFloat(0.005f)
+                    .writeFloat(300f).writeFloat(45f).writeFloat(0.5f).writeFloat(0.2f).writeInt(7);
+            r = assertEquals("11-field payload gets the default max ramp", TargetPriceBot.DEFAULT_MAX_RAMP_FRACTION,
+                    TargetPriceBot.Settings.CODEC.decode(buf).maxRampFraction());
+            if (!r.passed()) return r;
+            if (original.withMaxRampFraction(0).maxRampFraction() != TargetPriceBot.DEFAULT_MAX_RAMP_FRACTION
+                    || original.withMaxRampFraction(Float.NaN).maxRampFraction() != TargetPriceBot.DEFAULT_MAX_RAMP_FRACTION)
+                return fail("max ramp 0 / NaN must become the default");
         } finally {
             buf.release();
         }
@@ -4324,16 +4334,20 @@ public class PluginTestSuite extends TestSuite {
     /**
      * SM-334: after a player push the bot sizes each order from the "available volume" (the first
      * {@link TargetPriceBot.Settings#availableVolumeLevels} levels with volume in its direction, empty levels before them
-     * skipped) times a share that ramps up from {@link TargetPriceBot#RAMP_START_FRACTION}. Before, it sold the whole
+     * skipped) times a share that ramps up from {@link TargetPriceBot#RAMP_START_FRACTION} to
+     * {@link TargetPriceBot.Settings#maxRampFraction} (default 200%). Before, it sold the whole
      * volume down to its target in one order once the gap guard pause ended (diamond 10,449 to 416 in one tick).
      * Real market, constant test depth of 50 items per level, price 1000, bot target 500 (reference model off, so the
-     * target is fixed), one simulated player fill. Three runs of 60 s each:
+     * target is fixed), one simulated player fill. Three runs of 120 s each, max ramp 200%, so no tick may drop more
+     * than 2 x levels (+1):
      * <ul>
      *   <li>dense, levels 3 and the default 50: bids on every level below the price. The price must slide down over
-     *       several ticks, no tick may drop more than the setting's levels, and the order size must grow (ramp).</li>
+     *       several ticks, and the order size must grow (ramp). With 3 levels (150 items measured) the ramped order must
+     *       exceed the measured sum.</li>
      *   <li>gap, default levels: no bids within {@code gap} levels below the price. The first drop jumps to the first
-     *       bid level (an empty stretch is crossed in one step), every later drop is at most the setting's levels.</li>
+     *       bid level (an empty stretch is crossed in one step), every later drop stays within the bound.</li>
      * </ul>
+     * In every run the price never passes the bot's target.
      * Without a gap the guard does not block (the window holds enough volume), so the ramp starts at the fill.
      */
     private TestResult test_targetPriceBot_pump_slidesDown() {
@@ -4374,7 +4388,8 @@ public class PluginTestSuite extends TestSuite {
                 int drops = 0;
                 long firstDrop = 0, maxLaterDrop = 0;
                 TargetPriceBot.StepInfo last = null, first = null;
-                for (int t = 0; t < 60 * 20; t++) {
+                long minPrice = prev;
+                for (int t = 0; t < 120 * 20; t++) {
                     bot.update(markets);
                     cache.apply();
                     serverMarket.update();
@@ -4382,6 +4397,7 @@ public class PluginTestSuite extends TestSuite {
                     if (step != null && first == null) first = step;
                     last = step;
                     long p = serverMarket.getCurrentMarketPrice();
+                    minPrice = Math.min(minPrice, p);
                     if (p < prev) {
                         if (drops == 0) firstDrop = prev - p; else maxLaterDrop = Math.max(maxLaterDrop, prev - p);
                         drops++;
@@ -4389,15 +4405,19 @@ public class PluginTestSuite extends TestSuite {
                     prev = p;
                 }
                 double end = MarketManager.convertToRealAmountStatic(prev);
-                out.append(String.format(Locale.ROOT, "\n %s, levels %d: end %.2f after 60 s, %d drops, first %d levels, later max %d, order %.2f -> %.2f",
+                out.append(String.format(Locale.ROOT, "\n %s, levels %d: end %.2f after 120 s, %d drops, first %d levels, later max %d, order %.2f -> %.2f",
                         withGap ? "gap " + gap : "dense", levels, end, drops, firstDrop, maxLaterDrop,
                         first == null ? 0 : first.amount(), last == null ? 0 : last.amount()));
                 if (first == null || drops < 3) return fail("The price did not slide down over several ticks" + out);
-                if (!(end > targetReal)) return fail("Bot sold past its target" + out);
+                if (!(MarketManager.convertToRealAmountStatic(minPrice) >= targetReal)) return fail("Bot sold past its target" + out);
                 if (!(Math.abs(last.amount()) > Math.abs(first.amount()))) return fail("Order size did not ramp up" + out);
-                if (maxLaterDrop > levels) return fail("A tick dropped more than the available levels" + out);
-                if (withGap ? (firstDrop < gap || firstDrop > gap + levels) : firstDrop > levels)
+                long bound = (long) Math.ceil(TargetPriceBot.DEFAULT_MAX_RAMP_FRACTION * levels) + 1;
+                if (maxLaterDrop > bound) return fail("A tick dropped more than max ramp x levels" + out);
+                if (withGap ? (firstDrop < gap || firstDrop > gap + bound) : firstDrop > bound)
                     return fail("Unexpected first drop" + out);
+                // SM-334: past 100% the ramped order walks beyond the measured levels (3 x 50 items)
+                if (levels == 3 && !(Math.abs(last.amount()) > levels * 50))
+                    return fail("Ramped order did not exceed the measured available volume" + out);
             }
             StockMarketMod.LOGGER.info("[SM-334 slide] {}", out);
             return pass("Dense book slides, empty gap is crossed once, then slides" + out);

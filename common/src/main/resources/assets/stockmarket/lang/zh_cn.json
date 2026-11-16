@@ -558,6 +558,8 @@
   "gui.stockmarket.target_price_bot.oscillation_amplitude.tooltip": "第一次朝目标方向摆动的大小，占玩家推动价格幅度的比例。\n价格不会越过目标，也不会高于玩家推到的价格。默认：0.15",
   "gui.stockmarket.target_price_bot.available_volume_levels": "可用量价位数",
   "gui.stockmarket.target_price_bot.available_volume_levels.tooltip": "机器人计算下单量时统计的价位数量，从其方向上第一个有挂单量的价位开始计算。\n每笔机器人订单最多只取其中一部分，价位越多，价格回归越快。默认：50",
+  "gui.stockmarket.target_price_bot.max_ramp": "最大下单比例 (%)",
+  "gui.stockmarket.target_price_bot.max_ramp.tooltip": "完全加速后机器人单笔订单的最大规模，占测得可用量的百分比。\n超过 100% 时会越过已测价位下单。不会越过目标价，也不会超过订单上限。默认：200",
   "gui.stockmarket.volume_distribution.volume_scale.tooltip": "虚拟订单簿的深度，相对于物品的丰度（Abundance）：\n默认订单簿按 max(64, 64 x 丰度) 个物品的参考订单设计，\n为 1 时该订单约使价格变动 0.36%。市场的最大订单量不影响深度。\n数值越高 = 订单簿越深，每笔交易对价格的影响越小。\n默认值：1",
   "gui.stockmarket.volume_distribution.speed.tooltip": "虚拟订单簿成交量向目标分布收敛的整体速度。\n会与下方两个速率相乘。\n默认值：0.05",
   "gui.stockmarket.volume_distribution.accumulation_rate.tooltip": "缺失的成交量向目标补充的速率\n（例如玩家消耗了流动性之后）。默认值：0.1",

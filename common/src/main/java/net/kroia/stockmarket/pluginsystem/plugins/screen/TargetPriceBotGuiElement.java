@@ -68,6 +68,8 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         public static final Component OSCILLATION_AMPLITUDE_TOOLTIP = Component.translatable(PREFIX + "oscillation_amplitude.tooltip");
         public static final Component LABEL_AVAILABLE_VOLUME_LEVELS = Component.translatable(PREFIX + "available_volume_levels");
         public static final Component AVAILABLE_VOLUME_LEVELS_TOOLTIP = Component.translatable(PREFIX + "available_volume_levels.tooltip");
+        public static final Component LABEL_MAX_RAMP = Component.translatable(PREFIX + "max_ramp");
+        public static final Component MAX_RAMP_TOOLTIP = Component.translatable(PREFIX + "max_ramp.tooltip");
     }
 
     private final CandlestickChart candlestickChart;
@@ -104,6 +106,9 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     /** SM-334: price levels of the bot's available volume (TargetPriceBot.Settings#availableVolumeLevels). */
     private final Label availableVolumeLevelsLabel;
     private final TextBox availableVolumeLevelsTextBox;
+    /** SM-334: max share of the available volume per order in % (TargetPriceBot.Settings#maxRampFraction x 100). */
+    private final Label maxRampLabel;
+    private final TextBox maxRampTextBox;
     private final Button applyButton;
     private final Button applyAllButton;
     /** Fills the form with the plugin defaults (null = hidden). */
@@ -185,6 +190,10 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         availableVolumeLevelsLabel = new Label(Texts.LABEL_AVAILABLE_VOLUME_LEVELS.getString());
         availableVolumeLevelsTextBox = new TextBox();
         availableVolumeLevelsTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 7, 0));
+        // SM-334: in % like the target rate limit, > 0
+        maxRampLabel = new Label(Texts.LABEL_MAX_RAMP.getString());
+        maxRampTextBox = new TextBox();
+        maxRampTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 6, 1));
 
         applyButton = new Button(Texts.APPLY_BUTTON.getString(), this::onApplySettings);
         applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
@@ -222,6 +231,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         setSettingTooltip(Texts.OSCILLATION_DAMPING_TOOLTIP, oscillationDampingLabel, oscillationDampingTextBox);
         setSettingTooltip(Texts.OSCILLATION_AMPLITUDE_TOOLTIP, oscillationAmplitudeLabel, oscillationAmplitudeTextBox);
         setSettingTooltip(Texts.AVAILABLE_VOLUME_LEVELS_TOOLTIP, availableVolumeLevelsLabel, availableVolumeLevelsTextBox);
+        setSettingTooltip(Texts.MAX_RAMP_TOOLTIP, maxRampLabel, maxRampTextBox);
 
         settingsListView.addChild(pGainLabel);
         settingsListView.addChild(pGainTextBox);
@@ -245,6 +255,8 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         settingsListView.addChild(oscillationAmplitudeTextBox);
         settingsListView.addChild(availableVolumeLevelsLabel);
         settingsListView.addChild(availableVolumeLevelsTextBox);
+        settingsListView.addChild(maxRampLabel);
+        settingsListView.addChild(maxRampTextBox);
         settingsListView.addChild(applyButtonRow);
 
         addChild(candlestickChart);
@@ -400,6 +412,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         oscillationDampingTextBox.setText(s.oscillationDamping(), 3);
         oscillationAmplitudeTextBox.setText(s.oscillationAmplitude(), 3);
         availableVolumeLevelsTextBox.setText(String.valueOf(s.availableVolumeLevels()));
+        maxRampTextBox.setText(s.maxRampFraction() * 100, 1);
     }
 
     /**
@@ -427,7 +440,9 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
                 (float) Math.max(0, oscillationDampingTextBox.getDouble()),
                 (float) Math.max(0, oscillationAmplitudeTextBox.getDouble()),
                 // SM-334: <= 0 (or empty) falls back to the default in the Settings constructor
-                (int) Math.min(Integer.MAX_VALUE, Math.max(0, availableVolumeLevelsTextBox.getDouble()))
+                (int) Math.min(Integer.MAX_VALUE, Math.max(0, availableVolumeLevelsTextBox.getDouble())),
+                // SM-334: % -> fraction; <= 0 (or empty) falls back to the default in the Settings constructor
+                (float) Math.max(0, maxRampTextBox.getDouble() / 100)
         );
     }
 

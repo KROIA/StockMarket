@@ -560,6 +560,8 @@
   "gui.stockmarket.target_price_bot.oscillation_amplitude.tooltip": "Grössi vo de erste Schwingig Richtig Ziel, als Aateil\nvo de Priisverschiebig vom Spieler. De Priis gaht nie übers\nZiel use und nie über de Priis vom Spieler. Standard: 0.15",
   "gui.stockmarket.target_price_bot.available_volume_levels": "Verfüegbari Volume-Stuefe",
   "gui.stockmarket.target_price_bot.available_volume_levels.tooltip": "Wie vill Priisstuefe de Bot für sini Ordergrössi misst,\nab de erste Stuefe mit Volume i sinere Richtig.\nE Bot-Order nimmt höchstens en Teil devo, meh Stuefe\nbringed de Priis also schneller zrugg. Standard: 50",
+  "gui.stockmarket.target_price_bot.max_ramp": "Max. Orderaateil (%)",
+  "gui.stockmarket.target_price_bot.max_ramp.tooltip": "Grössti Bot-Order nach em Hochfahre, in % vom gmässne\nverfüegbare Volume. Über 100% ordered de Bot über d\ngmässne Stuefe use. Nie über sis Ziel use und nie\nübers Orderlimit. Standard: 200",
   "gui.stockmarket.volume_distribution.volume_scale.tooltip": "Tüüfi vom virtuelle Orderbuech relativ zur Hüüfigkeit\n(Abundance) vom Item: s Standardbuech isch uf e Referenzorder\nvo max(64, 64 x Abundance) Items usgleit, wo de Priis bi 1 um\nöppe 0,36 % bewegt. Di maximali Ordergrössi vom Markt ändert\nsi nöd. Höcher = tüüfers Orderbuech, de Priis bewegt sich pro\nHandel weniger. Standard: 1",
   "gui.stockmarket.volume_distribution.speed.tooltip": "Gsamtgschwindikeit, mit där sich s virtuelle Orderbuech-\nVolume sinere Zielverteilig aanäheret. Wird mit beide\nRate unde multipliziert. Standard: 0.05",
   "gui.stockmarket.volume_distribution.accumulation_rate.tooltip": "Rate, mit där fählends Volume zum Ziel hii ufgfüllt wird\n(z. B. nachdem Spieler Liquidität verbrucht hend). Standard: 0.1",
