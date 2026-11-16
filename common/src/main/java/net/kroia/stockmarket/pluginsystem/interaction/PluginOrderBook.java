@@ -7,6 +7,7 @@ import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
 import net.kroia.stockmarket.pluginsystem.plugin.core.cache.VirtualOrderBookCache;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
+import net.kroia.stockmarket.stockmarket.market.core.VirtualOrderbook;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.modutilities.Tuple;
@@ -96,6 +97,23 @@ public class PluginOrderBook implements IPluginOrderBook
         boolean up = to > from;
         long cap = Double.isFinite(capReal) ? MarketManager.convertToRawAmountStatic(capReal) : Long.MAX_VALUE;
         float real = (float) MarketManager.convertToRealAmountStatic(orderbook.getRawVirtualSideVolume(from, to, up, cap));
+        return up ? -real : real;
+    }
+
+    /** {@inheritDoc} SM-334: searches from the orderbook's raw current price, where the matching walk starts. */
+    @Override
+    public float getRealVirtualAvailableVolume(double targetRealPrice, int levels, double capReal) {
+        long from = serverMarket.getCurrentMarketPrice();
+        long to = Math.max(1, MarketManager.convertToRawAmountStatic(targetRealPrice)); // sells stop at price 1
+        if (to == from || levels <= 0)
+            return 0;
+        boolean up = to > from;
+        long first = orderbook.findVirtualVolume(from, to, up);
+        if (first == VirtualOrderbook.NO_VOLUME)
+            return 0;
+        long last = up ? Math.min(to, first + levels - 1) : Math.max(to, first - levels + 1);
+        long cap = Double.isFinite(capReal) ? MarketManager.convertToRawAmountStatic(capReal) : Long.MAX_VALUE;
+        float real = (float) MarketManager.convertToRealAmountStatic(orderbook.getRawVirtualSideVolume(first, last, up, cap));
         return up ? -real : real;
     }
 

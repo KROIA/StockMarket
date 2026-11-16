@@ -217,8 +217,10 @@ public class PluginTestSuite extends TestSuite {
         addTest("netFlow_randomTrades_exact", this::test_netFlow_randomTrades_exact);
         // T-207 (ungated): the bot does not trade through an empty gap right after a big order
         addTest("targetPriceBot_emptyGap_noSnapBack", this::test_targetPriceBot_emptyGap_noSnapBack);
-        // T-208 (ungated): the gap guard blocks at most 60 s after a player fill
+        // T-208 (ungated): the gap guard blocks at most 60 s after a player fill (SM-334: 45-75 s, rolled per fill)
         addTest("targetPriceBot_gapGuard_timesOut", this::test_targetPriceBot_gapGuard_timesOut);
+        // SM-334 (ungated): after the pause a far pump slides back down over minutes instead of in one tick
+        addTest("targetPriceBot_pump_slidesDown", this::test_targetPriceBot_pump_slidesDown);
         // #96 (ungated): the default depth is centred on the fair price, the bot's reference stays inside the flow band
         addTest("defaultDepth_centredOnFairPrice", this::test_defaultDepth_centredOnFairPrice);
         addTest("targetPriceBot_referenceAnchor_band", this::test_targetPriceBot_referenceAnchorBand);
@@ -293,11 +295,14 @@ public class PluginTestSuite extends TestSuite {
         // The harness fills millions of scratch orders: keep them out of BankSystem's trade ledger, whose write
         // backlog would otherwise drain at server shutdown.
         OrderLedger.Writer.testSink = e -> {};
+        // SM-334: the bot's gap guard pause is random per fill; seed it so every run trades the same way
+        TargetPriceBot.test_setGapGuardSeed(334L);
     }
 
     @Override
     public void teardown() {
         OrderLedger.Writer.testSink = null;
+        TargetPriceBot.test_setGapGuardSeed(null);
         serverMarket = null;
         fixture.cleanup();
     }
@@ -513,6 +518,8 @@ public class PluginTestSuite extends TestSuite {
         IPluginOrderBook book = (IPluginOrderBook) Proxy.newProxyInstance(IPluginOrderBook.class.getClassLoader(),
                 new Class<?>[]{IPluginOrderBook.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "getRealVirtualVolumeToPrice" -> (float) (depth * (price[0] - (Double) args[0]));
+                    // SM-334: availability not limiting (whole way to the target), this scenario is about the PID
+                    case "getRealVirtualAvailableVolume" -> (float) (depth * (price[0] - (Double) args[0]));
                     case "getDefaultRealVolume" -> 0f; // no default depth: T-207 gap guard off
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
@@ -571,6 +578,7 @@ public class PluginTestSuite extends TestSuite {
         IPluginOrderBook book = (IPluginOrderBook) Proxy.newProxyInstance(IPluginOrderBook.class.getClassLoader(),
                 new Class<?>[]{IPluginOrderBook.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "getRealVirtualVolumeToPrice" -> -1e6f;
+                    case "getRealVirtualAvailableVolume" -> -1e6f; // SM-334: deep book, so the size cap binds
                     case "getDefaultRealVolume" -> 0f; // no default depth: T-207 gap guard off
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
@@ -651,10 +659,12 @@ public class PluginTestSuite extends TestSuite {
                             + " (jump " + p0 + " -> " + p1 + ", window " + n + ")");
             }
 
-            // Flow reset: target back to the old price, let the bot work for 100 cycles (5 ticks each)
+            // Flow reset: target back to the old price, let the bot work. SM-334: one bot order takes at most
+            // AVAILABLE_VOLUME_LEVELS levels with volume (plus any empty stretch before them), so walking back
+            // 2 windows takes up to 2n / 3 cycles: 6n ticks instead of the former 100 cycles.
             cache.getPluginMarket().setTargetPrice(p0Real);
             cache.apply();
-            for (int t = 0; t < 500; t++) {
+            for (int t = 0; t < 6 * n; t++) {
                 bot.update(markets);
                 cache.apply();
                 serverMarket.update();
@@ -4257,10 +4267,13 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /**
-     * T-208: the gap guard blocks only for {@link TargetPriceBot#GAP_GUARD_MAX_BLOCK_SECONDS} after a player
-     * fill. On the thin diamond book one max buy sweeps a gap the refill doesn't close for minutes: the bot
-     * must not trade while the window is open, and must trade again (with the gap still empty) within 5 s
-     * after it closes without a new fill.
+     * T-208: the gap guard blocks only for a while after a player fill. On the thin diamond book one max buy sweeps a
+     * gap the refill doesn't close for minutes: the bot must not trade while the window is open, and must trade again
+     * (with the gap still empty) within 5 s after it closes without a new fill.
+     * <p>
+     * SM-334: the pause is rolled per fill from [{@link TargetPriceBot#GAP_GUARD_MIN_BLOCK_SECONDS},
+     * {@link TargetPriceBot#GAP_GUARD_MAX_BLOCK_SECONDS}]; the test reads the rolled pause through
+     * {@link TargetPriceBot#test_getGapGuardBlockSeconds} and also checks it lies in that range.
      */
     private TestResult test_targetPriceBot_gapGuard_timesOut() {
         harnessRefill = true; // book refills as in production
@@ -4274,6 +4287,13 @@ public class PluginTestSuite extends TestSuite {
             int window = (int) Math.round(TargetPriceBot.GAP_GUARD_MAX_BLOCK_SECONDS * 20);
             for (int t = 1; t <= window + 100; t++) {
                 env.tick();
+                // SM-334: the bot rolls the pause when it sees the fill, at its first step (within 5 ticks)
+                if (t == 5) {
+                    double pause = env.bot.test_getGapGuardBlockSeconds(itemID);
+                    if (pause < TargetPriceBot.GAP_GUARD_MIN_BLOCK_SECONDS || pause > TargetPriceBot.GAP_GUARD_MAX_BLOCK_SECONDS)
+                        return fail("Rolled pause " + pause + " s outside its range");
+                    window = (int) Math.round(pause * 20);
+                }
                 double p = env.price();
                 if (env.bot.test_getLastStep(itemID) == before) continue;
                 if (t < window - 10)
@@ -4287,6 +4307,95 @@ public class PluginTestSuite extends TestSuite {
             return fail("Exception: " + e);
         } finally {
             harnessRefill = false;
+        }
+    }
+
+    /**
+     * SM-334: after a player push the bot sizes each order from the "available volume" (the first
+     * {@link TargetPriceBot#AVAILABLE_VOLUME_LEVELS} levels with volume in its direction, empty levels before them
+     * skipped) times a share that ramps up from {@link TargetPriceBot#RAMP_START_FRACTION}. Before, it sold the whole
+     * volume down to its target in one order once the gap guard pause ended (diamond 10,449 to 416 in one tick).
+     * Real market, constant test depth of 50 items per level, price 1000, bot target 500 (reference model off, so the
+     * target is fixed), one simulated player fill. Two books, 60 s each:
+     * <ul>
+     *   <li>dense: bids on every level below the price. The price must slide down over several ticks, no tick may
+     *       drop more than AVAILABLE_VOLUME_LEVELS levels, and the order size must grow (ramp).</li>
+     *   <li>gap: no bids within {@code gap} levels below the price. The first drop jumps to the first bid level (an
+     *       empty stretch is crossed in one step), every later drop is at most AVAILABLE_VOLUME_LEVELS levels.</li>
+     * </ul>
+     * Without a gap the guard does not block (the window holds enough volume), so the ramp starts at the fill.
+     */
+    private TestResult test_targetPriceBot_pump_slidesDown() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        long originalPrice = serverMarket.getCurrentMarketPrice();
+        long originalFlow = market.getNetPlayerItemFlow();
+        StringBuilder out = new StringBuilder();
+        final long p1 = MarketManager.convertToRawAmountStatic(1000);
+        final double targetReal = 500;
+        final int gap = 200;
+        final int levels = TargetPriceBot.AVAILABLE_VOLUME_LEVELS;
+        try {
+            for (boolean withGap : new boolean[]{false, true}) {
+                MarketCache cache = new MarketCache(market);
+                List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+                double gapEdge = MarketManager.convertToRealAmountStatic(withGap ? p1 - gap : p1 - 1);
+                serverMarket.test_setDefaultVolumeProviderFunction(real -> real <= gapEdge + 1e-9 ? 50f : 0f);
+                serverMarket.test_clearOrderbook();
+                serverMarket.test_clearIncomingOrderBuffers();
+                serverMarket.test_setCurrentMarketPrice(p1);
+                serverMarket.test_resetVirtualOrderBookVolume();
+                cache.getPluginMarket().setTargetPrice(targetReal);
+                cache.apply();
+
+                TargetPriceBot bot = new TargetPriceBot();
+                bot.setLoggerEnabled(false);
+                bot.onMarketSubscribed(itemID);
+                applySettings(bot, TargetPriceBot.Settings.CODEC, TargetPriceBot.Settings.createDefault().withReference(0, 60, 0.3f, 0.15f));
+                // first bot step seeds the flow, then one simulated player fill
+                for (int t = 0; t < 5; t++) { bot.update(markets); cache.apply(); serverMarket.update(); }
+                if (serverMarket.getCurrentMarketPrice() != p1)
+                    return fail("Harness: the bot traded before the fill" + out);
+                market.setNetPlayerItemFlow(market.getNetPlayerItemFlow() - 1);
+
+                long prev = serverMarket.getCurrentMarketPrice();
+                int drops = 0;
+                long firstDrop = 0, maxLaterDrop = 0;
+                TargetPriceBot.StepInfo last = null, first = null;
+                for (int t = 0; t < 60 * 20; t++) {
+                    bot.update(markets);
+                    cache.apply();
+                    serverMarket.update();
+                    TargetPriceBot.StepInfo step = bot.test_getLastStep(itemID);
+                    if (step != null && first == null) first = step;
+                    last = step;
+                    long p = serverMarket.getCurrentMarketPrice();
+                    if (p < prev) {
+                        if (drops == 0) firstDrop = prev - p; else maxLaterDrop = Math.max(maxLaterDrop, prev - p);
+                        drops++;
+                    }
+                    prev = p;
+                }
+                double end = MarketManager.convertToRealAmountStatic(prev);
+                out.append(String.format(Locale.ROOT, "\n %s: end %.2f after 60 s, %d drops, first %d levels, later max %d, order %.2f -> %.2f",
+                        withGap ? "gap " + gap : "dense", end, drops, firstDrop, maxLaterDrop,
+                        first == null ? 0 : first.amount(), last == null ? 0 : last.amount()));
+                if (first == null || drops < 3) return fail("The price did not slide down over several ticks" + out);
+                if (!(end > targetReal)) return fail("Bot sold past its target" + out);
+                if (!(Math.abs(last.amount()) > Math.abs(first.amount()))) return fail("Order size did not ramp up" + out);
+                if (maxLaterDrop > levels) return fail("A tick dropped more than the available levels" + out);
+                if (withGap ? (firstDrop < gap || firstDrop > gap + levels) : firstDrop > levels)
+                    return fail("Unexpected first drop" + out);
+            }
+            StockMarketMod.LOGGER.info("[SM-334 slide] {}", out);
+            return pass("Dense book slides, empty gap is crossed once, then slides" + out);
+        } catch (Exception e) {
+            return fail("Exception: " + e + out);
+        } finally {
+            serverMarket.test_setDefaultVolumeProviderFunction(null);
+            serverMarket.test_clearIncomingOrderBuffers();
+            serverMarket.test_setCurrentMarketPrice(originalPrice);
+            serverMarket.test_clearOrderbook();
+            market.setNetPlayerItemFlow(originalFlow);
         }
     }
 
