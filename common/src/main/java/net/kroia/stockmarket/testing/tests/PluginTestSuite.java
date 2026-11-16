@@ -46,17 +46,17 @@ import java.util.UUID;
 
 public class PluginTestSuite extends TestSuite {
 
-    private static StockMarketModBackend.ServerInstances backend;
+    static StockMarketModBackend.ServerInstances backend;
 
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         PluginTestSuite.backend = backend;
     }
 
     /** Owns the scratch market and plugin cache this suite creates; drained in {@link #teardown()}. */
-    private final TestFixture fixture = new TestFixture("Plugin");
+    final TestFixture fixture = new TestFixture("Plugin");
 
-    private ItemID itemID;
-    private IServerMarket serverMarket;
+    ItemID itemID;
+    IServerMarket serverMarket;
     private ServerPluginManager pluginManager;
 
     /**
@@ -992,7 +992,7 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /** Encodes {@code settings} with {@code codec} and applies it to {@code plugin} for the scratch market. */
-    private <T> void applySettings(ServerPlugin<T, ?> plugin, StreamCodec<ByteBuf, T> codec, T settings) {
+    <T> void applySettings(ServerPlugin<T, ?> plugin, StreamCodec<ByteBuf, T> codec, T settings) {
         ByteBuf buf = Unpooled.buffer();
         codec.encode(buf, settings);
         byte[] bytes = new byte[buf.readableBytes()];
@@ -1278,7 +1278,7 @@ public class PluginTestSuite extends TestSuite {
      * @param halfLifeMinutes NET_FLOW_HALF_LIFE_MINUTES
      * @param bot             TargetPriceBot settings
      */
-    private record ReplaySetup(String market, double price, float abundance, long maxOrder, float sens, float maxMult,
+    record ReplaySetup(String market, double price, float abundance, long maxOrder, float sens, float maxMult,
                                float theta, float halfLifeMinutes, TargetPriceBot.Settings bot) {
         /** @return a copy with another θ and bot settings (T-208 tune grid) */
         ReplaySetup with(float theta, TargetPriceBot.Settings bot) {
@@ -1658,7 +1658,7 @@ public class PluginTestSuite extends TestSuite {
     private record T208Exec(PlayersResult best, Liquidation bestMode, double[] profit, double[] unsold) {}
 
     /** Locks {@code raw} items and places a player market sell of them. */
-    private void sell(ServerMarket market, IServerBank items, long raw, UUID player, IServerBankAccount account) {
+    void sell(ServerMarket market, IServerBank items, long raw, UUID player, IServerBankAccount account) {
         items.lockAmount(raw);
         market.putOrder(new Order(itemID, Order.Type.MARKET, -raw, 0, System.currentTimeMillis(), player, account.getAccountNumber()));
     }
@@ -1673,7 +1673,7 @@ public class PluginTestSuite extends TestSuite {
      * @param items real items to sell
      * @return proceeds (real money)
      */
-    private static double markToBook(IPluginOrderBook book, double price, double items) {
+    static double markToBook(IPluginOrderBook book, double price, double items) {
         double tick = MarketManager.convertToRealAmountStatic(1);
         double step = Math.max(tick, Math.round(price * 0.001 / tick) * tick);
         double left = items, proceeds = 0, hi = price;
@@ -2453,7 +2453,7 @@ public class PluginTestSuite extends TestSuite {
      * abundance 50), diamond_legacy (the same with maxPriceMult 20), dirt (price 0.1, abundance 2,000) or
      * T-214 netherite (price 22,000, abundance 5, max order 320: the depth floor case).
      */
-    private ReplaySetup t208Market(String name) {
+    ReplaySetup t208Market(String name) {
         NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
         float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
         boolean dirt = name.equals("dirt"), netherite = name.equals("netherite");
@@ -2646,7 +2646,7 @@ public class PluginTestSuite extends TestSuite {
      * @param content its full text
      * @return true if the file was written
      */
-    private static boolean t208WriteFile(java.nio.file.Path target, String content) {
+    static boolean t208WriteFile(java.nio.file.Path target, String content) {
         java.nio.file.Path tmp = null;
         for (int attempt = 1; ; attempt++) {
             try {
@@ -2928,7 +2928,7 @@ public class PluginTestSuite extends TestSuite {
     private static Boolean harnessAnchor = null;
 
     /** A volume distribution plugin subscribed to the scratch market (book refill for the harnesses). */
-    private DefaultOrderbookVolumeDistributionPlugin newHarnessRefill() {
+    DefaultOrderbookVolumeDistributionPlugin newHarnessRefill() {
         DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
         p.setLoggerEnabled(false);
         p.onMarketSubscribed(itemID);
@@ -3254,7 +3254,7 @@ public class PluginTestSuite extends TestSuite {
      * T-212: the production calculator of a harness market: depth scale plus the default round-level clusters
      * (scale {@link #harnessRoundLevelScale}).
      */
-    private static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator harnessCalc(double d, float depthScale) {
+    static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator harnessCalc(double d, float depthScale) {
         return rlCalc(d, depthScale, harnessRoundLevelScale, DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_WIDTH);
     }
 

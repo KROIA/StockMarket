@@ -15,6 +15,16 @@ public class NormalizedRandomPriceGenerator implements ServerSaveable {
 
     public NormalizedRandomPriceGenerator(int order)
     {
+        this(order, null);
+    }
+
+    /**
+     * @param order      number of summed random walks
+     * @param seedSource SM-336: if not null, each walk gets its own RNG seeded from it (deterministic tests);
+     *                   null = unseeded RNGs
+     */
+    public NormalizedRandomPriceGenerator(int order, java.util.Random seedSource)
+    {
         if(order <= 0)
             order = 1;
         randomWalk = new MeanRevertingRandomWalk[order];
@@ -23,7 +33,9 @@ public class NormalizedRandomPriceGenerator implements ServerSaveable {
         double sumCoeff = 0;
         for (int i = 0; i < order; i++) {
             // Initialize each random walk with a step size and mean reversion strength
-            randomWalk[i] = new MeanRevertingRandomWalk(0.05, 0.05);
+            randomWalk[i] = seedSource != null
+                    ? new MeanRevertingRandomWalk(0.05, 0.05, new java.util.Random(seedSource.nextLong()))
+                    : new MeanRevertingRandomWalk(0.05, 0.05);
             coefficients[i] = i+1; // Equal coefficients for normalization
             sumCoeff += coefficients[i];
         }

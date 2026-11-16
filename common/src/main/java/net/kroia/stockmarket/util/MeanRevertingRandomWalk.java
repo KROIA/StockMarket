@@ -21,10 +21,21 @@ public class MeanRevertingRandomWalk implements ServerSaveable {
      * @param meanReversionStrength Strength of the pull back to zero.
      */
     public MeanRevertingRandomWalk(double stepSize, double meanReversionStrength) {
+        this(stepSize, meanReversionStrength, new Random());
+    }
+
+    /**
+     * SM-336: same, with a given RNG (seeded in deterministic tests).
+     *
+     * @param stepSize              Maximum size of a single random step.
+     * @param meanReversionStrength Strength of the pull back to zero.
+     * @param random                source of the steps
+     */
+    public MeanRevertingRandomWalk(double stepSize, double meanReversionStrength, Random random) {
         this.currentValue = 0.0;
         this.stepSize = stepSize;
         this.meanReversionStrength = meanReversionStrength;
-        this.random = new Random();
+        this.random = random;
     }
 
     /**
