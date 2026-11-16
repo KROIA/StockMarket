@@ -660,8 +660,8 @@ public class PluginTestSuite extends TestSuite {
             }
 
             // Flow reset: target back to the old price, let the bot work. SM-334: one bot order takes at most
-            // AVAILABLE_VOLUME_LEVELS levels with volume (plus any empty stretch before them), so walking back
-            // 2 windows takes up to 2n / 3 cycles: 6n ticks instead of the former 100 cycles.
+            // availableVolumeLevels levels with volume (plus any empty stretch before them), so walking back
+            // 2 windows takes more cycles than before: 6n ticks instead of the former 100 cycles.
             cache.getPluginMarket().setTargetPrice(p0Real);
             cache.apply();
             for (int t = 0; t < 6 * n; t++) {
@@ -3909,7 +3909,8 @@ public class PluginTestSuite extends TestSuite {
      * reference state survives save/load and a save without the reference keys loads idle.
      */
     private TestResult test_targetPriceBot_referenceCodecNbt() {
-        TargetPriceBot.Settings original = TargetPriceBot.Settings.createDefault().withReference(300f, 45f, 0.5f, 0.2f);
+        TargetPriceBot.Settings original = TargetPriceBot.Settings.createDefault().withReference(300f, 45f, 0.5f, 0.2f)
+                .withAvailableVolumeLevels(7);
         ByteBuf buf = Unpooled.buffer();
         try {
             TargetPriceBot.Settings.CODEC.encode(buf, original);
@@ -3919,6 +3920,16 @@ public class PluginTestSuite extends TestSuite {
             buf.writeFloat(0.5f).writeFloat(0.1f).writeFloat(0f).writeFloat(0.1f).writeFloat(10f).writeFloat(0.005f);
             r = assertEquals("6-field payload gets the reference defaults", TargetPriceBot.Settings.createDefault(),
                     TargetPriceBot.Settings.CODEC.decode(buf));
+            if (!r.passed()) return r;
+            // SM-334: a 10-field payload (before availableVolumeLevels) gets its default; <= 0 becomes the default
+            buf.clear();
+            buf.writeFloat(0.5f).writeFloat(0.1f).writeFloat(0f).writeFloat(0.1f).writeFloat(10f).writeFloat(0.005f)
+                    .writeFloat(300f).writeFloat(45f).writeFloat(0.5f).writeFloat(0.2f);
+            r = assertEquals("10-field payload gets the default levels", TargetPriceBot.DEFAULT_AVAILABLE_VOLUME_LEVELS,
+                    TargetPriceBot.Settings.CODEC.decode(buf).availableVolumeLevels());
+            if (!r.passed()) return r;
+            r = assertEquals("levels 0 become the default", TargetPriceBot.DEFAULT_AVAILABLE_VOLUME_LEVELS,
+                    original.withAvailableVolumeLevels(0).availableVolumeLevels());
             if (!r.passed()) return r;
         } finally {
             buf.release();
@@ -4312,16 +4323,16 @@ public class PluginTestSuite extends TestSuite {
 
     /**
      * SM-334: after a player push the bot sizes each order from the "available volume" (the first
-     * {@link TargetPriceBot#AVAILABLE_VOLUME_LEVELS} levels with volume in its direction, empty levels before them
+     * {@link TargetPriceBot.Settings#availableVolumeLevels} levels with volume in its direction, empty levels before them
      * skipped) times a share that ramps up from {@link TargetPriceBot#RAMP_START_FRACTION}. Before, it sold the whole
      * volume down to its target in one order once the gap guard pause ended (diamond 10,449 to 416 in one tick).
      * Real market, constant test depth of 50 items per level, price 1000, bot target 500 (reference model off, so the
-     * target is fixed), one simulated player fill. Two books, 60 s each:
+     * target is fixed), one simulated player fill. Three runs of 60 s each:
      * <ul>
-     *   <li>dense: bids on every level below the price. The price must slide down over several ticks, no tick may
-     *       drop more than AVAILABLE_VOLUME_LEVELS levels, and the order size must grow (ramp).</li>
-     *   <li>gap: no bids within {@code gap} levels below the price. The first drop jumps to the first bid level (an
-     *       empty stretch is crossed in one step), every later drop is at most AVAILABLE_VOLUME_LEVELS levels.</li>
+     *   <li>dense, levels 3 and the default 50: bids on every level below the price. The price must slide down over
+     *       several ticks, no tick may drop more than the setting's levels, and the order size must grow (ramp).</li>
+     *   <li>gap, default levels: no bids within {@code gap} levels below the price. The first drop jumps to the first
+     *       bid level (an empty stretch is crossed in one step), every later drop is at most the setting's levels.</li>
      * </ul>
      * Without a gap the guard does not block (the window holds enough volume), so the ramp starts at the fill.
      */
@@ -4333,9 +4344,11 @@ public class PluginTestSuite extends TestSuite {
         final long p1 = MarketManager.convertToRawAmountStatic(1000);
         final double targetReal = 500;
         final int gap = 200;
-        final int levels = TargetPriceBot.AVAILABLE_VOLUME_LEVELS;
         try {
-            for (boolean withGap : new boolean[]{false, true}) {
+            int[][] runs = {{3, 0}, {TargetPriceBot.DEFAULT_AVAILABLE_VOLUME_LEVELS, 0}, {TargetPriceBot.DEFAULT_AVAILABLE_VOLUME_LEVELS, 1}};
+            for (int[] run : runs) {
+                final int levels = run[0];
+                final boolean withGap = run[1] == 1;
                 MarketCache cache = new MarketCache(market);
                 List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
                 double gapEdge = MarketManager.convertToRealAmountStatic(withGap ? p1 - gap : p1 - 1);
@@ -4350,7 +4363,7 @@ public class PluginTestSuite extends TestSuite {
                 TargetPriceBot bot = new TargetPriceBot();
                 bot.setLoggerEnabled(false);
                 bot.onMarketSubscribed(itemID);
-                applySettings(bot, TargetPriceBot.Settings.CODEC, TargetPriceBot.Settings.createDefault().withReference(0, 60, 0.3f, 0.15f));
+                applySettings(bot, TargetPriceBot.Settings.CODEC, TargetPriceBot.Settings.createDefault().withReference(0, 60, 0.3f, 0.15f).withAvailableVolumeLevels(levels));
                 // first bot step seeds the flow, then one simulated player fill
                 for (int t = 0; t < 5; t++) { bot.update(markets); cache.apply(); serverMarket.update(); }
                 if (serverMarket.getCurrentMarketPrice() != p1)
@@ -4376,8 +4389,8 @@ public class PluginTestSuite extends TestSuite {
                     prev = p;
                 }
                 double end = MarketManager.convertToRealAmountStatic(prev);
-                out.append(String.format(Locale.ROOT, "\n %s: end %.2f after 60 s, %d drops, first %d levels, later max %d, order %.2f -> %.2f",
-                        withGap ? "gap " + gap : "dense", end, drops, firstDrop, maxLaterDrop,
+                out.append(String.format(Locale.ROOT, "\n %s, levels %d: end %.2f after 60 s, %d drops, first %d levels, later max %d, order %.2f -> %.2f",
+                        withGap ? "gap " + gap : "dense", levels, end, drops, firstDrop, maxLaterDrop,
                         first == null ? 0 : first.amount(), last == null ? 0 : last.amount()));
                 if (first == null || drops < 3) return fail("The price did not slide down over several ticks" + out);
                 if (!(end > targetReal)) return fail("Bot sold past its target" + out);
