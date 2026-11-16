@@ -40,7 +40,10 @@ import java.util.UUID;
  * DefaultOrderbookVolumeDistributionPlugin (book refill, trend, depth), TargetPriceBot and NewsPlugin (the real
  * news library from {@code config/StockMarket/news/}, events resolved as if the scratch market were the preset's
  * item). Scripted players ({@link #scenario}) trade on it; per scenario the suite writes a per-minute CSV, an
- * in-game-hour OHLC CSV, a news log and a summary JSON.
+ * in-game-hour OHLC CSV, a news log and a summary JSON. The CSV ends with {@code anchor_price} (the T-213 long-term
+ * anchor {@code D x e^a}), {@code anchor_mult} ({@code e^a}) and {@code flow_mult} (the short-term flow part,
+ * {@code equilibrium = anchor_price x flow_mult}); the summary's {@code limits} block gives the first tick each cap
+ * was hit (-1 = never).
  * <p>
  * Deterministic: the volatility random walk ({@link VolatilityPlugin#test_setSeed}, stepped by a simulated clock,
  * {@link VolatilityPlugin#test_setClock}), the bot's gap guard ({@link TargetPriceBot#test_setGapGuardSeed}) and the
@@ -55,6 +58,8 @@ import java.util.UUID;
  *       also {@code dirt}, {@code netherite})</li>
  *   <li>{@code stockmarket.longrun.days}: simulated days of server time (default 10)</li>
  *   <li>{@code stockmarket.longrun.news}: {@code off} leaves the NewsPlugin out (default on)</li>
+ *   <li>{@code stockmarket.longrun.volatility}: {@code off} runs the VolatilityPlugin with scale 0, so its walk adds
+ *       nothing and the bot target is the bare NetFlow equilibrium (default on)</li>
  *   <li>{@code stockmarket.longrun.out}: output folder (default {@code longrun} in the game directory)</li>
  * </ul>
  */
@@ -77,7 +82,15 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
 
     /** Scenario names, see {@link #scenario}. */
     static final String[] SCENARIOS = {"baseline", "pump", "dump", "steadyBuy", "steadySell", "limitBuy", "cycle",
-            "netZero", "accumulateDump", "dayNight", "pumpSlowSell"};
+            "netZero", "accumulateDump", "dayNight", "pumpSlowSell",
+            "megaPump", "megaDump", "floodBuy", "floodSell", "floodBuyStop", "pumpTwice", "megaPumpSell"};
+    /** Scenarios whose players start with {@link #BIG_CASH} instead of 1e9 (the mega/flood ones would run dry). */
+    static final List<String> BIG_CASH_SCENARIOS = List.of("megaPump", "megaDump", "floodBuy", "floodSell", "floodBuyStop",
+            "pumpTwice", "megaPumpSell");
+    /** Start cash of the {@link #BIG_CASH_SCENARIOS} players (real). */
+    static final double BIG_CASH = 1e12;
+    /** Size of a mega pump / dump: 2,000,000 real items. */
+    static final long MEGA = 2_000_000L;
     /** T-208 markets a scenario can run on ({@link #t208Market}). */
     static final String[] MARKETS = {"diamond_default", "dirt", "netherite"};
 
@@ -113,6 +126,10 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
         return !System.getProperty("stockmarket.longrun.news", "on").equals("off");
     }
 
+    private static boolean volatilityOn() {
+        return !System.getProperty("stockmarket.longrun.volatility", "on").equals("off");
+    }
+
     private static java.nio.file.Path outDir() throws java.io.IOException {
         return java.nio.file.Files.createDirectories(java.nio.file.Path.of(System.getProperty("stockmarket.longrun.out", "longrun")));
     }
@@ -138,6 +155,8 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
         final double startItems, startCash;
         final int sf;
         final ServerMarket market;
+        /** First tick the cash could not pay one max order at the current price, -1 = never. */
+        int cashShortTick = -1;
         /** Behaviour scratch state. */
         int state, stateTick, count;
         long amount;
@@ -145,7 +164,7 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
         /** Bookkeeping (real units). */
         double prevItems, prevCash, avgCost, realized, bought, sold, spent, received;
 
-        Trader(String name, long startItems, Behaviour behaviour, ServerMarket market, int sf, double defaultPrice) {
+        Trader(String name, long startItems, Behaviour behaviour, ServerMarket market, int sf, double defaultPrice, double startCash) {
             this.name = name;
             this.behaviour = behaviour;
             this.market = market;
@@ -154,11 +173,11 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
             uuid = fixture.createUser("longrun_" + name);
             ItemID moneyID = backend.MARKET_MANAGER.getSync().getTradingCurrencyID();
             account.createBank(itemID, startItems * sf);
-            account.createBank(moneyID, MarketManager.convertToRawAmountStatic(1e9));
+            account.createBank(moneyID, MarketManager.convertToRawAmountStatic(startCash));
             items = account.getBank(itemID);
             money = account.getBank(moneyID);
             this.startItems = startItems;
-            startCash = cash();
+            this.startCash = cash();
             prevItems = startItems;
             prevCash = startCash;
             avgCost = defaultPrice;
@@ -256,6 +275,27 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
         };
     }
 
+    /** Market-buys {@code total} items from tick {@code from} on, one max order {@code maxOrder} per 10 ticks. */
+    static Behaviour megaBuy(long maxOrder, long total, int from) {
+        long[] done = {0};
+        return (me, t, p) -> {
+            if (t < from || done[0] >= total || (t - from) % 10 != 0) return;
+            long n = Math.min(maxOrder, total - done[0]);
+            me.buy(n);
+            done[0] += n;
+        };
+    }
+
+    /** Market-sells everything free from tick {@code from} on, one max order {@code maxOrder} per 10 ticks. */
+    static Behaviour sellAll(long maxOrder, int from) {
+        return (me, t, p) -> { if (t >= from && (t - from) % 10 == 0 && me.free() > 0) me.sellUpTo(maxOrder); };
+    }
+
+    /** Market-buys {@code maxOrder} every minute ({@link #SAMPLE}) from {@link #START} on, while {@code t < until}. */
+    static Behaviour floodBuy(long maxOrder, int until) {
+        return (me, t, p) -> { if (t >= START && t < until && (t - START) % SAMPLE == 0) me.buy(maxOrder); };
+    }
+
     /**
      * Builds a scenario. Sizes scale with the market's max order M (diamond 3,200) and the small trade
      * S = M / 50 (diamond 64); all players start at {@link #START} (1 h).
@@ -274,6 +314,19 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
      *   <li>dayNight: every 5 min buys 2 S during the in-game day (first half of each 24,000 ticks), sells 2 S
      *       (what it holds) at night</li>
      *   <li>pumpSlowSell: the pump, holds 1 h, then sells 1% of the pumped position every 5 min (exploit attempt)</li>
+     * </ul>
+     * Mega / flood scenarios (absolute sizes in real items, M per 10 ticks is the order limit; players start with
+     * {@link #BIG_CASH}):
+     * <ul>
+     *   <li>megaPump: market-buys 2,000,000 from 1 h on, M per 10 ticks (diamond: 625 orders, ~5 min), then holds to
+     *       the end</li>
+     *   <li>megaDump: starts with 2,000,000 and sells them from 1 h on, M per 10 ticks, then nothing</li>
+     *   <li>floodBuy: a market buy of M every minute for the whole run (diamond, 10 days: ~46M items)</li>
+     *   <li>floodSell: starts with enough items, a market sell of M every minute for the whole run</li>
+     *   <li>floodBuyStop: floodBuy until day 2 of the run, then nothing (how far the anchor moved, what the price
+     *       does once the flow stops)</li>
+     *   <li>pumpTwice: megaPump at 1 h, a second megaPump at day 3, holds both (does the anchor stack?)</li>
+     *   <li>megaPumpSell: megaPump, holds 2 days after the last buy, then sells everything at M per 10 ticks</li>
      * </ul>
      *
      * @param name     scenario name ({@link #SCENARIOS})
@@ -332,6 +385,22 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
                     pump.act(me, t, p);
                     if (t >= sellFrom && (t - sellFrom) % STEP == 0) me.sellUpTo(0.6 * maxOrder);
                 });
+            }
+            case "megaPump": return Scenario.of("pumper", 0, megaBuy(maxOrder, MEGA, START));
+            case "megaDump": return Scenario.of("dumper", MEGA, sellAll(maxOrder, START));
+            case "floodBuy": return Scenario.of("flooder", 0, floodBuy(maxOrder, Integer.MAX_VALUE));
+            case "floodSell": return Scenario.of("flooder", maxOrder * ((ticks - START) / SAMPLE + 1), (Behaviour) (me, t, p) -> {
+                if (t >= START && (t - START) % SAMPLE == 0) me.sellUpTo(maxOrder);
+            });
+            case "floodBuyStop": return Scenario.of("flooder", 0, floodBuy(maxOrder, 48 * HOUR));
+            case "pumpTwice": {
+                Behaviour first = megaBuy(maxOrder, MEGA, START), second = megaBuy(maxOrder, MEGA, 72 * HOUR);
+                return Scenario.of("pumper", 0, (Behaviour) (me, t, p) -> { first.act(me, t, p); second.act(me, t, p); });
+            }
+            case "megaPumpSell": {
+                Behaviour pump = megaBuy(maxOrder, MEGA, START);
+                Behaviour sell = sellAll(maxOrder, START + 10 * (int) ((MEGA + maxOrder - 1) / maxOrder) + 48 * HOUR);
+                return Scenario.of("pumper", 0, (Behaviour) (me, t, p) -> { pump.act(me, t, p); sell.act(me, t, p); });
             }
             default: throw new IllegalArgumentException("unknown SM-336 scenario " + name);
         }
@@ -410,12 +479,13 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
     /**
      * Runs one scenario on the scratch market for {@code ticks} ticks.
      *
+     * @param volatility false = VolatilityPlugin scale 0 (no walk, bot target = equilibrium)
      * @param csv     per-minute CSV (with header), or null
      * @param candles in-game-hour OHLC CSV (with header), or null
      * @param newsLog published news CSV (with header)
      */
-    Result simulate(ReplaySetup s, String scenarioName, int ticks, boolean news, StringBuilder csv, StringBuilder candles,
-                    StringBuilder newsLog) {
+    Result simulate(ReplaySetup s, String scenarioName, int ticks, boolean news, boolean volatility, StringBuilder csv,
+                    StringBuilder candles, StringBuilder newsLog) {
         ServerMarket market = (ServerMarket) serverMarket;
         StockMarketModSettings.Market modSettings = backend.SERVER_SETTINGS.MARKET;
         Float prevHalfLife = modSettings.NET_FLOW_HALF_LIFE_MINUTES.get();
@@ -450,7 +520,8 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
             VolatilityPlugin.test_setSeed(SEED);
             VolatilityPlugin.test_setClock(() -> clockMs[0]);
             TargetPriceBot.test_setGapGuardSeed(SEED);
-            HarnessModel model = new HarnessModel(itemID, NetFlowPlugin.Settings.createDefault(), VolatilityPlugin.DEFAULT_VOLATILITY_SCALE);
+            HarnessModel model = new HarnessModel(itemID, NetFlowPlugin.Settings.createDefault(),
+                    volatility ? VolatilityPlugin.DEFAULT_VOLATILITY_SCALE : 0f);
             DefaultOrderbookVolumeDistributionPlugin refill = newHarnessRefill();
             TargetPriceBot bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
@@ -461,20 +532,24 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
             if (newsPlugin != null) newsPlugin.reloadLibrary();
 
             Scenario sc = scenario(scenarioName, s.maxOrder(), ticks);
+            double startCash = BIG_CASH_SCENARIOS.contains(scenarioName) ? BIG_CASH : 1e9;
             for (int i = 0; i < sc.names().length; i++)
-                traders.add(new Trader(sc.names()[i], sc.startItems()[i], sc.players()[i], market, sf, s.price()));
+                traders.add(new Trader(sc.names()[i], sc.startItems()[i], sc.players()[i], market, sf, s.price(), startCash));
 
             if (csv != null) {
                 csv.append("tick,time_s,game_day,price,bot_target,equilibrium,default_price,saturated_flow,net_flow");
                 for (Trader tr : traders) csv.append(',').append(tr.name).append("_items,").append(tr.name).append("_cash_delta,")
                         .append(tr.name).append("_mtm_pl");
-                csv.append('\n');
+                csv.append(",anchor_price,anchor_mult,flow_mult\n");
             }
             if (candles != null) candles.append("game_hour,tick,game_day,open,high,low,close\n");
 
             double price = s.price(), min = price, max = price, startPrice = price;
             double cO = price, cH = price, cL = price;
             List<Double> minutes = new ArrayList<>();
+            // First tick each cap was hit, -1 = never (read-only: nothing below changes the simulation)
+            int eqMaxTick = -1, eqMinTick = -1, anchorMaxTick = -1, anchorMinTick = -1, anchorRateTick = -1, anchorRateTicks = 0;
+            double anchorMin = 1, anchorMax = 1;
             long hash = 0xcbf29ce484222325L;
             long wallStart = System.nanoTime();
             for (int t = 0; t < ticks; t++) {
@@ -487,7 +562,9 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
                                 model.getSaturatedFlow(itemID), market.getNetPlayerItemFlow() / (double) sf));
                         for (Trader tr : traders)
                             csv.append(String.format(Locale.ROOT, ",%.6g,%.6g,%.6g", tr.held(), tr.cash() - tr.startCash, tr.mtm(price, s.price())));
-                        csv.append('\n');
+                        double am = model.flow.getAnchorMultiplier(itemID);
+                        csv.append(String.format(Locale.ROOT, ",%.6g,%.6g,%.6g\n", d * am, am,
+                                model.equilibrium(itemID, d, s.abundance()) / (d * am)));
                     }
                 }
                 if (t % GAME_HOUR == 0) { cO = cH = cL = price; }
@@ -506,7 +583,28 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
                 cache.apply();
                 market.update();
                 clockMs[0] += 50;
-                for (Trader tr : traders) tr.book();
+                for (Trader tr : traders) {
+                    tr.book();
+                    if (tr.cashShortTick < 0 && tr.cash() < price * s.maxOrder()) tr.cashShortTick = t;
+                }
+                {
+                    NetFlowPlugin.Settings fs = model.flow.getMarketSettings(itemID);
+                    NetFlowPlugin.FlowBand band = NetFlowPlugin.flowBand(s.abundance(), fs, model.getBookEFold(itemID));
+                    double f = NetFlowPlugin.flowExponent(model.getSaturatedFlow(itemID), band);
+                    double aLn = Math.log(model.flow.getAnchorMultiplier(itemID));
+                    anchorMin = Math.min(anchorMin, Math.exp(aLn));
+                    anchorMax = Math.max(anchorMax, Math.exp(aLn));
+                    if (band != null && eqMaxTick < 0 && f >= band.lnMaxMult() - 1e-12) eqMaxTick = t;
+                    if (band != null && eqMinTick < 0 && f <= band.lnMinMult() + 1e-12) eqMinTick = t;
+                    if (fs != null && fs.anchorEnabled()) {
+                        if (anchorMaxTick < 0 && aLn >= Math.log(fs.anchorMaxMult()) - 1e-9) anchorMaxTick = t;
+                        if (anchorMinTick < 0 && aLn <= Math.log(fs.anchorMinMult()) + 1e-9) anchorMinTick = t;
+                        if (Math.abs(f) / fs.anchorTimeDays() > fs.anchorMaxMovePerDay()) {
+                            anchorRateTicks++;
+                            if (anchorRateTick < 0) anchorRateTick = t;
+                        }
+                    }
+                }
 
                 price = MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice());
                 hash = (hash ^ Double.doubleToLongBits(price)) * 0x100000001b3L;
@@ -541,6 +639,14 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
             json.append(String.format(Locale.ROOT, "  \"price\": {\"start\": %.6g, \"end\": %.6g, \"min\": %.6g, \"max\": %.6g, "
                             + "\"end_pct_of_start\": %.2f, \"max_rise_1h_pct\": %.2f, \"max_drop_1h_pct\": %.2f},%n",
                     startPrice, end, min, max, 100 * end / startPrice, 100 * rise, 100 * drop));
+            json.append(String.format(Locale.ROOT, "  \"volatility\": %s, \"start_cash\": %.6g,%n", volatility, startCash));
+            json.append(String.format(Locale.ROOT, "  \"anchor_mult\": {\"end\": %.6g, \"min\": %.6g, \"max\": %.6g},%n",
+                    model.flow.getAnchorMultiplier(itemID), anchorMin, anchorMax));
+            json.append(String.format(Locale.ROOT, "  \"limits\": {\"equilibrium_max_cap_first_tick\": %d, "
+                            + "\"equilibrium_min_cap_first_tick\": %d, \"anchor_max_cap_first_tick\": %d, "
+                            + "\"anchor_min_cap_first_tick\": %d, \"anchor_rate_cap_first_tick\": %d, "
+                            + "\"anchor_rate_capped_hours\": %.2f},%n",
+                    eqMaxTick, eqMinTick, anchorMaxTick, anchorMinTick, anchorRateTick, anchorRateTicks / (double) HOUR));
             json.append("  \"players\": [");
             StringBuilder line = new StringBuilder(String.format(Locale.ROOT, "%s %s: start %.4g end %.4g min %.4g max %.4g 1h +%.1f%%/%.1f%%",
                     s.market(), scenarioName, startPrice, end, min, max, 100 * rise, 100 * drop));
@@ -552,9 +658,10 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
                 json.append(i == 0 ? "\n" : ",\n").append(String.format(Locale.ROOT,
                         "    {\"name\": \"%s\", \"start_items\": %.6g, \"end_items\": %.6g, \"bought\": %.6g, \"sold\": %.6g, "
                                 + "\"spent\": %.6g, \"received\": %.6g, \"cash_delta\": %.6g, \"avg_cost\": %.6g, "
-                                + "\"realized_pl\": %.6g, \"unrealized_pl\": %.6g, \"mtm_pl\": %.6g, \"liquidation_pl\": %.6g}",
+                                + "\"realized_pl\": %.6g, \"unrealized_pl\": %.6g, \"mtm_pl\": %.6g, \"liquidation_pl\": %.6g, "
+                                + "\"cash_short_first_tick\": %d}",
                         tr.name, tr.startItems, held, tr.bought, tr.sold, tr.spent, tr.received, cashDelta, tr.avgCost,
-                        tr.realized, unrealized, mtm, liq));
+                        tr.realized, unrealized, mtm, liq, tr.cashShortTick));
                 line.append(String.format(Locale.ROOT, " | %s mtm %+.0f realized %+.0f liq %+.0f", tr.name, mtm, tr.realized, liq));
             }
             json.append(traders.isEmpty() ? "]\n}\n" : "\n  ]\n}\n");
@@ -589,7 +696,7 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
         if (!requested(marketName, scenarioName)) return skip("SM-336 long run not requested");
         try {
             StringBuilder csv = new StringBuilder(), candles = new StringBuilder(), newsLog = new StringBuilder();
-            Result r = simulate(t208Market(marketName), scenarioName, ticks(), newsOn(), csv, candles, newsLog);
+            Result r = simulate(t208Market(marketName), scenarioName, ticks(), newsOn(), volatilityOn(), csv, candles, newsLog);
             java.nio.file.Path dir = outDir();
             String base = marketName + "_" + scenarioName;
             boolean ok = t208WriteFile(dir.resolve(base + ".csv"), csv.toString())
@@ -611,8 +718,8 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
         if (System.getProperty("stockmarket.longrun", "").isBlank()) return skip("SM-336 long run not requested");
         try {
             ReplaySetup s = t208Market("diamond_default");
-            Result a = simulate(s, "cycle", 2 * HOUR, newsOn(), null, null, new StringBuilder());
-            Result b = simulate(s, "cycle", 2 * HOUR, newsOn(), null, null, new StringBuilder());
+            Result a = simulate(s, "cycle", 2 * HOUR, newsOn(), volatilityOn(), null, null, new StringBuilder());
+            Result b = simulate(s, "cycle", 2 * HOUR, newsOn(), volatilityOn(), null, null, new StringBuilder());
             String msg = String.format(Locale.ROOT, "[SM-336] determinism: hash %016x / %016x, %.0f ticks/s", a.hash(), b.hash(),
                     a.ticks() * 1e9 / a.wallNanos());
             StockMarketMod.LOGGER.info(msg);
