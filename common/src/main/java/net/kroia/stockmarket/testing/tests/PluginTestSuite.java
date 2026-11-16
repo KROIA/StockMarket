@@ -4388,6 +4388,8 @@ public class PluginTestSuite extends TestSuite {
                 serverMarket.test_setCurrentMarketPrice(p1);
                 serverMarket.test_resetVirtualOrderBookVolume();
                 market.setNetPlayerItemFlow(market.getNetPlayerItemFlow() - 1);
+                // The bot steps every 5 ticks and keeps its last step until the next one: ignore the warm-up step.
+                final TargetPriceBot.StepInfo warmup = bot.test_getLastStep(itemID);
 
                 long prev = serverMarket.getCurrentMarketPrice();
                 int drops = 0;
@@ -4399,8 +4401,10 @@ public class PluginTestSuite extends TestSuite {
                     cache.apply();
                     serverMarket.update();
                     TargetPriceBot.StepInfo step = bot.test_getLastStep(itemID);
-                    if (step != null && first == null) first = step;
-                    last = step;
+                    if (step != null && step != warmup) {
+                        if (first == null) first = step;
+                        last = step;
+                    }
                     long p = serverMarket.getCurrentMarketPrice();
                     minPrice = Math.min(minPrice, p);
                     if (p < prev) {
