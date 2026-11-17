@@ -107,6 +107,11 @@ public class NewsSystemTestSuite extends TestSuite {
         addTest("library_heals_missing_default_events", this::test_library_healsMissingDefaultEvents);
         addTest("library_migrates_old_scheduler_defaults", this::test_library_migratesOldSchedulerDefaults);
         addTest("library_migrates_old_luxury_tax", this::test_library_migratesOldLuxuryTax);
+        addTest("library_scans_root_and_one_level_subfolders", this::test_library_scansRootAndOneLevelSubfolders);
+        addTest("library_loads_single_event_and_array_files", this::test_library_loadsSingleEventAndArrayFiles);
+        addTest("library_duplicate_id_across_folders_names_both_files", this::test_library_duplicateIdAcrossFolders_namesBothFiles);
+        addTest("library_splits_legacy_default_events_file", this::test_library_splitsLegacyDefaultEventsFile);
+        addTest("library_legacy_file_with_existing_folder_only_renamed", this::test_library_legacyFileWithExistingFolder_onlyRenamed);
 
         // NewsRecord round-trips
         addTest("record_nbt_round_trip", this::test_record_nbtRoundTrip);
@@ -610,18 +615,34 @@ public class NewsSystemTestSuite extends TestSuite {
     // Library
     // ========================================================================
 
-    /** An empty folder must produce default_events.json and load its events. */
+    /**
+     * SM-343 fresh install: an empty folder gets {@code DefaultEvents/<id>.json} (resource
+     * text, one per shipped default), {@code scheduler.json}, no legacy file, and loads them.
+     */
     private TestResult test_library_generatesDefaults() {
         Path dir = null;
         try {
             dir = createTempDir();
             NewsEventLibrary library = new NewsEventLibrary();
             ValidationReport report = library.reload(dir);
-            TestResult r = assertTrue("defaults file must exist after reload on empty folder",
-                    Files.exists(dir.resolve(DefaultNewsEvents.DEFAULT_FILE_NAME)));
+            TestResult r = assertTrue("scheduler.json must exist after reload on empty folder",
+                    Files.exists(dir.resolve(DefaultNewsEvents.SCHEDULER_FILE_NAME)));
             if (!r.passed()) return r;
-            r = assertTrue("default events must be loaded, got: " + library.getDefinitionCount(),
-                    library.getDefinitionCount() >= 6);
+            r = assertEquals("scheduler.json = shipped scheduler text", DefaultNewsEvents.schedulerFileText(),
+                    Files.readString(dir.resolve(DefaultNewsEvents.SCHEDULER_FILE_NAME)));
+            if (!r.passed()) return r;
+            r = assertFalse("no legacy default_events.json may be written",
+                    Files.exists(dir.resolve(DefaultNewsEvents.LEGACY_FILE_NAME)));
+            if (!r.passed()) return r;
+            for (String id : DefaultNewsEvents.DEFAULT_EVENT_IDS) {
+                Path file = defaultEventsDir(dir).resolve(id + ".json");
+                if (!Files.exists(file)) return fail("DefaultEvents/" + id + ".json missing");
+                if (!Files.readString(file).equals(DefaultNewsEvents.getDefaultEventText(id))) {
+                    return fail("DefaultEvents/" + id + ".json differs from the resource file");
+                }
+            }
+            r = assertEquals("every default must be loaded",
+                    DefaultNewsEvents.DEFAULT_EVENT_IDS.size(), library.getDefinitionCount());
             if (!r.passed()) return r;
             return assertFalse("defaults must load without errors: " + report, report.hasErrors());
         } catch (IOException e) {
@@ -686,8 +707,7 @@ public class NewsSystemTestSuite extends TestSuite {
         Path dir = null;
         try {
             dir = createTempDir();
-            Files.writeString(dir.resolve("default_events.json"),
-                    DefaultNewsEvents.getDefaultEventsJson());
+            // Fresh install: the per-file layout written from the resources (SM-343).
             NewsEventLibrary library = new NewsEventLibrary();
             ValidationReport report = library.reload(dir);
             TestResult r = assertFalse("defaults must have no errors: " + report, report.hasErrors());
@@ -889,42 +909,46 @@ public class NewsSystemTestSuite extends TestSuite {
     }
 
     /**
-     * SM-338 upgrade: a pre-2.2 {@code default_events.json} (no multiplier keys) gets the
-     * shipped multipliers; its interval moves to the new defaults only when it is still
-     * 900 / 3600, an admin-tuned interval is kept, and once migrated an admin who sets
-     * 900 / 3600 again keeps it. A fresh folder gets the new values from the shipped file.
+     * SM-338 upgrade, per-file layout (SM-343): a pre-2.2 {@code default_events.json} with
+     * the old interval is migrated before its split, so {@code scheduler.json} gets the new
+     * interval and the shipped multipliers; an admin who sets 900 / 3600 in scheduler.json
+     * afterwards keeps it; a scheduler.json without multiplier keys and a tuned interval gets
+     * the multipliers but keeps its interval; a fresh folder gets the shipped values.
      */
     private TestResult test_library_migratesOldSchedulerDefaults() {
         Path dir = null;
         try {
             dir = createTempDir();
-            Path file = dir.resolve(DefaultNewsEvents.DEFAULT_FILE_NAME);
+            Path legacy = dir.resolve(DefaultNewsEvents.LEGACY_FILE_NAME);
+            Path schedulerFile = dir.resolve(DefaultNewsEvents.SCHEDULER_FILE_NAME);
             NewsEventLibrary library = new NewsEventLibrary();
 
-            // (a) untouched old block -> everything moves
-            Files.writeString(file, "{\"scheduler\":{\"minSecondsBetweenEvents\":900,"
+            // (a) untouched old block in the legacy file -> migrated, then split into scheduler.json
+            Files.writeString(legacy, "{\"scheduler\":{\"minSecondsBetweenEvents\":900,"
                     + "\"maxSecondsBetweenEvents\":3600},\"events\":[]}");
             library.reload(dir);
             TestResult r = assertSchedulerEquals("old defaults", library, 10800, 32400, 3.0, 0.5);
             if (!r.passed()) return r;
+            r = assertTrue("scheduler.json must be written by the split", Files.exists(schedulerFile));
+            if (!r.passed()) return r;
 
-            // (b) after the migration the admin sets 900 / 3600 again: kept
-            JsonObject root = JsonUtilities.fromString(Files.readString(file)).getAsJsonObject();
+            // (b) after the migration the admin sets 900 / 3600 again in scheduler.json: kept
+            JsonObject root = JsonUtilities.fromString(Files.readString(schedulerFile)).getAsJsonObject();
             root.getAsJsonObject("scheduler").addProperty("minSecondsBetweenEvents", 900);
             root.getAsJsonObject("scheduler").addProperty("maxSecondsBetweenEvents", 3600);
-            Files.writeString(file, JsonUtilities.toPrettyString(root));
+            Files.writeString(schedulerFile, JsonUtilities.toPrettyString(root));
             library.reload(dir);
             r = assertSchedulerEquals("admin edit after migration", library, 900, 3600, 3.0, 0.5);
             if (!r.passed()) return r;
 
-            // (c) admin-tuned old interval: kept, multipliers still added
-            Files.writeString(file, "{\"scheduler\":{\"minSecondsBetweenEvents\":600,"
-                    + "\"maxSecondsBetweenEvents\":1200},\"events\":[]}");
+            // (c) scheduler.json with a tuned old interval and no multipliers: interval kept, multipliers added
+            Files.writeString(schedulerFile, "{\"scheduler\":{\"minSecondsBetweenEvents\":600,"
+                    + "\"maxSecondsBetweenEvents\":1200}}");
             library.reload(dir);
             r = assertSchedulerEquals("tuned interval", library, 600, 1200, 3.0, 0.5);
             if (!r.passed()) return r;
 
-            // (d) fresh folder: shipped file
+            // (d) fresh folder: shipped scheduler.json
             deleteRecursively(dir);
             dir = createTempDir();
             library = new NewsEventLibrary();
@@ -938,15 +962,16 @@ public class NewsSystemTestSuite extends TestSuite {
     }
 
     /**
-     * SM-341 upgrade: an unedited old {@code luxury_goods_tax} entry (with or without zh_cn)
-     * is replaced by the shipped one and the repeal event is appended; an admin-edited
-     * entry is kept; once the file holds the repeal the step never runs again.
+     * SM-341 upgrade on both layouts (SM-343): an unedited old {@code luxury_goods_tax} in a
+     * legacy {@code default_events.json} (with or without zh_cn) is replaced before the split
+     * and the repeal is healed in as its own file; the same old event as
+     * {@code DefaultEvents/luxury_goods_tax.json} without a repeal file is replaced too; once
+     * {@code luxury_tax_repealed.json} exists the step never runs again; an admin-edited
+     * entry is kept.
      */
     private TestResult test_library_migratesOldLuxuryTax() {
         Path dir = null;
         try {
-            dir = createTempDir();
-            Path file = dir.resolve(DefaultNewsEvents.DEFAULT_FILE_NAME);
             JsonObject shippedTax = DefaultNewsEvents.getDefaultEventObjectsById().get("luxury_goods_tax");
             JsonObject oldTax = JsonUtilities.fromString(DefaultNewsEvents.OLD_LUXURY_GOODS_TAX_JSON).getAsJsonObject();
             JsonObject oldTaxNoZh = oldTax.deepCopy();
@@ -955,37 +980,48 @@ public class NewsSystemTestSuite extends TestSuite {
             JsonObject editedTax = oldTax.deepCopy();
             editedTax.addProperty("weight", 5);
 
-            // (a) old entry with zh_cn, (b) without: replaced, repeal appended, no errors
+            // (a) legacy file, old entry with zh_cn, (b) without: replaced, repeal healed in, no errors
             for (JsonObject old : List.of(oldTax, oldTaxNoZh)) {
-                writeEventsFile(file, old);
+                deleteRecursively(dir);
+                dir = createTempDir();
+                writeEventsFile(dir.resolve(DefaultNewsEvents.LEGACY_FILE_NAME), old);
                 ValidationReport report = new NewsEventLibrary().reload(dir);
                 TestResult r = assertFalse("migration must not produce errors: " + report, report.hasErrors());
                 if (!r.passed()) return r;
                 r = assertTrue("old entry replaced by the shipped one",
-                        shippedTax.equals(fileEvent(file, "luxury_goods_tax")));
+                        shippedTax.equals(defaultEventFile(dir, "luxury_goods_tax")));
                 if (!r.passed()) return r;
-                r = assertNotNull("repeal appended", fileEvent(file, "luxury_tax_repealed"));
+                r = assertNotNull("repeal healed in", defaultEventFile(dir, "luxury_tax_repealed"));
                 if (!r.passed()) return r;
             }
 
-            // (c) runs once: the old entry put back next to the repeal stays as it is
-            JsonObject root = JsonUtilities.fromString(Files.readString(file)).getAsJsonObject();
-            JsonArray events = root.getAsJsonArray("events");
-            for (int i = 0; i < events.size(); i++) {
-                if (shippedTax.equals(events.get(i))) events.set(i, oldTax);
-            }
-            Files.writeString(file, JsonUtilities.toPrettyString(root));
+            // (c) per-file layout: old event file without a repeal file -> replaced
+            Path taxFile = defaultEventsDir(dir).resolve("luxury_goods_tax.json");
+            Path repealFile = defaultEventsDir(dir).resolve("luxury_tax_repealed.json");
+            Files.delete(repealFile);
+            Files.writeString(taxFile, JsonUtilities.toPrettyString(oldTax));
             new NewsEventLibrary().reload(dir);
-            TestResult r = assertTrue("no second migration once the repeal is in the file",
-                    oldTax.equals(fileEvent(file, "luxury_goods_tax")));
+            TestResult r = assertTrue("old per-file tax replaced by the shipped one",
+                    shippedTax.equals(defaultEventFile(dir, "luxury_goods_tax")));
+            if (!r.passed()) return r;
+            r = assertTrue("repeal file healed back", Files.exists(repealFile));
             if (!r.passed()) return r;
 
-            // (d) admin-edited entry: kept, repeal still appended
-            writeEventsFile(file, editedTax);
+            // (d) runs once: the old event put back next to the repeal file stays as it is
+            Files.writeString(taxFile, JsonUtilities.toPrettyString(oldTax));
             new NewsEventLibrary().reload(dir);
-            r = assertTrue("admin-edited tax kept", editedTax.equals(fileEvent(file, "luxury_goods_tax")));
+            r = assertTrue("no second migration once the repeal file exists",
+                    oldTax.equals(defaultEventFile(dir, "luxury_goods_tax")));
             if (!r.passed()) return r;
-            return assertNotNull("repeal appended next to the edited tax", fileEvent(file, "luxury_tax_repealed"));
+
+            // (e) admin-edited legacy entry: kept, repeal still healed in
+            deleteRecursively(dir);
+            dir = createTempDir();
+            writeEventsFile(dir.resolve(DefaultNewsEvents.LEGACY_FILE_NAME), editedTax);
+            new NewsEventLibrary().reload(dir);
+            r = assertTrue("admin-edited tax kept", editedTax.equals(defaultEventFile(dir, "luxury_goods_tax")));
+            if (!r.passed()) return r;
+            return assertNotNull("repeal healed next to the edited tax", defaultEventFile(dir, "luxury_tax_repealed"));
         } catch (IOException e) {
             return fail("temp dir setup failed: " + e);
         } finally {
@@ -993,7 +1029,7 @@ public class NewsSystemTestSuite extends TestSuite {
         }
     }
 
-    /** Writes a default_events.json holding only the given event. */
+    /** Writes an events-array file holding only the given event. */
     private static void writeEventsFile(Path file, JsonObject event) throws IOException {
         JsonObject root = new JsonObject();
         JsonArray events = new JsonArray();
@@ -1002,15 +1038,24 @@ public class NewsSystemTestSuite extends TestSuite {
         Files.writeString(file, JsonUtilities.toPrettyString(root));
     }
 
-    /** @return the event object with the given id in the file, or null */
-    private static JsonObject fileEvent(Path file, String id) throws IOException {
-        JsonObject root = JsonUtilities.fromString(Files.readString(file)).getAsJsonObject();
-        for (var el : root.getAsJsonArray("events")) {
-            if (el.isJsonObject() && id.equals(el.getAsJsonObject().get("id").getAsString())) {
-                return el.getAsJsonObject();
-            }
-        }
-        return null;
+    /** @return {@code <dir>/DefaultEvents} */
+    private static Path defaultEventsDir(Path dir) {
+        return dir.resolve(DefaultNewsEvents.DEFAULT_EVENTS_DIR);
+    }
+
+    /** @return the event object in {@code DefaultEvents/<id>.json}, or null if the file is missing */
+    private static JsonObject defaultEventFile(Path dir, String id) throws IOException {
+        Path file = defaultEventsDir(dir).resolve(id + ".json");
+        if (!Files.exists(file)) return null;
+        return JsonUtilities.fromString(Files.readString(file)).getAsJsonObject();
+    }
+
+    /** A news file holding one event object (the per-file format), with the given id and weight. */
+    private static String singleEvent(String eventId, float weight) {
+        return "{\"id\":\"" + eventId + "\",\"weight\":" + weight + ","
+                + "\"headline\":\"H\",\"text\":\"T\","
+                + "\"impact\":{\"type\":\"shock\",\"peakFactor\":0.2},"
+                + "\"markets\":[{\"item\":\"minecraft:diamond\"}]}";
     }
 
     /** Compares the loaded scheduler interval and multipliers. */
@@ -1025,83 +1070,266 @@ public class NewsSystemTestSuite extends TestSuite {
     }
 
     /**
-     * Additive self-heal: an existing {@code default_events.json} holding only a SUBSET of
-     * the shipped defaults — one of them admin-modified — plus a separate custom file must,
-     * after reload, gain every shipped default while the admin-modified default keeps its
-     * change and the custom event survives, with no duplicate-id errors. Also verifies the
-     * heal is persisted back into {@code default_events.json}.
+     * Additive self-heal (SM-343): a {@code DefaultEvents/} folder holding only two shipped
+     * defaults (one admin-modified), plus an admin folder that redefines a third default id
+     * and adds a custom event. After reload every shipped default is in the pool; missing
+     * ones are written as {@code DefaultEvents/<id>.json} except the id the admin folder
+     * already defines (no duplicate); the modified default and the custom event survive.
      */
     private TestResult test_library_healsMissingDefaultEvents() {
         Path dir = null;
         try {
             dir = createTempDir();
-
             Map<String, JsonObject> shipped = DefaultNewsEvents.getDefaultEventObjectsById();
             String firstId = DefaultNewsEvents.DEFAULT_EVENT_IDS.get(0);
             String secondId = DefaultNewsEvents.DEFAULT_EVENT_IDS.get(1);
+            String thirdId = DefaultNewsEvents.DEFAULT_EVENT_IDS.get(2);
 
-            // default_events.json: scheduler + 2 shipped defaults; the first has a MODIFIED
-            // weight (admin edit) that the heal must never overwrite.
+            Path defaults = defaultEventsDir(dir);
+            Files.createDirectories(defaults);
             JsonObject modified = shipped.get(firstId).deepCopy();
             modified.addProperty("weight", 999);
-            JsonObject secondCopy = shipped.get(secondId).deepCopy();
-            JsonObject root = new JsonObject();
-            JsonObject scheduler = new JsonObject();
-            scheduler.addProperty("minSecondsBetweenEvents", 900);
-            root.add("scheduler", scheduler);
-            JsonArray events = new JsonArray();
-            events.add(modified);
-            events.add(secondCopy);
-            root.add("events", events);
-            Files.writeString(dir.resolve(DefaultNewsEvents.DEFAULT_FILE_NAME),
-                    JsonUtilities.toPrettyString(root));
+            Files.writeString(defaults.resolve(firstId + ".json"), JsonUtilities.toPrettyString(modified));
+            Files.writeString(defaults.resolve(secondId + ".json"), JsonUtilities.toPrettyString(shipped.get(secondId)));
 
-            // A separate custom file with a NON-default event id.
-            Files.writeString(dir.resolve("custom.json"), fileWithEvent("my_custom_event", 3f));
+            Path admin = dir.resolve("MyNews");
+            Files.createDirectories(admin);
+            JsonObject adminThird = shipped.get(thirdId).deepCopy();
+            adminThird.addProperty("weight", 7);
+            Files.writeString(admin.resolve("override.json"), JsonUtilities.toPrettyString(adminThird));
+            Files.writeString(admin.resolve("custom.json"), singleEvent("my_custom_event", 3f));
 
             NewsEventLibrary library = new NewsEventLibrary();
             ValidationReport report = library.reload(dir);
-
-            // No heal-induced errors (in particular: no duplicate-id error).
             TestResult r = assertFalse("heal must not produce errors: " + report, report.hasErrors());
             if (!r.passed()) return r;
-
-            // Every shipped default is now present in the live pool.
             for (String id : DefaultNewsEvents.DEFAULT_EVENT_IDS) {
-                if (library.getDefinition(id) == null) {
-                    return fail("shipped default not healed into the pool: " + id);
-                }
+                if (library.getDefinition(id) == null) return fail("shipped default not healed into the pool: " + id);
             }
-            // The custom event survives the heal.
-            r = assertNotNull("custom event must still be loaded", library.getDefinition("my_custom_event"));
-            if (!r.passed()) return r;
-            // All 72 defaults + the one custom event.
             r = assertEquals("pool = all defaults + the custom event",
                     DefaultNewsEvents.DEFAULT_EVENT_IDS.size() + 1, library.getDefinitionCount());
             if (!r.passed()) return r;
-            // The admin-modified default keeps its changed weight (not overwritten).
-            r = assertTrue("admin-modified default must keep its weight (999), got: "
-                            + library.getDefinition(firstId).getWeight(),
+            r = assertTrue("admin-modified default must keep its weight (999)",
                     library.getDefinition(firstId).getWeight() == 999f);
             if (!r.passed()) return r;
-
-            // Persistence: default_events.json now holds all 72 defaults, and the modified
-            // entry is preserved on disk (existing entries never rewritten).
-            JsonObject reloadedRoot = JsonUtilities.fromString(Files.readString(
-                    dir.resolve(DefaultNewsEvents.DEFAULT_FILE_NAME))).getAsJsonObject();
-            JsonArray persistedEvents = reloadedRoot.getAsJsonArray("events");
-            r = assertEquals("default_events.json must now contain every shipped default",
-                    DefaultNewsEvents.DEFAULT_EVENT_IDS.size(), persistedEvents.size());
+            r = assertTrue("admin folder's definition of " + thirdId + " must be used (weight 7)",
+                    library.getDefinition(thirdId).getWeight() == 7f);
             if (!r.passed()) return r;
-            int persistedWeight = -1;
-            for (JsonElement el : persistedEvents) {
-                JsonObject obj = el.getAsJsonObject();
-                if (firstId.equals(obj.get("id").getAsString())) {
-                    persistedWeight = obj.get("weight").getAsInt();
-                    break;
+            r = assertFalse("a default defined in another folder must not be written to DefaultEvents/",
+                    Files.exists(defaults.resolve(thirdId + ".json")));
+            if (!r.passed()) return r;
+            for (String id : DefaultNewsEvents.DEFAULT_EVENT_IDS) {
+                if (!id.equals(thirdId) && !Files.exists(defaults.resolve(id + ".json"))) {
+                    return fail("missing default not written as a file: " + id);
                 }
             }
-            return assertEquals("modified default's weight must survive on disk", 999, persistedWeight);
+            r = assertEquals("modified default's weight must survive on disk", 999,
+                    defaultEventFile(dir, firstId).get("weight").getAsInt());
+            if (!r.passed()) return r;
+
+            // A healed file has the shipped resource text.
+            String lastId = DefaultNewsEvents.DEFAULT_EVENT_IDS.get(DefaultNewsEvents.DEFAULT_EVENT_IDS.size() - 1);
+            return assertEquals("healed file = shipped resource text",
+                    DefaultNewsEvents.getDefaultEventText(lastId), Files.readString(defaults.resolve(lastId + ".json")));
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * SM-343: files directly in the news folder and in subfolders one level deep load;
+     * a folder two levels deep, dot-files, dot-folders and non-.json files (backups) are ignored.
+     */
+    private TestResult test_library_scansRootAndOneLevelSubfolders() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            Files.writeString(dir.resolve("root.json"), singleEvent("root_event", 1f));
+            Path sub = dir.resolve("MyNews");
+            Files.createDirectories(sub.resolve("Deeper"));
+            Files.writeString(sub.resolve("sub.json"), singleEvent("sub_event", 1f));
+            Files.writeString(sub.resolve("Deeper").resolve("deep.json"), singleEvent("deep_event", 1f));
+            Files.writeString(sub.resolve(".hidden.json"), singleEvent("hidden_event", 1f));
+            Files.writeString(sub.resolve("old.json.bak"), singleEvent("bak_event", 1f));
+            Files.writeString(dir.resolve("default_events.json.migrated"), fileWithEvent("migrated_event", 1f));
+            Files.createDirectories(dir.resolve(".git"));
+            Files.writeString(dir.resolve(".git").resolve("dot.json"), singleEvent("dotdir_event", 1f));
+
+            NewsEventLibrary library = new NewsEventLibrary();
+            ValidationReport report = library.reload(dir);
+            TestResult r = assertFalse("scan must be clean: " + report, report.hasErrors());
+            if (!r.passed()) return r;
+            r = assertNotNull("root file must load", library.getDefinition("root_event"));
+            if (!r.passed()) return r;
+            r = assertNotNull("one-level subfolder file must load", library.getDefinition("sub_event"));
+            if (!r.passed()) return r;
+            for (String ignored : List.of("deep_event", "hidden_event", "bak_event", "migrated_event", "dotdir_event")) {
+                if (library.getDefinition(ignored) != null) return fail(ignored + " must not be loaded");
+            }
+            return assertFalse("a non-empty tree must not get the shipped defaults",
+                    Files.exists(defaultEventsDir(dir)));
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** SM-343: a one-event file and an old {@code events}-array file load side by side. */
+    private TestResult test_library_loadsSingleEventAndArrayFiles() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            Files.writeString(dir.resolve("single.json"), singleEvent("single_event", 2f));
+            Files.writeString(dir.resolve("array.json"), fileWithEvent("array_event", 3f));
+            NewsEventLibrary library = new NewsEventLibrary();
+            ValidationReport report = library.reload(dir);
+            TestResult r = assertFalse("both formats must load cleanly: " + report,
+                    report.hasErrors() || report.hasWarnings());
+            if (!r.passed()) return r;
+            r = assertNotNull("single-event file must load", library.getDefinition("single_event"));
+            if (!r.passed()) return r;
+            r = assertNotNull("array file must load", library.getDefinition("array_event"));
+            if (!r.passed()) return r;
+            return assertTrue("single-event weight must be read",
+                    library.getDefinition("single_event").getWeight() == 2f);
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * SM-343: the same id in the root and in two subfolders → ERROR naming both files,
+     * stable winner = the last in load order (DefaultEvents/ first, then root, then folders
+     * by name); a shipped default redefined in a root file or an admin folder beats DefaultEvents/.
+     */
+    private TestResult test_library_duplicateIdAcrossFolders_namesBothFiles() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            Files.writeString(dir.resolve("zzz.json"), singleEvent("dupe", 1f));
+            Files.createDirectories(dir.resolve("Alpha"));
+            Files.createDirectories(dir.resolve("beta"));
+            Files.writeString(dir.resolve("Alpha").resolve("dupe.json"), singleEvent("dupe", 2f));
+            Files.writeString(dir.resolve("beta").resolve("dupe.json"), singleEvent("dupe", 3f));
+            NewsEventLibrary library = new NewsEventLibrary();
+            ValidationReport report = library.reload(dir);
+            boolean namesBoth = report.getErrors().stream().anyMatch(e -> e.message().contains("duplicate")
+                    && e.message().contains("Alpha/dupe.json") && e.message().contains("beta/dupe.json"));
+            TestResult r = assertTrue("duplicate error must name both files: " + report, namesBoth);
+            if (!r.passed()) return r;
+            r = assertEquals("only one definition in the pool", 1, library.getDefinitionCount());
+            if (!r.passed()) return r;
+            r = assertTrue("beta/dupe.json (last in load order, weight 3) must win, got "
+                    + library.getDefinition("dupe").getWeight(), library.getDefinition("dupe").getWeight() == 3f);
+            if (!r.passed()) return r;
+
+            // A default id redefined in a root file beats DefaultEvents/ (loaded first), even
+            // though "DefaultEvents" sorts after "Alpha"; an admin folder beats both.
+            deleteRecursively(dir);
+            dir = createTempDir();
+            Files.createDirectories(defaultEventsDir(dir));
+            Files.writeString(defaultEventsDir(dir).resolve("shipped.json"), singleEvent("shipped", 1f));
+            Files.writeString(defaultEventsDir(dir).resolve("shipped2.json"), singleEvent("shipped2", 1f));
+            Files.writeString(dir.resolve("aaa.json"), singleEvent("shipped", 5f));
+            Files.createDirectories(dir.resolve("Alpha"));
+            Files.writeString(dir.resolve("Alpha").resolve("mine.json"), singleEvent("shipped2", 6f));
+            library = new NewsEventLibrary();
+            report = library.reload(dir);
+            boolean rootNamed = report.getErrors().stream().anyMatch(e -> e.message().contains("DefaultEvents/shipped.json")
+                    && e.message().contains("aaa.json"));
+            r = assertTrue("duplicate error must name DefaultEvents/shipped.json and aaa.json: " + report, rootNamed);
+            if (!r.passed()) return r;
+            r = assertTrue("root redefinition (weight 5) must beat DefaultEvents/, got "
+                    + library.getDefinition("shipped").getWeight(), library.getDefinition("shipped").getWeight() == 5f);
+            if (!r.passed()) return r;
+            return assertTrue("admin folder redefinition (weight 6) must beat DefaultEvents/, got "
+                    + library.getDefinition("shipped2").getWeight(), library.getDefinition("shipped2").getWeight() == 6f);
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * SM-343 split: an old {@code default_events.json} with a tuned scheduler, an admin-edited
+     * default and an admin-added event becomes {@code scheduler.json} + one
+     * {@code DefaultEvents/<id>.json} per event (edits kept), the old file is renamed to
+     * {@code .migrated}, and the rest of the defaults are healed in as files.
+     */
+    private TestResult test_library_splitsLegacyDefaultEventsFile() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            Map<String, JsonObject> shipped = DefaultNewsEvents.getDefaultEventObjectsById();
+            String firstId = DefaultNewsEvents.DEFAULT_EVENT_IDS.get(0);
+            JsonObject modified = shipped.get(firstId).deepCopy();
+            modified.addProperty("weight", 999);
+            JsonObject root = JsonUtilities.fromString("{\"scheduler\":{\"minSecondsBetweenEvents\":120,"
+                    + "\"maxSecondsBetweenEvents\":240,\"impactDurationMultiplier\":2.0}}").getAsJsonObject();
+            JsonArray events = new JsonArray();
+            events.add(modified);
+            events.add(JsonUtilities.fromString(singleEvent("my_admin_event", 4f)));
+            root.add("events", events);
+            Files.writeString(dir.resolve(DefaultNewsEvents.LEGACY_FILE_NAME), JsonUtilities.toPrettyString(root));
+
+            NewsEventLibrary library = new NewsEventLibrary();
+            ValidationReport report = library.reload(dir);
+            TestResult r = assertFalse("split must load cleanly: " + report, report.hasErrors());
+            if (!r.passed()) return r;
+            r = assertFalse("old file must be gone", Files.exists(dir.resolve(DefaultNewsEvents.LEGACY_FILE_NAME)));
+            if (!r.passed()) return r;
+            r = assertTrue("old file kept as .migrated", Files.exists(dir.resolve(
+                    DefaultNewsEvents.LEGACY_FILE_NAME + DefaultNewsEvents.MIGRATED_SUFFIX)));
+            if (!r.passed()) return r;
+            r = assertEquals("admin-edited default kept in its own file", modified, defaultEventFile(dir, firstId));
+            if (!r.passed()) return r;
+            r = assertNotNull("admin-added event split into DefaultEvents/", defaultEventFile(dir, "my_admin_event"));
+            if (!r.passed()) return r;
+            r = assertSchedulerEquals("scheduler.json keeps the admin's block", library, 120, 240, 2.0, 1.0);
+            if (!r.passed()) return r;
+            r = assertEquals("pool = all defaults + the admin event",
+                    DefaultNewsEvents.DEFAULT_EVENT_IDS.size() + 1, library.getDefinitionCount());
+            if (!r.passed()) return r;
+            r = assertTrue("loaded default keeps the edit", library.getDefinition(firstId).getWeight() == 999f);
+            if (!r.passed()) return r;
+            // A second reload changes nothing and does not read the backup.
+            report = library.reload(dir);
+            r = assertFalse("second reload must be clean (backup not read): " + report, report.hasErrors());
+            if (!r.passed()) return r;
+            return assertEquals("pool unchanged on the second reload",
+                    DefaultNewsEvents.DEFAULT_EVENT_IDS.size() + 1, library.getDefinitionCount());
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** SM-343: old file and DefaultEvents/ both present → the folder wins, the old file is only renamed. */
+    private TestResult test_library_legacyFileWithExistingFolder_onlyRenamed() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            Files.createDirectories(defaultEventsDir(dir));
+            Files.writeString(defaultEventsDir(dir).resolve("folder_event.json"), singleEvent("folder_event", 1f));
+            Files.writeString(dir.resolve(DefaultNewsEvents.LEGACY_FILE_NAME), fileWithEvent("legacy_event", 1f));
+            NewsEventLibrary library = new NewsEventLibrary();
+            library.reload(dir);
+            TestResult r = assertTrue("old file renamed", Files.exists(dir.resolve(
+                    DefaultNewsEvents.LEGACY_FILE_NAME + DefaultNewsEvents.MIGRATED_SUFFIX)));
+            if (!r.passed()) return r;
+            r = assertFalse("old file's event must not be split",
+                    Files.exists(defaultEventsDir(dir).resolve("legacy_event.json")));
+            if (!r.passed()) return r;
+            r = assertTrue("old file's event must not be loaded", library.getDefinition("legacy_event") == null);
+            if (!r.passed()) return r;
+            return assertNotNull("folder event loads", library.getDefinition("folder_event"));
         } catch (IOException e) {
             return fail("temp dir setup failed: " + e);
         } finally {

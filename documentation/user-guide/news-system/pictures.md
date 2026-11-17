@@ -73,7 +73,7 @@ The shipped example events each reference a picture named after their event id (
 
 Two notes for existing servers:
 
-- **New default pictures arrive automatically.** Because the heal adds only the missing files, a server updating to a version with new default events receives their pictures on the next reload without touching your existing images. (The matching `picture` references heal into `default_events.json` the same way -- see [Getting the New Default Events](advanced-events.md#getting-the-new-default-events).)
+- **New default pictures arrive automatically.** Because the heal adds only the missing files, a server updating to a version with new default events receives their pictures on the next reload without touching your existing images. (The matching events heal into `DefaultEvents/` the same way -- see [Getting the New Default Events](advanced-events.md#getting-the-new-default-events).)
 - To restore a single default you changed, delete that one `<eventId>.png` and reload; it is regenerated. To run entirely without default pictures, remove the `picture` fields from the events instead.
 
 (For mod/modpack developers: a real PNG placed in the jar under `news/pictures/<eventId>.png` automatically takes precedence over the procedural generator -- no code change needed.)

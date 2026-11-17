@@ -18,7 +18,7 @@ import java.util.zip.Deflater;
 /**
  * Ships the default pictures that {@link NewsEventLibrary} extracts into
  * {@code config/StockMarket/news/pictures/} on first run — the picture-side twin of
- * {@link DefaultNewsEvents#writeDefaultFile} (picture plan §7).
+ * {@link DefaultNewsEvents#writeDefaultFiles} (picture plan §7).
  * <p>
  * <b>Additive self-healing:</b> {@link #extractMissingDefaults} runs during every reload,
  * right after the defaults-json step. It creates the folder if absent and, for each shipped

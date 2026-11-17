@@ -10,22 +10,58 @@ All news events are defined in JSON files in:
 config/StockMarket/news/
 ```
 
+A typical folder looks like this:
+
+```
+config/StockMarket/news/
+    scheduler.json               # the scheduler block (generated on first run)
+    DefaultEvents/               # the shipped events, one file per event (generated on first run)
+        diamond_rush.json
+        gold_rush_rumor.json
+        ...
+    MyServer/                    # your own folder (any name)
+        harvest.json
+    my_events.json               # files directly in news/ load too
+    pictures/                    # event pictures (see pictures.md)
+```
+
 The folder uses **drop-in loading**:
 
-- Every `*.json` file in the folder is loaded. Filenames do not matter.
-- Each file may contain any number of events. All files merge into one event pool.
-- To add news to a server, simply drop a file into the folder and run `/stockmarket news reload` (or restart).
-- On first run (folder missing or empty) the mod generates `default_events.json` with a set of example events that demonstrate every schema feature -- use it as a template. On later reloads the shipped defaults **self-heal additively**: any shipped default event missing from all your files is appended back into `default_events.json` (and any missing default picture is written into `pictures/`), without overwriting your files, existing entries, or customized defaults. See [Getting the New Default Events](advanced-events.md#getting-the-new-default-events).
+- Every `*.json` file directly in `news/` **and** in every folder one level below it is loaded. Folders deeper than that (e.g. `news/MyServer/old/`) are **ignored**, so you can park files there to switch them off. Files and folders whose name starts with a dot, and files that don't end in `.json` (e.g. `.bak` backups), are ignored too.
+- Folder and file names do not matter. Create as many folders as you like to organize your events, e.g. one per theme or per event pack.
+- A file holds either **one event** (a single event object, like the files in `DefaultEvents/`) or any number of events in an `events` array (see [File Format](#file-format)). All files merge into one event pool.
+- To add news to a server, simply drop a file into `news/` or one of its folders and run `/stockmarket news reload` (or restart).
+- On first run (no `.json` file anywhere in the folder) the mod writes the shipped example events into `DefaultEvents/`, one file per event, plus `scheduler.json`. The examples demonstrate every schema feature -- use them as templates. On later reloads the shipped defaults **self-heal additively**: any shipped default event whose id is defined in none of your files is written back as `DefaultEvents/<id>.json` (and any missing default picture is written into `pictures/`), without overwriting your files or customized defaults. This means a default you delete comes back on the next reload; to switch a default off, disable it in the NewsPlugin management window instead (or delete the whole `DefaultEvents/` folder, which stops the self-heal). See [Getting the New Default Events](advanced-events.md#getting-the-new-default-events).
 - Event pictures live in the `pictures/` subfolder -- see [News Event Pictures](pictures.md).
 
-Files are processed in **alphabetical filename order** (case-insensitive), so conflicts resolve deterministically:
+Files are processed in a fixed order: first `DefaultEvents/`, then the files directly in `news/`, then every other folder by name, the files inside each folder by name (all case-insensitive). Conflicts therefore resolve deterministically:
 
-- **Duplicate event ids** across files are reported as an error; the later-processed definition wins.
+- **Duplicate event ids** across files are reported as an error that names both files; the later-processed definition wins. Because `DefaultEvents/` loads first, your own copy of a shipped event (with the same id) anywhere else always wins over the shipped one.
 - **`scheduler` blocks** merge per field; the last-loaded file wins per field (see [The Scheduler Block](#the-scheduler-block)).
+
+### Updating from an older version
+
+Older versions kept all shipped events in a single `news/default_events.json`. On the first start with the new version that file is converted once:
+
+1. The scheduler and luxury tax updates of this version are applied to it first (only to values you never edited).
+2. Every event in it -- shipped ones, ones you edited and ones you added yourself -- becomes its own file in `DefaultEvents/`, with your changes kept. Its `scheduler` block becomes `scheduler.json`.
+3. The old file is renamed to `default_events.json.migrated` and kept as a backup. It is never read again; delete it once you are happy with the result.
+
+If a `DefaultEvents/` folder already exists, the folder wins: the old file is only renamed, not converted, and the server log says so.
 
 ## File Format
 
-One file = an optional `scheduler` block + an `events` array:
+A file holds **one event object**:
+
+```json
+{
+  "id": "wheat_blight",
+  "headline": "Blight hits the wheat fields",
+  ...
+}
+```
+
+...or the multi-event form, an optional `scheduler` block + an `events` array:
 
 ```json
 {
@@ -189,7 +225,7 @@ Matcher forms for `item`:
 
 ## The Scheduler Block
 
-Global scheduler tuning. The block is optional and may appear in **any** file; every reload starts from the defaults, then each file's block overrides the fields it specifies -- files in alphabetical order, **last-loaded file wins per field**.
+Global scheduler tuning. Its home is `news/scheduler.json` (`{ "scheduler": { ... } }`), written on first run with the shipped values. The block is optional and may also appear in any other multi-event file; every reload starts from the defaults, then each file's block overrides the fields it specifies -- files in load order (see [The News Folder](#the-news-folder)), **last-loaded file wins per field**.
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -315,4 +351,4 @@ Create `config/StockMarket/news/my_server_events.json`:
 }
 ```
 
-Then run `/stockmarket news reload` -- the file merges into the pool, and `/stockmarket news trigger wheat_blight` lets you watch the impact immediately. The generated `default_events.json` contains further examples for every schema feature (translation maps, tags, globs, negative weight factors, `adminOnly`, negative announce delays, [picture](pictures.md) references, and a permanent `reversal: "none"` event) -- including the [advanced features](advanced-events.md): a multi-step `sequences` event with two weighted story variants (`gold_rush_rumor`) and the gold-standard pair demonstrating `requires`, `records` and `chains`.
+Then run `/stockmarket news reload` -- the file merges into the pool, and `/stockmarket news trigger wheat_blight` lets you watch the impact immediately. The generated `DefaultEvents/` folder contains further examples for every schema feature (translation maps, tags, globs, negative weight factors, `adminOnly`, negative announce delays, [picture](pictures.md) references, and a permanent `reversal: "none"` event) -- including the [advanced features](advanced-events.md): a multi-step `sequences` event with two weighted story variants (`gold_rush_rumor`) and the gold-standard pair demonstrating `requires`, `records` and `chains`.

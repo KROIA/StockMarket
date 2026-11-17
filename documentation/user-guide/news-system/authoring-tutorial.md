@@ -57,16 +57,18 @@ Where files live:
 
 ```
 <server-folder>/config/StockMarket/news/
-    default_events.json          # example file, generated on first run
+    scheduler.json               # scheduler block, generated on first run
+    DefaultEvents/               # the example events, one file each, generated on first run
     pictures/                    # optional PNG files (see pictures.md)
 ```
 
 Rules of the folder:
 
-- **Any `*.json` file** in this folder is loaded. Filenames are irrelevant.
-- **All files merge** into one event pool -- you can split your work across as many files as you like.
-- Files are processed in **alphabetical order** (case-insensitive). Duplicate event ids are an error, later definition wins.
-- The full `default_events.json` is written from scratch only on the first run (empty folder). After that the shipped defaults **self-heal additively**: on every reload, any shipped default event whose id is present in none of your files is added back to the pool and appended to `default_events.json` -- your own files, your existing entries and any default you customized are **never** overwritten. (A folder with no `default_events.json` is left alone; delete the file only if you want the full current version rewritten.)
+- **Any `*.json` file** directly in this folder **or in a folder one level below it** is loaded (e.g. `news/MyServer/harvest.json`). Deeper folders are ignored. Folder and file names are irrelevant.
+- A file holds either one event object or an `events` array with any number of events.
+- **All files merge** into one event pool -- you can split your work across as many files and folders as you like.
+- Files are processed in a fixed order: `DefaultEvents/` first, then files directly in `news/`, then every other folder by name, files by name inside it (case-insensitive). Duplicate event ids are an error naming both files; the later definition wins, so your own copy of a shipped event always beats the one in `DefaultEvents/`.
+- `DefaultEvents/` is written in full only on the first run (no `.json` file in the folder yet). After that the shipped defaults **self-heal additively**: on every reload, any shipped default event whose id is present in none of your files is added back to the pool and written as `DefaultEvents/<id>.json` -- your own files and any default you customized are **never** overwritten. A deleted default therefore comes back; disable it in the NewsPlugin management window instead. (Without a `DefaultEvents/` folder the self-heal is off; delete the folder only if you want the full current version rewritten on an otherwise empty news folder, or run without defaults.)
 
 To iterate on your file, edit it and run:
 
@@ -483,7 +485,7 @@ Full reference: [Event Chains](advanced-events.md#event-chains).
 
 ## 11. The Scheduler
 
-The `scheduler` block tunes the random-event pacing. It is **optional** and may appear in any file; every reload starts from the built-in defaults, then each file's block overrides the fields it specifies -- files in alphabetical order, **last-loaded file wins per field**.
+The `scheduler` block tunes the random-event pacing. Its home is `news/scheduler.json`. It is **optional** and may also appear in any other multi-event file; every reload starts from the built-in defaults, then each file's block overrides the fields it specifies -- files in load order, **last-loaded file wins per field**.
 
 ```json
 {
@@ -614,7 +616,7 @@ Recommended conventions to make your file play well with others:
 
 - **Namespace your event ids.** Prefix them with a short server or pack name -- e.g. `myserver_wheat_shortage` instead of `wheat_shortage`. Reduces collision risk with defaults and other authors.
 - **Comment via `category`.** The `category` field is free-form -- use it to group your events (`"category": "myserver:harvest"`). It appears in `/stockmarket news list` and `/stockmarket news info` output.
-- **Split by theme, not by file.** All files merge into one pool, so `harvest.json` + `mining.json` + `trade.json` is clearer than one 800-line file. Filenames are irrelevant to loading order except alphabetically for scheduler conflict resolution.
+- **Split by theme, not by file.** All files merge into one pool, so `harvest.json` + `mining.json` + `trade.json` (or one folder per theme) is clearer than one 800-line file. Names only matter for the load order, which decides duplicate ids and scheduler conflicts.
 
 For the exhaustive schema (every field, every default, every validation rule): **[Configuring News Events](configuration.md)**.
 For sequences, requirements, and chains in full: **[Advanced News Events](advanced-events.md)**.

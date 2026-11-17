@@ -13,18 +13,20 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * Ships the default {@code default_events.json} that {@link NewsEventLibrary} writes into
- * {@code config/StockMarket/news/} when the folder is empty on first load.
+ * Ships the default news events that {@link NewsEventLibrary} writes into
+ * {@code config/StockMarket/news/DefaultEvents/} (one file per event) when no news file exists yet.
  * <p>
- * The file doubles as <b>admin documentation</b>: it demonstrates every schema feature —
+ * The files double as <b>admin documentation</b>: they demonstrate every schema feature —
  * shock/trend/crash presets, single- and multi-market events, exact/tag/glob matchers,
  * negative {@code weightFactor} (inverted impact), an {@code adminOnly} event, an
  * {@code announceDelayMs} range (including a negative "insiders knew first" range),
@@ -49,25 +51,36 @@ import java.util.Set;
  * <p>
  * <b>Source (SM-342):</b> the defaults live in {@code common/src/main/resources/news/}:
  * {@code events/<eventId>.json} (one event object per file), {@code scheduler.json} and
- * {@code index.json} (ordered id list; a new default event needs an entry there). They are
- * assembled at runtime into the single config file, see {@link #loadResource}.
+ * {@code index.json} (ordered id list; a new default event needs an entry there).
  * <p>
- * <b>Additive self-healing (existing installs):</b> on every reload
- * {@link NewsEventLibrary} tops up an existing {@code default_events.json} — any shipped
- * default whose id is present in <b>no</b> loaded {@code .json} is parsed into the live
- * pool and appended to the file by {@link #appendMissingToFile}. Existing entries
- * (including admin-customized defaults) and the {@code scheduler} block are never modified
- * or overwritten (exceptions: the one-time SM-338 scheduler upgrade and the SM-341 luxury tax upgrade,
- * {@link #migrateOldSchedulerDefaults}, {@link #migrateOldLuxuryTax}), so a server that predates newly shipped events receives them without
- * losing its edits. The full file is written from scratch only on the first run (empty
- * folder, see {@link #writeDefaultFile}); a folder that has no {@code default_events.json}
- * is left untouched. The default pictures are healed independently and per id into
- * {@code pictures/} (see {@link DefaultNewsPictures#extractMissingDefaults}).
+ * <b>Config layout (SM-343):</b> the defaults are written as one file per event into
+ * {@code config/StockMarket/news/DefaultEvents/<eventId>.json} (same text as the resource
+ * file) plus {@code config/StockMarket/news/scheduler.json} ({@code {"scheduler": {...}}}),
+ * see {@link #writeDefaultFiles}. A pre-2.2 single {@code default_events.json} is split into
+ * that layout once and renamed to {@code default_events.json.migrated}
+ * ({@link #migrateLegacyFile}).
+ * <p>
+ * <b>Additive self-healing (existing installs):</b> on every reload {@link NewsEventLibrary}
+ * writes {@code DefaultEvents/<id>.json} for any shipped default whose id is defined in
+ * <b>no</b> loaded file ({@link #writeMissingEventFiles}); existing files (admin edits) are
+ * never overwritten (exceptions: the one-time SM-338 scheduler and SM-341 luxury tax
+ * upgrades, {@link #migrateOldSchedulerDefaults}, {@link #migrateOldLuxuryTax}). The default
+ * pictures are healed independently and per id into {@code pictures/}
+ * (see {@link DefaultNewsPictures#extractMissingDefaults}).
  */
 public final class DefaultNewsEvents {
 
-    /** File name of the generated defaults file. */
-    public static final String DEFAULT_FILE_NAME = "default_events.json";
+    /**
+     * Pre-2.2 single defaults file ({@code scheduler} + {@code events} array). Only read by
+     * the one-time split in {@link #migrateLegacyFile}, then renamed with {@link #MIGRATED_SUFFIX}.
+     */
+    public static final String LEGACY_FILE_NAME = "default_events.json";
+    /** Suffix of the renamed legacy file (no longer {@code .json}, so it is never loaded again). */
+    public static final String MIGRATED_SUFFIX = ".migrated";
+    /** Subfolder of the news config dir holding one {@code <eventId>.json} per shipped default. */
+    public static final String DEFAULT_EVENTS_DIR = "DefaultEvents";
+    /** File in the news config dir holding the scheduler block ({@code {"scheduler": {...}}}). */
+    public static final String SCHEDULER_FILE_NAME = "scheduler.json";
 
     /**
      * Classpath folder of the shipped defaults ({@code common/src/main/resources/news/}).
@@ -114,7 +127,15 @@ public final class DefaultNewsEvents {
      *       {@code publish|step|completion} with a chance and a delay range.</li>
      * </ul>
      */
-    private static final String DEFAULT_EVENTS_JSON = loadResource();
+    private static final String DEFAULT_EVENTS_JSON;
+    /** Raw resource text of each shipped default event, by id in index order (filled by {@link #loadResource}). */
+    private static final Map<String, String> EVENT_TEXTS = new LinkedHashMap<>();
+    /** Raw resource text of the shipped scheduler block (filled by {@link #loadResource}). */
+    private static String schedulerText = "";
+
+    static {
+        DEFAULT_EVENTS_JSON = loadResource();
+    }
 
     /**
      * The ids of all shipped default events, in file order. Each id also names its
@@ -127,28 +148,67 @@ public final class DefaultNewsEvents {
     }
 
     /**
-     * Writes {@code default_events.json} into the given news config directory.
+     * Fresh install: writes every shipped default as {@code DefaultEvents/<id>.json} (same
+     * text as the resource file) and {@link #SCHEDULER_FILE_NAME} if it is missing.
      * Never throws — failures are logged and reported via the return value.
      *
      * @param newsDir the news config directory (must already exist)
-     * @return true if the file was written successfully
+     * @return true if the files were written successfully
      */
-    public static boolean writeDefaultFile(Path newsDir) {
+    public static boolean writeDefaultFiles(Path newsDir) {
         if (DEFAULT_EVENT_IDS.isEmpty()) {
-            // Resource missing or unparsable (already logged): never write an empty/broken file.
+            // Resource missing or unparsable (already logged): never write an empty/broken set.
             StockMarketMod.LOGGER.error("[NewsEventLibrary] No shipped default news events available -"
-                    + " {} not generated", DEFAULT_FILE_NAME);
+                    + " {} not generated", DEFAULT_EVENTS_DIR);
             return false;
         }
         try {
-            Path file = newsDir.resolve(DEFAULT_FILE_NAME);
-            Files.writeString(file, DEFAULT_EVENTS_JSON, StandardCharsets.UTF_8);
-            StockMarketMod.LOGGER.info("[NewsEventLibrary] Generated default news events file: {}", file);
+            Path scheduler = newsDir.resolve(SCHEDULER_FILE_NAME);
+            if (!Files.exists(scheduler)) {
+                Files.writeString(scheduler, schedulerFileText(), StandardCharsets.UTF_8);
+            }
+            writeMissingEventFiles(newsDir, EVENT_TEXTS.keySet());
+            StockMarketMod.LOGGER.info("[NewsEventLibrary] Generated default news events in {}",
+                    newsDir.resolve(DEFAULT_EVENTS_DIR));
             return true;
         } catch (IOException e) {
-            StockMarketMod.LOGGER.error("[NewsEventLibrary] Failed to write default news events file", e);
+            StockMarketMod.LOGGER.error("[NewsEventLibrary] Failed to write default news events", e);
             return false;
         }
+    }
+
+    /**
+     * Writes {@code DefaultEvents/<id>.json} with the shipped resource text for each given id
+     * whose file does not exist yet. An existing file (admin edit, even a broken one) is never
+     * touched, so the caller must only pass ids defined nowhere in the news folder tree.
+     *
+     * @param newsDir the news config directory
+     * @param ids     shipped default ids to write
+     * @return the number of files written
+     * @throws IOException if the folder or a file cannot be written
+     */
+    public static int writeMissingEventFiles(Path newsDir, Collection<String> ids) throws IOException {
+        Path dir = newsDir.resolve(DEFAULT_EVENTS_DIR);
+        Files.createDirectories(dir);
+        int written = 0;
+        for (String id : ids) {
+            String text = EVENT_TEXTS.get(id);
+            Path file = dir.resolve(id + ".json");
+            if (text == null || Files.exists(file)) continue;
+            Files.writeString(file, text, StandardCharsets.UTF_8);
+            written++;
+        }
+        return written;
+    }
+
+    /** @return the shipped scheduler block wrapped as {@code {"scheduler": {...}}} (content of {@link #SCHEDULER_FILE_NAME}) */
+    public static String schedulerFileText() {
+        return "{\n  \"scheduler\": " + indent(schedulerText, "  ").substring(2) + "\n}\n";
+    }
+
+    /** @return the raw resource text of the shipped default event {@code id}, or null */
+    public static @Nullable String getDefaultEventText(String id) {
+        return EVENT_TEXTS.get(id);
     }
 
     /** @return the raw JSON text of the shipped defaults (used by tests to validate it parses clean) */
@@ -179,8 +239,8 @@ public final class DefaultNewsEvents {
     /**
      * Extracts the shipped default event objects keyed by their {@code id}, in file order.
      * Used by {@link NewsEventLibrary}'s additive self-heal to (a) parse a missing default
-     * into the live pool through the normal parse path and (b) append its raw JSON object
-     * to {@code default_events.json}. Never throws.
+     * into the live pool through the normal parse path and (b) run the legacy luxury tax
+     * migration. Never throws.
      *
      * @return an insertion-ordered id → event-object map of the shipped defaults
      *         (empty if the resource is missing or fails to parse)
@@ -203,100 +263,114 @@ public final class DefaultNewsEvents {
     }
 
     /**
-     * Additively persists the given shipped-default event ids into {@code default_events.json}
-     * — merging, never overwriting (self-healing, complements {@link #writeDefaultFile}):
+     * SM-343 one-time split of a pre-2.2 {@link #LEGACY_FILE_NAME}. If it exists:
      * <ul>
-     *   <li>if the file exists it is parsed and the missing default event objects are
-     *       <b>appended</b> to its {@code events} array; the existing {@code scheduler}
-     *       block and every existing event entry are preserved untouched (an admin-modified
-     *       default is never overwritten);</li>
-     *   <li>if the file does not exist it is created with the shipped {@code scheduler}
-     *       block plus the missing events;</li>
-     *   <li>an id already present in the file's {@code events} array is skipped, so the
-     *       merge can never introduce a duplicate-id entry.</li>
+     *   <li>{@link #DEFAULT_EVENTS_DIR} already exists: the folder wins and the old file is
+     *       only renamed (logged with the reason);</li>
+     *   <li>otherwise the SM-338/SM-341 content migrations run on it first, then every event
+     *       object in it (shipped or admin-added, edits kept) becomes
+     *       {@code DefaultEvents/<id>.json} and its scheduler block becomes
+     *       {@link #SCHEDULER_FILE_NAME} (unless that file already exists: then the block is
+     *       only kept in the backup, logged).</li>
      * </ul>
-     * Never throws — on any I/O or parse failure it logs and returns false; the caller keeps
-     * its in-memory additions regardless (never-crash contract). A file that exists but
-     * cannot be parsed is left <b>unchanged</b> so an admin's broken edit is never clobbered.
+     * Afterwards the file is renamed to {@code default_events.json.migrated} and never read
+     * again. A file that is not a parsable JSON object is left in place, so it keeps loading
+     * (and reporting its errors) as a normal news file until the admin fixes it. Never throws.
      *
-     * @param newsDir    the news config directory (must already exist)
-     * @param missingIds the shipped-default ids to append (verified absent from the whole pool)
-     * @return true if the file was (re)written with at least one appended event
+     * @param newsDir the news config directory
      */
-    public static boolean appendMissingToFile(Path newsDir, Collection<String> missingIds) {
-        Path file = newsDir.resolve(DEFAULT_FILE_NAME);
+    public static void migrateLegacyFile(Path newsDir) {
+        Path legacy = newsDir.resolve(LEGACY_FILE_NAME);
+        if (!Files.isRegularFile(legacy)) return;
+        Path eventsDir = newsDir.resolve(DEFAULT_EVENTS_DIR);
+        Path backup = newsDir.resolve(LEGACY_FILE_NAME + MIGRATED_SUFFIX);
         try {
-            Map<String, JsonObject> shipped = getDefaultEventObjectsById();
-            JsonObject root;
-            if (Files.exists(file)) {
-                JsonElement existing;
-                try {
-                    existing = JsonUtilities.fromString(
-                            Files.readString(file, StandardCharsets.UTF_8));
-                } catch (Exception e) {
-                    StockMarketMod.LOGGER.warn("[NewsEventLibrary] Could not parse {} to append"
-                            + " missing default event(s) — file left unchanged, in-memory heal kept",
-                            DEFAULT_FILE_NAME, e);
-                    return false;
-                }
-                if (existing == null || !existing.isJsonObject()) {
-                    StockMarketMod.LOGGER.warn("[NewsEventLibrary] {} is not a JSON object —"
-                            + " file left unchanged, in-memory heal kept", DEFAULT_FILE_NAME);
-                    return false;
-                }
-                root = existing.getAsJsonObject();
-            } else {
-                // Fresh file: seed it with the shipped scheduler block, then the missing events.
-                root = new JsonObject();
-                JsonObject shippedRoot = parseDefaultRoot();
-                if (shippedRoot != null && shippedRoot.has("scheduler")) {
-                    root.add("scheduler", shippedRoot.get("scheduler"));
+            if (Files.exists(eventsDir)) {
+                Files.move(legacy, backup, StandardCopyOption.REPLACE_EXISTING);
+                StockMarketMod.LOGGER.warn("[NewsEventLibrary] {} and the {}/ folder both exist - the folder wins;"
+                        + " the old file was renamed to {} without splitting", LEGACY_FILE_NAME,
+                        DEFAULT_EVENTS_DIR, backup.getFileName());
+                return;
+            }
+            migrateOldSchedulerDefaults(legacy);
+            migrateOldLuxuryTax(legacy);
+
+            JsonElement rootEl;
+            try {
+                rootEl = JsonUtilities.fromString(Files.readString(legacy, StandardCharsets.UTF_8));
+            } catch (Exception e) {
+                rootEl = null;
+            }
+            if (rootEl == null || !rootEl.isJsonObject()) {
+                StockMarketMod.LOGGER.warn("[NewsEventLibrary] {} is not a valid JSON object - not split"
+                        + " into {}/, left in place", LEGACY_FILE_NAME, DEFAULT_EVENTS_DIR);
+                return;
+            }
+            JsonObject root = rootEl.getAsJsonObject();
+
+            JsonElement schedulerEl = root.get("scheduler");
+            if (schedulerEl != null) {
+                Path schedulerFile = newsDir.resolve(SCHEDULER_FILE_NAME);
+                if (Files.exists(schedulerFile)) {
+                    StockMarketMod.LOGGER.warn("[NewsEventLibrary] {} already exists - the scheduler block of {}"
+                            + " was not copied (still in {})", SCHEDULER_FILE_NAME, LEGACY_FILE_NAME,
+                            backup.getFileName());
+                } else {
+                    JsonObject wrapped = new JsonObject();
+                    wrapped.add("scheduler", schedulerEl);
+                    Files.writeString(schedulerFile, JsonUtilities.toPrettyString(wrapped), StandardCharsets.UTF_8);
                 }
             }
 
-            JsonArray events;
+            Files.createDirectories(eventsDir);
+            int written = 0;
             JsonElement eventsEl = root.get("events");
             if (eventsEl != null && eventsEl.isJsonArray()) {
-                events = eventsEl.getAsJsonArray();
-            } else {
-                events = new JsonArray();
-                root.add("events", events);
-            }
-
-            // Never duplicate: skip any id already present in the file's events array.
-            Set<String> presentIds = new HashSet<>();
-            for (JsonElement el : events) {
-                if (el.isJsonObject()) {
-                    JsonElement idEl = el.getAsJsonObject().get("id");
-                    if (idEl != null && idEl.isJsonPrimitive()) presentIds.add(idEl.getAsString());
+                Set<String> used = new HashSet<>();
+                JsonArray events = eventsEl.getAsJsonArray();
+                for (int i = 0; i < events.size(); i++) {
+                    JsonElement el = events.get(i);
+                    if (!el.isJsonObject()) {
+                        StockMarketMod.LOGGER.warn("[NewsEventLibrary] {} events entry {} is not an object -"
+                                + " not split (still in {})", LEGACY_FILE_NAME, i, backup.getFileName());
+                        continue;
+                    }
+                    String name = uniqueFileName(idOf(el.getAsJsonObject()), i, used);
+                    Files.writeString(eventsDir.resolve(name),
+                            JsonUtilities.toPrettyString(el), StandardCharsets.UTF_8);
+                    written++;
                 }
             }
-
-            int appended = 0;
-            for (String id : missingIds) {
-                if (presentIds.contains(id)) continue;
-                JsonObject obj = shipped.get(id);
-                if (obj == null) continue;
-                events.add(obj);
-                appended++;
-            }
-            if (appended == 0) return false;
-
-            Files.writeString(file, JsonUtilities.toPrettyString(root), StandardCharsets.UTF_8);
-            StockMarketMod.LOGGER.info(
-                    "[NewsEventLibrary] Appended {} missing default news event(s) to {}",
-                    appended, file);
-            return true;
+            Files.move(legacy, backup, StandardCopyOption.REPLACE_EXISTING);
+            StockMarketMod.LOGGER.info("[NewsEventLibrary] Split {} into {} event file(s) in {}/ and {};"
+                    + " the old file is kept as {}", LEGACY_FILE_NAME, written, DEFAULT_EVENTS_DIR,
+                    SCHEDULER_FILE_NAME, backup.getFileName());
         } catch (Exception e) {
-            StockMarketMod.LOGGER.error("[NewsEventLibrary] Failed to append missing default"
-                    + " news events to " + DEFAULT_FILE_NAME + " — in-memory heal kept", e);
-            return false;
+            StockMarketMod.LOGGER.error("[NewsEventLibrary] Failed to split " + LEGACY_FILE_NAME
+                    + " into " + DEFAULT_EVENTS_DIR + "/", e);
         }
     }
 
     /**
-     * SM-338 upgrade of an existing {@code default_events.json}: files written before 2.2
-     * have no {@code impactDurationMultiplier} in their {@code scheduler} block. Such a file
+     * File name {@code <id>.json} for a split event: characters outside {@code [A-Za-z0-9_-]}
+     * become {@code _} (also keeps the name from starting with a dot), a missing id gives
+     * {@code event_<n>}, and a name already used (case-insensitive, for Windows) gets
+     * {@code _2}, {@code _3}, ...
+     */
+    private static String uniqueFileName(@Nullable String id, int index, Set<String> used) {
+        String base = id == null ? "" : id.trim().replaceAll("[^A-Za-z0-9_-]", "_");
+        if (base.isEmpty()) base = "event_" + (index + 1);
+        String name = base;
+        for (int n = 2; !used.add(name.toLowerCase(Locale.ROOT)); n++) {
+            name = base + "_" + n;
+        }
+        return name + ".json";
+    }
+
+    /**
+     * SM-338 upgrade of a file holding a {@code scheduler} block: {@link #SCHEDULER_FILE_NAME}
+     * in the per-file layout, or the legacy {@code default_events.json} right before its split
+     * (SM-343). Files written before 2.2 have no {@code impactDurationMultiplier} in their {@code scheduler} block. Such a file
      * gets the shipped multipliers ({@link NewsEventLibrary.SchedulerConfig#SHIPPED_IMPACT_DURATION_MULTIPLIER},
      * {@link NewsEventLibrary.SchedulerConfig#SHIPPED_IMPACT_STRENGTH_MULTIPLIER}) for each
      * one it lacks, and the new event interval only if both interval fields are still at the
@@ -305,11 +379,10 @@ public final class DefaultNewsEvents {
      * 900 / 3600) are never touched again. A missing file or scheduler block is left alone.
      * Never throws; a file that cannot be parsed is left unchanged.
      *
-     * @param newsDir the news config directory
+     * @param file the file to upgrade
      * @return true if the file was rewritten
      */
-    public static boolean migrateOldSchedulerDefaults(Path newsDir) {
-        Path file = newsDir.resolve(DEFAULT_FILE_NAME);
+    public static boolean migrateOldSchedulerDefaults(Path file) {
         if (!Files.exists(file)) return false;
         try {
             JsonElement rootEl = JsonUtilities.fromString(Files.readString(file, StandardCharsets.UTF_8));
@@ -339,55 +412,70 @@ public final class DefaultNewsEvents {
             return true;
         } catch (Exception e) {
             StockMarketMod.LOGGER.warn("[NewsEventLibrary] Could not migrate the scheduler block of {}"
-                    + " - file left unchanged", DEFAULT_FILE_NAME, e);
+                    + " - file left unchanged", file, e);
             return false;
         }
     }
 
     /**
-     * SM-341 upgrade of an existing {@code default_events.json}: the pre-2.2
-     * {@code luxury_goods_tax} entry has no {@code requires}/{@code records}, so it could
-     * stack its permanent cut. If the file's entry is still exactly an old shipped version
-     * (with or without the zh_cn translations), it is replaced by the shipped one; an
-     * admin-edited entry is never touched. Runs once: the step is skipped as soon as the
-     * file holds {@code luxury_tax_repealed}, which the library's self-heal appends later
-     * in the same reload. Never throws; a file that cannot be parsed is left unchanged.
+     * SM-341 upgrade of the pre-2.2 {@code luxury_goods_tax} event, which has no
+     * {@code requires}/{@code records} and could stack its permanent cut. Works on both
+     * layouts: an {@code events}-array file (the legacy {@code default_events.json} right
+     * before its split) or the single-event file {@code DefaultEvents/luxury_goods_tax.json}.
+     * If the entry is still exactly an old shipped version (with or without the zh_cn
+     * translations), it is replaced by the shipped one; an admin-edited entry is never
+     * touched. Runs once: skipped as soon as {@code luxury_tax_repealed} exists (in the same
+     * array file, or as {@code luxury_tax_repealed.json} next to the single-event file), which
+     * the library's self-heal adds later in the same reload. Never throws; a file that cannot
+     * be parsed is left unchanged.
      *
-     * @param newsDir the news config directory
+     * @param file the array file or the single-event {@code luxury_goods_tax.json}
      * @return true if the file was rewritten
      */
-    public static boolean migrateOldLuxuryTax(Path newsDir) {
-        Path file = newsDir.resolve(DEFAULT_FILE_NAME);
+    public static boolean migrateOldLuxuryTax(Path file) {
         if (!Files.exists(file)) return false;
         try {
             JsonElement rootEl = JsonUtilities.fromString(Files.readString(file, StandardCharsets.UTF_8));
             if (rootEl == null || !rootEl.isJsonObject()) return false;
-            JsonElement eventsEl = rootEl.getAsJsonObject().get("events");
-            if (eventsEl == null || !eventsEl.isJsonArray()) return false;
-            JsonArray events = eventsEl.getAsJsonArray();
-            for (JsonElement el : events) {
-                if (el.isJsonObject() && "luxury_tax_repealed".equals(idOf(el.getAsJsonObject()))) return false;
-            }
             JsonObject oldWithZh = JsonUtilities.fromString(OLD_LUXURY_GOODS_TAX_JSON).getAsJsonObject();
             JsonObject oldWithoutZh = oldWithZh.deepCopy();
             oldWithoutZh.getAsJsonObject("headline").remove("zh_cn");
             oldWithoutZh.getAsJsonObject("text").remove("zh_cn");
+            JsonElement eventsEl = rootEl.getAsJsonObject().get("events");
+            if (eventsEl == null) {
+                // Per-file layout: the file is the event itself.
+                if (Files.exists(file.resolveSibling("luxury_tax_repealed.json"))) return false;
+                String shipped = EVENT_TEXTS.get("luxury_goods_tax");
+                if (shipped == null || !(rootEl.equals(oldWithZh) || rootEl.equals(oldWithoutZh))) return false;
+                Files.writeString(file, shipped, StandardCharsets.UTF_8);
+                logLuxuryTaxMigrated(file);
+                return true;
+            }
+            if (!eventsEl.isJsonArray()) return false;
+            JsonArray events = eventsEl.getAsJsonArray();
+            for (JsonElement el : events) {
+                if (el.isJsonObject() && "luxury_tax_repealed".equals(idOf(el.getAsJsonObject()))) return false;
+            }
             for (int i = 0; i < events.size(); i++) {
                 JsonElement el = events.get(i);
                 if (el.equals(oldWithZh) || el.equals(oldWithoutZh)) {
                     events.set(i, getDefaultEventObjectsById().get("luxury_goods_tax"));
                     Files.writeString(file, JsonUtilities.toPrettyString(rootEl), StandardCharsets.UTF_8);
-                    StockMarketMod.LOGGER.info("[NewsEventLibrary] Updated the unedited luxury_goods_tax"
-                            + " event in {} (fires once until repealed)", file);
+                    logLuxuryTaxMigrated(file);
                     return true;
                 }
             }
             return false;
         } catch (Exception e) {
             StockMarketMod.LOGGER.warn("[NewsEventLibrary] Could not migrate luxury_goods_tax in {}"
-                    + " - file left unchanged", DEFAULT_FILE_NAME, e);
+                    + " - file left unchanged", file, e);
             return false;
         }
+    }
+
+    private static void logLuxuryTaxMigrated(Path file) {
+        StockMarketMod.LOGGER.info("[NewsEventLibrary] Updated the unedited luxury_goods_tax"
+                + " event in {} (fires once until repealed)", file);
     }
 
     /** @return the string {@code id} of an event object, or null */
@@ -440,12 +528,15 @@ public final class DefaultNewsEvents {
     }
 
     /**
-     * Assembles the shipped {@code default_events.json} text from the jar resources under
+     * Fills {@link #EVENT_TEXTS} / {@link #schedulerText} (the per-file writes use them) and
+     * assembles the shipped defaults as one {@code scheduler} + {@code events} JSON text
+     * (the legacy {@code default_events.json} shape; used by tests, by
+     * {@link #getDefaultEventObjectsById} and by the legacy luxury tax migration) from the jar resources under
      * {@link #RESOURCE_DIR}: {@link #SCHEDULER_RESOURCE} becomes the {@code scheduler} block
      * and each id of {@link #INDEX_RESOURCE} (in index order) pulls in
      * {@code events/<id>.json}, re-indented by four spaces into the {@code events} array.
-     * The output layout is fixed, so the written file stays byte-identical to the pre-SM-342
-     * text blocks (the migrations and "unedited" checks rely on it). A missing or unparsable
+     * The output layout is fixed and byte-identical to the pre-SM-342 default_events.json
+     * text blocks. A missing or unparsable
      * event file is logged and skipped. Never throws.
      *
      * @return the assembled JSON text, or an empty string (logged) if the index or the
@@ -454,9 +545,9 @@ public final class DefaultNewsEvents {
     private static String loadResource() {
         try {
             String indexText = readResource(RESOURCE_DIR + INDEX_RESOURCE);
-            String schedulerText = readResource(RESOURCE_DIR + SCHEDULER_RESOURCE);
-            if (indexText == null || schedulerText == null) return "";
-            JsonParser.parseString(schedulerText).getAsJsonObject(); // validate before shipping it
+            String scheduler = readResource(RESOURCE_DIR + SCHEDULER_RESOURCE);
+            if (indexText == null || scheduler == null) return "";
+            JsonParser.parseString(scheduler).getAsJsonObject(); // validate before shipping it
             StringBuilder events = new StringBuilder();
             for (JsonElement idEl : JsonParser.parseString(indexText).getAsJsonArray()) {
                 String path = RESOURCE_DIR + EVENTS_RESOURCE_DIR + idEl.getAsString() + ".json";
@@ -469,6 +560,7 @@ public final class DefaultNewsEvents {
                             + path, e);
                     continue;
                 }
+                EVENT_TEXTS.put(idEl.getAsString(), eventText);
                 if (!events.isEmpty()) events.append(",\n");
                 events.append(indent(eventText, "    "));
             }
@@ -477,7 +569,8 @@ public final class DefaultNewsEvents {
                         + " - running without default news events", RESOURCE_DIR);
                 return "";
             }
-            return "{\n  \"scheduler\": " + indent(schedulerText, "  ").substring(2)
+            schedulerText = scheduler;
+            return "{\n  \"scheduler\": " + indent(scheduler, "  ").substring(2)
                     + ",\n  \"events\": [\n" + events + "\n  ]\n}\n";
         } catch (Exception e) {
             StockMarketMod.LOGGER.error("[NewsEventLibrary] Could not parse the default news resources in "

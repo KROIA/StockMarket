@@ -9,7 +9,7 @@ This page covers the advanced authoring features of the [News Event System](over
 
 The simple `impact` block remains the **recommended form** for normal events -- it is not deprecated, and internally both forms run on the exact same machinery. Reach for the advanced features when you want multi-act stories ("pump, peak, dump, recover"), one-time world-changing events, or connected narratives.
 
-All four features are demonstrated by the shipped default events: `gold_rush_rumor` (sequences), and the **gold-standard pair** `gold_reserve_standard` / `end_of_gold_standard` (requirements, records, chains) -- used as the running example below. See [Getting the New Default Events](#getting-the-new-default-events) if your server already has an older `default_events.json`.
+All four features are demonstrated by the shipped default events: `gold_rush_rumor` (sequences), and the **gold-standard pair** `gold_reserve_standard` / `end_of_gold_standard` (requirements, records, chains) -- used as the running example below. See [Getting the New Default Events](#getting-the-new-default-events) if your server was set up with an older version.
 
 ## Multi-Step Sequences
 
@@ -294,10 +294,10 @@ A malformed chain entry (missing `eventId`/`on`, unknown `on` value, bad `chance
 
 ## Getting the New Default Events
 
-The shipped default events **self-heal additively**: on every reload (including `/stockmarket news reload`), any shipped default whose id is present in none of your `.json` files is added to the pool and appended to `default_events.json`. Existing servers that already have a `default_events.json` therefore receive newly shipped events -- such as the showcase events `gold_rush_rumor`, `end_of_gold_standard` and the upgraded `gold_reserve_standard` -- automatically on the next reload, **without** overwriting any file, existing entry, or default you customized.
+The shipped default events **self-heal additively**: on every reload (including `/stockmarket news reload`), any shipped default whose id is present in none of your `.json` files is added to the pool and written as `DefaultEvents/<id>.json`. Existing servers therefore receive newly shipped events -- such as the showcase events `gold_rush_rumor`, `end_of_gold_standard` and the upgraded `gold_reserve_standard` -- automatically on the next reload, **without** overwriting any file or default you customized. (The self-heal only runs while the `DefaultEvents/` folder exists.)
 
-- **If you kept the shipped `default_events.json`:** just run `/stockmarket news reload` (or restart) -- the missing defaults are appended in place.
-- **The luxury tax upgrade:** if your `default_events.json` still holds the old, unedited `luxury_goods_tax`, it is replaced once by the new version, which can't fire again until `luxury_tax_repealed` has taken it back. If you edited that entry, your version is kept: add the `requires` and `records` shown in [The Luxury Tax Cycle](#example-the-luxury-tax-cycle) yourself if you want the new behaviour.
+- **If your server still has the old single `default_events.json`:** the first start with this version splits it into `DefaultEvents/` (one file per event, your edits and added events kept) and `scheduler.json`, and keeps the old file as `default_events.json.migrated`. See [Updating from an older version](configuration.md#updating-from-an-older-version).
+- **The luxury tax upgrade:** if your old `default_events.json` or your `DefaultEvents/luxury_goods_tax.json` still holds the old, unedited `luxury_goods_tax`, it is replaced once by the new version, which can't fire again until `luxury_tax_repealed` has taken it back. If you edited that entry, your version is kept: add the `requires` and `records` shown in [The Luxury Tax Cycle](#example-the-luxury-tax-cycle) yourself if you want the new behaviour.
 - **If you redefined a default under its original id in your own files:** your version wins and is left untouched -- the heal will not duplicate or overwrite it. To adopt an upgraded default (e.g. the `requires`/`records`/`chains` added to `gold_reserve_standard`), edit your copy using this page as a reference.
 
 The default **pictures** heal the same way, per id: on every reload any shipped default picture missing from `pictures/` is written as `<eventId>.png` (see [Default Pictures](pictures.md#default-pictures)), while your own art and any default you modified are never overwritten. So the new events get their pictures automatically -- no need to empty the folder.
