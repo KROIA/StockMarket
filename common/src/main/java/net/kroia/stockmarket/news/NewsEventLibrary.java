@@ -100,12 +100,18 @@ public class NewsEventLibrary {
     public static final class SchedulerConfig {
 
         /**
-         * Default minimum seconds between two random event activations (3 h). SM-338: was
-         * 900 up to 2.1.x; together with the max this gives ~4 events per real day.
+         * Default minimum seconds between two random event activations (2 h). SM-344: together
+         * with the max this gives about 6 news per real day across all markets (measured with
+         * the shipped events, see the {@code default_files_give_4_to_8_news_per_day} test).
+         * Was 900 up to 2.1.x and 10800 in the SM-338 development state.
          */
-        public static final long DEFAULT_MIN_SECONDS_BETWEEN_EVENTS = 10800;
-        /** Default maximum seconds between two random event activations (9 h; SM-338: was 3600). */
-        public static final long DEFAULT_MAX_SECONDS_BETWEEN_EVENTS = 32400;
+        public static final long DEFAULT_MIN_SECONDS_BETWEEN_EVENTS = 7200;
+        /** Default maximum seconds between two random event activations (4.5 h; SM-344). */
+        public static final long DEFAULT_MAX_SECONDS_BETWEEN_EVENTS = 16200;
+        /** SM-344: min interval of the SM-338 scheduler.json (about 4 news a day), migrated to the new default. */
+        public static final long SM338_DEFAULT_MIN_SECONDS_BETWEEN_EVENTS = 10800;
+        /** SM-344: max interval of the SM-338 scheduler.json, migrated to the new default. */
+        public static final long SM338_DEFAULT_MAX_SECONDS_BETWEEN_EVENTS = 32400;
         /** SM-338: min interval written into {@code default_events.json} by releases up to 2.1.x. */
         public static final long OLD_DEFAULT_MIN_SECONDS_BETWEEN_EVENTS = 900;
         /** SM-338: max interval written into {@code default_events.json} by releases up to 2.1.x. */

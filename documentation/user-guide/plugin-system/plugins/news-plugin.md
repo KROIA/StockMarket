@@ -57,8 +57,8 @@ Open the plugin's window with **Open Plugin** in its entry on the [Plugin Manage
 
 | Setting (UI name) | File default | Allowed values | What it controls |
 |---|---|---|---|
-| Min seconds between events | `10800` (3 h) | > 0 and <= max | Shortest pause between two random events |
-| Max seconds between events | `32400` (9 h) | >= min | Longest pause between two random events |
+| Min seconds between events | `7200` (2 h) | > 0 and <= max | Shortest pause between two random events |
+| Max seconds between events | `16200` (4.5 h) | >= min | Longest pause between two random events |
 | Max active events (global) | `3` | >= 1 | How many events may run at the same time on the whole server |
 | Max active events (per market) | `1` | >= 1 | How many events may affect one market at the same time |
 
@@ -98,7 +98,7 @@ Scales every news effect on this market, including the permanent shift of perman
 
 ### Min / Max seconds between events
 
-The pause before the next random event is picked uniformly between these two values. With the defaults the average pause is (10800 + 32400) / 2 = 21,600 s (6 h), so about **4 random events per real day** -- if an eligible event exists. If nothing can fire when the time comes (all events on cooldown, caps reached), the scheduler waits a full new interval. Manually triggered and chained events do not use these slots.
+The pause before the next random event is picked uniformly between these two values. With the defaults the average pause is (7200 + 16200) / 2 = 11,700 s (3.25 h), so about 7 attempts per real day. If nothing can fire when the time comes (all events on cooldown, caps reached), the scheduler waits a full new interval; with up to 3 events active at once some attempts are skipped, and chained follow-up events come on top, so the result is about **6 news per real day** across all markets. Manually triggered and chained events do not use these slots.
 
 Lower both values for a busy news feed on servers with active traders. Worlds created before version 2.2 used 900 / 3600 s (about 38 events per day); if the file still has these values it is moved to the new ones once.
 

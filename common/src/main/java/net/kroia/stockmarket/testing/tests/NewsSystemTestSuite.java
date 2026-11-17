@@ -913,7 +913,9 @@ public class NewsSystemTestSuite extends TestSuite {
      * the old interval is migrated before its split, so {@code scheduler.json} gets the new
      * interval and the shipped multipliers; an admin who sets 900 / 3600 in scheduler.json
      * afterwards keeps it; a scheduler.json without multiplier keys and a tuned interval gets
-     * the multipliers but keeps its interval; a fresh folder gets the shipped values.
+     * the multipliers but keeps its interval; SM-344: a scheduler.json still at the SM-338
+     * interval (10800 / 32400) gets the new interval, a tuned one keeps it; a fresh folder
+     * gets the shipped values.
      */
     private TestResult test_library_migratesOldSchedulerDefaults() {
         Path dir = null;
@@ -927,7 +929,7 @@ public class NewsSystemTestSuite extends TestSuite {
             Files.writeString(legacy, "{\"scheduler\":{\"minSecondsBetweenEvents\":900,"
                     + "\"maxSecondsBetweenEvents\":3600},\"events\":[]}");
             library.reload(dir);
-            TestResult r = assertSchedulerEquals("old defaults", library, 10800, 32400, 3.0, 0.5);
+            TestResult r = assertSchedulerEquals("old defaults", library, 7200, 16200, 3.0, 0.5);
             if (!r.passed()) return r;
             r = assertTrue("scheduler.json must be written by the split", Files.exists(schedulerFile));
             if (!r.passed()) return r;
@@ -948,12 +950,27 @@ public class NewsSystemTestSuite extends TestSuite {
             r = assertSchedulerEquals("tuned interval", library, 600, 1200, 3.0, 0.5);
             if (!r.passed()) return r;
 
-            // (d) fresh folder: shipped scheduler.json
+            // (d) SM-344: scheduler.json still at the SM-338 defaults -> new interval, rest kept
+            Files.writeString(schedulerFile, "{\"scheduler\":{\"minSecondsBetweenEvents\":10800,"
+                    + "\"maxSecondsBetweenEvents\":32400,\"impactDurationMultiplier\":3.0,"
+                    + "\"impactStrengthMultiplier\":0.4}}");
+            library.reload(dir);
+            r = assertSchedulerEquals("SM-338 defaults", library, 7200, 16200, 3.0, 0.4);
+            if (!r.passed()) return r;
+
+            // (e) SM-338 layout with an admin-tuned interval: kept
+            Files.writeString(schedulerFile, "{\"scheduler\":{\"minSecondsBetweenEvents\":10800,"
+                    + "\"maxSecondsBetweenEvents\":30000,\"impactDurationMultiplier\":3.0}}");
+            library.reload(dir);
+            r = assertSchedulerEquals("tuned SM-338 interval", library, 10800, 30000, 3.0, 1.0);
+            if (!r.passed()) return r;
+
+            // (f) fresh folder: shipped scheduler.json
             deleteRecursively(dir);
             dir = createTempDir();
             library = new NewsEventLibrary();
             library.reload(dir);
-            return assertSchedulerEquals("fresh install", library, 10800, 32400, 3.0, 0.5);
+            return assertSchedulerEquals("fresh install", library, 7200, 16200, 3.0, 0.5);
         } catch (IOException e) {
             return fail("temp dir setup failed: " + e);
         } finally {

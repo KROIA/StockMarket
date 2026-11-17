@@ -66,8 +66,8 @@ A file holds **one event object**:
 ```json
 {
   "scheduler": {
-    "minSecondsBetweenEvents": 10800,
-    "maxSecondsBetweenEvents": 32400,
+    "minSecondsBetweenEvents": 7200,
+    "maxSecondsBetweenEvents": 16200,
     "maxActiveEventsGlobal": 3,
     "maxActiveEventsPerMarket": 1,
     "historyMaxEntries": 1000,
@@ -229,8 +229,8 @@ Global scheduler tuning. Its home is `news/scheduler.json` (`{ "scheduler": { ..
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `minSecondsBetweenEvents` | `10800` | Minimum seconds between two random event activations (3 hours). Together with the max this gives about 4 news per real day. |
-| `maxSecondsBetweenEvents` | `32400` | Maximum seconds between two random activations. Each interval is sampled uniformly from `[min, max]`. If an attempt fires nothing (caps reached, everything on cooldown), the scheduler waits a full new interval. |
+| `minSecondsBetweenEvents` | `7200` | Minimum seconds between two random event activations (2 hours). Together with the max this gives about 6 news per real day across all markets. |
+| `maxSecondsBetweenEvents` | `16200` | Maximum seconds between two random activations (4.5 hours). Each interval is sampled uniformly from `[min, max]`. If an attempt fires nothing (caps reached, everything on cooldown), the scheduler waits a full new interval. |
 | `maxActiveEventsGlobal` | `3` | Cap of simultaneously active events across all markets. |
 | `maxActiveEventsPerMarket` | `1` | Cap of simultaneously active events per market. A market at its cap is skipped by new events. |
 | `impactDurationMultiplier` | `1` (shipped file: `3`) | Stretches every event's steps (ramp, hold, reversal) by this factor when the event starts. `3` = each event's impact lasts three times as long as written. Applies to all events, also manual triggers and chains. Must be greater than 0. |

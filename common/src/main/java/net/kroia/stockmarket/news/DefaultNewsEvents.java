@@ -376,7 +376,10 @@ public final class DefaultNewsEvents {
      * one it lacks, and the new event interval only if both interval fields are still at the
      * old defaults (900 / 3600 s): an admin-tuned interval is kept. The added multiplier key
      * marks the file as migrated, so the step runs once and later admin edits (even back to
-     * 900 / 3600) are never touched again. A missing file or scheduler block is left alone.
+     * 900 / 3600) are never touched again. SM-344: a file whose interval is still exactly the
+     * SM-338 default (10800 / 32400 s) also gets the new interval, with or without the
+     * multiplier key (an admin cannot be told apart from an untouched file at exactly those
+     * values). A missing file or scheduler block is left alone.
      * Never throws; a file that cannot be parsed is left unchanged.
      *
      * @param file the file to upgrade
@@ -390,14 +393,22 @@ public final class DefaultNewsEvents {
             JsonElement schedulerEl = rootEl.getAsJsonObject().get("scheduler");
             if (schedulerEl == null || !schedulerEl.isJsonObject()) return false;
             JsonObject scheduler = schedulerEl.getAsJsonObject();
-            if (scheduler.has("impactDurationMultiplier")) return false; // already migrated
-            scheduler.addProperty("impactDurationMultiplier",
-                    NewsEventLibrary.SchedulerConfig.SHIPPED_IMPACT_DURATION_MULTIPLIER);
-            if (!scheduler.has("impactStrengthMultiplier")) {
-                scheduler.addProperty("impactStrengthMultiplier",
-                        NewsEventLibrary.SchedulerConfig.SHIPPED_IMPACT_STRENGTH_MULTIPLIER);
+            boolean sm338Interval = isNumber(scheduler, "minSecondsBetweenEvents",
+                    NewsEventLibrary.SchedulerConfig.SM338_DEFAULT_MIN_SECONDS_BETWEEN_EVENTS)
+                    && isNumber(scheduler, "maxSecondsBetweenEvents",
+                    NewsEventLibrary.SchedulerConfig.SM338_DEFAULT_MAX_SECONDS_BETWEEN_EVENTS);
+            if (scheduler.has("impactDurationMultiplier")) {
+                // Already on the 2.2 layout; SM-344: an untouched SM-338 interval moves on.
+                if (!sm338Interval) return false;
+            } else {
+                scheduler.addProperty("impactDurationMultiplier",
+                        NewsEventLibrary.SchedulerConfig.SHIPPED_IMPACT_DURATION_MULTIPLIER);
+                if (!scheduler.has("impactStrengthMultiplier")) {
+                    scheduler.addProperty("impactStrengthMultiplier",
+                            NewsEventLibrary.SchedulerConfig.SHIPPED_IMPACT_STRENGTH_MULTIPLIER);
+                }
             }
-            if (isNumber(scheduler, "minSecondsBetweenEvents",
+            if (sm338Interval || isNumber(scheduler, "minSecondsBetweenEvents",
                     NewsEventLibrary.SchedulerConfig.OLD_DEFAULT_MIN_SECONDS_BETWEEN_EVENTS)
                     && isNumber(scheduler, "maxSecondsBetweenEvents",
                     NewsEventLibrary.SchedulerConfig.OLD_DEFAULT_MAX_SECONDS_BETWEEN_EVENTS)) {
