@@ -35,7 +35,8 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      * Custom per-market settings of the random walk.
      *
      * @param volatilityScale amplitude of the random price walk relative to the equilibrium price
-     *                        (0.3 = price wanders roughly +-30%)
+     *                        (0.3 = standard deviation ~14%, multi-day swings of roughly +-20-30%, hourly
+     *                        moves of a few percent; see {@link NormalizedRandomPriceGenerator})
      */
     public record Settings(float volatilityScale) {
         /**
@@ -75,7 +76,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
 
         MarketData() {
             rng = testSeed != null ? new Random(testSeed) : random;
-            priceGenerator = new NormalizedRandomPriceGenerator(5, testSeed != null ? rng : null);
+            priceGenerator = new NormalizedRandomPriceGenerator(testSeed != null ? rng : null);
             LongSupplier clock = testClock;
             timer = clock == null ? new TimerMillis(false) : new TimerMillis(false) {
                 @Override
@@ -144,8 +145,10 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
 
             // Each market advances its own random walk timer independently
             if (data.timer.check()) {
+                // SM-337: the walk advances by the elapsed (real or simulated) time, not by the step count
+                long elapsedMs = data.timer.getElapsedTime();
                 data.timer.start(100 + data.rng.nextLong(100 * 10L + 1));
-                data.priceGenerator.getNextValue();
+                data.priceGenerator.step(elapsedMs);
             }
 
             // T-213: the random walk oscillates around the NetFlowPlugin's equilibrium (default price without one).
