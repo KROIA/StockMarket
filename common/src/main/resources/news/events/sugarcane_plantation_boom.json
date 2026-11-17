@@ -1,0 +1,38 @@
+{
+  "id": "sugarcane_plantation_boom",
+  "picture": "sugarcane_plantation_boom.png",
+  "headline": {
+    "en_us": "New river plantations turn sugar cane cheap for good",
+    "zh_cn": "新建河畔种植园让甘蔗永久廉价",
+    "de_de": "Neue Flussplantagen machen Zuckerrohr dauerhaft billig"
+  },
+  "text": {
+    "en_us": "Vast new sugar-cane plantations have been established along the great river deltas, and the first barges are already arriving. The trade council expects the flood of cane to hold indefinitely, pressing the prices of sugar cane, refined sugar, and paper down to a permanently lower level.",
+    "zh_cn": "大河流域新建起大片甘蔗种植园，首批驳船已经抵达。贸易议会预计这股甘蔗洪流将长期持续，把甘蔗、糖与纸的价格压至永久性低位。",
+    "de_de": "Entlang der großen Flussdeltas sind weite neue Zuckerrohrplantagen entstanden, und die ersten Kähne treffen bereits ein. Der Handelsrat rechnet damit, dass die Rohrschwemme auf Dauer anhält, und drückt die Preise für Zuckerrohr, raffinierten Zucker und Papier auf ein dauerhaft niedrigeres Niveau."
+  },
+  "category": "economy",
+  "weight": 5,
+  "cooldownSeconds": 86400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.25,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 3000,
+    "reversal": "none"
+  },
+  "markets": [
+    {
+      "item": "minecraft:sugar_cane",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:sugar",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:paper",
+      "weightFactor": 0.4
+    }
+  ]
+}

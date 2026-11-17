@@ -414,6 +414,20 @@ public class StockMarketModSettings extends ModSettings {
          */
         public final Setting<Boolean> DISCORD_ENABLED = registerSetting("DISCORD_ENABLED", false, Boolean.class);
 
+        /**
+         * SM-347: read-only web page with charts, order book and recent trades ({@code StockMarketWebInterface}).
+         * Applied live (a SET starts, stops or moves the HTTP server), master / singleplayer only, never
+         * propagated to slaves. Binds to all interfaces on a dedicated server and to loopback only in
+         * singleplayer. Default off.
+         */
+        public final Setting<Boolean> WEB_INTERFACE_ENABLED = registerSetting("WEB_INTERFACE_ENABLED", false, Boolean.class);
+
+        /**
+         * SM-347: TCP port of the web interface. Must be 1024-65535 and differ from the game port and the
+         * multi-server link port; a SET to a port in use is rejected. Applied live, master only.
+         */
+        public final Setting<Integer> WEB_INTERFACE_PORT = registerSetting("WEB_INTERFACE_PORT", 8090, Integer.class);
+
         public Integrations() { super("Integrations"); }
     }
 

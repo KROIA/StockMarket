@@ -1,0 +1,110 @@
+{
+  "id": "speculation_mania",
+  "picture": "speculation_mania.png",
+  "headline": {
+    "en_us": "Speculative mania grips the trading floor!",
+    "zh_cn": "投机狂热笼罩交易大厅！",
+    "de_de": "Spekulationsrausch erfasst das Parkett!"
+  },
+  "text": {
+    "en_us": "A frenzy has seized the trading floor - clerks and courtiers alike are borrowing against their homes to pile into diamonds, emeralds and gold. Seasoned brokers mutter that manias like this always end the same way, but for now the only word on every tongue is 'buy'.",
+    "zh_cn": "交易大厅陷入狂热——书记员与廷臣纷纷抵押房产，涌入钻石、绿宝石与黄金。资深经纪人低声说，这类狂热结局总是相同，但眼下人人挂在嘴边的只有一个词：买。",
+    "de_de": "Ein Rausch hat das Parkett gepackt - Schreiber wie Höflinge beleihen ihre Häuser, um sich in Diamanten, Smaragde und Gold zu stürzen. Erfahrene Makler murmeln, dass solche Manien immer gleich enden, doch vorerst kennt jeder Mund nur ein Wort: 'kaufen'."
+  },
+  "category": "rumors",
+  "weight": 4,
+  "cooldownSeconds": 14400,
+  "sequences": [
+    {
+      "name": "euphoria",
+      "weight": 2,
+      "steps": [
+        {
+          "name": "buildup",
+          "durationSeconds": {
+            "min": 600,
+            "max": 1500
+          },
+          "targetFactor": 0.35,
+          "curve": "linear",
+          "noise": 0.05
+        },
+        {
+          "name": "blowoff",
+          "durationSeconds": {
+            "min": 300,
+            "max": 750
+          },
+          "curve": "hold",
+          "noise": 0.08
+        },
+        {
+          "name": "crash",
+          "durationSeconds": {
+            "min": 150,
+            "max": 450
+          },
+          "targetFactor": -0.25,
+          "curve": "exponential",
+          "noise": 0.06
+        },
+        {
+          "name": "settle",
+          "durationSeconds": 1500,
+          "targetFactor": 0.0,
+          "curve": "linear"
+        }
+      ]
+    },
+    {
+      "name": "cooler_heads",
+      "weight": 1,
+      "steps": [
+        {
+          "name": "rally",
+          "durationSeconds": {
+            "min": 450,
+            "max": 900
+          },
+          "targetFactor": 0.18,
+          "curve": "linear",
+          "noise": 0.04
+        },
+        {
+          "name": "fade",
+          "durationSeconds": {
+            "min": 600,
+            "max": 1200
+          },
+          "targetFactor": 0.0,
+          "curve": "exponential"
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:diamond",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:emerald",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 0.6
+    }
+  ],
+  "chains": [
+    {
+      "eventId": "margin_call_crash",
+      "on": "completion",
+      "chance": 0.6,
+      "delaySeconds": {
+        "min": 300,
+        "max": 900
+      }
+    }
+  ]
+}

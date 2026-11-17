@@ -1,0 +1,31 @@
+{
+  "id": "lumber_construction_boom",
+  "picture": "lumber_construction_boom.png",
+  "headline": {
+    "en_us": "Construction boom drives lumber demand to record highs",
+    "zh_cn": "建筑热潮推动木材需求创下新高",
+    "de_de": "Bauboom treibt Holznachfrage auf Rekordhöhen"
+  },
+  "text": {
+    "en_us": "Villages everywhere are expanding and carpenters cannot keep up. Sawmills report record order books, lifting prices across every kind of log while stone suppliers see orders quietly slip away.",
+    "zh_cn": "各地村庄纷纷扩建，木匠已难以应付。锯木厂订单簿创下纪录，各类原木价格齐涨，而石料供应商则眼看着订单悄然流失。",
+    "de_de": "Überall wachsen die Dörfer, und die Zimmerleute kommen nicht hinterher. Sägewerke melden Rekordaufträge, was die Preise für alle Holzarten steigen lässt, während Steinlieferanten stillschweigend Aufträge verlieren."
+  },
+  "category": "economy",
+  "weight": 9,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.35,
+    "rampUpSeconds": 750,
+    "durationSeconds": 2250,
+    "reversal": "ramp",
+    "reversalSeconds": 2250,
+    "noise": 0.03
+  },
+  "markets": [
+    { "item": "#minecraft:logs",     "weightFactor": 1.0 },
+    { "item": "minecraft:*_planks",  "weightFactor": 0.6 },
+    { "item": "minecraft:stone",     "weightFactor": -0.15 }
+  ]
+}

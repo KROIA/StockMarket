@@ -1,0 +1,32 @@
+{
+  "id": "cocoa_trade_route_opens",
+  "picture": "cocoa_trade_route_opens.png",
+  "headline": {
+    "en_us": "Southern trade route opens the cocoa floodgates",
+    "zh_cn": "南方商路打通，可可闸门大开",
+    "de_de": "Südliche Handelsroute öffnet die Kakaoschleusen"
+  },
+  "text": {
+    "en_us": "A new caravan route through the southern jungles has finally been secured, and the first shipments of cocoa beans are pouring into the northern markets. With supply suddenly abundant, cocoa prices are drifting lower as chocolatiers stock up while the going is cheap.",
+    "zh_cn": "穿越南部丛林的新商队路线终于打通，首批可可豆正涌入北方市场。供给骤然充裕，趁价格低廉囤货的巧克力师们推动可可价格持续走低。",
+    "de_de": "Eine neue Karawanenroute durch die südlichen Dschungel ist endlich gesichert, und die ersten Ladungen Kakaobohnen strömen in die nördlichen Märkte. Da das Angebot plötzlich reichlich ist, geben die Kakaopreise nach, während sich die Chocolatiers eindecken, solange es günstig ist."
+  },
+  "category": "commodities",
+  "weight": 7,
+  "cooldownSeconds": 10800,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.28,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.03
+  },
+  "markets": [
+    {
+      "item": "minecraft:cocoa_beans",
+      "weightFactor": 1.0
+    }
+  ]
+}
