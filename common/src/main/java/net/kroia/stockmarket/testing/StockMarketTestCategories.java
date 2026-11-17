@@ -220,6 +220,8 @@ public class StockMarketTestCategories {
     public static final TestCategory CLIENT_INTEGRATION = new TestCategory(
             "stockmarket", "sm_client_integration", "Client integration API: embedded price chart subscription balance, unknown markets, trade screen initial market and OpenUIPacket market round trip", BOTH, true);
     public static final TestCategory PICKER_REGISTRATION = new TestCategory("stockmarket", "sm_picker_registration", "SM-273: a not-yet-registered plain item gets an ItemID through the picker's server path and its market is created (master, trusted slave); an untrusted slave stays lookup-only", BOTH, true);
+    // SM-347: read-only web interface; port checks offline, HTTP tests on the master, never on a slave.
+    public static final TestCategory WEB = new TestCategory("stockmarket", "sm_web", "Web interface tests", BOTH, false);
     public static final TestCategory DOCUMENTATION = new TestCategory("stockmarket", "sm_docs", "SM-276: relative links, images and anchors in README.md and documentation/ resolve; plugin SVGs are well-formed with a size (offline)", BOTH, false);
     // BS-269: the master-side fixture hooks (FixtureTestRequest), driven from a trusted slave.
     public static final TestCategory FIXTURE_HOOKS = new TestCategory("stockmarket", "sm_fixture_hooks", "BS-269: a trusted slave makes the master change a market setting and restore it, place a bot order, detach plugins, backfill candles and read back a filled order", SLAVE_ONLY, true);

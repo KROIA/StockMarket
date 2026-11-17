@@ -1,0 +1,29 @@
+{
+  "id": "copper_seam_discovery",
+  "picture": "copper_seam_discovery.png",
+  "headline": {
+    "en_us": "Massive copper seam opened in coastal cliffs!",
+    "zh_cn": "沿海崖壁开出一处巨型铜矿脉！",
+    "de_de": "Gewaltige Kupferader in den Küstenklippen erschlossen!"
+  },
+  "text": {
+    "en_us": "Surveyors have opened up a huge new copper seam running along the coastal cliffs. Foundries are queuing wagons for the fresh raw ore, and traders warn that ingots, blocks, and raw copper will all cheapen permanently as the new seam ramps up.",
+    "zh_cn": "勘测者在沿海崖壁开辟出一处巨大的新铜矿脉。铸造厂排起运矿车的长队，商人警告：随着新矿脉逐步投产，铜锭、铜块与粗铜的价格将永久性走低。",
+    "de_de": "Vermesser haben eine gewaltige neue Kupferader entlang der Küstenklippen erschlossen. Gießereien schicken Wagen um Wagen zu den frischen Rohvorkommen, und Händler warnen, dass Barren, Blöcke und Rohkupfer dauerhaft billiger werden, sobald die Ader in Produktion geht."
+  },
+  "category": "commodities",
+  "weight": 8,
+  "cooldownSeconds": 5400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.25,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 3000,
+    "reversal": "none"
+  },
+  "markets": [
+    { "item": "minecraft:copper_ingot", "weightFactor": 1.0 },
+    { "item": "minecraft:copper_block", "weightFactor": 1.0 },
+    { "item": "minecraft:raw_copper",   "weightFactor": 0.8 }
+  ]
+}

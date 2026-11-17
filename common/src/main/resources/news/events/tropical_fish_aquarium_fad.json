@@ -1,0 +1,32 @@
+{
+  "id": "tropical_fish_aquarium_fad",
+  "picture": "tropical_fish_aquarium_fad.png",
+  "headline": {
+    "en_us": "Aquarium fad grips the wealthy",
+    "zh_cn": "水族箱风潮席卷豪富之家",
+    "de_de": "Aquarienmode packt die Wohlhabenden"
+  },
+  "text": {
+    "en_us": "A craze for glass tanks of glittering tropical fish has swept the manor houses, and no gentry parlour is complete without one. Collectors are paying dizzying sums for the brightest specimens, and divers cannot bring them ashore fast enough. Prices for tropical fish are climbing as fast as the fashion spreads.",
+    "zh_cn": "一股在玻璃缸中饲养艳丽热带鱼的风潮席卷庄园宅第，没有哪间士绅客厅能缺了它。收藏者为最亮眼的个体一掷千金，潜水者来不及把它们送上岸。随着风尚蔓延，热带鱼价格同样快速攀升。",
+    "de_de": "Eine Begeisterung für gläserne Becken mit schillernden tropischen Fischen hat die Herrenhäuser erfasst, und kein Salon der feinen Leute kommt mehr ohne eines aus. Sammler zahlen schwindelerregende Summen für die prächtigsten Exemplare, und die Taucher bringen sie kaum schnell genug an Land. Die Preise für tropische Fische klettern so rasch, wie sich die Mode verbreitet."
+  },
+  "category": "cultural",
+  "weight": 5,
+  "cooldownSeconds": 10800,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.32,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:tropical_fish",
+      "weightFactor": 1.0
+    }
+  ]
+}

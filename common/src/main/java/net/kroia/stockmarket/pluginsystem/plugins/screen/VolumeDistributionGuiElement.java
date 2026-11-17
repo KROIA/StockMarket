@@ -46,6 +46,14 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         public static final Component ROUND_LEVEL_SCALE_TOOLTIP = Component.translatable(PREFIX + "round_level_scale.tooltip");
         public static final Component ROUND_LEVEL_WIDTH_TOOLTIP = Component.translatable(PREFIX + "round_level_width.tooltip");
         public static final Component ROUND_LEVEL_RANGE_TOOLTIP = Component.translatable(PREFIX + "round_level_range.tooltip");
+        public static final Component WALL_PERIOD = Component.translatable(PREFIX + "wall_period");
+        public static final Component WALL_DEAD_ZONE = Component.translatable(PREFIX + "wall_dead_zone");
+        public static final Component WALL_STRENGTH = Component.translatable(PREFIX + "wall_strength");
+        public static final Component WALL_CAP = Component.translatable(PREFIX + "wall_cap");
+        public static final Component WALL_PERIOD_TOOLTIP = Component.translatable(PREFIX + "wall_period.tooltip");
+        public static final Component WALL_DEAD_ZONE_TOOLTIP = Component.translatable(PREFIX + "wall_dead_zone.tooltip");
+        public static final Component WALL_STRENGTH_TOOLTIP = Component.translatable(PREFIX + "wall_strength.tooltip");
+        public static final Component WALL_CAP_TOOLTIP = Component.translatable(PREFIX + "wall_cap.tooltip");
     }
 
     private final Label volumeScaleLabel;
@@ -69,6 +77,15 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     private final TextBox roundLevelWidthTextBox;
     private final Label roundLevelRangeLabel;
     private final TextBox roundLevelRangeTextBox;
+    /** SM-340 slow-average wall fields: period, dead zone, strength, cap. */
+    private final Label wallPeriodLabel;
+    private final TextBox wallPeriodTextBox;
+    private final Label wallDeadZoneLabel;
+    private final TextBox wallDeadZoneTextBox;
+    private final Label wallStrengthLabel;
+    private final TextBox wallStrengthTextBox;
+    private final Label wallCapLabel;
+    private final TextBox wallCapTextBox;
     private final Button applyButton;
     private final Button applyAllButton;
     private final Button resetVolumeButton;
@@ -131,6 +148,26 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         roundLevelRangeTextBox = new TextBox();
         roundLevelRangeTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
 
+        wallPeriodLabel = new Label(Texts.WALL_PERIOD.getString());
+        wallPeriodLabel.setAlignment(Alignment.RIGHT);
+        wallPeriodTextBox = new TextBox();
+        wallPeriodTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
+        wallDeadZoneLabel = new Label(Texts.WALL_DEAD_ZONE.getString());
+        wallDeadZoneLabel.setAlignment(Alignment.RIGHT);
+        wallDeadZoneTextBox = new TextBox();
+        wallDeadZoneTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
+        wallStrengthLabel = new Label(Texts.WALL_STRENGTH.getString());
+        wallStrengthLabel.setAlignment(Alignment.RIGHT);
+        wallStrengthTextBox = new TextBox();
+        wallStrengthTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
+        wallCapLabel = new Label(Texts.WALL_CAP.getString());
+        wallCapLabel.setAlignment(Alignment.RIGHT);
+        wallCapTextBox = new TextBox();
+        wallCapTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
         applyButton = new Button(Texts.APPLY.getString(), this::onApply);
         resetVolumeButton = new Button(Texts.RESET_VOLUME.getString(), this::onResetVolume);
         // Apply-to-all never resets the volume (resetVolume = false)
@@ -148,6 +185,10 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         setSettingTooltip(Texts.ROUND_LEVEL_SCALE_TOOLTIP, roundLevelScaleLabel, roundLevelScaleTextBox);
         setSettingTooltip(Texts.ROUND_LEVEL_WIDTH_TOOLTIP, roundLevelWidthLabel, roundLevelWidthTextBox);
         setSettingTooltip(Texts.ROUND_LEVEL_RANGE_TOOLTIP, roundLevelRangeLabel, roundLevelRangeTextBox);
+        setSettingTooltip(Texts.WALL_PERIOD_TOOLTIP, wallPeriodLabel, wallPeriodTextBox);
+        setSettingTooltip(Texts.WALL_DEAD_ZONE_TOOLTIP, wallDeadZoneLabel, wallDeadZoneTextBox);
+        setSettingTooltip(Texts.WALL_STRENGTH_TOOLTIP, wallStrengthLabel, wallStrengthTextBox);
+        setSettingTooltip(Texts.WALL_CAP_TOOLTIP, wallCapLabel, wallCapTextBox);
 
         addChild(volumeScaleLabel);
         addChild(volumeScaleTextBox);
@@ -169,14 +210,22 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         addChild(roundLevelWidthTextBox);
         addChild(roundLevelRangeLabel);
         addChild(roundLevelRangeTextBox);
+        addChild(wallPeriodLabel);
+        addChild(wallPeriodTextBox);
+        addChild(wallDeadZoneLabel);
+        addChild(wallDeadZoneTextBox);
+        addChild(wallStrengthLabel);
+        addChild(wallStrengthTextBox);
+        addChild(wallCapLabel);
+        addChild(wallCapTextBox);
         addChild(applyButton);
         addChild(applyAllButton);
         addChild(resetVolumeButton);
         if (defaultsButton != null) addChild(defaultsButton);
 
-        // 10 label+field rows, 1 button row with Apply + Apply-to-all + Reset side by side,
+        // 14 label+field rows, 1 button row with Apply + Apply-to-all + Reset side by side,
         // and the Defaults button in its own row
-        setHeight((defaultsButton != null ? 12 : 11) * (defaultElementHeight + spacing) + padding);
+        setHeight((defaultsButton != null ? 16 : 15) * (defaultElementHeight + spacing) + padding);
     }
 
     @Override
@@ -251,7 +300,7 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         showTrend(s);
     }
 
-    /** Fills the trend accumulation and (T-212) round-level cluster fields from {@code s}. */
+    /** Fills the trend accumulation, (T-212) round-level cluster and (SM-340) wall fields from {@code s}. */
     private void showTrend(DefaultOrderbookVolumeDistributionPlugin.Settings s) {
         trendPeriodTextBox.setText(s.trendPeriodMinutes(), 6);
         trendGainTextBox.setText(s.trendGain(), 6);
@@ -259,6 +308,10 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         roundLevelScaleTextBox.setText(s.roundLevelScale(), 6);
         roundLevelWidthTextBox.setText(s.roundLevelWidth(), 6);
         roundLevelRangeTextBox.setText(s.roundLevelRange(), 6);
+        wallPeriodTextBox.setText(s.wallPeriodMinutes(), 6);
+        wallDeadZoneTextBox.setText(s.wallDeadZone(), 6);
+        wallStrengthTextBox.setText(s.wallStrength(), 6);
+        wallCapTextBox.setText(s.wallCap(), 6);
     }
 
     @Override
@@ -292,7 +345,11 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
                 (float) trendMaxFactorTextBox.getDouble(),
                 (float) roundLevelScaleTextBox.getDouble(),
                 (float) roundLevelWidthTextBox.getDouble(),
-                (float) roundLevelRangeTextBox.getDouble()
+                (float) roundLevelRangeTextBox.getDouble(),
+                (float) wallPeriodTextBox.getDouble(),
+                (float) wallDeadZoneTextBox.getDouble(),
+                (float) wallStrengthTextBox.getDouble(),
+                (float) wallCapTextBox.getDouble()
         );
     }
 
@@ -359,6 +416,22 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         roundLevelRangeTextBox.setBounds(roundLevelRangeLabel.getRight() + spacing, y, fieldW, eh);
 
         y = roundLevelRangeTextBox.getBottom() + spacing;
+        wallPeriodLabel.setBounds(padding, y, labelW, eh);
+        wallPeriodTextBox.setBounds(wallPeriodLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = wallPeriodTextBox.getBottom() + spacing;
+        wallDeadZoneLabel.setBounds(padding, y, labelW, eh);
+        wallDeadZoneTextBox.setBounds(wallDeadZoneLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = wallDeadZoneTextBox.getBottom() + spacing;
+        wallStrengthLabel.setBounds(padding, y, labelW, eh);
+        wallStrengthTextBox.setBounds(wallStrengthLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = wallStrengthTextBox.getBottom() + spacing;
+        wallCapLabel.setBounds(padding, y, labelW, eh);
+        wallCapTextBox.setBounds(wallCapLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = wallCapTextBox.getBottom() + spacing;
         int buttonW = (w - 2 * padding - 2 * spacing) / 3;
         applyButton.setBounds(padding, y, buttonW, eh);
         applyAllButton.setBounds(applyButton.getRight() + spacing, y, buttonW, eh);

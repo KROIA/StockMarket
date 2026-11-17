@@ -1,0 +1,37 @@
+{
+  "id": "great_forest_fire",
+  "picture": "great_forest_fire.png",
+  "headline": {
+    "en_us": "Wildfires sweep the taiga - lumber prices spike!",
+    "zh_cn": "野火席卷针叶林——木材价格飙升！",
+    "de_de": "Waldbrände fegen durch die Taiga - Holzpreise schnellen hoch!"
+  },
+  "text": {
+    "en_us": "Wildfires touched off by a dry lightning storm are racing through the northern taiga, consuming acres of timber a day. Sawmills warn of severe log shortages while the flames burn and orders are already being redirected to distant forests.",
+    "zh_cn": "干旱雷暴引发的野火正在北部针叶林蔓延，每日吞噬大片林地。锯木厂警告原木将严重短缺，订单已在转向远方林区。",
+    "de_de": "Waldbrände, ausgelöst durch ein trockenes Gewitter, rasen durch die nördliche Taiga und fressen täglich hektarweise Bauholz. Sägewerke warnen vor massiven Engpässen bei Baumstämmen, während die Flammen lodern, und Aufträge werden bereits in entfernte Wälder umgeleitet."
+  },
+  "category": "disaster",
+  "weight": 3,
+  "cooldownSeconds": 14400,
+  "sequences": [
+    {
+      "name": "wildfire",
+      "weight": 1,
+      "steps": [
+        { "name": "spark",     "durationSeconds": { "min": 300, "max": 600 },  "targetFactor": 0.15, "curve": "linear",      "noise": 0.03 },
+        { "name": "spread",    "durationSeconds": { "min": 600, "max": 1200 }, "targetFactor": 0.40, "curve": "linear",      "noise": 0.05 },
+        { "name": "inferno",   "durationSeconds": { "min": 450,  "max": 900 },                       "curve": "hold",        "noise": 0.07 },
+        { "name": "contained", "durationSeconds": { "min": 600, "max": 1200 }, "targetFactor": 0.20, "curve": "exponential", "noise": 0.04 },
+        { "name": "settle",    "durationSeconds": 1500, "targetFactor": 0.0, "curve": "linear" }
+      ]
+    }
+  ],
+  "markets": [
+    { "item": "#minecraft:logs",    "weightFactor": 1.0 },
+    { "item": "minecraft:*_planks", "weightFactor": 0.6 }
+  ],
+  "chains": [
+    { "eventId": "great_forest_fire_recovery", "on": "completion", "chance": 0.7, "delaySeconds": { "min": 600, "max": 1800 } }
+  ]
+}

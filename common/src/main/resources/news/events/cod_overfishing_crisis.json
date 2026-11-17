@@ -1,0 +1,34 @@
+{
+  "id": "cod_overfishing_crisis",
+  "picture": "cod_overfishing_crisis.png",
+  "headline": {
+    "en_us": "Overfishing collapses the cod grounds for good",
+    "zh_cn": "过度捕捞使鳕鱼场永久崩溃",
+    "de_de": "Überfischung lässt die Dorschgründe für immer zusammenbrechen"
+  },
+  "text": {
+    "en_us": "Years of dragging the shoals dry have finally emptied the great cod grounds, and this season the fleets returned with holds barely half full. Fishmongers say the collapse is no passing lean spell but a lasting one - the breeding stock is simply gone. Prices for cod, fresh and cooked, have settled onto a permanently higher shelf.",
+    "zh_cn": "多年拖网已将大鳕鱼场捞空，本季船队返航时船舱尚不满半。鱼贩说这次崩溃不是一时歉收，而是永久性的——繁殖种群已经消失。鳕鱼、生鳕鱼与熟鳕鱼的价格已站上永久性的高位。",
+    "de_de": "Jahrelanges Leerfischen der Schwärme hat die großen Dorschgründe endgültig ausgezehrt, und diese Saison kehrten die Flotten mit kaum halb gefüllten Laderäumen zurück. Fischhändler sagen, der Zusammenbruch sei keine vorübergehende Flaute, sondern von Dauer - der Laichbestand ist schlicht dahin. Die Preise für Dorsch, frisch wie gebraten, haben sich auf einem dauerhaft höheren Niveau eingependelt."
+  },
+  "category": "disaster",
+  "weight": 3,
+  "cooldownSeconds": 86400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.3,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 3000,
+    "reversal": "none"
+  },
+  "markets": [
+    {
+      "item": "minecraft:cod",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:cooked_cod",
+      "weightFactor": 0.6
+    }
+  ]
+}

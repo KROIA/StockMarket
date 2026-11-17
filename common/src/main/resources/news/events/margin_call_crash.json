@@ -1,0 +1,46 @@
+{
+  "id": "margin_call_crash",
+  "picture": "margin_call_crash.png",
+  "headline": {
+    "en_us": "Margin calls wipe out overleveraged traders in a cascade!",
+    "zh_cn": "追加保证金连锁爆发，高杠杆交易者全线覆灭！",
+    "de_de": "Nachschussforderungen radieren überhebelte Händler in einer Kettenreaktion aus!"
+  },
+  "text": {
+    "en_us": "The lenders have called in their loans all at once, and traders who bought the mania on borrowed coin cannot pay. Forced liquidations are feeding on themselves - every sale drives the price lower, triggering the next margin call - and diamonds, emeralds and gold are cascading downward with no floor in sight.",
+    "zh_cn": "放贷方同时催收贷款，靠借来的钱追涨的交易者无力偿付。强制平仓自我强化——每一笔抛售都压低价格，触发下一轮追保——钻石、绿宝石与黄金一路坠落，看不到底。",
+    "de_de": "Die Geldverleiher haben ihre Kredite alle auf einmal fällig gestellt, und Händler, die den Rausch auf Pump gekauft haben, können nicht zahlen. Zwangsverkäufe nähren sich selbst - jeder Verkauf drückt den Preis tiefer und löst die nächste Nachschussforderung aus -, und Diamanten, Smaragde und Gold stürzen kaskadenartig ins Bodenlose."
+  },
+  "category": "markets",
+  "weight": 0,
+  "cooldownSeconds": 14400,
+  "impact": {
+    "type": "crash",
+    "peakFactor": -0.45,
+    "durationSeconds": 900,
+    "reversal": "exponential",
+    "reversalSeconds": 6000,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:diamond",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:emerald",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 0.6
+    }
+  ],
+  "requires": [
+    {
+      "type": "firedBefore",
+      "eventId": "speculation_mania",
+      "minSecondsAgo": 60
+    }
+  ]
+}

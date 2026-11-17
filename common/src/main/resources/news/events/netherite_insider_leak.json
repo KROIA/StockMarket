@@ -1,0 +1,29 @@
+{
+  "id": "netherite_insider_leak",
+  "picture": "netherite_insider_leak.png",
+  "headline": {
+    "en_us": "Leaked: expedition secures massive ancient debris hoard",
+    "zh_cn": "泄露：探险队已囤积大量远古残骸",
+    "de_de": "Geleakt: Expedition sichert riesigen Fund an antikem Schrott"
+  },
+  "text": {
+    "en_us": "Documents leaked tonight reveal that a private expedition already secured a massive hoard of ancient debris days ago - and quietly sold ahead of the announcement. The market moved before the public ever knew.",
+    "zh_cn": "今夜泄露的文件显示，一支私人探险队数日前就已囤下大批远古残骸，并在公告发布前悄然抛售。市场在公众知情之前便已异动。",
+    "de_de": "Heute Nacht geleakte Dokumente zeigen, dass eine private Expedition bereits vor Tagen einen riesigen Fund an antikem Schrott gesichert hat - und noch vor der Bekanntgabe still verkauft hat. Der Markt bewegte sich, bevor die Öffentlichkeit davon erfuhr."
+  },
+  "category": "commodities",
+  "weight": 3,
+  "cooldownSeconds": 28800,
+  "announceDelayMs": { "min": -45000, "max": -15000 },
+  "impact": {
+    "type": "shock",
+    "peakFactor": -0.3,
+    "durationSeconds": 1500,
+    "reversalSeconds": 3000
+  },
+  "markets": [
+    { "item": "minecraft:netherite_ingot", "weightFactor": 1.0 },
+    { "item": "minecraft:netherite_scrap", "weightFactor": 0.8 },
+    { "item": "minecraft:ancient_debris",  "weightFactor": 0.8 }
+  ]
+}

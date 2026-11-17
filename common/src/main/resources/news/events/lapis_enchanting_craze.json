@@ -1,0 +1,40 @@
+{
+  "id": "lapis_enchanting_craze",
+  "picture": "lapis_enchanting_craze.png",
+  "headline": {
+    "en_us": "Enchanting craze sends lapis demand soaring!",
+    "zh_cn": "附魔热潮令青金石需求暴涨！",
+    "de_de": "Verzauberungs-Manie treibt die Lapis-Nachfrage in die Höhe!"
+  },
+  "text": {
+    "en_us": "A new fashion for enchanted gear has swept the guild halls, and every apprentice wants a stocked enchanting table. Lapis lazuli is suddenly the ingredient nobody can keep on the shelf, and traders who read the newspaper early may position themselves before the buying frenzy fully hits the market.",
+    "zh_cn": "附魔装备的新风尚席卷公会大厅，每个学徒都想要一台备货充足的附魔台。青金石骤然成为无人能囤住货的原料，早早读到报纸的交易者或许能在抢购全面爆发前完成布局。",
+    "de_de": "Eine neue Mode für verzauberte Ausrüstung hat die Gildenhallen erfasst, und jeder Lehrling will einen gut bestückten Zaubertisch. Lapislazuli ist plötzlich die Zutat, die niemand mehr im Regal halten kann, und wer die Zeitung früh liest, kann sich womöglich in Stellung bringen, bevor der Kaufrausch den Markt voll erfasst."
+  },
+  "category": "technology",
+  "weight": 7,
+  "cooldownSeconds": 10800,
+  "announceDelayMs": {
+    "min": 15000,
+    "max": 90000
+  },
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.3,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 3000,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:lapis_lazuli",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:lapis_block",
+      "weightFactor": 0.8
+    }
+  ]
+}

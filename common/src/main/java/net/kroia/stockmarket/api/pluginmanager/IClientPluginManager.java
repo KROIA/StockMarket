@@ -53,4 +53,12 @@ public interface IClientPluginManager {
 
     /** Sends a request to delete a plugin instance on the server. */
     CompletableFuture<Boolean> requestDeletePlugin(UUID instanceID);
+
+    /**
+     * SM-329: reads or sets the master's plugin manager logger switch (the manager's own log lines).
+     *
+     * @param enable null to only read the current state, true/false to set it
+     * @return a future with the master's state after the call, or null if the request was refused
+     */
+    CompletableFuture<Boolean> requestPluginManagerLogger(@org.jetbrains.annotations.Nullable Boolean enable);
 }

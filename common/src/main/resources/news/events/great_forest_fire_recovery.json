@@ -1,0 +1,33 @@
+{
+  "id": "great_forest_fire_recovery",
+  "picture": "great_forest_fire_recovery.png",
+  "headline": {
+    "en_us": "Disaster relief planks flood the lumber market",
+    "zh_cn": "救灾木板涌入木材市场",
+    "de_de": "Katastrophenhilfe schwemmt den Holzmarkt"
+  },
+  "text": {
+    "en_us": "Emergency shipments of planks and salvaged logs from unaffected regions are pouring into the burned lands. Sawmills are running around the clock and the shortage-driven premium on lumber is unwinding rapidly.",
+    "zh_cn": "来自未受灾地区的木板与打捞原木正紧急运往过火地带。锯木厂昼夜不停，由短缺推高的木材溢价正迅速消退。",
+    "de_de": "Notlieferungen von Brettern und geborgenen Stämmen aus unversehrten Regionen strömen in die Brandgebiete. Sägewerke laufen rund um die Uhr, und der knappheitsbedingte Aufschlag auf Bauholz baut sich rasch ab."
+  },
+  "category": "recovery",
+  "weight": 4,
+  "cooldownSeconds": 21600,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.18,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.03
+  },
+  "markets": [
+    { "item": "#minecraft:logs",    "weightFactor": 1.0 },
+    { "item": "minecraft:*_planks", "weightFactor": 0.6 }
+  ],
+  "requires": [
+    { "type": "firedBefore", "eventId": "great_forest_fire", "minSecondsAgo": 60 }
+  ]
+}
