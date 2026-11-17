@@ -1,0 +1,36 @@
+{
+  "id": "beetroot_harvest_surplus",
+  "picture": "beetroot_harvest_surplus.png",
+  "headline": {
+    "en_us": "Record beetroot harvest weighs on prices",
+    "zh_cn": "甜菜根创纪录丰收压制价格",
+    "de_de": "Rekord-Rübenernte drückt die Preise"
+  },
+  "text": {
+    "en_us": "Growers report a record beetroot harvest this year, with cellars overflowing and soup kitchens spoiled for choice. As the surplus works its way through the market, prices for beetroot and beetroot soup are easing steadily lower.",
+    "zh_cn": "种植者报告今年甜菜根产量创下纪录，地窖满溢，施汤所挑花了眼。随着过剩货源流入市场，甜菜根与甜菜汤的价格稳步走低。",
+    "de_de": "Die Anbauer melden in diesem Jahr eine Rekordernte an Roten Rüben, die Keller quellen über und die Suppenküchen haben die Qual der Wahl. Während sich der Überschuss durch den Markt arbeitet, geben die Preise für Rote Rüben und Rübensuppe stetig nach."
+  },
+  "category": "commodities",
+  "weight": 6,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.2,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2700,
+    "reversal": "ramp",
+    "reversalSeconds": 2400,
+    "noise": 0.03
+  },
+  "markets": [
+    {
+      "item": "minecraft:beetroot",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:beetroot_soup",
+      "weightFactor": 0.6
+    }
+  ]
+}

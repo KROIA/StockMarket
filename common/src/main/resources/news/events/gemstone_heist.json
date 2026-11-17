@@ -1,0 +1,39 @@
+{
+  "id": "gemstone_heist",
+  "picture": "gemstone_heist.png",
+  "headline": {
+    "en_us": "Daring vault heist empties the gem exchange!",
+    "zh_cn": "大胆金库劫案掏空宝石交易所！",
+    "de_de": "Kühner Tresorraub leert die Edelsteinbörse!"
+  },
+  "text": {
+    "en_us": "Thieves cracked the gem exchange's deepest vault overnight and made off with its entire diamond and emerald reserve. By the time the theft was announced, prices had already lurched upward - insiders, it seems, knew the stones were gone before the watch ever raised the alarm.",
+    "zh_cn": "窃贼一夜之间撬开宝石交易所最深处的金库，卷走了全部钻石与绿宝石储备。等到失窃公告发布，价格早已跳涨——看来内部人士在守卫拉响警报之前就已知道宝石不翼而飞。",
+    "de_de": "Diebe knackten über Nacht das tiefste Gewölbe der Edelsteinbörse und machten sich mit ihrer gesamten Diamant- und Smaragdreserve davon. Als der Diebstahl bekannt gegeben wurde, waren die Preise bereits nach oben gesprungen - Eingeweihte wussten offenbar vom Verschwinden der Steine, bevor die Wache überhaupt Alarm schlug."
+  },
+  "category": "crime",
+  "weight": 4,
+  "cooldownSeconds": 14400,
+  "announceDelayMs": {
+    "min": -45000,
+    "max": -15000
+  },
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.4,
+    "durationSeconds": 1500,
+    "reversal": "exponential",
+    "reversalSeconds": 3600,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:diamond",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:emerald",
+      "weightFactor": 0.8
+    }
+  ]
+}

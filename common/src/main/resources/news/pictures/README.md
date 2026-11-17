@@ -7,7 +7,7 @@ How it works (`DefaultNewsPictures`):
 
 - On reload, if `config/StockMarket/news/pictures/` contains no `.png`, the server
   extracts one default picture per shipped event id (`<eventId>.png`).
-- For each event id, a jar resource `news_pictures/<eventId>.png` **takes precedence**
+- For each event id, a jar resource `news/pictures/<eventId>.png` **takes precedence**
   over the procedural placeholder generator. No code change needed — just drop the
   file here with the exact event id as its name.
 - If no resource exists for an id (this folder currently ships no art), a
@@ -20,7 +20,7 @@ generator with a warning):
 - max file size: 128 KiB (load-bearing for the network batching design — do not raise)
 - width/height: 16..512 px each; square (1:1) is expected by the UI display boxes
 
-Expected file names (see `DefaultNewsEvents.DEFAULT_EVENT_IDS`):
+Expected file names (the ids listed in `../index.json`):
 
 - `diamond_rush.png`
 - `iron_supply_disruption.png`

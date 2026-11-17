@@ -18,7 +18,7 @@ import java.util.zip.Deflater;
 /**
  * Ships the default pictures that {@link NewsEventLibrary} extracts into
  * {@code config/StockMarket/news/pictures/} on first run — the picture-side twin of
- * {@link DefaultNewsEvents#writeDefaultFile} (picture plan §7).
+ * {@link DefaultNewsEvents#writeDefaultFiles} (picture plan §7).
  * <p>
  * <b>Additive self-healing:</b> {@link #extractMissingDefaults} runs during every reload,
  * right after the defaults-json step. It creates the folder if absent and, for each shipped
@@ -28,9 +28,9 @@ import java.util.zip.Deflater;
  * all-or-nothing variant is retained for callers/tests that want the empty-only semantics.)
  * Source priority per picture:
  * <ol>
- *   <li><b>Baked jar resource</b> {@code news_pictures/<eventId>.png} (classloader,
+ *   <li><b>Baked jar resource</b> {@code news/pictures/<eventId>.png} (classloader,
  *       same mechanism as the shipped {@code sql/} resources) — drop real art into
- *       {@code common/src/main/resources/news_pictures/} and it automatically takes
+ *       {@code common/src/main/resources/news/pictures/} and it automatically takes
  *       precedence, no code change;</li>
  *   <li><b>Procedural fallback</b>: a deterministic square grayscale placeholder PNG
  *       ({@value #GENERATED_SIZE}×{@value #GENERATED_SIZE} px, well under both
@@ -49,7 +49,7 @@ import java.util.zip.Deflater;
 public final class DefaultNewsPictures {
 
     /** Classpath directory of the baked default pictures (inside the mod jar). */
-    public static final String RESOURCE_DIR = "/news_pictures/";
+    public static final String RESOURCE_DIR = "/news/pictures/";
 
     /** Side length of procedurally generated placeholder pictures (square, §12.3). */
     public static final int GENERATED_SIZE = 384;
@@ -183,7 +183,7 @@ public final class DefaultNewsPictures {
         return null;
     }
 
-    /** Reads a baked {@code news_pictures/<eventId>.png} from the jar, or null if absent. */
+    /** Reads a baked {@code news/pictures/<eventId>.png} from the jar, or null if absent. */
     private static @Nullable byte[] loadBakedResource(String eventId) {
         try (InputStream in = DefaultNewsPictures.class
                 .getResourceAsStream(RESOURCE_DIR + eventId + ".png")) {

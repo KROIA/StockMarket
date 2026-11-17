@@ -1,0 +1,30 @@
+{
+  "id": "shulker_shell_shortage",
+  "picture": "shulker_shell_shortage.png",
+  "headline": {
+    "en_us": "End raids stall - shulker shells scarce for good",
+    "zh_cn": "末地突袭停滞——潜影壳永久稀缺",
+    "de_de": "End-Raubzüge stocken - Shulker-Schalen dauerhaft knapp"
+  },
+  "text": {
+    "en_us": "The raiding parties that once stripped the End cities have stalled, and the flow of shulker shells has all but dried up. With no new supply in sight, traders warn that the shortage is structural - the elevated price is here to stay.",
+    "zh_cn": "曾洗劫末地城的突袭队陷入停滞，潜影壳的供给几近干涸。看不到新增供给，商人警告这次短缺是结构性的——高价位将长期维持。",
+    "de_de": "Die Raubzüge, die einst die End-Städte plünderten, sind ins Stocken geraten, und der Nachschub an Shulker-Schalen ist so gut wie versiegt. Da kein neues Angebot in Sicht ist, warnen Händler, dass die Knappheit struktureller Natur ist - der erhöhte Preis bleibt."
+  },
+  "category": "commodities",
+  "weight": 3,
+  "cooldownSeconds": 43200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.3,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 3000,
+    "reversal": "none"
+  },
+  "markets": [
+    {
+      "item": "minecraft:shulker_shell",
+      "weightFactor": 1.0
+    }
+  ]
+}

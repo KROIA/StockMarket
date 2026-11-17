@@ -96,6 +96,27 @@ public interface IPluginOrderBook {
         return 0;
     }
 
+    /**
+     * SM-334: the virtual volume "available" to a market order towards {@code targetRealPrice}: starting at the
+     * current market price, walk one price level at a time in that direction (asks for a target above the price,
+     * bids for one below), skip empty levels up to the first level that holds volume, however deep, and sum that
+     * level and the next {@code levels - 1} levels. Read the way the matching walk reads the book (incl. the depth
+     * memory), like {@link #getRealVirtualVolumeToPrice}; the search and the sum stop at the target. Resting limit
+     * orders are not counted.
+     * <p>
+     * Default: {@code 0} ("no depth information"), which keeps order sizing callers inert.
+     *
+     * @param targetRealPrice the real price an order would move the market towards (direction and search limit)
+     * @param levels          number of price levels to sum, counted from the first level with volume
+     * @param capReal         stop counting once this many real items are reached; {@link Double#POSITIVE_INFINITY} = no cap
+     * @return signed real volume like {@link #getRealVirtualVolumeToPrice}: negative = asks (target above),
+     *         positive = bids (target below), 0 if there is no volume up to the target
+     */
+    default float getRealVirtualAvailableVolume(double targetRealPrice, int levels, double capReal)
+    {
+        return 0;
+    }
+
     long getRawVolume(long backendPrice);
 
     float getRawVirtualVolume(long backendPrice);
@@ -207,7 +228,8 @@ public interface IPluginOrderBook {
      * Like {@link #getDefaultRealVolume(double)}, but evaluates the volume distribution calculators centred on
      * {@code centerPrice} and splits bid/ask there, instead of the fair price and the current price. Used to
      * read the <i>default</i> book around the market's default price, whatever the price is now (T-208
-     * permanent impact capacity).
+     * permanent impact capacity). SM-340: only the calculators' static profile
+     * ({@link IVolumeDistributionCalculator#getStaticVolume}), so the slow-average wall does not count.
      * <p>
      * Default: falls back to {@link #getDefaultRealVolume(double)}, for implementations that cannot re-centre.
      *
