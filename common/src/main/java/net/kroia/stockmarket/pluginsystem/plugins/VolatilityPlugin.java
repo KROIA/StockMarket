@@ -28,15 +28,20 @@ import java.util.function.LongSupplier;
  */
 public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Void> {
 
-    /** Default random-walk amplitude relative to the equilibrium price (30%). */
+    /**
+     * Default amplitude of the price noise relative to the equilibrium price. At 0.3 the target price swings
+     * about +-14% (1 sigma) around the equilibrium, mostly as multi-day trends; hourly moves are about 3%.
+     * The noise is four mean-reverting walks (tau 5 min / 1 h / 8 h / 60 h, total sigma ~0.47 noise), see
+     * {@link NormalizedRandomPriceGenerator}.
+     */
     public static final float DEFAULT_VOLATILITY_SCALE = 0.3f;
 
     /**
-     * Custom per-market settings of the random walk.
+     * Custom per-market settings of the noise.
      *
-     * @param volatilityScale amplitude of the random price walk relative to the equilibrium price
-     *                        (0.3 = standard deviation ~14%, multi-day swings of roughly +-20-30%, hourly
-     *                        moves of a few percent; see {@link NormalizedRandomPriceGenerator})
+     * @param volatilityScale multiplier of the noise relative to the equilibrium price (0.3 = target swings
+     *                        about +-14% at 1 sigma, mostly as multi-day trends; hourly moves about 3%;
+     *                        see {@link NormalizedRandomPriceGenerator})
      */
     public record Settings(float volatilityScale) {
         /**
