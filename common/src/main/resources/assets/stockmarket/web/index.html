@@ -53,6 +53,16 @@
   .tfs button { background: transparent; border: 1px solid var(--line); color: var(--muted); padding: 3px 10px; border-radius: 4px; font: 12px var(--mono); cursor: pointer; }
   .tfs button.sel, .tfs button:hover { color: var(--text); border-color: var(--accent); }
   #chart { flex: 1; min-height: 320px; }
+  .modes { display: flex; gap: 4px; padding: 10px 16px 0; }
+  .modes button, #pairSwap { background: transparent; border: 1px solid var(--line); color: var(--muted); padding: 4px 14px; border-radius: 4px; font: inherit; cursor: pointer; }
+  .modes button.sel, .modes button:hover, #pairSwap:hover { color: var(--text); border-color: var(--accent); }
+  #pairBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px 0; }
+  #pairBar[hidden] { display: none; }
+  #pairBar label { color: var(--muted); font-size: 12px; }
+  #pairBar select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; max-width: 200px; }
+  #pairBar .icon { width: 22px; height: 22px; }
+  #pairRates { flex-basis: 100%; font: 12px var(--mono); color: var(--muted); }
+  #side.dim { opacity: .45; }
   .empty { color: var(--muted); padding: 24px 16px; }
   h3 { margin: 0; padding: 12px 14px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
   #book { padding: 0 8px 8px; font: 12px var(--mono); }
@@ -93,6 +103,13 @@
     <div id="markets"></div>
   </aside>
   <section id="center">
+    <div class="modes"><button id="modeMarket" class="sel">Market</button><button id="modePair">Pair</button></div>
+    <div id="pairBar" hidden>
+      <label for="pairHave">I have</label><span id="pairHaveIcon"></span><select id="pairHave"></select>
+      <button id="pairSwap" title="Swap" aria-label="Swap">&#8646;</button>
+      <label for="pairWant">I want</label><span id="pairWantIcon"></span><select id="pairWant"></select>
+      <div id="pairRates"></div>
+    </div>
     <div class="head">
       <span id="mIcon"></span>
       <h2 id="mName">No market selected</h2>

@@ -6,6 +6,7 @@ StockMarket can serve a small read-only web page with live market data, so playe
 
 * [Turning it on](#turning-it-on)
 * [What the page shows](#what-the-page-shows)
+* [Pair view](#pair-view)
 * [Privacy](#privacy)
 * [Security and HTTPS](#security-and-https)
 * [Multi-server setups](#multi-server-setups)
@@ -37,7 +38,15 @@ Switching the setting off stops the web server right away.
 
 The page updates itself every few seconds.
 
-Item-for-item trades (the "I have / I want" pair in the trade screen) have no market of their own: they run through the two items' markets, so the page shows those two markets.
+### Pair view
+
+Item-for-item trades (the "I have / I want" pair in the trade screen) have no market of their own: they run through the two items' markets. The **Pair** tab above the chart shows such a pair anyway, derived from those two markets:
+
+* Pick **I have** and **I want** (any two items or company shares); the arrow button swaps them.
+* The header shows the current rate both ways, for example `1 Gold Ingot = 8.5 Iron Ingot` and `1 Iron Ingot = 0.1176 Gold Ingot`. It is the "want" price divided by the "have" price, the same rate the in-game pair selector shows, without fees.
+* The chart is a line of that price ratio over time for the selected timeframe. Points where either market has no candle or a price of 0 are left out. It is not a market of its own: there is no order book, volume or trade list for a pair, so the side panel keeps showing the last selected market.
+
+The address of the page remembers the pair (`#pair=...`), so you can bookmark it or send the link. Clicking a market in the list goes back to the normal market view.
 
 ### Item icons
 

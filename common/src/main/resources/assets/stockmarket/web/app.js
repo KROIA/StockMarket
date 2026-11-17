@@ -6,11 +6,13 @@
   const GAME_HOUR_MS = 50000;
   const WALL_LABELS = { 60000: '1m', 300000: '5m', 900000: '15m', 3600000: '1h', 14400000: '4h', 86400000: '1D' };
 
-  const state = { markets: [], sel: null, tf: null, tfs: [], gameTime: false, candleStart: null, lastBar: null, historyAt: 0 };
+  const state = { markets: [], sel: null, tf: null, tfs: [], gameTime: false, candleStart: null, lastBar: null, historyAt: 0,
+    mode: 'market', have: null, want: null, pairStarts: '', pairAt: 0, pairLast: null, pairOptions: '', startPair: false };
 
   // ---- formatting
   const fmtPrice = n => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: Math.abs(n) < 1 ? 4 : 2 });
   const fmtVol = n => n.toLocaleString(undefined, { maximumFractionDigits: n < 10 ? 2 : 0 });
+  const fmtRate = n => n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 4 });
   const fmtTime = ms => new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   // an untranslated key such as "item.mod.thing" -> show the item id instead
   const displayName = m => /^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(m.name) ? m.itemId : m.name;
@@ -60,6 +62,32 @@
     priceScaleId: '', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false,
   });
   volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+  // pair view: price ratio as a line on the same chart, visible only in pair mode
+  const pairSeries = chart.addSeries(LC.LineSeries, { color: '#2ec4b6', lineWidth: 2, visible: false,
+    priceFormat: { type: 'price', precision: 4, minMove: 0.0001 } });
+
+  /**
+   * Pair rate history like the in-game cross-rate chart (CrossRateMarket): candles of both markets matched by
+   * timestamp within half a timeframe, rate = want / have = how many "have" items one "want" item costs.
+   * Buckets missing in either market or with a price of 0 are skipped. Pure: candles in, line points out.
+   * @param have candles of the "I have" market ({t seconds, c close}, oldest first)
+   * @param want candles of the "I want" market, same format
+   * @param tfMs timeframe in milliseconds
+   */
+  function ratioSeries(have, want, tfMs) {
+    const tol = tfMs / 2000; // candle times are in seconds
+    const out = [];
+    let i = 0, j = 0;
+    while (i < have.length && j < want.length) {
+      const d = have[i].t - want[j].t;
+      if (Math.abs(d) <= tol) {
+        if (have[i].c > 0 && want[j].c > 0) out.push({ time: have[i].t, value: want[j].c / have[i].c });
+        i++; j++;
+      } else if (d > 0) j++;
+      else i++;
+    }
+    return out;
+  }
 
   // ---- item icons: the PNG from the server, else a coloured badge with initials
   const missingIcons = new Set(); // 404s are not cached by the browser: ask once per page load
@@ -99,7 +127,7 @@
         const li = el('li', m.id === state.sel ? 'sel' : '');
         li.title = m.itemId;
         li.append(el('span', 'dot ' + m.state), icon(m.itemId, displayName(m)), el('span', 'name', displayName(m)), el('span', 'price', fmtPrice(m.price)));
-        li.onclick = () => select(m.id);
+        li.onclick = () => { setMode('market'); select(m.id); };
         ul.append(li);
       }
       group.append(ul);
@@ -107,6 +135,7 @@
     }
   }
   function renderHead() {
+    if (state.mode === 'pair') return renderPair();
     const m = state.markets.find(x => x.id === state.sel);
     $('mName').textContent = m ? displayName(m) : 'No market selected';
     const key = m ? m.itemId : '';
@@ -124,7 +153,7 @@
     box.replaceChildren();
     for (const tf of state.tfs) {
       const b = el('button', tf === state.tf ? 'sel' : '', tfLabel(tf));
-      b.onclick = () => { state.tf = tf; renderTimeframes(); loadHistory(true); };
+      b.onclick = () => { state.tf = tf; renderTimeframes(); if (state.mode === 'pair') loadPair(true); else loadHistory(true); };
       box.append(b);
     }
   }
@@ -146,9 +175,12 @@
         if (state.markets.length) select(state.markets[0].id);
       }
       renderMarkets();
+      renderPairOptions(false);
       renderHead();
       const m = state.markets.find(x => x.id === state.sel);
-      if (m) {
+      if (state.mode === 'pair') {
+        refreshPair();
+      } else if (m) {
         if (m.candleStart !== state.candleStart || Date.now() - state.historyAt > 30000) {
           loadHistory(false);
         } else if (state.lastBar) {
@@ -194,6 +226,119 @@
       if (fit) chart.timeScale().fitContent();
     } catch (e) { /* next poll retries */ }
   }
+
+  // ---- pair view (derived from the two items' markets, not a market of its own)
+  const byId = id => state.markets.find(m => m.id === id);
+  function setMode(mode) {
+    if (state.mode === mode) return;
+    state.mode = mode;
+    $('modeMarket').classList.toggle('sel', mode === 'market');
+    $('modePair').classList.toggle('sel', mode === 'pair');
+    $('pairBar').hidden = mode !== 'pair';
+    $('side').classList.toggle('dim', mode === 'pair');
+    candleSeries.applyOptions({ visible: mode === 'market' });
+    volumeSeries.applyOptions({ visible: mode === 'market' });
+    pairSeries.applyOptions({ visible: mode === 'pair' });
+    $('mIcon').dataset.item = '';
+    if (mode === 'pair') {
+      if (!byId(state.have) || !byId(state.want) || state.have === state.want) {
+        state.have = state.markets[0] ? state.markets[0].id : null;
+        state.want = state.markets[1] ? state.markets[1].id : null;
+      }
+      renderPairOptions(true);
+      loadPair(true);
+    } else {
+      saveHash();
+      loadHistory(true);
+    }
+    renderHead();
+  }
+  /** Remembers the pair as #pair=<have id>,<want id>, so a reload or shared link opens the same pair. */
+  function saveHash() {
+    try {
+      history.replaceState(null, '', state.mode === 'pair' ? `#pair=${state.have},${state.want}` : location.pathname + location.search);
+    } catch (e) { /* the hash is a convenience */ }
+  }
+  function renderPairOptions(force) {
+    const key = state.markets.map(m => m.id + displayName(m)).join('|');
+    if (!force && key === state.pairOptions) return; // don't rebuild an open dropdown every poll
+    state.pairOptions = key;
+    for (const [sel, cur] of [[$('pairHave'), state.have], [$('pairWant'), state.want]]) {
+      sel.replaceChildren(...state.markets.map(m => {
+        const o = el('option', '', displayName(m) + (m.category === 'shares' ? ' (share)' : ''));
+        o.value = m.id;
+        return o;
+      }));
+      sel.value = cur;
+    }
+  }
+  function setPairIcon(box, m) {
+    const key = m ? m.itemId : '';
+    if (box.dataset.item === key) return; // keep the image while the item stays the same
+    box.dataset.item = key;
+    box.replaceChildren(...(m ? [icon(m.itemId, displayName(m))] : []));
+  }
+  function renderPair() {
+    const h = byId(state.have), w = byId(state.want);
+    setPairIcon($('pairHaveIcon'), h);
+    setPairIcon($('pairWantIcon'), w);
+    setPairIcon($('mIcon'), w);
+    const ok = h && w && h.price > 0 && w.price > 0;
+    const rate = ok ? w.price / h.price : 0; // same as the in-game pair selector: want / have, no fee or spread
+    $('mName').textContent = h && w ? `${displayName(w)} / ${displayName(h)}` : 'Pick two markets';
+    $('mPrice').textContent = ok ? fmtRate(rate) : '';
+    $('mState').textContent = '';
+    $('mId').textContent = '';
+    $('pairRates').textContent = ok
+      ? `1 ${displayName(w)} = ${fmtRate(rate)} ${displayName(h)}  \u00b7  1 ${displayName(h)} = ${fmtRate(1 / rate)} ${displayName(w)}`
+      : 'Rate unknown';
+    document.title = ok ? `${displayName(w)}/${displayName(h)} ${fmtRate(rate)} - StockMarket` : 'StockMarket';
+  }
+  /** Called by the markets poll: reload both histories on a new candle or every 30 s, else move the newest point. */
+  function refreshPair() {
+    const h = byId(state.have), w = byId(state.want);
+    if (!h || !w) return;
+    if (h.candleStart + ',' + w.candleStart !== state.pairStarts || Date.now() - state.pairAt > 30000) {
+      loadPair(false);
+    } else if (state.pairLast && h.price > 0 && w.price > 0) {
+      state.pairLast.value = w.price / h.price;
+      pairSeries.update(state.pairLast);
+    }
+  }
+  async function loadPair(fit) {
+    const have = state.have, want = state.want, tf = state.tf;
+    if (have === null || want === null || !tf) return;
+    const h = byId(have), w = byId(want);
+    state.pairAt = Date.now();
+    state.pairStarts = h && w ? h.candleStart + ',' + w.candleStart : ''; // set before the fetch, like loadHistory
+    saveHash();
+    try {
+      const [hd, wd] = await Promise.all([
+        api(`api/history?market=${have}&tf=${tf}&max=500`), api(`api/history?market=${want}&tf=${tf}&max=500`)]);
+      if (have !== state.have || want !== state.want || tf !== state.tf || state.mode !== 'pair') return;
+      const points = ratioSeries(hd.candles, wd.candles, tf);
+      pairSeries.setData(points);
+      state.pairLast = points.length ? { ...points[points.length - 1] } : null;
+      if (fit) chart.timeScale().fitContent();
+    } catch (e) { /* next poll retries */ }
+  }
+  function pairChanged() {
+    state.have = Number($('pairHave').value);
+    state.want = Number($('pairWant').value);
+    state.pairLast = null;
+    pairSeries.setData([]);
+    renderHead();
+    loadPair(true);
+  }
+  $('pairHave').onchange = pairChanged;
+  $('pairWant').onchange = pairChanged;
+  $('pairSwap').onclick = () => {
+    [state.have, state.want] = [state.want, state.have];
+    renderPairOptions(true);
+    pairChanged();
+  };
+  $('modeMarket').onclick = () => setMode('market');
+  $('modePair').onclick = () => setMode('pair');
 
   // ---- order book, open orders, trades
   async function pollBook() {
@@ -257,7 +402,11 @@
 
   $('search').addEventListener('input', renderMarkets);
   tickClock();
-  pollMarkets();
+  try { // #pair=<have id>,<want id> opens the pair view
+    const m = /^#pair=(-?\d+),(-?\d+)$/.exec(location.hash);
+    if (m) { state.have = Number(m[1]); state.want = Number(m[2]); state.startPair = true; }
+  } catch (e) { /* ignore a broken hash */ }
+  pollMarkets().then(() => { if (state.startPair) { state.startPair = false; setMode('pair'); } });
   setInterval(tickClock, 1000);
   setInterval(pollMarkets, 2000);
   setInterval(pollBook, 2000);
