@@ -1,0 +1,32 @@
+{
+  "id": "magma_cream_alchemy_demand",
+  "picture": "magma_cream_alchemy_demand.png",
+  "headline": {
+    "en_us": "Fire-resistance brewing drives magma-cream demand",
+    "zh_cn": "抗火药水酿造拉动岩浆膏需求",
+    "de_de": "Feuerresistenz-Brauerei treibt die Magmacreme-Nachfrage"
+  },
+  "text": {
+    "en_us": "With expeditions pushing ever deeper into the lava seas, brewers cannot mix fire-resistance potions fast enough. Magma cream is the key ingredient, and the alchemists' guild is buying every batch the slime-and-blaze hunters can render down.",
+    "zh_cn": "探险队不断深入熔岩海，酿造师调配抗火药水的速度根本跟不上。岩浆膏是关键原料，炼金师公会正收购猎手们熬制的每一批货。",
+    "de_de": "Da Expeditionen immer tiefer in die Lavameere vordringen, kommen die Brauer mit dem Mischen von Feuerresistenz-Tränken nicht hinterher. Magmacreme ist die Schlüsselzutat, und die Alchemistengilde kauft jede Charge auf, die die Schleim- und Lohenjäger auslassen können."
+  },
+  "category": "commodities",
+  "weight": 6,
+  "cooldownSeconds": 10800,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.26,
+    "rampUpSeconds": 750,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:magma_cream",
+      "weightFactor": 1.0
+    }
+  ]
+}

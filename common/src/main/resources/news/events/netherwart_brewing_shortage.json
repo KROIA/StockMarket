@@ -1,0 +1,39 @@
+{
+  "id": "netherwart_brewing_shortage",
+  "picture": "netherwart_brewing_shortage.png",
+  "headline": {
+    "en_us": "Brewers empty the nether wart stocks!",
+    "zh_cn": "酿造师扫空下界疣库存！",
+    "de_de": "Brauer räumen die Netherwarzen-Lager leer!"
+  },
+  "text": {
+    "en_us": "A surge in potion demand has seen the brewers' guild buy up every last crate of nether wart, and the fortress caravans cannot resupply fast enough. Nether wart prices have spiked overnight, while sugar and glowstone dust sag as half-finished brews sit idle without their base ingredient.",
+    "zh_cn": "药水需求激增，酿造师公会买下了每一箱下界疣，要塞商队已来不及补货。下界疣价格一夜暴涨，而糖与荧石粉则因半成品药水缺少主料停摆而走低。",
+    "de_de": "Ein sprunghaft gestiegener Trankbedarf hat die Brauergilde jede letzte Kiste Netherwarzen aufkaufen lassen, und die Festungskarawanen kommen mit dem Nachschub nicht hinterher. Die Netherwarzenpreise sind über Nacht in die Höhe geschnellt, während Zucker und Leuchtsteinstaub nachgeben, weil halbfertige Gebräue ohne ihre Grundzutat brachliegen."
+  },
+  "category": "commodities",
+  "weight": 5,
+  "cooldownSeconds": 10800,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.42,
+    "durationSeconds": 1500,
+    "reversal": "exponential",
+    "reversalSeconds": 3600,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:nether_wart",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:sugar",
+      "weightFactor": -0.2
+    },
+    {
+      "item": "minecraft:glowstone_dust",
+      "weightFactor": -0.15
+    }
+  ]
+}

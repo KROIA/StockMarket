@@ -1,0 +1,36 @@
+{
+  "id": "nether_quartz_glut",
+  "picture": "nether_quartz_glut.png",
+  "headline": {
+    "en_us": "Nether quartz glut buries the market!",
+    "zh_cn": "下界石英过剩，压垮市场！",
+    "de_de": "Netherquarz-Schwemme erdrückt den Markt!"
+  },
+  "text": {
+    "en_us": "Fresh prospecting camps in the crimson wastes have flooded the caravans with nether quartz. Smelteries report warehouses filled to the rafters, and traders warn that the price of quartz and cut blocks will keep sliding for as long as the digging holds. Overmined and oversupplied, the shine has gone off the market.",
+    "zh_cn": "绯红废土上新开的勘探营地让下界石英涌入商队。冶炼厂报告仓库已堆至屋梁，商人警告只要开采持续，石英与石英砖的价格就会一路下滑。过度开采、供给过剩，市场的光泽已然褪去。",
+    "de_de": "Neue Schürfcamps in den karmesinroten Ödländern haben die Karawanen mit Netherquarz überschwemmt. Hütten melden bis unters Dach gefüllte Lagerhallen, und Händler warnen, dass die Preise für Quarz und geschnittene Blöcke weiter fallen, solange der Abbau anhält. Überfördert und überversorgt, ist der Glanz vom Markt verschwunden."
+  },
+  "category": "commodities",
+  "weight": 8,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.28,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2700,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:quartz",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:quartz_block",
+      "weightFactor": 0.8
+    }
+  ]
+}

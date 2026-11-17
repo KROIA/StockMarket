@@ -1,0 +1,40 @@
+{
+  "id": "royal_purple_fashion",
+  "picture": "royal_purple_fashion.png",
+  "headline": {
+    "en_us": "Court adopts royal purple - dye prices soar!",
+    "zh_cn": "宫廷采行王室紫——染料价格腾飞！",
+    "de_de": "Hof erhebt Königspurpur zur Mode - Farbpreise schnellen empor!"
+  },
+  "text": {
+    "en_us": "The queen has declared royal purple the colour of the season, and every noble house is scrambling to re-dye its wardrobe before the next gala. Dyers cannot keep up with the orders, and prices for purple, magenta and pink dyes are climbing by the day as the fashion sweeps the court.",
+    "zh_cn": "女王宣布王室紫为本季之色，各贵族府邸赶在下一场舞会前重染衣橱。染工接不完订单，随着这股风尚席卷宫廷，紫色、品红与粉红染料价格逐日攀升。",
+    "de_de": "Die Königin hat Königspurpur zur Farbe der Saison erklärt, und jedes Adelshaus wetteifert darum, seine Garderobe vor der nächsten Gala umzufärben. Die Färber kommen mit den Aufträgen nicht nach, und die Preise für Purpur-, Magenta- und Rosafarbstoffe steigen von Tag zu Tag, während die Mode über den Hof fegt."
+  },
+  "category": "cultural",
+  "weight": 5,
+  "cooldownSeconds": 10800,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.3,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:purple_dye",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:magenta_dye",
+      "weightFactor": 0.7
+    },
+    {
+      "item": "minecraft:pink_dye",
+      "weightFactor": 0.5
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "id": "wither_skull_bounty",
+  "picture": "wither_skull_bounty.png",
+  "headline": {
+    "en_us": "Warlord posts a bounty on wither skulls!",
+    "zh_cn": "军阀悬赏凋灵骷髅头！",
+    "de_de": "Kriegsherr setzt ein Kopfgeld auf Witherskelett-Schädel aus!"
+  },
+  "text": {
+    "en_us": "A warlord massing for war has posted a lavish bounty on every wither-skeleton skull that can be brought to his fortress. Soul sand is being bought up alongside them to raise the beast itself, and both have shot up as mercenaries pour into the Nether fortresses.",
+    "zh_cn": "一位正在集结兵力的军阀，对凡能送到其堡垒的凋灵骷髅头开出重赏。为召唤那头恶兽，灵魂沙也被一并扫购，随着雇佣兵涌入下界要塞，两者价格齐飞。",
+    "de_de": "Ein Kriegsherr, der zum Krieg rüstet, hat ein üppiges Kopfgeld auf jeden Witherskelett-Schädel ausgesetzt, der zu seiner Festung gebracht wird. Seelensand wird gleich mitgekauft, um die Bestie selbst zu beschwören, und beide sind in die Höhe geschossen, während Söldner in die Netherfestungen strömen."
+  },
+  "category": "conflict",
+  "weight": 3,
+  "cooldownSeconds": 21600,
+  "adminOnly": true,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.45,
+    "durationSeconds": 1800,
+    "reversal": "exponential",
+    "reversalSeconds": 4500,
+    "noise": 0.06
+  },
+  "markets": [
+    {
+      "item": "minecraft:wither_skeleton_skull",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:soul_sand",
+      "weightFactor": 0.4
+    }
+  ]
+}

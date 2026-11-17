@@ -6,6 +6,7 @@ import net.kroia.modutilities.PermissionCompat;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.minecraft.compat.StockMarketWebInterface;
 import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -270,6 +271,8 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         ItemStack currencyBefore = settings.MARKET.CURRENCY.get();
         String villagerBefore = store.toJsonString(settings.VILLAGER_TRADING);
         int initialLoadBefore = settings.MARKET.getPriceHistoryInitialLoadCandles(); // T-140 client re-push
+        boolean webEnabledBefore = Boolean.TRUE.equals(settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.get()); // SM-347
+        Integer webPortBefore = settings.INTEGRATIONS.WEB_INTERFACE_PORT.get();
 
         String applyError = null;
         try {
@@ -286,6 +289,20 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         // Clamp all numeric values into their documented bounds and restore the
         // previous currency if the new one is empty/unresolvable.
         sanitize(settings, currencyBefore);
+
+        // SM-347: validate a new or newly enabled web interface port before saving. On rejection both web
+        // settings go back to their previous values; the other settings of this SET still save.
+        boolean webEnabled = Boolean.TRUE.equals(settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.get());
+        int webPort = settings.INTEGRATIONS.WEB_INTERFACE_PORT.get();
+        if (webEnabled && (!webEnabledBefore || !java.util.Objects.equals(webPortBefore, webPort))) {
+            String reason = StockMarketWebInterface.checkPort(webPort);
+            if (reason != null) {
+                settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.set(webEnabledBefore);
+                settings.INTEGRATIONS.WEB_INTERFACE_PORT.set(webPortBefore);
+                String msg = "Web interface port " + webPort + " rejected: " + reason;
+                applyError = applyError == null ? msg : applyError + "; " + msg;
+            }
+        }
 
         // Persist ONLY settings.json (targeted save — no full market/plugin NBT save).
         boolean saved = BACKEND_INSTANCES.DATA_MANAGER.saveSettingsToFile(UtilitiesPlatform.getServer());
@@ -370,6 +387,14 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //     on here may trigger the one-time LuckPerms migration (below).
         //   - DISCORD_ENABLED: read live on every post (StockMarketDiscord); only the master posts
         //     (slaves never register the feed), so a slave's value is never read.
+        //   - WEB_INTERFACE_ENABLED / WEB_INTERFACE_PORT (SM-347): applied right below on the master
+        //     (StockMarketWebInterface.apply). Slaves keep the defaults and apply() refuses to start there
+        //     (not the master), so no propagation needed.
+        StockMarketWebInterface.apply(BACKEND_INSTANCES);
+        if (Boolean.TRUE.equals(settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.get()) && StockMarketWebInterface.getRunningPort() == -1) {
+            String msg = "saved, but the web interface could not start (see server log)";
+            applyError = applyError == null ? msg : applyError + "; " + msg;
+        }
         String villagerAfter = store.toJsonString(settings.VILLAGER_TRADING);
         if (!villagerAfter.equals(villagerBefore) && BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER != null) {
             BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
@@ -418,6 +443,8 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
      *   <li>{@code VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES} ∈ [1, 10,080]</li>
      *   <li>{@code VillagerTrading.VILLAGER_BUY_MARGIN / VILLAGER_SELL_MARGIN} ∈ [0.01, 100];
      *       NaN/Infinite values fall back to the setting's default</li>
+     *   <li>{@code Integrations.WEB_INTERFACE_PORT}: null = default (range and conflicts are checked in the SET
+     *       path by {@code StockMarketWebInterface.checkPort})</li>
      * </ul>
      * Static and side-effect free apart from the settings object itself, so the
      * in-game test suite can verify the bounds without a running request.
@@ -484,6 +511,12 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         settings.VILLAGER_TRADING.VILLAGER_SELL_MARGIN.set(
                 clampMargin(settings.VILLAGER_TRADING.VILLAGER_SELL_MARGIN.get(),
                         settings.VILLAGER_TRADING.VILLAGER_SELL_MARGIN.getDefaultValue()));
+
+        // Integrations
+        if (settings.INTEGRATIONS.WEB_INTERFACE_PORT.get() == null)
+            settings.INTEGRATIONS.WEB_INTERFACE_PORT.set(settings.INTEGRATIONS.WEB_INTERFACE_PORT.getDefaultValue());
+        if (settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.get() == null)
+            settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.set(false);
     }
 
     /** Clamps a Float setting value into [min, max]; null, NaN and Infinite fall back to {@code fallback}. */
