@@ -1283,7 +1283,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         int bannerLineHeight = 12; // matches textFontScale=0.7f visible height
         int bannerX = tradingPanel.getLeft();
         int bannerW = tradingPanel.getWidth();
-        int bannerY = tradingPanel.getTop() + spacing;
+        // MU-167: start below the market-closed/maintenance label so the two never overlap
+        // (that label can show in any state; the banner still ends well inside the panel).
+        int bannerY = marketClosedLabel.getBottom() + spacing;
         untrustedSlaveBanner1.setBounds(bannerX, bannerY, bannerW, bannerLineHeight);
         untrustedSlaveBanner2.setBounds(bannerX, bannerY + bannerLineHeight, bannerW, bannerLineHeight);
         untrustedSlaveBanner3.setBounds(bannerX, bannerY + 2 * bannerLineHeight, bannerW, bannerLineHeight);

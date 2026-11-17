@@ -1,0 +1,30 @@
+{
+  "id": "amethyst_geode_discovery",
+  "picture": "amethyst_geode_discovery.png",
+  "headline": {
+    "en_us": "Colossal geode cracked open - amethyst everywhere!",
+    "zh_cn": "巨型晶洞被凿开——紫水晶遍地！",
+    "de_de": "Gewaltige Geode aufgebrochen - überall Amethyst!"
+  },
+  "text": {
+    "en_us": "Miners in the deep caverns have broken into a geode the size of a village hall, its walls solid with amethyst clusters. So much crystal is now reaching the caravans that jewelers expect the glut to be permanent - the days of scarce amethyst are simply over, and the price will settle at a new, lower level for good.",
+    "zh_cn": "深穴矿工凿开了一座足有村礼堂大小的晶洞，洞壁满布紫水晶簇。涌入商队的晶体之多，令珠宝商认为这次过剩将是永久的——紫水晶稀缺的时代就此结束，价格将长期停留在新的低位。",
+    "de_de": "Bergleute in den tiefen Höhlen sind in eine Geode so groß wie eine Dorfhalle vorgedrungen, deren Wände dicht mit Amethystdrusen besetzt sind. So viel Kristall erreicht nun die Karawanen, dass Juweliere von einem dauerhaften Überangebot ausgehen - die Zeiten des knappen Amethysts sind schlicht vorbei, und der Preis pendelt sich auf einem neuen, tieferen Niveau ein."
+  },
+  "category": "commodities",
+  "weight": 4,
+  "cooldownSeconds": 43200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.3,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 3000,
+    "reversal": "none"
+  },
+  "markets": [
+    {
+      "item": "minecraft:amethyst_shard",
+      "weightFactor": 1.0
+    }
+  ]
+}

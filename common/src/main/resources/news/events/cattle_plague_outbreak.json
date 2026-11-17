@@ -1,0 +1,40 @@
+{
+  "id": "cattle_plague_outbreak",
+  "picture": "cattle_plague_outbreak.png",
+  "headline": {
+    "en_us": "Cattle plague fells the herds - meat and hides grow scarce!",
+    "zh_cn": "牛瘟击倒畜群——肉与皮日益稀缺！",
+    "de_de": "Rinderseuche rafft die Herden dahin - Fleisch und Häute werden knapp!"
+  },
+  "text": {
+    "en_us": "A murrain sweeping the pasturelands has felled entire herds within days, and drovers are burning carcasses to halt its spread. With beef, milk and hides all vanishing from the stalls at once, prices have lurched upward and butchers are turning buyers away. Herders warn the shortage will bite hardest before the surviving stock can recover.",
+    "zh_cn": "一场席卷牧场的牛瘟在数日内击倒了整群牲畜，赶牛人焚烧尸体以阻止扩散。牛肉、牛奶与皮革同时从摊位上消失，价格骤然上扬，屠夫开始劝退买家。牧人警告，在幸存畜群恢复之前，短缺将最为难熬。",
+    "de_de": "Eine Viehseuche fegt über die Weidegründe und hat binnen Tagen ganze Herden dahingerafft; Treiber verbrennen die Kadaver, um ihre Ausbreitung zu stoppen. Da Rindfleisch, Milch und Häute zugleich aus den Ständen verschwinden, sind die Preise nach oben gesprungen, und Metzger weisen ihre Kundschaft ab. Hirten warnen, dass die Knappheit am härtesten zuschlägt, bevor sich der überlebende Bestand erholen kann."
+  },
+  "category": "disaster",
+  "weight": 3,
+  "cooldownSeconds": 21600,
+  "adminOnly": true,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.42,
+    "durationSeconds": 1800,
+    "reversal": "exponential",
+    "reversalSeconds": 4500,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:beef",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:milk_bucket",
+      "weightFactor": 0.7
+    },
+    {
+      "item": "minecraft:leather",
+      "weightFactor": 0.5
+    }
+  ]
+}

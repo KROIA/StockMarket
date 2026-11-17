@@ -283,7 +283,7 @@ All market management in v2.0 is done through graphical interfaces. The old comm
 
 For a walkthrough of common server setups — the default bot-driven market vs. a fully player-driven market — see the [Admin Setup Use Cases](documentation/user-guide/admin-setup.md) guide.
 
-For scoreboard / tab-list placeholders (requires TAB or Placeholder API) see the [Placeholders](documentation/user-guide/placeholders.md) guide. To post player trades and trading alerts to Discord, see [Discord feed](documentation/user-guide/admin-setup.md#discord-feed).
+For scoreboard / tab-list placeholders (requires TAB or Placeholder API) see the [Placeholders](documentation/user-guide/placeholders.md) guide. To post player trades and trading alerts to Discord, see [Discord feed](documentation/user-guide/admin-setup.md#discord-feed). To show charts, order books and recent trades on a read-only web page, see [Web interface](documentation/user-guide/web-interface.md).
 
 #### Getting Admin Access
 A server operator needs to grant StockMarket admin privileges:<br>
@@ -344,7 +344,7 @@ The **Mod Settings** button on the Management GUI's overview tab opens an editor
 * **Trade cooldown (ms)** (`ServerMarket.TRADE_COOLDOWN_MS`, default `500`, range 0 - 60000, `0` = off): minimum time between two accepted orders of the same player across all markets and both normal and pair (inter-market) orders — stops autoclickers. Rejected orders don't restart it; bots are not affected. Takes effect immediately.
 * **Max order size factor** (`ServerMarket.MAX_ORDER_VOLUME_FACTOR`, default `64`, minimum 1): the default max order size of a market is `max(factor, factor x abundance)`. Used for new markets and presets and for saves without a value; existing markets keep their limit. The **Apply to all markets** button next to it (asks for confirmation) recomputes the max order size of **every** market from its abundance and the **saved** factor — per-market custom limits, including 0 = unlimited, are overwritten. Press Apply first if you changed the factor.
 * **Candles: use in-game time** (`ServerMarket.CANDLE_USE_GAME_TIME`, default off, restart required): one price candle per in-game hour of the master's overworld instead of one per **Candle time (ms)**; the charts then offer 1h / 4h / 1D / 1W in-game candles labelled `Day N` / `hh:00`. **Candle time (ms)** only applies while this is off. Independent of the trading hours clock. See [Candle Timebase](documentation/user-guide/candle-timebase.md).
-* The **Integrations** group shows one switchable section per external integration: **Placeholders (TAB / Placeholder API)** (`Integrations.PLACEHOLDERS_ENABLED`, default on, restart required, see [Placeholders](documentation/user-guide/placeholders.md)) , **Sync admin flag with LuckPerms** (`Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION`, default off, restart required, see above) and **Discord feed (trades and alerts)** (`Integrations.DISCORD_ENABLED`, default off, takes effect immediately, see [Discord feed](documentation/user-guide/admin-setup.md#discord-feed)). Worlds from older versions keep their LuckPerms sync value: it moves from the Utilities group to Integrations on the first load.
+* The **Integrations** group shows one switchable section per external integration: **Placeholders (TAB / Placeholder API)** (`Integrations.PLACEHOLDERS_ENABLED`, default on, restart required, see [Placeholders](documentation/user-guide/placeholders.md)) , **Sync admin flag with LuckPerms** (`Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION`, default off, restart required, see above), **Discord feed (trades and alerts)** (`Integrations.DISCORD_ENABLED`, default off, takes effect immediately, see [Discord feed](documentation/user-guide/admin-setup.md#discord-feed)) and **Web interface (read-only)** (`Integrations.WEB_INTERFACE_ENABLED` and `WEB_INTERFACE_PORT`, default off and 8090, takes effect immediately, see [Web interface](documentation/user-guide/web-interface.md)). Worlds from older versions keep their LuckPerms sync value: it moves from the Utilities group to Integrations on the first load.
 * Changes to the **Villager Trading** group are propagated to all connected slave servers right away (the villager price table is recomputed and re-broadcast).
 
 This screen is the recommended way to change any persisted mod setting — admins do not need to edit `settings.json` by hand. Every setting with its default and range is listed in the [Mod Settings Reference](documentation/user-guide/mod-settings.md). For master/slave servers see [Multi-Server Setup](documentation/user-guide/multi-server.md).
@@ -682,6 +682,12 @@ A dev build of StockMarket needs ModUtilities and BankSystem jars that were also
 <div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
     <p><strong>Warning:</strong> the in-game tests run against the live world: they create scratch markets, bank accounts and users and touch real mod data. The test fixture cleans up after itself, but a failing or aborted test can leave data behind. Never run them on a real world or a production server — use a throwaway test world.</p>
 </div>
+
+---
+
+## Third-party
+
+* [TradingView Lightweight Charts](https://github.com/tradingview/lightweight-charts) v5.2.1 (Apache License 2.0), bundled for the charts of the [web interface](documentation/user-guide/web-interface.md). License and notice: `common/src/main/resources/assets/stockmarket/web/vendor/LICENSE-lightweight-charts.txt`
 
 ---
 

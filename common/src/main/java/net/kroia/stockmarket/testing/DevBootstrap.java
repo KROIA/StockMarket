@@ -43,6 +43,7 @@ public final class DevBootstrap {
         MarketIntegrationTestSuite.setBackend(instances);
         InterMarketExecutorTestSuite.setBackend(instances);
         MarketVisibilityTestSuite.setBackend(instances); // T-237: runs on master and slave
+        WebInterfaceTestSuite.setBackend(instances); // SM-347: master tests + the slave check
         UserTestSuite.setBackend(instances); // SM-266/SM-287 admin command gate; master tests skip on a slave (no sync manager)
         StockMarketTestRegistration.register();
         if (isMaster) {

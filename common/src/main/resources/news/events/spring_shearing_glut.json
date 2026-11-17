@@ -1,0 +1,40 @@
+{
+  "id": "spring_shearing_glut",
+  "picture": "spring_shearing_glut.png",
+  "headline": {
+    "en_us": "Spring shearing floods the wool market",
+    "zh_cn": "春季剪毛淹没羊毛市场",
+    "de_de": "Frühjahrsschur überschwemmt den Wollmarkt"
+  },
+  "text": {
+    "en_us": "The first warm days brought every shepherd's flock to the shears at once, and bales of fresh fleece are piling up faster than the weavers can spin them. Wool and raw thread are drifting cheaper by the day as sellers undercut one another at the gate. Tanners, meanwhile, note that buyers are quietly turning back to leather for their finer garments.",
+    "zh_cn": "头几个暖日让所有牧羊人同时开剪，新羊毛成捆堆积的速度快过织工纺线的速度。卖家在门口互相压价，羊毛与线的价格逐日走低。与此同时，制革匠注意到买家正悄然转回皮革，用以制作更精细的衣物。",
+    "de_de": "Die ersten warmen Tage haben die Herden aller Schäfer zugleich unter die Schere gebracht, und Ballen frischer Wolle stapeln sich schneller, als die Weber sie verspinnen können. Wolle und Rohgarn werden von Tag zu Tag billiger, während die Verkäufer sich am Tor gegenseitig unterbieten. Gerber wiederum bemerken, dass sich die Käufer für ihre feineren Gewänder still wieder dem Leder zuwenden."
+  },
+  "category": "commodities",
+  "weight": 6,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.24,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:string",
+      "weightFactor": 0.5
+    },
+    {
+      "item": "#minecraft:wool",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:leather",
+      "weightFactor": -0.3
+    }
+  ]
+}
