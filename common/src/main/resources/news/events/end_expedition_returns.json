@@ -1,0 +1,45 @@
+{
+  "id": "end_expedition_returns",
+  "picture": "end_expedition_returns.png",
+  "headline": {
+    "en_us": "Triumphant End expedition floods the market with relics!",
+    "zh_cn": "末地远征凯旋，遗迹之物涌入市场！",
+    "de_de": "Triumphale End-Expedition überschwemmt den Markt mit Relikten!"
+  },
+  "text": {
+    "en_us": "A great expedition has returned from the End in triumph, its ships laden with elytra and vials of dragon's breath. The sudden flood of once-priceless relics has sent prices crashing as buyers realize the scarcity is broken - at least for now.",
+    "zh_cn": "一支大型探险队自末地凯旋，船上满载鞘翅与龙息瓶。曾经无价的遗迹之物骤然涌入，买家意识到稀缺已被打破，价格应声暴跌——至少眼下如此。",
+    "de_de": "Eine große Expedition ist im Triumph aus dem End zurückgekehrt, ihre Schiffe beladen mit Elytren und Fläschchen voll Drachenatem. Die plötzliche Schwemme einst unbezahlbarer Relikte hat die Preise abstürzen lassen, als den Käufern klar wurde, dass die Knappheit gebrochen ist - zumindest vorerst."
+  },
+  "category": "commodities",
+  "weight": 2,
+  "cooldownSeconds": 86400,
+  "impact": {
+    "type": "crash",
+    "peakFactor": -0.4,
+    "rampUpSeconds": 300,
+    "durationSeconds": 1200,
+    "reversal": "exponential",
+    "reversalSeconds": 6000,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:elytra",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:dragon_breath",
+      "weightFactor": 0.6
+    }
+  ],
+  "requires": [
+    {
+      "type": "notFired",
+      "eventId": "end_expedition_returns"
+    }
+  ],
+  "records": {
+    "frontier": "end_breached"
+  }
+}

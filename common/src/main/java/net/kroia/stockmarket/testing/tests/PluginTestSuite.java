@@ -46,17 +46,17 @@ import java.util.UUID;
 
 public class PluginTestSuite extends TestSuite {
 
-    private static StockMarketModBackend.ServerInstances backend;
+    static StockMarketModBackend.ServerInstances backend;
 
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         PluginTestSuite.backend = backend;
     }
 
     /** Owns the scratch market and plugin cache this suite creates; drained in {@link #teardown()}. */
-    private final TestFixture fixture = new TestFixture("Plugin");
+    final TestFixture fixture = new TestFixture("Plugin");
 
-    private ItemID itemID;
-    private IServerMarket serverMarket;
+    ItemID itemID;
+    IServerMarket serverMarket;
     private ServerPluginManager pluginManager;
 
     /**
@@ -146,6 +146,9 @@ public class PluginTestSuite extends TestSuite {
 
         // Logging
         addTest("errorLogging_gatedByLoggerEnabled", this::test_errorLogging_gatedByLoggerEnabled);
+        // SM-329: plugin manager logger switch (request path, save data, old saves)
+        addTest("pluginManagerLogger_setViaClientRequest", this::test_pluginManagerLogger_setViaClientRequest);
+        addTest("pluginManagerLogger_loadsFromSave_oldSaveOff", this::test_pluginManagerLogger_loadsFromSave);
 
         // TargetPriceBot scenarios
         addTest("targetPriceBot_noOvershootAfterWindup", this::test_targetPriceBot_noOvershootAfterWindup);
@@ -190,6 +193,12 @@ public class PluginTestSuite extends TestSuite {
         addTest("volumeDistribution_trend_codec_legacy", this::test_volumeDistribution_trendCodec);
         addTest("volumeDistribution_trend_reachesBook", this::test_volumeDistribution_trendReachesBook);
         // trend_onOff_report (report only): T208GateTestSuite
+        // SM-340: slow-average wall
+        addTest("volumeDistribution_wall_deadZone_noVolume", this::test_wall_deadZone);
+        addTest("volumeDistribution_wall_sideAndGrowth", this::test_wall_sideAndGrowth);
+        addTest("volumeDistribution_wall_codec_legacy", this::test_wall_codec);
+        addTest("volumeDistribution_wall_nbt_legacy", this::test_wall_nbt);
+        addTest("volumeDistribution_wall_reachesCalculator", this::test_wall_reachesCalculator);
         // T-214: depth per relative price, sized to the max order
         addTest("depthScale_diamond_matchesOld", this::test_depthScale_diamondMatchesOld);
         addTest("depthScale_scaleInvariance", this::test_depthScale_scaleInvariance);
@@ -214,8 +223,10 @@ public class PluginTestSuite extends TestSuite {
         addTest("netFlow_randomTrades_exact", this::test_netFlow_randomTrades_exact);
         // T-207 (ungated): the bot does not trade through an empty gap right after a big order
         addTest("targetPriceBot_emptyGap_noSnapBack", this::test_targetPriceBot_emptyGap_noSnapBack);
-        // T-208 (ungated): the gap guard blocks at most 60 s after a player fill
+        // T-208 (ungated): the gap guard blocks at most 60 s after a player fill (SM-334: 45-75 s, rolled per fill)
         addTest("targetPriceBot_gapGuard_timesOut", this::test_targetPriceBot_gapGuard_timesOut);
+        // SM-334 (ungated): after the pause a far pump slides back down over minutes instead of in one tick
+        addTest("targetPriceBot_pump_slidesDown", this::test_targetPriceBot_pump_slidesDown);
         // #96 (ungated): the default depth is centred on the fair price, the bot's reference stays inside the flow band
         addTest("defaultDepth_centredOnFairPrice", this::test_defaultDepth_centredOnFairPrice);
         addTest("targetPriceBot_referenceAnchor_band", this::test_targetPriceBot_referenceAnchorBand);
@@ -290,11 +301,14 @@ public class PluginTestSuite extends TestSuite {
         // The harness fills millions of scratch orders: keep them out of BankSystem's trade ledger, whose write
         // backlog would otherwise drain at server shutdown.
         OrderLedger.Writer.testSink = e -> {};
+        // SM-334: the bot's gap guard pause is random per fill; seed it so every run trades the same way
+        TargetPriceBot.test_setGapGuardSeed(334L);
     }
 
     @Override
     public void teardown() {
         OrderLedger.Writer.testSink = null;
+        TargetPriceBot.test_setGapGuardSeed(null);
         serverMarket = null;
         fixture.cleanup();
     }
@@ -510,6 +524,8 @@ public class PluginTestSuite extends TestSuite {
         IPluginOrderBook book = (IPluginOrderBook) Proxy.newProxyInstance(IPluginOrderBook.class.getClassLoader(),
                 new Class<?>[]{IPluginOrderBook.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "getRealVirtualVolumeToPrice" -> (float) (depth * (price[0] - (Double) args[0]));
+                    // SM-334: availability not limiting (whole way to the target), this scenario is about the PID
+                    case "getRealVirtualAvailableVolume" -> (float) (depth * (price[0] - (Double) args[0]));
                     case "getDefaultRealVolume" -> 0f; // no default depth: T-207 gap guard off
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
@@ -568,6 +584,7 @@ public class PluginTestSuite extends TestSuite {
         IPluginOrderBook book = (IPluginOrderBook) Proxy.newProxyInstance(IPluginOrderBook.class.getClassLoader(),
                 new Class<?>[]{IPluginOrderBook.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "getRealVirtualVolumeToPrice" -> -1e6f;
+                    case "getRealVirtualAvailableVolume" -> -1e6f; // SM-334: deep book, so the size cap binds
                     case "getDefaultRealVolume" -> 0f; // no default depth: T-207 gap guard off
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
@@ -648,10 +665,12 @@ public class PluginTestSuite extends TestSuite {
                             + " (jump " + p0 + " -> " + p1 + ", window " + n + ")");
             }
 
-            // Flow reset: target back to the old price, let the bot work for 100 cycles (5 ticks each)
+            // Flow reset: target back to the old price, let the bot work. SM-334: one bot order takes at most
+            // availableVolumeLevels levels with volume (plus any empty stretch before them), so walking back
+            // 2 windows takes more cycles than before: 6n ticks instead of the former 100 cycles.
             cache.getPluginMarket().setTargetPrice(p0Real);
             cache.apply();
-            for (int t = 0; t < 500; t++) {
+            for (int t = 0; t < 6 * n; t++) {
                 bot.update(markets);
                 cache.apply();
                 serverMarket.update();
@@ -979,7 +998,7 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /** Encodes {@code settings} with {@code codec} and applies it to {@code plugin} for the scratch market. */
-    private <T> void applySettings(ServerPlugin<T, ?> plugin, StreamCodec<ByteBuf, T> codec, T settings) {
+    <T> void applySettings(ServerPlugin<T, ?> plugin, StreamCodec<ByteBuf, T> codec, T settings) {
         ByteBuf buf = Unpooled.buffer();
         codec.encode(buf, settings);
         byte[] bytes = new byte[buf.readableBytes()];
@@ -1265,7 +1284,7 @@ public class PluginTestSuite extends TestSuite {
      * @param halfLifeMinutes NET_FLOW_HALF_LIFE_MINUTES
      * @param bot             TargetPriceBot settings
      */
-    private record ReplaySetup(String market, double price, float abundance, long maxOrder, float sens, float maxMult,
+    record ReplaySetup(String market, double price, float abundance, long maxOrder, float sens, float maxMult,
                                float theta, float halfLifeMinutes, TargetPriceBot.Settings bot) {
         /** @return a copy with another θ and bot settings (T-208 tune grid) */
         ReplaySetup with(float theta, TargetPriceBot.Settings bot) {
@@ -1645,7 +1664,7 @@ public class PluginTestSuite extends TestSuite {
     private record T208Exec(PlayersResult best, Liquidation bestMode, double[] profit, double[] unsold) {}
 
     /** Locks {@code raw} items and places a player market sell of them. */
-    private void sell(ServerMarket market, IServerBank items, long raw, UUID player, IServerBankAccount account) {
+    void sell(ServerMarket market, IServerBank items, long raw, UUID player, IServerBankAccount account) {
         items.lockAmount(raw);
         market.putOrder(new Order(itemID, Order.Type.MARKET, -raw, 0, System.currentTimeMillis(), player, account.getAccountNumber()));
     }
@@ -1660,7 +1679,7 @@ public class PluginTestSuite extends TestSuite {
      * @param items real items to sell
      * @return proceeds (real money)
      */
-    private static double markToBook(IPluginOrderBook book, double price, double items) {
+    static double markToBook(IPluginOrderBook book, double price, double items) {
         double tick = MarketManager.convertToRealAmountStatic(1);
         double step = Math.max(tick, Math.round(price * 0.001 / tick) * tick);
         double left = items, proceeds = 0, hi = price;
@@ -1720,11 +1739,12 @@ public class PluginTestSuite extends TestSuite {
     // VolatilityPlugin, anchor off) must reproduce them bit for bit.
     // #96: re-captured after the default depth moved to the fair price (deliberate behaviour change).
     // SM-241: pump hash re-captured, the bot keeps its reference on same-direction fills (deliberate behaviour change).
+    // SM-334: pump hash re-captured, the bot ramps its orders from the available volume (deliberate behaviour change).
 
     /** Golden hash of the scripted flow series over all {@link #GOLDEN_SCALES} x flow x calculator x maxMult configs. */
     private static final long GOLDEN_SCRIPT_HASH = 0x7ca4b1a5d1bba416L;
     /** Golden hash of the t208 diamond_default pump30 price path (volatility scale 0, book refill on). */
-    private static final long GOLDEN_PUMP_HASH = 0xcaf42eca64243b03L;
+    private static final long GOLDEN_PUMP_HASH = 0xb2c2f7df4f6cf55fL;
     /** Volatility scales of the golden configs (they enter the flow capacity as 1 + scale). */
     private static final float[] GOLDEN_SCALES = {0f, 0.3f, 1.5f};
 
@@ -2439,7 +2459,7 @@ public class PluginTestSuite extends TestSuite {
      * abundance 50), diamond_legacy (the same with maxPriceMult 20), dirt (price 0.1, abundance 2,000) or
      * T-214 netherite (price 22,000, abundance 5, max order 320: the depth floor case).
      */
-    private ReplaySetup t208Market(String name) {
+    ReplaySetup t208Market(String name) {
         NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
         float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
         boolean dirt = name.equals("dirt"), netherite = name.equals("netherite");
@@ -2632,7 +2652,7 @@ public class PluginTestSuite extends TestSuite {
      * @param content its full text
      * @return true if the file was written
      */
-    private static boolean t208WriteFile(java.nio.file.Path target, String content) {
+    static boolean t208WriteFile(java.nio.file.Path target, String content) {
         java.nio.file.Path tmp = null;
         for (int attempt = 1; ; attempt++) {
             try {
@@ -2914,7 +2934,7 @@ public class PluginTestSuite extends TestSuite {
     private static Boolean harnessAnchor = null;
 
     /** A volume distribution plugin subscribed to the scratch market (book refill for the harnesses). */
-    private DefaultOrderbookVolumeDistributionPlugin newHarnessRefill() {
+    DefaultOrderbookVolumeDistributionPlugin newHarnessRefill() {
         DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
         p.setLoggerEnabled(false);
         p.onMarketSubscribed(itemID);
@@ -3007,6 +3027,158 @@ public class PluginTestSuite extends TestSuite {
         } finally {
             vob.setDepthSideFactors(1f, 1f);
             market.test_setCurrentMarketPrice(originalPrice);
+        }
+    }
+
+    // ── SM-340: slow-average wall ────────────────────────────────────────────────────────────────
+
+    /** SM-340: diamond calculator (160, abundance 50) with the default wall around the slow average {@code ma} at {@code price}. */
+    private static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator wallCalc(double ma, double price) {
+        var c = t214Calc(160, 50f);
+        c.setWall(new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator.Wall(Math.log(ma), price,
+                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_DEAD_ZONE,
+                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_STRENGTH,
+                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_CAP));
+        return c;
+    }
+
+    /** SM-340: inside the dead zone (price 10% above the average, levels within +-15%) the book is unchanged. */
+    private TestResult test_wall_deadZone() {
+        var c = wallCalc(160, 176);
+        for (double p : new double[]{140, 150, 160, 170, 175.9, 176.1, 180, 185})
+            if (c.wallShape(p) != 0 || c.getVolume(160, p) != c.getStaticVolume(160, p))
+                return fail("Level " + p + " inside the dead zone got wall volume " + c.wallShape(p));
+        var off = t214Calc(160, 50f);
+        for (double p : new double[]{150, 180, 250})
+            if (off.getVolume(160, p) != off.getStaticVolume(160, p)) return fail("No wall must equal the static profile at " + p);
+        return pass("levels within +-15% of the average and a calculator without wall: no extra volume");
+    }
+
+    /**
+     * SM-340: beyond the dead zone the wall sits only on the side facing away from the average (asks above it,
+     * bids below it), grows with the distance and stops at the cap; its depth per relative price at the cap is
+     * {@code cap x 250 x reference order} at any level.
+     */
+    private TestResult test_wall_sideAndGrowth() {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        float strength = DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_STRENGTH;
+        float cap = DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_CAP;
+        float dz = DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_DEAD_ZONE;
+        StringBuilder out = new StringBuilder();
+        // price 25% above the average: asks get the wall, bids between the average and the price do not
+        var up = wallCalc(160, 200);
+        if (up.wallShape(195) != 0 || up.wallShape(190) != 0) return fail("Bids above the average must not get wall volume");
+        double prev = 0;
+        for (double p : new double[]{205, 210, 220, 230}) {
+            double w = up.wallShape(p), expected = Math.min(cap, strength * (Math.log(p / 160) - dz));
+            out.append(String.format(Locale.ROOT, " ask %.0f: %.2f;", p, w));
+            if (Math.abs(w - expected) > 1e-6 * expected || !(w > prev)) return fail("Ask wall must grow as min(cap, k(g - dz)):" + out);
+            prev = w;
+        }
+        if (up.wallShape(300) != cap || up.wallShape(1000) != cap) return fail("Far asks must hold the cap:" + out);
+        // price 25% below the average: bids get the wall, asks between the price and the average do not
+        var down = wallCalc(160, 125);
+        if (down.wallShape(130) != 0 || down.wallShape(150) != 0) return fail("Asks below the average must not get wall volume");
+        if (!(down.wallShape(120) > 0) || !(down.wallShape(110) > down.wallShape(120)) || down.wallShape(50) != cap)
+            return fail("Bid wall must appear below the dead zone and grow to the cap: " + down.wallShape(120) + " / " + down.wallShape(110));
+        // depth per relative price at the cap: cap x 250 x 3,200 at any level
+        double refDensity = cap * DefaultOrderbookVolumeDistributionPlugin.DEPTH_PER_MAX_ORDER
+                * DefaultOrderbookVolumeDistributionPlugin.referenceOrderSize(50f);
+        for (double p : new double[]{400, 1000}) {
+            double density = (up.getVolume(160, p) - (double) up.getStaticVolume(160, p)) * p / tick;
+            out.append(String.format(Locale.ROOT, " density %.0f: %.4g;", p, density));
+            if (Math.abs(density / refDensity - 1) > 1e-3) return fail("Cap density must be " + refDensity + ":" + out);
+        }
+        return pass(out.toString());
+    }
+
+    /** SM-340: an 11-float (round-level era) payload decodes with the wall defaults; 15-float payloads round-trip. */
+    private TestResult test_wall_codec() {
+        ByteBuf old = Unpooled.buffer();
+        old.writeFloat(2f); old.writeFloat(0.1f); old.writeFloat(0.2f); old.writeFloat(0.03f); old.writeBoolean(false);
+        old.writeFloat(5f); old.writeFloat(3f); old.writeFloat(2f);
+        old.writeFloat(0.5f); old.writeFloat(0.01f); old.writeFloat(2f);
+        DefaultOrderbookVolumeDistributionPlugin.Settings a = DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.decode(old);
+        old.release();
+        if (a.roundLevelRange() != 2f
+                || a.wallPeriodMinutes() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_PERIOD_MINUTES
+                || a.wallDeadZone() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_DEAD_ZONE
+                || a.wallStrength() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_STRENGTH
+                || a.wallCap() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_CAP)
+            return fail("11-float payload decoded as " + a);
+        DefaultOrderbookVolumeDistributionPlugin.Settings b = a.withWall(1000f, 0.1f, 50f, 10f);
+        ByteBuf buf = Unpooled.buffer();
+        DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.encode(buf, b);
+        DefaultOrderbookVolumeDistributionPlugin.Settings c = DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.decode(buf);
+        boolean rest = buf.isReadable();
+        buf.release();
+        if (rest) return fail("15-float payload left bytes");
+        return b.equals(c) ? pass("11-float payload -> wall defaults, 15-float payload round-trips") : fail(b + " -> " + c);
+    }
+
+    /** SM-340: wall settings and the slow average survive save/load; a save without the keys loads the defaults and NaN. */
+    private TestResult test_wall_nbt() {
+        DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
+        p.setLoggerEnabled(false);
+        p.onMarketSubscribed(itemID);
+        applySettings(p, DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC,
+                DefaultOrderbookVolumeDistributionPlugin.Settings.createDefault().withWall(1000f, 0.1f, 50f, 10f));
+        p.test_setWallLnMA(itemID, 5.25);
+        CompoundTag tag = new CompoundTag();
+        p.save(tag);
+        DefaultOrderbookVolumeDistributionPlugin q = new DefaultOrderbookVolumeDistributionPlugin();
+        q.setLoggerEnabled(false);
+        q.onMarketSubscribed(itemID);
+        q.load(tag);
+        if (q.test_getWallLnMA(itemID) != 5.25) return fail("Slow average lost on save/load: " + q.test_getWallLnMA(itemID));
+        CompoundTag again = new CompoundTag();
+        q.save(again);
+        CompoundTag m2 = net.kroia.modutilities.NbtCompat.getCompound((ListTag) again.get("marketData"), 0);
+        if (net.kroia.modutilities.NbtCompat.getFloat(m2, "wallStrength") != 50f
+                || net.kroia.modutilities.NbtCompat.getFloat(m2, "wallCap") != 10f
+                || net.kroia.modutilities.NbtCompat.getFloat(m2, "wallDeadZone") != 0.1f
+                || net.kroia.modutilities.NbtCompat.getFloat(m2, "wallPeriodMinutes") != 1000f)
+            return fail("Wall settings lost on save/load: " + m2);
+        CompoundTag m = net.kroia.modutilities.NbtCompat.getCompound((ListTag) tag.get("marketData"), 0);
+        for (String key : new String[]{"wallPeriodMinutes", "wallDeadZone", "wallStrength", "wallCap", "wallLnMA"}) m.remove(key);
+        DefaultOrderbookVolumeDistributionPlugin legacy = new DefaultOrderbookVolumeDistributionPlugin();
+        legacy.setLoggerEnabled(false);
+        legacy.onMarketSubscribed(itemID);
+        legacy.load(tag);
+        if (!Double.isNaN(legacy.test_getWallLnMA(itemID))) return fail("Old save must start the average at the next price");
+        CompoundTag l = new CompoundTag();
+        legacy.save(l);
+        CompoundTag lm = net.kroia.modutilities.NbtCompat.getCompound((ListTag) l.get("marketData"), 0);
+        if (net.kroia.modutilities.NbtCompat.getFloat(lm, "wallStrength") != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_STRENGTH
+                || net.kroia.modutilities.NbtCompat.getFloat(lm, "wallPeriodMinutes") != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_PERIOD_MINUTES)
+            return fail("Old save must load the wall defaults: " + lm);
+        return pass("settings + slow average round-trip; old save -> defaults, average NaN");
+    }
+
+    /**
+     * SM-340, plugin path: an update starts the slow average at the price and hands the wall to the calculator;
+     * strength 0 switches it off (no wall, average forgotten).
+     */
+    private TestResult test_wall_reachesCalculator() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        try {
+            MarketCache cache = new MarketCache(market);
+            List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+            DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
+            p.setLoggerEnabled(false);
+            p.onMarketSubscribed(itemID);
+            p.update(markets);
+            var wall = p.test_getCalculator(itemID).getWall();
+            double lnP = Math.log((float) cache.getPluginMarket().getPrice());
+            if (wall == null || Math.abs(wall.lnMA() - lnP) > 1e-9) return fail("Fresh average must start at the price: " + wall);
+            applySettings(p, DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC,
+                    DefaultOrderbookVolumeDistributionPlugin.Settings.createDefault().withWall(2880f, 0.15f, 0f, 40f));
+            p.update(markets);
+            if (p.test_getCalculator(itemID).getWall() != null || !Double.isNaN(p.test_getWallLnMA(itemID)))
+                return fail("Strength 0 must switch the wall off");
+            return pass("average starts at the price, strength 0 -> off");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
         }
     }
 
@@ -3240,7 +3412,7 @@ public class PluginTestSuite extends TestSuite {
      * T-212: the production calculator of a harness market: depth scale plus the default round-level clusters
      * (scale {@link #harnessRoundLevelScale}).
      */
-    private static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator harnessCalc(double d, float depthScale) {
+    static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator harnessCalc(double d, float depthScale) {
         return rlCalc(d, depthScale, harnessRoundLevelScale, DefaultOrderbookVolumeDistributionPlugin.DEFAULT_ROUND_LEVEL_WIDTH);
     }
 
@@ -3896,7 +4068,8 @@ public class PluginTestSuite extends TestSuite {
      * reference state survives save/load and a save without the reference keys loads idle.
      */
     private TestResult test_targetPriceBot_referenceCodecNbt() {
-        TargetPriceBot.Settings original = TargetPriceBot.Settings.createDefault().withReference(300f, 45f, 0.5f, 0.2f);
+        TargetPriceBot.Settings original = TargetPriceBot.Settings.createDefault().withReference(300f, 45f, 0.5f, 0.2f)
+                .withAvailableVolumeLevels(7).withMaxRampFraction(1.5f);
         ByteBuf buf = Unpooled.buffer();
         try {
             TargetPriceBot.Settings.CODEC.encode(buf, original);
@@ -3907,6 +4080,26 @@ public class PluginTestSuite extends TestSuite {
             r = assertEquals("6-field payload gets the reference defaults", TargetPriceBot.Settings.createDefault(),
                     TargetPriceBot.Settings.CODEC.decode(buf));
             if (!r.passed()) return r;
+            // SM-334: a 10-field payload (before availableVolumeLevels) gets its default; <= 0 becomes the default
+            buf.clear();
+            buf.writeFloat(0.5f).writeFloat(0.1f).writeFloat(0f).writeFloat(0.1f).writeFloat(10f).writeFloat(0.005f)
+                    .writeFloat(300f).writeFloat(45f).writeFloat(0.5f).writeFloat(0.2f);
+            r = assertEquals("10-field payload gets the default levels", TargetPriceBot.DEFAULT_AVAILABLE_VOLUME_LEVELS,
+                    TargetPriceBot.Settings.CODEC.decode(buf).availableVolumeLevels());
+            if (!r.passed()) return r;
+            r = assertEquals("levels 0 become the default", TargetPriceBot.DEFAULT_AVAILABLE_VOLUME_LEVELS,
+                    original.withAvailableVolumeLevels(0).availableVolumeLevels());
+            if (!r.passed()) return r;
+            // SM-334: an 11-field payload (before maxRampFraction) gets its default; <= 0 / NaN become the default
+            buf.clear();
+            buf.writeFloat(0.5f).writeFloat(0.1f).writeFloat(0f).writeFloat(0.1f).writeFloat(10f).writeFloat(0.005f)
+                    .writeFloat(300f).writeFloat(45f).writeFloat(0.5f).writeFloat(0.2f).writeInt(7);
+            r = assertEquals("11-field payload gets the default max ramp", TargetPriceBot.DEFAULT_MAX_RAMP_FRACTION,
+                    TargetPriceBot.Settings.CODEC.decode(buf).maxRampFraction());
+            if (!r.passed()) return r;
+            if (original.withMaxRampFraction(0).maxRampFraction() != TargetPriceBot.DEFAULT_MAX_RAMP_FRACTION
+                    || original.withMaxRampFraction(Float.NaN).maxRampFraction() != TargetPriceBot.DEFAULT_MAX_RAMP_FRACTION)
+                return fail("max ramp 0 / NaN must become the default");
         } finally {
             buf.release();
         }
@@ -4254,10 +4447,13 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /**
-     * T-208: the gap guard blocks only for {@link TargetPriceBot#GAP_GUARD_MAX_BLOCK_SECONDS} after a player
-     * fill. On the thin diamond book one max buy sweeps a gap the refill doesn't close for minutes: the bot
-     * must not trade while the window is open, and must trade again (with the gap still empty) within 5 s
-     * after it closes without a new fill.
+     * T-208: the gap guard blocks only for a while after a player fill. On the thin diamond book one max buy sweeps a
+     * gap the refill doesn't close for minutes: the bot must not trade while the window is open, and must trade again
+     * (with the gap still empty) within 5 s after it closes without a new fill.
+     * <p>
+     * SM-334: the pause is rolled per fill from [{@link TargetPriceBot#GAP_GUARD_MIN_BLOCK_SECONDS},
+     * {@link TargetPriceBot#GAP_GUARD_MAX_BLOCK_SECONDS}]; the test reads the rolled pause through
+     * {@link TargetPriceBot#test_getGapGuardBlockSeconds} and also checks it lies in that range.
      */
     private TestResult test_targetPriceBot_gapGuard_timesOut() {
         harnessRefill = true; // book refills as in production
@@ -4271,6 +4467,13 @@ public class PluginTestSuite extends TestSuite {
             int window = (int) Math.round(TargetPriceBot.GAP_GUARD_MAX_BLOCK_SECONDS * 20);
             for (int t = 1; t <= window + 100; t++) {
                 env.tick();
+                // SM-334: the bot rolls the pause when it sees the fill, at its first step (within 5 ticks)
+                if (t == 5) {
+                    double pause = env.bot.test_getGapGuardBlockSeconds(itemID);
+                    if (pause < TargetPriceBot.GAP_GUARD_MIN_BLOCK_SECONDS || pause > TargetPriceBot.GAP_GUARD_MAX_BLOCK_SECONDS)
+                        return fail("Rolled pause " + pause + " s outside its range");
+                    window = (int) Math.round(pause * 20);
+                }
                 double p = env.price();
                 if (env.bot.test_getLastStep(itemID) == before) continue;
                 if (t < window - 10)
@@ -4284,6 +4487,115 @@ public class PluginTestSuite extends TestSuite {
             return fail("Exception: " + e);
         } finally {
             harnessRefill = false;
+        }
+    }
+
+    /**
+     * SM-334: after a player push the bot sizes each order from the "available volume" (the first
+     * {@link TargetPriceBot.Settings#availableVolumeLevels} levels with volume in its direction, empty levels before them
+     * skipped) times a share that ramps up from {@link TargetPriceBot#RAMP_START_FRACTION} to
+     * {@link TargetPriceBot.Settings#maxRampFraction} (default 200%). Before, it sold the whole
+     * volume down to its target in one order once the gap guard pause ended (diamond 10,449 to 416 in one tick).
+     * Real market, constant test depth of 50 items per level, price 1000, bot target 500 (reference model off, so the
+     * target is fixed), one simulated player fill. Three runs of 120 s each, max ramp 200%, so no tick may drop more
+     * than 2 x levels (+1):
+     * <ul>
+     *   <li>dense, levels 3 and the default 50: bids on every level below the price. The price must slide down over
+     *       several ticks, and the order size must grow (ramp). With 3 levels (150 items measured) the ramped order must
+     *       exceed the measured sum.</li>
+     *   <li>gap, default levels: no bids within {@code gap} levels below the price. The first drop jumps to the first
+     *       bid level (an empty stretch is crossed in one step), every later drop stays within the bound.</li>
+     * </ul>
+     * In every run the price never passes the bot's target.
+     * Without a gap the guard does not block (the window holds enough volume), so the ramp starts at the fill.
+     */
+    private TestResult test_targetPriceBot_pump_slidesDown() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        long originalPrice = serverMarket.getCurrentMarketPrice();
+        long originalFlow = market.getNetPlayerItemFlow();
+        StringBuilder out = new StringBuilder();
+        final long p1 = MarketManager.convertToRawAmountStatic(1000);
+        final double targetReal = 500;
+        final int gap = 200;
+        try {
+            int[][] runs = {{3, 0}, {TargetPriceBot.DEFAULT_AVAILABLE_VOLUME_LEVELS, 0}, {TargetPriceBot.DEFAULT_AVAILABLE_VOLUME_LEVELS, 1}};
+            for (int[] run : runs) {
+                final int levels = run[0];
+                final boolean withGap = run[1] == 1;
+                MarketCache cache = new MarketCache(market);
+                List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+                double gapEdge = MarketManager.convertToRealAmountStatic(withGap ? p1 - gap : p1 - 1);
+                serverMarket.test_setDefaultVolumeProviderFunction(real -> real <= gapEdge + 1e-9 ? 50f : 0f);
+                serverMarket.test_clearOrderbook();
+                serverMarket.test_clearIncomingOrderBuffers();
+                serverMarket.test_setCurrentMarketPrice(p1);
+                serverMarket.test_resetVirtualOrderBookVolume();
+                cache.getPluginMarket().setTargetPrice(targetReal);
+                cache.apply();
+
+                TargetPriceBot bot = new TargetPriceBot();
+                bot.setLoggerEnabled(false);
+                bot.onMarketSubscribed(itemID);
+                applySettings(bot, TargetPriceBot.Settings.CODEC, TargetPriceBot.Settings.createDefault().withReference(0, 60, 0.3f, 0.15f).withAvailableVolumeLevels(levels));
+                // The first bot step seeds the flow. A fresh bot has seen no fill, so it is fully ramped and may
+                // already trade towards the target here: undo that (book and price back to the start), then one
+                // simulated player fill. Everything measured below happens after the fill.
+                for (int t = 0; t < 5; t++) { bot.update(markets); cache.apply(); serverMarket.update(); }
+                serverMarket.test_clearOrderbook();
+                serverMarket.test_clearIncomingOrderBuffers();
+                serverMarket.test_setCurrentMarketPrice(p1);
+                serverMarket.test_resetVirtualOrderBookVolume();
+                market.setNetPlayerItemFlow(market.getNetPlayerItemFlow() - 1);
+                // The bot steps every 5 ticks and keeps its last step until the next one: ignore the warm-up step.
+                final TargetPriceBot.StepInfo warmup = bot.test_getLastStep(itemID);
+
+                long prev = serverMarket.getCurrentMarketPrice();
+                int drops = 0;
+                long firstDrop = 0, maxLaterDrop = 0;
+                TargetPriceBot.StepInfo last = null, first = null;
+                long minPrice = prev;
+                for (int t = 0; t < 120 * 20; t++) {
+                    bot.update(markets);
+                    cache.apply();
+                    serverMarket.update();
+                    TargetPriceBot.StepInfo step = bot.test_getLastStep(itemID);
+                    if (step != null && step != warmup) {
+                        if (first == null) first = step;
+                        last = step;
+                    }
+                    long p = serverMarket.getCurrentMarketPrice();
+                    minPrice = Math.min(minPrice, p);
+                    if (p < prev) {
+                        if (drops == 0) firstDrop = prev - p; else maxLaterDrop = Math.max(maxLaterDrop, prev - p);
+                        drops++;
+                    }
+                    prev = p;
+                }
+                double end = MarketManager.convertToRealAmountStatic(prev);
+                out.append(String.format(Locale.ROOT, "\n %s, levels %d: end %.2f after 120 s, %d drops, first %d levels, later max %d, order %.2f -> %.2f",
+                        withGap ? "gap " + gap : "dense", levels, end, drops, firstDrop, maxLaterDrop,
+                        first == null ? 0 : first.amount(), last == null ? 0 : last.amount()));
+                if (first == null || drops < 3) return fail("The price did not slide down over several ticks" + out);
+                if (!(MarketManager.convertToRealAmountStatic(minPrice) >= targetReal)) return fail("Bot sold past its target" + out);
+                if (!(Math.abs(last.amount()) > Math.abs(first.amount()))) return fail("Order size did not ramp up" + out);
+                long bound = (long) Math.ceil(TargetPriceBot.DEFAULT_MAX_RAMP_FRACTION * levels) + 1;
+                if (maxLaterDrop > bound) return fail("A tick dropped more than max ramp x levels" + out);
+                if (withGap ? (firstDrop < gap || firstDrop > gap + bound) : firstDrop > bound)
+                    return fail("Unexpected first drop" + out);
+                // SM-334: past 100% the ramped order walks beyond the measured levels (3 x 50 items)
+                if (levels == 3 && !(Math.abs(last.amount()) > levels * 50))
+                    return fail("Ramped order did not exceed the measured available volume" + out);
+            }
+            StockMarketMod.LOGGER.info("[SM-334 slide] {}", out);
+            return pass("Dense book slides, empty gap is crossed once, then slides" + out);
+        } catch (Exception e) {
+            return fail("Exception: " + e + out);
+        } finally {
+            serverMarket.test_setDefaultVolumeProviderFunction(null);
+            serverMarket.test_clearIncomingOrderBuffers();
+            serverMarket.test_setCurrentMarketPrice(originalPrice);
+            serverMarket.test_clearOrderbook();
+            market.setNetPlayerItemFlow(originalFlow);
         }
     }
 
@@ -4576,5 +4888,83 @@ public class PluginTestSuite extends TestSuite {
             if (!wasAdmin)
                 manager.setStockmarketAdminMode(player, false);
         }
+    }
+
+    // ── SM-329 ───────────────────────────────────────────────────────────────
+
+    /**
+     * SM-329: the request path of the Plugin management screen's "Plugin manager logger" checkbox
+     * ({@code requestPluginManagerLogger} -> {@code PluginManagerLoggerRequest}). Sets the switch on, then off, from
+     * this JVM's client and checks each answer, the master's state and the "loggerEnabled" flag the manager writes
+     * into its save data; a read-only request (null) returns the current state. sp only (client and master in one
+     * JVM); the player gets StockMarket admin mode for the test if needed. The previous state is restored.
+     */
+    private TestResult test_pluginManagerLogger_setViaClientRequest() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null || client.PLUGIN_MANAGER == null || pluginManager == null)
+            return skip("sp only (client and master in this JVM)");
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.player == null)
+            return skip("no client player");
+        UUID player = mc.player.getUUID();
+        var manager = backend.MARKET_MANAGER.getSync();
+        boolean wasAdmin = manager.isStockmarketAdmin(player);
+        boolean before = pluginManager.isLoggerEnabled();
+        try {
+            if (!wasAdmin)
+                manager.setStockmarketAdminMode(player, true);
+            for (Boolean value : new Boolean[]{true, false, null}) {
+                java.util.function.Supplier<java.util.concurrent.CompletableFuture<Boolean>> send =
+                        () -> client.PLUGIN_MANAGER.requestPluginManagerLogger(value);
+                var future = mc.isSameThread() ? send.get() : await(mc.submit(send), 10_000);
+                Boolean answer = await(future, 10_000);
+                boolean expected = value != null ? value : false; // the read follows the "off" step
+                TestResult r = assertEquals("answer for " + value, (Boolean) expected, answer);
+                if (!r.passed()) return r;
+                r = assertEquals("master state after " + value, expected, pluginManager.isLoggerEnabled());
+                if (!r.passed()) return r;
+                java.util.Map<String, ListTag> saved = new java.util.HashMap<>();
+                pluginManager.save(saved);
+                CompoundTag flags = net.kroia.modutilities.NbtCompat.getCompound(saved.get("managerData"), 0);
+                r = assertEquals("saved loggerEnabled after " + value, expected, net.kroia.modutilities.NbtCompat.getBoolean(flags, "loggerEnabled"));
+                if (!r.passed()) return r;
+            }
+            return pass("set on, set off and read back via the client request; state and save data follow");
+        } finally {
+            pluginManager.setLoggerEnabled(before);
+            if (!wasAdmin)
+                manager.setStockmarketAdminMode(player, false);
+        }
+    }
+
+    /**
+     * SM-329: a fresh manager restores the switch from its save data; a save without the "loggerEnabled" flag
+     * (written before SM-329) loads with the switch off. The saves hold one plugin entry of an unknown type, so no
+     * plugin is created (an empty list would create the defaults) and both migration flags are set.
+     */
+    private TestResult test_pluginManagerLogger_loadsFromSave() {
+        for (Boolean flag : new Boolean[]{null, true, false}) {
+            CompoundTag unknownPlugin = new CompoundTag();
+            unknownPlugin.putString("pluginTypeID", "sm329_unknown_plugin_type");
+            ListTag plugins = new ListTag();
+            plugins.add(unknownPlugin);
+            CompoundTag flags = new CompoundTag();
+            flags.putBoolean("newsPluginAutoCreateDone", true);
+            flags.putBoolean("netFlowPluginMigrationDone", true);
+            if (flag != null) flags.putBoolean("loggerEnabled", flag);
+            ListTag managerData = new ListTag();
+            managerData.add(flags);
+            java.util.Map<String, ListTag> save = new java.util.HashMap<>();
+            save.put("plugins", plugins);
+            save.put("managerData", managerData);
+
+            ServerPluginManager fresh = new ServerPluginManager();
+            fresh.load(save);
+            TestResult r = assertEquals("loggerEnabled after loading flag " + flag, flag != null && flag, fresh.isLoggerEnabled());
+            if (!r.passed()) return r;
+            r = assertTrue("no plugin created", fresh.getPlugins().isEmpty());
+            if (!r.passed()) return r;
+        }
+        return pass("missing flag loads off, true/false load as saved");
     }
 }

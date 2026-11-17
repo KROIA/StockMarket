@@ -1,0 +1,48 @@
+{
+  "id": "treasury_stimulus_windfall",
+  "picture": "treasury_stimulus_windfall.png",
+  "headline": {
+    "en_us": "Royal treasury floods the market with fresh coin",
+    "zh_cn": "王室金库向市场倾注新币",
+    "de_de": "Königliche Schatzkammer überschwemmt den Markt mit frischem Geld"
+  },
+  "text": {
+    "en_us": "The royal treasury has opened its vaults, pouring newly minted coin into the markets to spur trade after a long lean season. With coin suddenly cheap and plentiful, merchants are rushing into hard assets - gems and gold above all - to preserve their wealth before the money loses its shine.",
+    "zh_cn": "王室金库打开库门，把新铸钱币投入市场，以在漫长歉收季后刺激贸易。钱币骤然廉价且充裕，商人争相涌入硬资产——尤以宝石与黄金为甚——以求在货币失去光泽前保住财富。",
+    "de_de": "Die königliche Schatzkammer hat ihre Gewölbe geöffnet und schüttet frisch geprägtes Geld in die Märkte, um den Handel nach einer langen mageren Zeit anzukurbeln. Da Münzen plötzlich billig und reichlich vorhanden sind, flüchten Händler in Sachwerte - vor allem Edelsteine und Gold -, um ihr Vermögen zu sichern, bevor das Geld seinen Glanz verliert."
+  },
+  "category": "economy",
+  "weight": 6,
+  "cooldownSeconds": 14400,
+  "announceDelayMs": {
+    "min": 30000,
+    "max": 90000
+  },
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.3,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 3000,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:diamond",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:emerald",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:iron_ingot",
+      "weightFactor": 0.6
+    }
+  ]
+}

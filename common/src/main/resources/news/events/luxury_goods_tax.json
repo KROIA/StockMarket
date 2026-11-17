@@ -1,0 +1,42 @@
+{
+  "id": "luxury_goods_tax",
+  "picture": "luxury_goods_tax.png",
+  "headline": {
+    "en_us": "Council levies steep luxury tax on gems and gold",
+    "zh_cn": "议会对宝石与黄金课以重税",
+    "de_de": "Rat erhebt saftige Luxussteuer auf Edelsteine und Gold"
+  },
+  "text": {
+    "en_us": "To fill the war chest the trade council has slapped a punishing luxury tax on every sale of diamonds, emeralds and gold. Buyers are balking at the new surcharge, demand for finery is cooling sharply, and analysts expect the chill on luxury prices to last for as long as the tax stays on the books.",
+    "zh_cn": "为充实战备金库，贸易议会对钻石、绿宝石与黄金的每笔交易课以惩罚性奢侈税。买家面对新增费用望而却步，奢侈品需求急剧降温，分析师预计只要这项税收仍在实施，这轮寒潮就会一直持续。",
+    "de_de": "Um die Kriegskasse zu füllen, hat der Handelsrat eine drückende Luxussteuer auf jeden Verkauf von Diamanten, Smaragden und Gold verhängt. Käufer schrecken vor dem neuen Aufschlag zurück, die Nachfrage nach Prunk kühlt merklich ab, und Analysten erwarten, dass die Preisdämpfung im Luxussegment anhält, solange die Steuer in Kraft bleibt."
+  },
+  "category": "politics",
+  "weight": 2,
+  "cooldownSeconds": 86400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.2,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 2700,
+    "reversal": "none"
+  },
+  "markets": [
+    {
+      "item": "minecraft:diamond",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:emerald",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 0.6
+    }
+  ],
+  "requires": [
+    { "type": "keyNotEquals", "key": "luxury_tax", "value": "active" }
+  ],
+  "records": { "luxury_tax": "active" }
+}

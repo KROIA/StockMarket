@@ -1,0 +1,44 @@
+{
+  "id": "pumpkin_autumn_festival",
+  "picture": "pumpkin_autumn_festival.png",
+  "headline": {
+    "en_us": "Autumn festival lifts the pumpkin trade!",
+    "zh_cn": "秋日庆典提振南瓜交易！",
+    "de_de": "Herbstfest belebt den Kürbishandel!"
+  },
+  "text": {
+    "en_us": "The annual autumn festival is upon us and every village square is being decked out with lanterns and pies. Bakers cannot bake pumpkin pie fast enough, carvers are besieged for jack-o'-lanterns, and prices for pumpkins climb steadily through the season while the ordinary cake stalls stand quiet.",
+    "zh_cn": "一年一度的秋日庆典将至，各个村庄广场都挂起了灯笼、摆出了馅饼。面包坊赶制南瓜派赶不过来，雕匠被追着要南瓜灯，南瓜价格整个季节稳步上涨，而寻常蛋糕摊则门可罗雀。",
+    "de_de": "Das alljährliche Herbstfest steht vor der Tür, und auf jedem Dorfplatz werden Laternen und Kuchen ausgestellt. Die Bäcker kommen mit dem Kürbiskuchen nicht hinterher, die Schnitzer werden nach Kürbislaternen belagert, und die Kürbispreise klettern die Saison über stetig, während die gewöhnlichen Kuchenstände leer bleiben."
+  },
+  "category": "cultural",
+  "weight": 5,
+  "cooldownSeconds": 43200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.25,
+    "rampUpSeconds": 1050,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:pumpkin",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:pumpkin_pie",
+      "weightFactor": 0.7
+    },
+    {
+      "item": "minecraft:carved_pumpkin",
+      "weightFactor": 0.5
+    },
+    {
+      "item": "minecraft:cake",
+      "weightFactor": -0.15
+    }
+  ]
+}

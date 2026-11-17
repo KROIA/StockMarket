@@ -1,0 +1,32 @@
+{
+  "id": "phantom_membrane_repair_run",
+  "picture": "phantom_membrane_repair_run.png",
+  "headline": {
+    "en_us": "Rush to repair elytra empties membrane stocks",
+    "zh_cn": "鞘翅抢修潮扫空幻翼膜库存",
+    "de_de": "Ansturm auf Elytren-Reparaturen leert die Membranvorräte"
+  },
+  "text": {
+    "en_us": "After a season of hard flying, every glider-pilot in the realm is scrambling to patch worn elytra - and only phantom membrane will do the job. Night-hunters cannot down the phantoms fast enough, and membrane prices are climbing with every torn wing.",
+    "zh_cn": "一季高强度飞行之后，境内每位滑翔者都在急着修补磨损的鞘翅——而只有幻翼膜管用。夜猎者击杀幻翼的速度赶不上需求，每多一片破损的翅膀，幻翼膜价格就再涨一分。",
+    "de_de": "Nach einer Saison harten Fliegens versucht jeder Gleiter-Pilot des Reiches, abgenutzte Elytren zu flicken - und nur Phantommembranen taugen dafür. Die Nachtjäger können die Phantome nicht schnell genug erlegen, und die Membranpreise klettern mit jedem zerrissenen Flügel."
+  },
+  "category": "commodities",
+  "weight": 5,
+  "cooldownSeconds": 10800,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.3,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2100,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:phantom_membrane",
+      "weightFactor": 1.0
+    }
+  ]
+}

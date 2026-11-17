@@ -57,8 +57,8 @@ Open the plugin's window with **Open Plugin** in its entry on the [Plugin Manage
 
 | Setting (UI name) | File default | Allowed values | What it controls |
 |---|---|---|---|
-| Min seconds between events | `900` (15 min) | > 0 and <= max | Shortest pause between two random events |
-| Max seconds between events | `3600` (60 min) | >= min | Longest pause between two random events |
+| Min seconds between events | `7200` (2 h) | > 0 and <= max | Shortest pause between two random events |
+| Max seconds between events | `16200` (4.5 h) | >= min | Longest pause between two random events |
 | Max active events (global) | `3` | >= 1 | How many events may run at the same time on the whole server |
 | Max active events (per market) | `1` | >= 1 | How many events may affect one market at the same time |
 
@@ -98,9 +98,13 @@ Scales every news effect on this market, including the permanent shift of perman
 
 ### Min / Max seconds between events
 
-The pause before the next random event is picked uniformly between these two values. With the defaults the average pause is (900 + 3600) / 2 = 2,250 s, so about **1.6 random events per hour** -- if an eligible event exists. If nothing can fire when the time comes (all events on cooldown, caps reached), the scheduler waits a full new interval. Manually triggered and chained events do not use these slots.
+The pause before the next random event is picked uniformly between these two values. With the defaults the average pause is (7200 + 16200) / 2 = 11,700 s (3.25 h), so about 7 attempts per real day. If nothing can fire when the time comes (all events on cooldown, caps reached), the scheduler waits a full new interval; with up to 3 events active at once some attempts are skipped, and chained follow-up events come on top, so the result is about **6 news per real day** across all markets. Manually triggered and chained events do not use these slots.
 
-Halve both values for a busy news feed on servers with active traders; double them if news should feel rare and important.
+Lower both values for a busy news feed on servers with active traders. Worlds created before version 2.2 used 900 / 3600 s (about 38 events per day); if the file still has these values it is moved to the new ones once.
+
+### Impact duration and strength
+
+The shipped `default_events.json` also sets two multipliers in its `scheduler` block: `impactDurationMultiplier` `3` makes every event last three times as long as its definition says (ramp, hold and reversal), and `impactStrengthMultiplier` `0.5` halves every price target, including permanent shifts. Example: the shock above (+0.5, hold 5 min) then moves the target to x1.25 and holds it for 15 minutes. They apply to all events, also manual triggers and chains, and only to events that start after a reload. See [Configuration](../../news-system/configuration.md#the-scheduler-block).
 
 ### Max active events (global / per market)
 

@@ -246,7 +246,12 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
             if (market != null) {
                 MarketPriceStruct currentCandleData = market.getCurrentMarketPriceStruct();
                 if(input.maxTimestamp >= currentCandleData.time()) {
-                    data.startNewCandle(System.currentTimeMillis());
+                    // SM-331: the aggregation (loadFrom, fill off) may already have appended the live
+                    // candle; stored rows always open before the current raw candle, so a tail at or
+                    // after it is that live candle. Update it instead of adding a second one.
+                    PriceHistoryData.Candle tail = data.getCurrentCandle();
+                    if (tail == null || tail.openTimestamp < currentCandleData.time())
+                        data.startNewCandle(System.currentTimeMillis());
                     data.setCurrentMarketPrice(currentCandleData.high());
                     data.setCurrentMarketPrice(currentCandleData.low());
                     data.setCurrentMarketPrice(market.getCurrentMarketPrice());
