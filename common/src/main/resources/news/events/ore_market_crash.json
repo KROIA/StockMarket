@@ -1,0 +1,28 @@
+{
+  "id": "ore_market_crash",
+  "picture": "ore_market_crash.png",
+  "headline": {
+    "en_us": "Ore bubble bursts - mining stocks in free fall!",
+    "zh_cn": "矿石泡沫破裂——矿类资产断崖下跌！",
+    "de_de": "Erzblase geplatzt - Bergbauwerte im freien Fall!"
+  },
+  "text": {
+    "en_us": "After months of speculation the ore bubble has finally burst. Panic selling grips every ore market as overleveraged traders liquidate their positions. Analysts expect a slow recovery.",
+    "zh_cn": "历经数月炒作，矿石泡沫终于破裂。恐慌性抛售席卷每一个矿石市场，杠杆过高的交易者被迫平仓。分析师预计复苏将十分缓慢。",
+    "de_de": "Nach Monaten der Spekulation ist die Erzblase endlich geplatzt. Panikverkäufe erfassen alle Erzmärkte, während überhebelte Händler ihre Positionen auflösen. Analysten erwarten eine langsame Erholung."
+  },
+  "category": "markets",
+  "weight": 4,
+  "cooldownSeconds": 21600,
+  "impact": {
+    "type": "crash",
+    "peakFactor": -0.5,
+    "durationSeconds": 900,
+    "reversal": "exponential",
+    "reversalSeconds": 6000
+  },
+  "markets": [
+    { "item": "minecraft:*_ore", "weightFactor": 1.0 },
+    { "item": "minecraft:raw_*", "weightFactor": 0.7 }
+  ]
+}

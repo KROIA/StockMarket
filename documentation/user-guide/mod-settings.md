@@ -111,6 +111,8 @@ Group `Integrations`. Each integration has its own switchable section.
 | Placeholders (TAB / Placeholder API) | `PLACEHOLDERS_ENABLED` | on | **Restart required**. See [Placeholders](placeholders.md) |
 | Sync admin flag with LuckPerms | `SYNC_ADMIN_FLAG_WITH_PERMISSION` | off | **Restart required**. See [Syncing admin mode with LuckPerms](admin-setup.md#syncing-stockmarket-admin-mode-with-luckperms) |
 | Discord feed (trades and alerts) | `DISCORD_ENABLED` | off | Master only. See [Discord feed](admin-setup.md#discord-feed) |
+| Web interface (read-only) | `WEB_INTERFACE_ENABLED` | off | Master only, takes effect immediately. See [Web interface](web-interface.md) |
+| Web interface port | `WEB_INTERFACE_PORT` | 8090 | 1024-65535; not the game port, the multi-server link port or a port in use |
 
 ---
 

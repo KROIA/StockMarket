@@ -1,0 +1,32 @@
+{
+  "id": "quartz_cartel_squeeze",
+  "picture": "quartz_cartel_squeeze.png",
+  "headline": {
+    "en_us": "Cartel corners quartz supply - prices squeezed!",
+    "zh_cn": "卡特尔垄断石英供给——价格被挤压！",
+    "de_de": "Kartell verknappt den Quarz - Preise unter Druck!"
+  },
+  "text": {
+    "en_us": "Word from the back rooms is that a ring of merchants has quietly bought up every quartz shipment leaving the nether portals. With the supply locked in their vaults and buyers left scrambling, the price has been squeezed sharply upward overnight - a manipulation the trade council is said to be investigating.",
+    "zh_cn": "据密室消息，一个商人集团已悄然买下所有运出下界传送门的石英。供给被锁进他们的金库，买家四处奔走，价格一夜之间被大幅推高——据说贸易议会正在调查这起操纵行为。",
+    "de_de": "Aus den Hinterzimmern heißt es, ein Ring von Händlern habe still und heimlich jede Quarzlieferung aufgekauft, die die Netherportale verlässt. Da der Nachschub in ihren Gewölben liegt und die Käufer im Regen stehen, wurde der Preis über Nacht scharf nach oben getrieben - eine Manipulation, gegen die der Handelsrat angeblich bereits ermittelt."
+  },
+  "category": "crime",
+  "weight": 3,
+  "cooldownSeconds": 28800,
+  "adminOnly": true,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.45,
+    "durationSeconds": 1500,
+    "reversal": "exponential",
+    "reversalSeconds": 3000,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:quartz",
+      "weightFactor": 1.0
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "id": "fletcher_feather_demand",
+  "picture": "fletcher_feather_demand.png",
+  "headline": {
+    "en_us": "Archery muster empties the fletchers' feather stores",
+    "zh_cn": "射术点阅扫空箭匠的羽毛库存",
+    "de_de": "Bogenschützen-Aufgebot leert die Federlager der Pfeilmacher"
+  },
+  "text": {
+    "en_us": "With the muster called and every able archer ordered to the butts, the fletchers are working through the night and their bins of goose feathers are running dry. Buyers are offering above the going rate for any bundle of quills that comes to market. Until the flocks moult again, feathers will stay dear.",
+    "zh_cn": "点阅令下，所有能拉弓的射手被召至靶场，箭匠通宵赶工，鹅羽箱已见底。凡有羽束上市，买家都愿出高于行情的价钱。在禽群再次换羽之前，羽毛将一直昂贵。",
+    "de_de": "Da das Aufgebot einberufen und jeder taugliche Bogenschütze an die Schießstände beordert ist, arbeiten die Pfeilmacher die Nächte durch, und ihre Kästen mit Gänsefedern laufen leer. Käufer bieten über dem üblichen Preis für jedes Bündel Federkiele, das auf den Markt kommt. Bis die Schwärme wieder mausern, bleiben Federn teuer."
+  },
+  "category": "conflict",
+  "weight": 5,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.28,
+    "rampUpSeconds": 750,
+    "durationSeconds": 2250,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.03
+  },
+  "markets": [
+    {
+      "item": "minecraft:feather",
+      "weightFactor": 1.0
+    }
+  ]
+}

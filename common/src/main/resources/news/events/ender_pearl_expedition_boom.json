@@ -1,0 +1,36 @@
+{
+  "id": "ender_pearl_expedition_boom",
+  "picture": "ender_pearl_expedition_boom.png",
+  "headline": {
+    "en_us": "Expedition fever drives ender-pearl demand sky-high",
+    "zh_cn": "探险热潮将末影珍珠需求推至天际",
+    "de_de": "Expeditionsfieber treibt die Nachfrage nach Enderperlen in die Höhe"
+  },
+  "text": {
+    "en_us": "A wave of frontier expeditions is setting out for the far reaches, and every party wants pearls for the leap home. With ender eyes needed to chart the way, brokers report pearls and eyes alike snapped up faster than the delvers can gather them.",
+    "zh_cn": "一波边疆探险队正开赴远方，每支队伍都需要珍珠以便跃回故乡。绘制路线离不开末影之眼，经纪商称珍珠与末影之眼被抢购的速度快过探险者的采集速度。",
+    "de_de": "Eine Welle von Grenzland-Expeditionen bricht in die fernen Weiten auf, und jede Gruppe will Perlen für den Sprung nach Hause. Da auch Enderaugen zum Kartieren des Weges gebraucht werden, melden Makler, dass Perlen und Augen schneller vergriffen sind, als die Delver sie sammeln können."
+  },
+  "category": "commodities",
+  "weight": 6,
+  "cooldownSeconds": 10800,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.28,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2100,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:ender_pearl",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:ender_eye",
+      "weightFactor": 0.6
+    }
+  ]
+}

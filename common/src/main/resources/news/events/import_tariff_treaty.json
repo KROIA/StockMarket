@@ -1,0 +1,31 @@
+{
+  "id": "import_tariff_treaty",
+  "picture": "import_tariff_treaty.png",
+  "headline": {
+    "en_us": "Trade council signs sweeping import tariff treaty",
+    "zh_cn": "贸易议会签署全面进口关税协定",
+    "de_de": "Handelsrat unterzeichnet umfassenden Einfuhrzoll-Vertrag"
+  },
+  "text": {
+    "en_us": "After months of negotiation the trade council has signed a sweeping import tariff treaty on foreign metals. Cross-border shipments of iron and gold will carry a permanent surcharge - analysts expect the premium to become the new normal price.",
+    "zh_cn": "经过数月谈判，贸易议会就外国金属签署了一项全面的进口关税协定。铁与金的跨境运输将被永久加征费用——分析师预计该溢价将成为新的常态价格。",
+    "de_de": "Nach monatelangen Verhandlungen hat der Handelsrat einen umfassenden Einfuhrzoll-Vertrag auf ausländische Metalle unterzeichnet. Grenzüberschreitende Lieferungen von Eisen und Gold tragen künftig einen dauerhaften Aufschlag - Analysten erwarten, dass der Zuschlag zum neuen Normalpreis wird."
+  },
+  "category": "politics",
+  "weight": 1,
+  "cooldownSeconds": 86400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.18,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 2400,
+    "reversal": "none"
+  },
+  "markets": [
+    { "item": "minecraft:iron_ingot", "weightFactor": 1.0 },
+    { "item": "minecraft:gold_ingot", "weightFactor": 0.8 }
+  ],
+  "requires": [
+    { "type": "notFired", "eventId": "import_tariff_treaty" }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "id": "leather_tannery_boom",
+  "picture": "leather_tannery_boom.png",
+  "headline": {
+    "en_us": "New tanneries drive a run on leather",
+    "zh_cn": "新制革坊引发皮革抢购",
+    "de_de": "Neue Gerbereien lösen einen Ansturm auf Leder aus"
+  },
+  "text": {
+    "en_us": "A cluster of new tanneries has opened along the river, and their appetite for hides is reshaping the whole leather trade. Saddlers, bookbinders and armourers are all bidding against one another, and prices are climbing steadily. Wool merchants grumble that the fashion for tooled leather is pulling custom away from their looms.",
+    "zh_cn": "沿河新开了一批制革坊，它们对生皮的胃口正在重塑整个皮革贸易。马鞍匠、装订匠与甲匠彼此竞价，价格稳步攀升。羊毛商人抱怨，压花皮革的风尚正把客源从他们的织机上拉走。",
+    "de_de": "Entlang des Flusses hat eine Reihe neuer Gerbereien eröffnet, und ihr Hunger nach Häuten krempelt den gesamten Lederhandel um. Sattler, Buchbinder und Waffenschmiede überbieten sich gegenseitig, und die Preise klettern stetig. Wollhändler murren, dass die Mode für gepunztes Leder ihnen die Kundschaft von den Webstühlen zieht."
+  },
+  "category": "economy",
+  "weight": 7,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.3,
+    "rampUpSeconds": 750,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.03
+  },
+  "markets": [
+    {
+      "item": "minecraft:leather",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "#minecraft:wool",
+      "weightFactor": -0.25
+    }
+  ]
+}

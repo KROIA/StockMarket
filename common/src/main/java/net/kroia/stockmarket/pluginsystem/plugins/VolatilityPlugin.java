@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.LongSupplier;
 
 /**
  * Random-walk volatility on top of the flow equilibrium.
@@ -27,14 +28,20 @@ import java.util.Random;
  */
 public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Void> {
 
-    /** Default random-walk amplitude relative to the equilibrium price (30%). */
+    /**
+     * Default amplitude of the price noise relative to the equilibrium price. At 0.3 the target price swings
+     * about +-14% (1 sigma) around the equilibrium, mostly as multi-day trends; hourly moves are about 3%.
+     * The noise is four mean-reverting walks (tau 5 min / 1 h / 8 h / 60 h, total sigma ~0.47 noise), see
+     * {@link NormalizedRandomPriceGenerator}.
+     */
     public static final float DEFAULT_VOLATILITY_SCALE = 0.3f;
 
     /**
-     * Custom per-market settings of the random walk.
+     * Custom per-market settings of the noise.
      *
-     * @param volatilityScale amplitude of the random price walk relative to the equilibrium price
-     *                        (0.3 = price wanders roughly +-30%)
+     * @param volatilityScale multiplier of the noise relative to the equilibrium price (0.3 = target swings
+     *                        about +-14% at 1 sigma, mostly as multi-day trends; hourly moves about 3%;
+     *                        see {@link NormalizedRandomPriceGenerator})
      */
     public record Settings(float volatilityScale) {
         /**
@@ -68,16 +75,43 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
     static class MarketData {
         final NormalizedRandomPriceGenerator priceGenerator;
         final TimerMillis timer;
+        /** Source of the walk step intervals: the shared RNG, or a seeded one ({@link #test_setSeed}). */
+        final Random rng;
         Settings settings = Settings.createDefault();
 
         MarketData() {
-            priceGenerator = new NormalizedRandomPriceGenerator(5);
-            timer = new TimerMillis(false);
-            timer.start(random.nextInt(10000));
+            rng = testSeed != null ? new Random(testSeed) : random;
+            priceGenerator = new NormalizedRandomPriceGenerator(testSeed != null ? rng : null);
+            LongSupplier clock = testClock;
+            timer = clock == null ? new TimerMillis(false) : new TimerMillis(false) {
+                @Override
+                public long currentTimeMillis() { return clock.getAsLong(); }
+            };
+            timer.start(rng.nextInt(10000));
         }
     }
 
     private static final Random random = new Random();
+    /** SM-336 test hook: seed of the random walk of markets subscribed from now on (null = unseeded). */
+    private static Long testSeed = null;
+    /** SM-336 test hook: clock (ms) of the walk timer of markets subscribed from now on (null = wall clock). */
+    private static LongSupplier testClock = null;
+
+    /**
+     * SM-336 test hook: seeds the random walk (step values and step intervals) of every market subscribed
+     * after this call, so a simulation replays the same walk. null restores the unseeded production RNG.
+     *
+     * @param seed the seed, or null
+     */
+    public static void test_setSeed(Long seed) { testSeed = seed; }
+
+    /**
+     * SM-336 test hook: drives the walk timer of every market subscribed after this call from a simulated
+     * clock instead of the wall clock, so a simulation faster than 20 TPS steps the walk at game speed.
+     *
+     * @param clock current simulated time in ms (must start above 0), or null for the wall clock
+     */
+    public static void test_setClock(LongSupplier clock) { testClock = clock; }
     private final Map<ItemID, MarketData> marketData = new HashMap<>();
     /**
      * SM-327: each market's loaded "marketData" entry, written back under the current keys on save. A pre-T-213
@@ -116,8 +150,10 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
 
             // Each market advances its own random walk timer independently
             if (data.timer.check()) {
-                data.timer.start(100 + random.nextLong(100 * 10L + 1));
-                data.priceGenerator.getNextValue();
+                // SM-337: the walk advances by the elapsed (real or simulated) time, not by the step count
+                long elapsedMs = data.timer.getElapsedTime();
+                data.timer.start(100 + data.rng.nextLong(100 * 10L + 1));
+                data.priceGenerator.step(elapsedMs);
             }
 
             // T-213: the random walk oscillates around the NetFlowPlugin's equilibrium (default price without one).

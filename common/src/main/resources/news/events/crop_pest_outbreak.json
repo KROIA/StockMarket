@@ -1,0 +1,31 @@
+{
+  "id": "crop_pest_outbreak",
+  "picture": "crop_pest_outbreak.png",
+  "headline": {
+    "en_us": "Locust swarm ravages farmland - staple crops in short supply!",
+    "zh_cn": "蝗群肆虐农田——主粮供应告急！",
+    "de_de": "Heuschreckenschwarm verwüstet Felder - Grundnahrungsmittel werden knapp!"
+  },
+  "text": {
+    "en_us": "A massive locust swarm has descended on the central farmlands, devouring rows of wheat, potatoes, and carrots. With the fall harvest threatened, prices for staple crops are spiking as households and merchants scramble to secure supplies.",
+    "zh_cn": "一场大规模蝗灾降临中部农区，成排的小麦、马铃薯与胡萝卜被啃食殆尽。秋收受到威胁，民众与商贩争相抢购，主粮价格急剧飙升。",
+    "de_de": "Ein gewaltiger Heuschreckenschwarm hat sich über die zentralen Felder hergemacht und Weizen, Kartoffeln und Karotten kahlgefressen. Die Herbsternte steht auf der Kippe, und die Preise für Grundnahrungsmittel schießen nach oben, während Haushalte und Händler ihre Vorräte sichern."
+  },
+  "category": "disaster",
+  "weight": 4,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.38,
+    "durationSeconds": 1500,
+    "reversal": "exponential",
+    "reversalSeconds": 4500,
+    "noise": 0.05
+  },
+  "markets": [
+    { "item": "minecraft:wheat",  "weightFactor": 1.0 },
+    { "item": "minecraft:potato", "weightFactor": 0.9 },
+    { "item": "minecraft:carrot", "weightFactor": 0.9 },
+    { "item": "minecraft:bread",  "weightFactor": 0.5 }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "tuff_facade_fashion",
+  "picture": "tuff_facade_fashion.png",
+  "headline": {
+    "en_us": "Tuff-and-calcite facades sweep the townhouses",
+    "zh_cn": "凝灰岩与方解石外墙风靡联排宅邸",
+    "de_de": "Tuff-und-Kalzit-Fassaden erobern die Stadthäuser"
+  },
+  "text": {
+    "en_us": "A wave of taste for pale tuff-and-calcite facades has swept the townhouses, and masons cannot cut the mottled stone fast enough. As tuff and calcite climb, plain cobblestone is quietly falling out of favor - the humble grey walls now read as old-fashioned and their price drifts lower.",
+    "zh_cn": "一股偏爱浅色凝灰岩与方解石外墙的风潮席卷联排宅邸，石匠切不出足够快的斑驳石料。凝灰岩与方解石走高之际，普通圆石悄然失宠——朴素灰墙如今被视为过时，价格随之下滑。",
+    "de_de": "Eine Modewelle für helle Tuff-und-Kalzit-Fassaden hat die Stadthäuser erfasst, und die Steinmetze kommen mit dem Zuschneiden des gesprenkelten Gesteins kaum nach. Während Tuff und Kalzit steigen, gerät schlichtes Kopfsteinpflaster still aus der Mode - die biederen grauen Mauern gelten nun als altbacken, und ihr Preis gibt nach."
+  },
+  "category": "cultural",
+  "weight": 6,
+  "cooldownSeconds": 10800,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.3,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.03
+  },
+  "markets": [
+    {
+      "item": "minecraft:tuff",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:calcite",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:cobblestone",
+      "weightFactor": -0.15
+    }
+  ]
+}
