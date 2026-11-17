@@ -342,6 +342,11 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         addSection(group, group.SYNC_ADMIN_FLAG_WITH_PERMISSION);
         // Text only: the webhook routing lives in config/modutilities/discord/stockmarket.json (secrets), not here.
         addSection(group, group.DISCORD_ENABLED);
+        // SM-347: applied live by the SET (port checked there), so not restart-required.
+        FeatureToggleSection web = addSection(group, group.WEB_INTERFACE_ENABLED);
+        SettingRow port = new SettingRow(group, group.WEB_INTERFACE_PORT);
+        editorValues.add(port::editorValue);
+        web.addChild(port);
     }
 
     /**

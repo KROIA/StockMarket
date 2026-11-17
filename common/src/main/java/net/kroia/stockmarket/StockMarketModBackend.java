@@ -25,6 +25,7 @@ import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommandHandler;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
 import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
+import net.kroia.stockmarket.minecraft.compat.StockMarketWebInterface;
 import net.kroia.stockmarket.minecraft.compat.StockMarketPlaceholders;
 import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.data.DatabaseManager;
@@ -445,6 +446,7 @@ public class StockMarketModBackend implements StockMarketAPI {
                 AdminFlagSync.init();
             AdminFlagSync.migrateIfNeeded(); // one-time push of admins to LuckPerms (setting on), users are loaded now
             StockMarketDiscord.register(SERVER_INSTANCES); // T-217: master only; creates config/modutilities/discord/stockmarket.json
+            StockMarketWebInterface.apply(SERVER_INSTANCES); // SM-347: read-only web page, master only, off by default
             registerItemPriceProvider();
 
             // Villager trade repricing: build the initial price table now that
@@ -953,6 +955,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         events.getSlaveConnectionLostSignal().removeListener(SLAVE_LOST_LISTENER);
         StockMarketPlaceholders.shutdown();
         StockMarketDiscord.shutdown();
+        StockMarketWebInterface.stop(); // SM-347
         saveDataToFiles(server);
 
         if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATABASE_MANAGER != null) {
