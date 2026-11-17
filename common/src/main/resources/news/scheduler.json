@@ -1,0 +1,9 @@
+{
+  "minSecondsBetweenEvents": 7200,
+  "maxSecondsBetweenEvents": 16200,
+  "maxActiveEventsGlobal": 3,
+  "maxActiveEventsPerMarket": 1,
+  "historyMaxEntries": 1000,
+  "impactDurationMultiplier": 3.0,
+  "impactStrengthMultiplier": 0.5
+}

@@ -37,6 +37,10 @@ All settings are **per market**. Select a market icon in the plugin entry of the
 | Trend Period (min) | `10` | number > 0 | Time constant of the price's moving average. The book refills against a move away from it |
 | Trend Gain | `10` | number >= 0 | How strongly the distance between the price and its moving average speeds up the refill of the opposite side (asks while the price is above the average, bids while below) and slows the other side; 0 = off |
 | Trend Max Factor | `4` | number >= 1 | Largest speed-up or slow-down of a side's refill (between 1/x and x); 1 = off |
+| Wall Average Period | `2880` | number >= 0 | Time constant of the slow moving average of the price in minutes (2880 = 2 days); 0 = wall off |
+| Wall Dead Zone | `0.15` | number >= 0 | Distance from the slow average without any wall, in log price (0.15 = about +-15 %) |
+| Wall Strength | `200` | number >= 0 | How fast the wall grows beyond the dead zone, as a multiple of the normal depth near the price per 1.0 log price (200: 10 % beyond the dead zone = 20 times the depth); 0 = off |
+| Wall Cap | `40` | number >= 0 | Largest extra depth of the wall, as a multiple of the normal depth near the price; 0 = off |
 
 The text fields accept only non-negative numbers.
 
@@ -141,6 +145,21 @@ This is an exponential approach. The **time constant** `1 / (rate x Speed)` seco
 ### Trend Period, Trend Gain and Trend Max Factor
 
 The plugin tracks a moving average of the price (time constant **Trend Period**). While the price is above it, the sell side refills faster and the buy side slower; below it the other way round. This applies inside the order book window and to the remembered depth outside it, so the book leans against a sustained move. **Trend Gain** sets how strongly the distance to the average changes the refill speed, and **Trend Max Factor** caps the change: with the default `4` a side refills at most 4 times faster or slower than the normal Accumulation Rate x Speed. Set Trend Gain to `0` or Trend Max Factor to `1` to switch it off.
+
+### Wall Average Period, Wall Dead Zone, Wall Strength and Wall Cap
+
+These settings protect a market against a player who buys or sells the same item non-stop for days. Besides the short trend average above, the plugin keeps a **slow moving average** of the price (time constant **Wall Average Period**, 2 days by default).
+
+As long as the price stays within the **Wall Dead Zone** of that average (about +-15 %), nothing changes. Natural price swings, including trends over several days, mostly stay inside this zone. When the price moves further away, extra volume builds up on the side that faces away from the average:
+
+- **Above the average** only the sell side gets the extra volume: traders take their profits.
+- **Below the average** only the buy side gets it: bargain hunters step in.
+
+The further the price is beyond the dead zone, the bigger this "wall": **Wall Strength** sets how fast it grows, **Wall Cap** how big it can get. A player who keeps pushing the price in one direction must buy or sell more and more items for each further percent. Moving the price back toward the average costs the same as before, because that side gets no extra volume. Because the average follows the price slowly, a price that stays at a new level for days becomes the new normal and the wall fades.
+
+**Effect:** in a 10-day simulation of a diamond market where one player market-buys 3,200 diamonds every minute, the price ends near 650 with the wall instead of about 30,000 without it. Markets with normal trading are not affected.
+
+Set Wall Strength, Wall Cap or Wall Average Period to `0` to switch the wall off.
 
 ## Generic Settings
 

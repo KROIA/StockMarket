@@ -44,6 +44,9 @@ public class PriceHistoryTestSuite extends TestSuite {
         addTest("load_from_empty_source", this::test_loadFrom_emptySource);
         addTest("load_from_time_gap_filling", this::test_loadFrom_timeGapFilling);
         addTest("load_from_no_time_gap_filling", this::test_loadFrom_noTimeGapFilling);
+        addTest("load_from_offline_gaps_own_bucket", this::test_loadFrom_offlineGaps_ownBucket);
+        addTest("load_from_offline_gaps_fill", this::test_loadFrom_offlineGaps_fill);
+        addTest("load_from_offline_gaps_second_pass", this::test_loadFrom_offlineGaps_secondPass);
         // Range Queries
         addTest("get_min_price_normal", this::test_getMinPrice_normalRange);
         addTest("get_max_price_normal", this::test_getMaxPrice_normalRange);
@@ -265,6 +268,138 @@ public class PriceHistoryTestSuite extends TestSuite {
         // Without gap filling, should have fewer candles
         return assertTrue("Without gap filling, should have few candles, got: " + target.getCandles().size(),
                 target.getCandles().size() <= 5);
+    }
+
+    // --- SM-331: candles after offline time (1h candles, multi-day gaps) ---
+
+    private static final long HOUR = 3_600_000L;
+    /** 2026-11-03 00:00 UTC; hour boundaries are the same in CET. */
+    private static final long DAY0 = 1_793_664_000_000L;
+    /** "Now" for the runs: day 12, 18:10, one hour after the last stored row. */
+    private static final long NOW = at(12, 18, 10);
+    /** Price the source reports as current; seeds the live / trailing candle. */
+    private static final long LIVE_PRICE = 500L;
+
+    private static long at(int day, int hour, int minute) {
+        return DAY0 + day * 24L * HOUR + hour * HOUR + minute * 60_000L;
+    }
+
+    /**
+     * Stored rows modeled on the user's data (row i opens at 100 + i, high +2, low -1, volume 1):
+     * A = day 0 00:43 (1 row), B = day 4 14:58 + 14:59, C = day 9 12:12..12:24 (13 rows),
+     * D = day 12 16:04/16:30/16:59, E = day 12 17:00 (exactly on the boundary) + 17:05.
+     */
+    private static PriceHistoryData offlineGapRows() {
+        List<Long> times = new ArrayList<>();
+        times.add(at(0, 0, 43));
+        times.add(at(4, 14, 58));
+        times.add(at(4, 14, 59));
+        for (int m = 12; m <= 24; m++)
+            times.add(at(9, 12, m));
+        times.add(at(12, 16, 4));
+        times.add(at(12, 16, 30));
+        times.add(at(12, 16, 59));
+        times.add(at(12, 17, 0));
+        times.add(at(12, 17, 5));
+        List<Candle> rows = new ArrayList<>();
+        for (int i = 0; i < times.size(); i++)
+            rows.add(new Candle(times.get(i), 100 + i, 102 + i, 99 + i, 1f));
+        return new PriceHistoryData(DUMMY_ITEM, SCALE_FACTOR, rows, LIVE_PRICE);
+    }
+
+    /** Expected real candles: bucket start, first row index, row count. */
+    private static final long[][] OFFLINE_BUCKETS = {
+            {at(0, 0, 0), 0, 1},
+            {at(4, 14, 0), 1, 2},
+            {at(9, 12, 0), 3, 13},
+            {at(12, 16, 0), 16, 3},
+            {at(12, 17, 0), 19, 2},
+    };
+
+    /** Checks one real candle: its own bucket, open of its first row, high/low/volume of its rows only. */
+    private TestResult checkRealCandle(Candle c, long[] bucket) {
+        long first = 100 + bucket[1], last = first + bucket[2] - 1;
+        TestResult r = assertEquals("candle at its own bucket " + Candle.dateTimeFormat.format(bucket[0]), bucket[0], c.openTimestamp);
+        if (!r.passed()) return r;
+        r = assertEquals("open = first row's open", first, c.open);
+        if (!r.passed()) return r;
+        r = assertEquals("high = highest row high", last + 2, c.high);
+        if (!r.passed()) return r;
+        r = assertEquals("low = lowest row low", first - 1, c.low);
+        if (!r.passed()) return r;
+        return assertEquals("volume = own rows only", (float) bucket[2], c.tradedVolume);
+    }
+
+    /**
+     * Fill-on result: one candle per hour from day 0 00:00 to day 12 18:00 (strictly increasing,
+     * no duplicates), the real buckets carry their rows, every other bucket is a flat fill candle.
+     */
+    private TestResult checkHourlyFilled(PriceHistoryData out) {
+        List<Candle> c = out.getCandles();
+        long start = at(0, 0, 0);
+        int expected = (int) ((at(12, 18, 0) - start) / HOUR) + 1;
+        TestResult r = assertEquals("one candle per hour up to the live bucket", expected, c.size());
+        if (!r.passed()) return r;
+        int nextReal = 0;
+        for (int k = 0; k < c.size(); k++) {
+            Candle candle = c.get(k);
+            long bucket = start + k * HOUR;
+            if (nextReal < OFFLINE_BUCKETS.length && OFFLINE_BUCKETS[nextReal][0] == bucket) {
+                r = checkRealCandle(candle, OFFLINE_BUCKETS[nextReal++]);
+                if (!r.passed()) return r;
+                continue;
+            }
+            r = assertEquals("candle " + k + " at its own hour", bucket, candle.openTimestamp);
+            if (!r.passed()) return r;
+            r = assertTrue("candle " + k + " is a flat fill", candle.open == candle.high && candle.open == candle.low && candle.tradedVolume == 0f);
+            if (!r.passed()) return r;
+            // Gap fills take the next real candle's open (unchanged behaviour); the tail is the live price.
+            long fillPrice = nextReal < OFFLINE_BUCKETS.length ? 100 + OFFLINE_BUCKETS[nextReal][1] : LIVE_PRICE;
+            r = assertEquals("candle " + k + " fill price", fillPrice, candle.open);
+            if (!r.passed()) return r;
+        }
+        return assertEquals("all real candles found", OFFLINE_BUCKETS.length, nextReal);
+    }
+
+    /**
+     * SM-331, fill off (the server's aggregation): each real candle sits in its own floored bucket
+     * holding only its own rows, followed by exactly one live candle at "now".
+     */
+    private TestResult test_loadFrom_offlineGaps_ownBucket() {
+        PriceHistoryData out = offlineGapRows().createFromDifferentCandleDeltaTime(NOW, HOUR, LIVE_PRICE, false);
+        List<Candle> c = out.getCandles();
+        TestResult r = assertEquals("5 real candles + 1 live", OFFLINE_BUCKETS.length + 1, c.size());
+        if (!r.passed()) return r;
+        for (int k = 0; k < OFFLINE_BUCKETS.length; k++) {
+            r = checkRealCandle(c.get(k), OFFLINE_BUCKETS[k]);
+            if (!r.passed()) return r;
+        }
+        Candle live = c.getLast();
+        r = assertEquals("live candle opens at now", NOW, live.openTimestamp);
+        if (!r.passed()) return r;
+        return assertTrue("live candle is flat at the current price",
+                live.open == LIVE_PRICE && live.high == LIVE_PRICE && live.low == LIVE_PRICE);
+    }
+
+    /**
+     * SM-331, fill on straight from the stored rows: fill candles only in the empty hours between
+     * the real candles, and every real candle in its own hour.
+     */
+    private TestResult test_loadFrom_offlineGaps_fill() {
+        PriceHistoryData out = new PriceHistoryData(DUMMY_ITEM, SCALE_FACTOR, new ArrayList<>(), 0);
+        out.loadFrom(offlineGapRows(), HOUR, NOW, LIVE_PRICE, true);
+        return checkHourlyFilled(out);
+    }
+
+    /**
+     * SM-331, the client's second pass: fill on over the server's fill-off output (already floored
+     * candles + live candle). Candles on a bucket start must not fold into the previous bucket.
+     */
+    private TestResult test_loadFrom_offlineGaps_secondPass() {
+        PriceHistoryData server = offlineGapRows().createFromDifferentCandleDeltaTime(NOW, HOUR, LIVE_PRICE, false);
+        PriceHistoryData client = new PriceHistoryData(DUMMY_ITEM, SCALE_FACTOR, new ArrayList<>(), 0);
+        client.loadFrom(server, HOUR, NOW, LIVE_PRICE, true);
+        return checkHourlyFilled(client);
     }
 
     // --- Range Queries ---

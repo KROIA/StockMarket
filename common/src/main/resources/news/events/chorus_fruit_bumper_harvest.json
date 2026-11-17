@@ -1,0 +1,36 @@
+{
+  "id": "chorus_fruit_bumper_harvest",
+  "picture": "chorus_fruit_bumper_harvest.png",
+  "headline": {
+    "en_us": "Outer islands yield a chorus-fruit glut",
+    "zh_cn": "外岛紫颂果大丰收，市场过剩",
+    "de_de": "Äußere Inseln bringen eine Chorusfrucht-Schwemme"
+  },
+  "text": {
+    "en_us": "The chorus plants of the outer End islands have grown wild this season, and returning delvers are hauling back more fruit than the markets can absorb. With popped chorus fruit piling up beside it in the warehouses, prices are drifting steadily lower.",
+    "zh_cn": "本季末地外岛的紫颂植株疯长，返航的探险者带回的果实超出市场消化能力。爆裂紫颂果在仓库里堆积，价格持续走低。",
+    "de_de": "Die Choruspflanzen der äußeren End-Inseln sind in dieser Saison wild gewuchert, und heimkehrende Delver bringen mehr Früchte zurück, als die Märkte aufnehmen können. Da sich geplatzte Chorusfrüchte daneben in den Lagern stapeln, geben die Preise stetig nach."
+  },
+  "category": "commodities",
+  "weight": 5,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.25,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2700,
+    "reversal": "ramp",
+    "reversalSeconds": 2400,
+    "noise": 0.03
+  },
+  "markets": [
+    {
+      "item": "minecraft:chorus_fruit",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:popped_chorus_fruit",
+      "weightFactor": 0.7
+    }
+  ]
+}

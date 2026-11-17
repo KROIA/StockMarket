@@ -1,0 +1,34 @@
+{
+  "id": "diamond_rush",
+  "picture": "diamond_rush.png",
+  "headline": {
+    "en_us": "Diamond rush in the northern mountains!",
+    "zh_cn": "北部山脉掀起钻石淘金热！",
+    "de_de": "Diamantenrausch in den nördlichen Bergen!"
+  },
+  "text": {
+    "en_us": "Prospectors report huge diamond veins in the northern mountains. Experts expect supply to surge within days, putting pressure on prices across the ore market. Emerald traders are already rerouting caravans towards the new claims.",
+    "zh_cn": "勘探者在北部山脉发现巨型钻石矿脉。专家预计供给将在数日内激增，令整个矿石市场的价格承压。绿宝石商人已开始将商队改道前往新矿区。",
+    "de_de": "Schürfer melden riesige Diamantvorkommen in den nördlichen Bergen. Experten erwarten, dass das Angebot innerhalb weniger Tage stark steigt und die Preise am Erzmarkt unter Druck geraten. Smaragdhändler leiten ihre Karawanen bereits zu den neuen Claims um."
+  },
+  "category": "commodities",
+  "weight": 10,
+  "cooldownSeconds": 7200,
+  "adminOnly": false,
+  "announceDelayMs": { "min": 0, "max": 60000 },
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.35,
+    "rampUpSeconds": 600,
+    "durationSeconds": 3000,
+    "reversal": "exponential",
+    "reversalSeconds": 4500,
+    "noise": 0.05
+  },
+  "markets": [
+    { "item": "minecraft:diamond",       "weightFactor": 1.0 },
+    { "item": "minecraft:diamond_block", "weightFactor": 1.0 },
+    { "item": "#c:ores",                 "weightFactor": 0.3 },
+    { "item": "minecraft:emerald",       "weightFactor": -0.4 }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "id": "crying_obsidian_anchor_fad",
+  "picture": "crying_obsidian_anchor_fad.png",
+  "headline": {
+    "en_us": "Respawn anchors become the must-have - crying obsidian soars",
+    "zh_cn": "重生锚成必备之物——哭泣的黑曜石飙升",
+    "de_de": "Seelenanker werden zum Muss - Weinender Obsidian schießt hoch"
+  },
+  "text": {
+    "en_us": "No frontier camp is complete without a respawn anchor this season, and the craze has sent crying obsidian to dizzy heights. With everyone abandoning their old beds for the glowing anchors, bed-makers are watching demand quietly slip away.",
+    "zh_cn": "本季没有重生锚的边疆营地都不算完整，这股热潮把哭泣的黑曜石推到令人目眩的高位。众人弃旧床而投发光锚，制床匠眼看着需求悄然流失。",
+    "de_de": "Kein Grenzlager gilt in dieser Saison als vollständig ohne Seelenanker, und die Mode hat Weinenden Obsidian in schwindelerregende Höhen getrieben. Da alle ihre alten Betten für die leuchtenden Anker aufgeben, sehen die Bettmacher zu, wie ihnen die Nachfrage stillschweigend entgleitet."
+  },
+  "category": "cultural",
+  "weight": 5,
+  "cooldownSeconds": 10800,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.28,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:crying_obsidian",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:*_bed",
+      "weightFactor": -0.15
+    }
+  ]
+}

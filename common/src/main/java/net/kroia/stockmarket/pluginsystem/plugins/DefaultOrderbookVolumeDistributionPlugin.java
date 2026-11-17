@@ -36,11 +36,28 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
      * @param roundLevelScale    T-212: round-level cluster scale S, multiple of the near-price depth; 0 = off
      * @param roundLevelWidth    T-212: cluster width sigma in ln price
      * @param roundLevelRange    T-212: distance e-fold lambda in ln price (how far from the price clusters stay visible)
+     * @param wallPeriodMinutes  SM-340 slow-average wall: time constant of the slow moving average of ln price (minutes);
+     *                           &lt;= 0 = wall off
+     * @param wallDeadZone       SM-340: half width of the dead zone around the slow average in ln price (0.15 = about
+     *                           +-15%); no extra volume inside it
+     * @param wallStrength       SM-340: extra depth per unit of ln distance beyond the dead zone, in multiples of the
+     *                           normal near-price depth; &lt;= 0 = wall off
+     * @param wallCap            SM-340: maximum extra depth, same unit as the strength; &lt;= 0 = wall off
      */
     public record Settings(float volumeScale, float speed, float accumulationRate, float decumulationRate, boolean resetVolume,
                            float trendPeriodMinutes, float trendGain, float trendMaxFactor,
-                           float roundLevelScale, float roundLevelWidth, float roundLevelRange) {
-        /** Settings with the default round-level clusters. */
+                           float roundLevelScale, float roundLevelWidth, float roundLevelRange,
+                           float wallPeriodMinutes, float wallDeadZone, float wallStrength, float wallCap) {
+        /** Settings with the default slow-average wall (SM-340). */
+        public Settings(float volumeScale, float speed, float accumulationRate, float decumulationRate, boolean resetVolume,
+                        float trendPeriodMinutes, float trendGain, float trendMaxFactor,
+                        float roundLevelScale, float roundLevelWidth, float roundLevelRange) {
+            this(volumeScale, speed, accumulationRate, decumulationRate, resetVolume, trendPeriodMinutes, trendGain, trendMaxFactor,
+                    roundLevelScale, roundLevelWidth, roundLevelRange,
+                    DEFAULT_WALL_PERIOD_MINUTES, DEFAULT_WALL_DEAD_ZONE, DEFAULT_WALL_STRENGTH, DEFAULT_WALL_CAP);
+        }
+
+        /** Settings with the default round-level clusters and wall. */
         public Settings(float volumeScale, float speed, float accumulationRate, float decumulationRate, boolean resetVolume,
                         float trendPeriodMinutes, float trendGain, float trendMaxFactor) {
             this(volumeScale, speed, accumulationRate, decumulationRate, resetVolume, trendPeriodMinutes, trendGain, trendMaxFactor,
@@ -64,13 +81,21 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         /** @return a copy with other trend accumulation parameters */
         public Settings withTrend(float periodMinutes, float gain, float maxFactor) {
             return new Settings(volumeScale, speed, accumulationRate, decumulationRate, resetVolume, periodMinutes, gain, maxFactor,
-                    roundLevelScale, roundLevelWidth, roundLevelRange);
+                    roundLevelScale, roundLevelWidth, roundLevelRange, wallPeriodMinutes, wallDeadZone, wallStrength, wallCap);
         }
 
         /** @return a copy with other T-212 round-level cluster parameters */
         public Settings withRoundLevels(float scale, float width, float range) {
             return new Settings(volumeScale, speed, accumulationRate, decumulationRate, resetVolume,
-                    trendPeriodMinutes, trendGain, trendMaxFactor, scale, width, range);
+                    trendPeriodMinutes, trendGain, trendMaxFactor, scale, width, range,
+                    wallPeriodMinutes, wallDeadZone, wallStrength, wallCap);
+        }
+
+        /** @return a copy with other SM-340 slow-average wall parameters */
+        public Settings withWall(float periodMinutes, float deadZone, float strength, float cap) {
+            return new Settings(volumeScale, speed, accumulationRate, decumulationRate, resetVolume,
+                    trendPeriodMinutes, trendGain, trendMaxFactor, roundLevelScale, roundLevelWidth, roundLevelRange,
+                    periodMinutes, deadZone, strength, cap);
         }
 
         public static final StreamCodec<ByteBuf, Settings> CODEC = new StreamCodec<>() {
@@ -90,7 +115,13 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
                 float rlScale = buf.isReadable() ? buf.readFloat() : DEFAULT_ROUND_LEVEL_SCALE;
                 float rlWidth = buf.isReadable() ? buf.readFloat() : DEFAULT_ROUND_LEVEL_WIDTH;
                 float rlRange = buf.isReadable() ? buf.readFloat() : DEFAULT_ROUND_LEVEL_RANGE;
-                return new Settings(scale, speed, acc, dec, reset, period, gain, max, rlScale, rlWidth, rlRange);
+                // SM-340 slow-average wall, appended after the round-level floats (older payloads: defaults)
+                float wPeriod = buf.isReadable() ? buf.readFloat() : DEFAULT_WALL_PERIOD_MINUTES;
+                float wDead = buf.isReadable() ? buf.readFloat() : DEFAULT_WALL_DEAD_ZONE;
+                float wStrength = buf.isReadable() ? buf.readFloat() : DEFAULT_WALL_STRENGTH;
+                float wCap = buf.isReadable() ? buf.readFloat() : DEFAULT_WALL_CAP;
+                return new Settings(scale, speed, acc, dec, reset, period, gain, max, rlScale, rlWidth, rlRange,
+                        wPeriod, wDead, wStrength, wCap);
             }
             @Override
             public void encode(ByteBuf buf, Settings s) {
@@ -105,6 +136,10 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
                 buf.writeFloat(s.roundLevelScale());
                 buf.writeFloat(s.roundLevelWidth());
                 buf.writeFloat(s.roundLevelRange());
+                buf.writeFloat(s.wallPeriodMinutes());
+                buf.writeFloat(s.wallDeadZone());
+                buf.writeFloat(s.wallStrength());
+                buf.writeFloat(s.wallCap());
             }
         };
     }
@@ -323,8 +358,58 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             return roundLevelScale * levels.refShape * sum;
         }
 
+        /**
+         * SM-340: the slow-average wall state the plugin hands the calculator every tick. Immutable, so the volatile
+         * field is safe between the plugin thread and the order book's reads.
+         *
+         * @param lnMA     ln of the slow moving average of the price
+         * @param price    market price at the plugin's last update (the bid/ask split the wall side is chosen at)
+         * @param deadZone half width of the dead zone in ln price
+         * @param strength extra shape per unit of ln distance beyond the dead zone
+         * @param cap      maximum extra shape
+         */
+        public record Wall(double lnMA, double price, float deadZone, float strength, float cap) {}
+
+        /** SM-340: current wall, null = off (the 2-arg constructor and tests without the plugin). */
+        private volatile Wall wall = null;
+
+        /**
+         * SM-340: sets the wall state (null or a non-finite/non-positive input = off).
+         *
+         * @param wall the new state, see {@link Wall}
+         */
+        public void setWall(Wall wall)
+        {
+            this.wall = wall != null && Double.isFinite(wall.lnMA) && wall.price > 0 && wall.strength > 0 && wall.cap > 0
+                    ? wall : null;
+        }
+
+        /** @return the current wall state, null = off */
+        public Wall getWall() { return wall; }
+
+        /**
+         * SM-340: extra shape of the wall at a pick price. With {@code g = ln(pick) - lnMA}, a level gets
+         * {@link #wallFactor} of |g| only on the side facing away from the slow average: asks (pick above the price)
+         * with g &gt; 0, bids (pick below the price) with g &lt; 0. So above the average only the asks get thicker
+         * (profit taking), below it only the bids (bargain hunters); moving back toward the average stays as cheap
+         * as before.
+         *
+         * @param volumePickPrice pick price p
+         * @return the extra shape (0 when off, inside the dead zone or on the side facing the average)
+         */
+        public double wallShape(double volumePickPrice)
+        {
+            Wall w = wall;
+            if (w == null || !(volumePickPrice > 0)) return 0;
+            double g = Math.log(volumePickPrice) - w.lnMA;
+            boolean ask = volumePickPrice > w.price;
+            if (ask ? g <= 0 : g >= 0) return 0;
+            return wallFactor(Math.abs(g), w.deadZone, w.strength, w.cap);
+        }
+
+        /** {@inheritDoc} SM-340: the depth without the slow-average wall ({@link #wallShape}). */
         @Override
-        public float getVolume(double marketPrice, double volumePickPrice) {
+        public float getStaticVolume(double marketPrice, double volumePickPrice) {
             if (marketPrice <= 0) return 0;
             // T-214: depth per relative price stays constant as the centre moves (more ticks per % below D).
             // #96: marketPrice is the order book's depth centre, the fair price E, so a dumped price no longer
@@ -333,6 +418,19 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             // T-212: the cluster term is added before the depth scale and the normalisation
             double shape = smoothShape(marketPrice, volumePickPrice) + roundLevelShape(marketPrice, volumePickPrice);
             return (float) (shape * volumeScale * priceNorm);
+        }
+
+        /** {@inheritDoc} The static profile ({@link #getStaticVolume}) plus the SM-340 slow-average wall ({@link #wallShape}). */
+        @Override
+        public float getVolume(double marketPrice, double volumePickPrice) {
+            if (marketPrice <= 0) return 0;
+            float volume = getStaticVolume(marketPrice, volumePickPrice);
+            // SM-340: the wall is normalised by the pick price instead of the centre, so its depth per relative price
+            // (wallShape x 250 x reference order) does not depend on how far the fair price lags the price.
+            double wallShape = wallShape(volumePickPrice);
+            if (wallShape > 0)
+                volume += (float) (wallShape * volumeScale * (defaultPrice > 0 ? defaultPrice / volumePickPrice : 1));
+            return volume;
         }
 
         /**
@@ -453,6 +551,40 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
     /** Trend accumulation: side factor clamp (1 = off). */
     public static final float DEFAULT_TREND_MAX_FACTOR = 4f;
 
+    // ---- SM-340 slow-average wall ----
+    /**
+     * SM-340: default time constant of the slow average: 2 days. Offline estimate (floodBuy, 3,200 diamonds a
+     * minute): 1.5 days ends at ~1,100 after 10 days, 2 days at ~780.
+     */
+    public static final float DEFAULT_WALL_PERIOD_MINUTES = 2880f;
+    /**
+     * SM-340: default dead zone +-0.15 in ln price. The volatility noise (+-14% at 1 sigma) keeps its gap to a 2-day
+     * average at about 9.5% (1 sigma), beyond 0.15 about 12% of the time, by 0.04 on average.
+     */
+    public static final float DEFAULT_WALL_DEAD_ZONE = 0.15f;
+    /** SM-340: default strength: 10% beyond the dead zone = 20 times the normal near-price depth. */
+    public static final float DEFAULT_WALL_STRENGTH = 200f;
+    /** SM-340: default cap: 40 times the normal near-price depth (reached 20% beyond the dead zone). */
+    public static final float DEFAULT_WALL_CAP = 40f;
+
+    /**
+     * SM-340: extra shape {@code min(cap, strength x (|g| - deadZone))} of a level at ln distance {@code |g|} from the
+     * slow average; 0 inside the dead zone. One shape unit is about the normal depth near the price (250 reference
+     * orders per unit of relative price).
+     *
+     * @param absGap   |ln(level / slow average)|
+     * @param deadZone dead zone half width in ln price (NaN or &lt; 0 = 0)
+     * @param strength shape per ln unit beyond the dead zone (&lt;= 0 = off)
+     * @param cap      maximum shape (&lt;= 0 = off)
+     * @return the extra shape, &gt;= 0, 0 for any non-finite input
+     */
+    public static double wallFactor(double absGap, float deadZone, float strength, float cap)
+    {
+        if (!(strength > 0) || !(cap > 0) || !Double.isFinite(absGap) || !Float.isFinite(strength) || !Float.isFinite(cap)) return 0;
+        double excess = absGap - (deadZone > 0 ? deadZone : 0);
+        return excess > 0 ? Math.min(cap, strength * excess) : 0;
+    }
+
     // ---- T-212 round-level clusters ----
     /** T-212: default cluster scale S (multiple of the near-price depth; 0 = off). */
     public static final float DEFAULT_ROUND_LEVEL_SCALE = 1f;
@@ -500,6 +632,18 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         public float roundLevelScale = DEFAULT_ROUND_LEVEL_SCALE;
         public float roundLevelWidth = DEFAULT_ROUND_LEVEL_WIDTH;
         public float roundLevelRange = DEFAULT_ROUND_LEVEL_RANGE;
+        /** SM-340 slow-average wall settings (see {@link Settings}). */
+        public float wallPeriodMinutes = DEFAULT_WALL_PERIOD_MINUTES;
+        public float wallDeadZone = DEFAULT_WALL_DEAD_ZONE;
+        public float wallStrength = DEFAULT_WALL_STRENGTH;
+        public float wallCap = DEFAULT_WALL_CAP;
+        /** SM-340: ln of the slow moving average of the price, NaN = start at the next price. */
+        public double wallLnMA = Double.NaN;
+        /**
+         * SM-340 test hook: a second calculator that gets the same wall every tick (harnesses that register their own
+         * calculator on the order book instead of the plugin's); null = none.
+         */
+        public DistributionCalculator wallMirror = null;
 
         // ---- Target-distribution cache ----
         // The expensive distribution targets (Math.pow/exp/sqrt per price level) are cached
@@ -512,6 +656,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         public double cachedCenter = Double.NaN;        // #96: fair price the distribution was centred on
         public float cachedVolumeScale = Float.NaN;     // effective calculator volume scale used (changes via settings/load)
         public double cachedDefaultPrice = Double.NaN;  // calculator default/fair price used
+        public double cachedWallLnMA = Double.NaN;      // SM-340: slow average the wall was computed for (NaN = off)
 
         public RuntimeData()
         {
@@ -609,6 +754,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
                 continue;
             data.currentMarketPrice = (float) market.market.getPrice();
             updateTrend(market, data);
+            updateWall(data);
             boolean mayRefreshTargets =
                     ((i - rotationStart + marketCount) % marketCount) < MAX_TARGET_REFRESHES_PER_UPDATE;
             updateForMarket(market, data, mayRefreshTargets);
@@ -648,6 +794,60 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         data.trendLnMA += (lnP - data.trendLnMA) * (1 - Math.exp(-ServerMarket.TICK_SECONDS / periodSeconds));
         data.trendAskFactor = trendAskFactor(lnP, data.trendLnMA, data.trendGain, data.trendMaxFactor);
         market.oderBook.setVirtualDepthSideFactors(1f / data.trendAskFactor, data.trendAskFactor);
+    }
+
+    /**
+     * SM-340: one tick of the slow average (exponential in ln price, time constant {@code wallPeriodMinutes}), then
+     * hands the wall state to the calculator. Period, strength or cap &lt;= 0 switch the wall off; the average keeps
+     * running only while it is on (switched on later, it starts at the price then).
+     */
+    private static void updateWall(RuntimeData data)
+    {
+        double price = data.currentMarketPrice;
+        boolean on = data.wallPeriodMinutes > 0 && data.wallStrength > 0 && data.wallCap > 0;
+        if(!on) data.wallLnMA = Double.NaN;
+        DistributionCalculator.Wall wall = null;
+        if(on && price > 0)
+        {
+            double lnP = Math.log(price);
+            if(!Double.isFinite(data.wallLnMA)) data.wallLnMA = lnP;
+            data.wallLnMA += (lnP - data.wallLnMA) * (1 - Math.exp(-ServerMarket.TICK_SECONDS / (data.wallPeriodMinutes * 60.0)));
+            wall = new DistributionCalculator.Wall(data.wallLnMA, price, data.wallDeadZone, data.wallStrength, data.wallCap);
+        }
+        data.calculator.setWall(wall);
+        if(data.wallMirror != null) data.wallMirror.setWall(wall);
+    }
+
+    /**
+     * SM-340 test hook: hands this market's wall to {@code calc} as well, every tick, so a harness that registered its own
+     * calculator on the order book sees the same wall as production (where the plugin's calculator is registered).
+     *
+     * @param marketID the subscribed market
+     * @param calc     the harness calculator, null = stop mirroring
+     */
+    public void test_mirrorWallTo(ItemID marketID, DistributionCalculator calc)
+    {
+        RuntimeData data = marketData.get(marketID);
+        if (data != null) data.wallMirror = calc;
+    }
+
+    /** @return ln of a subscribed market's slow wall average, NaN if none yet or the wall is off (tests) */
+    public double test_getWallLnMA(ItemID marketID)
+    {
+        RuntimeData data = marketData.get(marketID);
+        return data == null ? Double.NaN : data.wallLnMA;
+    }
+
+    /**
+     * Sets a subscribed market's slow wall average (tests: put the price a chosen distance from it).
+     *
+     * @param marketID the market
+     * @param lnMA     ln of the average, NaN = start at the next price
+     */
+    public void test_setWallLnMA(ItemID marketID, double lnMA)
+    {
+        RuntimeData data = marketData.get(marketID);
+        if (data != null) data.wallLnMA = lnMA;
     }
 
     /** @return the trend accumulation ask side factor of a subscribed market (1 = neutral; tests and reports) */
@@ -697,7 +897,12 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         // market price (drives the buy/sell sign flip), the fair price the distribution is
         // centred on (#96), effective volume scale (settings change / load) and default price.
         double center = market.market.getEquilibriumPrice();
-        boolean cacheValid = rangeMatches
+        // SM-340: the wall moves with the slow average; rebuild once it moved like the centre tolerance
+        DistributionCalculator.Wall wall = data.calculator.getWall();
+        double wallLnMA = wall == null ? Double.NaN : wall.lnMA();
+        boolean wallValid = Double.isNaN(wallLnMA) ? Double.isNaN(data.cachedWallLnMA)
+                : Math.abs(wallLnMA - data.cachedWallLnMA) <= CENTER_REFRESH_MOVE;
+        boolean cacheValid = rangeMatches && wallValid
                 && data.cachedMarketPrice == data.currentMarketPrice
                 && Math.abs(center - data.cachedCenter) <= CENTER_REFRESH_MOVE * data.cachedCenter
                 && data.cachedVolumeScale == data.calculator.volumeScale
@@ -719,6 +924,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             data.cachedCenter = center;
             data.cachedVolumeScale = data.calculator.volumeScale;
             data.cachedDefaultPrice = data.calculator.defaultPrice;
+            data.cachedWallLnMA = wallLnMA;
         }
         float[] targets = data.cachedTargets;
 
@@ -730,6 +936,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             orderBook.resetVirtualVolume();
             orderBook.setRawVolume(rangeStart, targets.clone());
             data.trendLnMA = Double.NaN;   // the trend starts over with the fresh book
+            data.wallLnMA = Double.NaN;    // SM-340: so does the slow average (e.g. a new default price)
             return;
         }
 
@@ -831,6 +1038,11 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             marketTag.putFloat("roundLevelWidth", entry.getValue().roundLevelWidth);
             marketTag.putFloat("roundLevelRange", entry.getValue().roundLevelRange);
             if (!Double.isNaN(entry.getValue().trendLnMA)) marketTag.putDouble("trendLnMA", entry.getValue().trendLnMA);
+            marketTag.putFloat("wallPeriodMinutes", entry.getValue().wallPeriodMinutes);
+            marketTag.putFloat("wallDeadZone", entry.getValue().wallDeadZone);
+            marketTag.putFloat("wallStrength", entry.getValue().wallStrength);
+            marketTag.putFloat("wallCap", entry.getValue().wallCap);
+            if (!Double.isNaN(entry.getValue().wallLnMA)) marketTag.putDouble("wallLnMA", entry.getValue().wallLnMA);
             marketTag.putInt(DEPTH_MODEL_KEY, DEPTH_MODEL);
             marketDataTag.add(marketTag);
         }
@@ -863,6 +1075,12 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
                         data.calculator.setRoundLevels(data.roundLevelScale, data.roundLevelWidth, data.roundLevelRange);
                         data.cachedTargets = null;
                         data.trendLnMA = marketTag.contains("trendLnMA") ? NbtCompat.getDouble(marketTag, "trendLnMA") : Double.NaN;
+                        // SM-340 slow-average wall (older saves: defaults, the average starts at the current price)
+                        if (marketTag.contains("wallPeriodMinutes")) data.wallPeriodMinutes = NbtCompat.getFloat(marketTag, "wallPeriodMinutes");
+                        if (marketTag.contains("wallDeadZone")) data.wallDeadZone = NbtCompat.getFloat(marketTag, "wallDeadZone");
+                        if (marketTag.contains("wallStrength")) data.wallStrength = NbtCompat.getFloat(marketTag, "wallStrength");
+                        if (marketTag.contains("wallCap")) data.wallCap = NbtCompat.getFloat(marketTag, "wallCap");
+                        data.wallLnMA = marketTag.contains("wallLnMA") ? NbtCompat.getDouble(marketTag, "wallLnMA") : Double.NaN;
 
                         // T-214: books saved before the price-normalised depth are rebuilt once
                         if (!marketTag.contains(DEPTH_MODEL_KEY) || NbtCompat.getInt(marketTag, DEPTH_MODEL_KEY) < DEPTH_MODEL)
@@ -902,6 +1120,10 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         data.roundLevelWidth = settings.roundLevelWidth();
         data.roundLevelRange = settings.roundLevelRange();
         data.calculator.setRoundLevels(data.roundLevelScale, data.roundLevelWidth, data.roundLevelRange);
+        data.wallPeriodMinutes = settings.wallPeriodMinutes();
+        data.wallDeadZone = settings.wallDeadZone();
+        data.wallStrength = settings.wallStrength();
+        data.wallCap = settings.wallCap();
 
         MarketInterface interf = getMarketInterface(marketID);
         if (interf != null) refreshDepth(data, interf.market, false);   // else the next update() applies it
