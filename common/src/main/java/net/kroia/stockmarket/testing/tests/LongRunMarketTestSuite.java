@@ -286,9 +286,23 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
         };
     }
 
-    /** Market-sells everything free from tick {@code from} on, one max order {@code maxOrder} per 10 ticks. */
+    /**
+     * Market-sells everything free from tick {@code from} on, one max order {@code maxOrder} per 10 ticks.
+     * SM-339: one sell-off only. As soon as a sell was not fully filled (rest cancelled or still open for lack of
+     * bids, seen 10 ticks later as a total holding above the expected one) the player stops selling for the rest
+     * of the run, so the market can recover. Uses {@link Trader#count} (sells sent), {@link Trader#amount}
+     * (expected raw holding after the last sell) and {@link Trader#state} (1 = stopped).
+     */
     static Behaviour sellAll(long maxOrder, int from) {
-        return (me, t, p) -> { if (t >= from && (t - from) % 10 == 0 && me.free() > 0) me.sellUpTo(maxOrder); };
+        return (me, t, p) -> {
+            if (t < from || (t - from) % 10 != 0 || me.state == 1) return;
+            if (me.count > 0 && me.items.getTotalBalance() > me.amount) { me.state = 1; return; }
+            long raw = Math.min(Math.round(maxOrder * (double) me.sf), me.items.getBalance());
+            if (raw <= 0) return;
+            me.amount = me.items.getTotalBalance() - raw;
+            me.sellUpTo(maxOrder);
+            me.count++;
+        };
     }
 
     /** Market-buys {@code maxOrder} every minute ({@link #SAMPLE}) from {@link #START} on, while {@code t < until}. */
@@ -320,13 +334,16 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
      * <ul>
      *   <li>megaPump: market-buys 2,000,000 from 1 h on, M per 10 ticks (diamond: 625 orders, ~5 min), then holds to
      *       the end</li>
-     *   <li>megaDump: starts with 2,000,000 and sells them from 1 h on, M per 10 ticks, then nothing</li>
+     *   <li>megaDump: starts with 2,000,000 and sells them from 1 h on, M per 10 ticks; stops for good after the
+     *       first sell that is not fully filled (lack of bids) or when everything is sold, then nothing (one
+     *       sell-off, then the market may recover)</li>
      *   <li>floodBuy: a market buy of M every minute for the whole run (diamond, 10 days: ~46M items)</li>
      *   <li>floodSell: starts with enough items, a market sell of M every minute for the whole run</li>
      *   <li>floodBuyStop: floodBuy until day 2 of the run, then nothing (how far the anchor moved, what the price
      *       does once the flow stops)</li>
      *   <li>pumpTwice: megaPump at 1 h, a second megaPump at day 3, holds both (does the anchor stack?)</li>
-     *   <li>megaPumpSell: megaPump, holds 2 days after the last buy, then sells everything at M per 10 ticks</li>
+     *   <li>megaPumpSell: megaPump, holds 2 days after the last buy, then sells at M per 10 ticks until everything
+     *       is sold or the first sell is not fully filled; never resells after that</li>
      * </ul>
      *
      * @param name     scenario name ({@link #SCENARIOS})
