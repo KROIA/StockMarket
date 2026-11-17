@@ -1,10 +1,10 @@
 package net.kroia.stockmarket.testing;
 
-import net.kroia.modutilities.testing.TestCategory;
+import net.kroia.testkit.TestCategory;
 
-import static net.kroia.modutilities.testing.TestCategory.ServerType.BOTH;
-import static net.kroia.modutilities.testing.TestCategory.ServerType.MASTER_ONLY;
-import static net.kroia.modutilities.testing.TestCategory.ServerType.SLAVE_ONLY;
+import static net.kroia.testkit.TestCategory.ServerType.BOTH;
+import static net.kroia.testkit.TestCategory.ServerType.MASTER_ONLY;
+import static net.kroia.testkit.TestCategory.ServerType.SLAVE_ONLY;
 
 public class StockMarketTestCategories {
 

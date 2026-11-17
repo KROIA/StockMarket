@@ -901,6 +901,12 @@ public class StockMarketModBackend implements StockMarketAPI {
      * @param args   its arguments
      */
     private static void invokeDevBootstrap(String method, Class<?>[] types, Object... args) {
+        // The dev code uses the dev-only TestKit mod (-Pwith_testkit=true); without it DevBootstrap fails with
+        // NoClassDefFoundError.
+        if (!dev.architectury.platform.Platform.isModLoaded("testkit")) {
+            StockMarketMod.LOGGER.warn("Dev features are enabled but the TestKit mod is not loaded; tests are off");
+            return;
+        }
         try {
             Class.forName(StockMarketMod.DEV_BOOTSTRAP).getMethod(method, types).invoke(null, args);
         } catch (ReflectiveOperationException e) {

@@ -1,6 +1,6 @@
 package net.kroia.stockmarket.testing;
 
-import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.testkit.TestRegistry;
 import net.kroia.stockmarket.testing.tests.ActiveOrdersRequestTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientIntegrationTestSuite;
 import net.kroia.stockmarket.testing.tests.ClientMarketTestSuite;
