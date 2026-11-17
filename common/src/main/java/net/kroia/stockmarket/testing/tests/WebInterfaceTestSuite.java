@@ -60,6 +60,7 @@ public class WebInterfaceTestSuite extends TestSuite {
     public void registerTests() {
         addTest("port_validation_rejects_reserved", this::test_portValidation);
         addTest("occupied_port_rejected_start_fails_cleanly", this::test_occupiedPort);
+        addTest("icon_path_validation", this::test_iconPathValidation);
         addTest("serves_page_and_json", this::test_servesPageAndJson);
         addTest("settings_change_moves_port", this::test_settingsChangeMovesPort);
         addTest("mod_settings_set_rejects_game_port", this::test_setRejectsReservedPort);
@@ -75,6 +76,18 @@ public class WebInterfaceTestSuite extends TestSuite {
         TestResult r = assertNull("8090 accepted", StockMarketWebInterface.validatePort(8090, 25565, 25575));
         if (!r.passed()) return r;
         return assertNull("any port when there is no game/link port", StockMarketWebInterface.validatePort(25565, -1, -1));
+    }
+
+    /** Only plain {@code namespace:path} item names map to texture paths; anything that could leave the folder is refused. */
+    private TestResult test_iconPathValidation() {
+        for (String bad : new String[]{null, "", "../x", "minecraft:../x", "minecraft:a/b", "minecraft:.hidden",
+                "Minecraft:Stone", "minecraft:stone%2f", "stone", "minecraft:stone:x"}) {
+            TestResult r = assertNull("refused: " + bad, StockMarketWebInterface.iconResourcePaths(bad));
+            if (!r.passed()) return r;
+        }
+        return assertEquals("item texture, then block texture",
+                java.util.List.of("assets/minecraft/textures/item/stone.png", "assets/minecraft/textures/block/stone.png"),
+                StockMarketWebInterface.iconResourcePaths("minecraft:stone"));
     }
 
     private TestResult test_occupiedPort() {
@@ -126,6 +139,12 @@ public class WebInterfaceTestSuite extends TestSuite {
             HttpResponse<String> markets = get(port, "/api/markets");
             r = assertTrue("markets lists the fixture market: " + markets.body(),
                     markets.statusCode() == 200 && markets.body().contains("\"id\":" + marketShort + ","));
+            if (!r.passed()) return r;
+            r = assertTrue("markets carry a category", markets.body().contains("\"category\":\"money\""));
+            if (!r.passed()) return r;
+            r = assertEquals("icon traversal refused", 400, get(port, "/api/icon?item=minecraft:..%2F..%2Fx").statusCode());
+            if (!r.passed()) return r;
+            r = assertEquals("BankSystem's own item icon is served", 200, get(port, "/api/icon?item=banksystem:stamped_share").statusCode());
             if (!r.passed()) return r;
             HttpResponse<String> history = get(port, "/api/history?market=" + marketShort + "&tf=" + firstTimeframe(markets.body()) + "&max=50");
             r = assertTrue("history has candles: " + history.body(), history.statusCode() == 200 && history.body().contains("\"candles\":["));

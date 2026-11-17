@@ -30,7 +30,13 @@
   #side { grid-area: side; overflow-y: auto; }
   #search { margin: 10px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
   #search:focus { outline: none; border-color: var(--accent); }
-  #markets { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+  #markets { overflow-y: auto; flex: 1; }
+  #markets summary { padding: 6px 12px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); cursor: pointer; user-select: none; }
+  #markets ul { list-style: none; margin: 0; padding: 0; }
+  .icon { width: 20px; height: 20px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; overflow: hidden; font: 600 9px var(--mono); color: #fff; }
+  /* first 16x16 frame of animated (stacked) textures, crisp pixels */
+  .icon img { width: 100%; height: 100%; object-fit: cover; object-position: top; image-rendering: pixelated; }
+  .head .icon { width: 28px; height: 28px; font-size: 11px; align-self: center; }
   #markets li { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; border-left: 2px solid transparent; }
   #markets li:hover { background: var(--panel2); }
   #markets li.sel { background: var(--panel2); border-left-color: var(--accent); }
@@ -84,10 +90,11 @@
 <main>
   <aside id="list">
     <input id="search" type="search" placeholder="Search markets" aria-label="Search markets">
-    <ul id="markets"></ul>
+    <div id="markets"></div>
   </aside>
   <section id="center">
     <div class="head">
+      <span id="mIcon"></span>
       <h2 id="mName">No market selected</h2>
       <span class="p" id="mPrice"></span>
       <span class="st" id="mState"></span>

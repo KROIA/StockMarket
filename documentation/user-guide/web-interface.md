@@ -29,13 +29,23 @@ Switching the setting off stops the web server right away.
 
 ## What the page shows
 
-* **Market list** with search, the current price and a status dot: green = open, grey = closed (outside trading hours), amber = maintenance.
+* **Market list** with search, an item icon, the current price and a status dot: green = open, grey = closed (outside trading hours), amber = maintenance. The list has two collapsible groups like the in-game trade screen: **Items** and **Company shares** (BankSystem company shares). All prices are in the trading currency.
 * **Candlestick chart** with a volume histogram. Timeframes are 1m, 5m, 15m, 1h, 4h and 1D. When candles follow in-game time (see [Candle timebase](candle-timebase.md)) the timeframes are in-game hours: 1h, 4h, 1D and 1W; the chart's time axis still shows real-world clock times.
 * **Order book depth** within 25 % of the current price, sell volume above the price and buy volume below it. This includes the bot liquidity, the same as the in-game order book.
 * **Open player orders**, grouped by limit price: buy volume, sell volume and the number of orders at each price.
 * **Recent trades**: the finished player orders of the last 24 hours (filled, or cancelled after a partial fill), with side, amount and average price. One row is one order, not each individual fill.
 
 The page updates itself every few seconds.
+
+Item-for-item trades (the "I have / I want" pair in the trade screen) have no market of their own: they run through the two items' markets, so the page shows those two markets.
+
+### Item icons
+
+The icons are the item textures found in the mod files on the server:
+
+* Items of mods (including StockMarket and BankSystem) show their icon on a dedicated server and in singleplayer.
+* Vanilla Minecraft items only show their icon in singleplayer. A dedicated server does not contain the vanilla textures, so they get a coloured badge with the item's initials instead.
+* Blocks whose inventory icon is a 3D model or uses differently named textures (for example a furnace) get the badge too. Company shares show the plain share icon, not the company's symbol.
 
 ## Privacy
 

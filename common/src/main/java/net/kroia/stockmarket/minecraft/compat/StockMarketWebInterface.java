@@ -22,6 +22,7 @@ import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -39,6 +40,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.regex.Pattern;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -85,6 +87,11 @@ public final class StockMarketWebInterface {
             "/vendor/lightweight-charts.js", new String[]{"vendor/lightweight-charts.standalone.production.js", "text/javascript; charset=utf-8"},
             "/vendor/LICENSE-lightweight-charts.txt", new String[]{"vendor/LICENSE-lightweight-charts.txt", "text/plain; charset=utf-8"});
     private static final Map<String, byte[]> STATIC_BYTES = new ConcurrentHashMap<>();
+
+    /** Item registry name allowed in {@code /api/icon}: {@code namespace:path}, no '/', no segment starting with '.'. */
+    private static final Pattern ICON_ITEM = Pattern.compile("[a-z0-9_-][a-z0-9_.-]*:[a-z0-9_-][a-z0-9_.-]*");
+    /** Icon PNGs read from the class path; an empty array = not found. Cleared when it grows past {@link #CACHE_MAX_ENTRIES}. */
+    private static final Map<String, byte[]> ICON_BYTES = new ConcurrentHashMap<>();
 
     private record Cached(long at, byte[] body) {}
     // ponytail: per-URI cache with a 1 s TTL, cleared when full; switch to a per-tick snapshot if many viewers
@@ -159,6 +166,7 @@ public final class StockMarketWebInterface {
                 return t;
             });
             server.createContext("/api/", StockMarketWebInterface::handleApi);
+            server.createContext("/api/icon", StockMarketWebInterface::handleIcon);
             server.createContext("/", StockMarketWebInterface::handleStatic);
             server.setExecutor(pool);
             server.start();
@@ -322,6 +330,67 @@ public final class StockMarketWebInterface {
         }
     }
 
+    /**
+     * Class-path locations of an item's icon: its item texture, then its block texture (block items whose item
+     * model uses a block texture of the same name). The item ID must match {@link #ICON_ITEM}, so no path traversal.
+     *
+     * @param item item registry name, e.g. {@code minecraft:diamond}
+     * @return the resource paths to try in order, or null if the name is not allowed
+     */
+    public static @Nullable List<String> iconResourcePaths(@Nullable String item) {
+        if (item == null || !ICON_ITEM.matcher(item).matches())
+            return null;
+        int colon = item.indexOf(':');
+        String base = "assets/" + item.substring(0, colon) + "/textures/";
+        String file = item.substring(colon + 1) + ".png";
+        return List.of(base + "item/" + file, base + "block/" + file);
+    }
+
+    /**
+     * {@code GET /api/icon?item=ns:path}: the item's PNG from the class path (mod jars; in singleplayer also the game's
+     * own textures). 400 for a disallowed name, 404 when no texture is found. Never touches the server thread.
+     */
+    private static void handleIcon(HttpExchange ex) throws IOException {
+        try {
+            if (!"GET".equals(ex.getRequestMethod())) {
+                send(ex, 405, "text/plain; charset=utf-8", "Method not allowed".getBytes(StandardCharsets.UTF_8));
+                return;
+            }
+            String item = parseQuery(ex.getRequestURI().getRawQuery()).get("item");
+            List<String> paths = iconResourcePaths(item);
+            if (paths == null || !ex.getRequestURI().getPath().equals("/api/icon")) {
+                send(ex, 400, "text/plain; charset=utf-8", "Bad item".getBytes(StandardCharsets.UTF_8));
+                return;
+            }
+            byte[] png = ICON_BYTES.get(item);
+            if (png == null) {
+                png = new byte[0];
+                ClassLoader loader = StockMarketWebInterface.class.getClassLoader();
+                for (String path : paths) {
+                    try (InputStream in = loader.getResourceAsStream(path)) {
+                        if (in != null) {
+                            png = in.readAllBytes();
+                            break;
+                        }
+                    }
+                }
+                if (ICON_BYTES.size() > CACHE_MAX_ENTRIES)
+                    ICON_BYTES.clear();
+                ICON_BYTES.put(item, png);
+            }
+            if (png.length == 0) {
+                send(ex, 404, "text/plain; charset=utf-8", "No icon".getBytes(StandardCharsets.UTF_8));
+                return;
+            }
+            ex.getResponseHeaders().set("Cache-Control", "max-age=3600");
+            send(ex, 200, "image/png", png);
+        } catch (RuntimeException e) {
+            send(ex, 500, "text/plain; charset=utf-8", "Error".getBytes(StandardCharsets.UTF_8));
+        } finally {
+            ex.close();
+        }
+    }
+
     private static void send(HttpExchange ex, int status, String contentType, byte[] body) throws IOException {
         ex.getResponseHeaders().set("Content-Type", contentType);
         ex.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
@@ -380,6 +449,8 @@ public final class StockMarketWebInterface {
             m.addProperty("id", id.getShort());
             m.addProperty("itemId", id.getName());
             m.addProperty("name", itemName(id));
+            // BankSystem company shares are stamped share stacks; everything else trades against the currency as an item
+            m.addProperty("category", id.getStackTemplate().getItem() == BankSystemItems.STAMPED_SHARE.get() ? "shares" : "money");
             m.addProperty("price", real(market.getCurrentMarketPrice()));
             m.addProperty("state", market.getTradingState().name());
             m.addProperty("candleStart", candle.time());

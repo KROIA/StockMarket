@@ -41,7 +41,8 @@
     autoSize: true,
     layout: { background: { type: 'solid', color: '#0d1424' }, textColor: '#7d8aa3', attributionLogo: true },
     grid: { vertLines: { color: '#152035' }, horzLines: { color: '#152035' } },
-    rightPriceScale: { borderColor: '#1c2840' },
+    // candles use the top 5-75 %, the volume histogram the bottom 20 %: they never overlap, at any height
+    rightPriceScale: { borderColor: '#1c2840', scaleMargins: { top: 0.05, bottom: 0.25 } },
     timeScale: {
       borderColor: '#1c2840', timeVisible: true, secondsVisible: false,
       tickMarkFormatter: (t, type) => {
@@ -60,24 +61,59 @@
   });
   volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
 
-  // ---- markets
+  // ---- item icons: the PNG from the server, else a coloured badge with initials
+  const missingIcons = new Set(); // 404s are not cached by the browser: ask once per page load
+  function icon(itemId, name) {
+    const box = el('span', 'icon');
+    const badge = () => {
+      let h = 0;
+      for (const ch of itemId) h = (h * 31 + ch.charCodeAt(0)) | 0;
+      box.style.background = `hsl(${Math.abs(h) % 360} 45% 35%)`;
+      box.textContent = name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+    };
+    if (missingIcons.has(itemId)) { badge(); return box; }
+    const img = new Image();
+    img.alt = '';
+    img.onerror = () => { missingIcons.add(itemId); img.remove(); badge(); };
+    img.src = 'api/icon?item=' + encodeURIComponent(itemId);
+    box.append(img);
+    return box;
+  }
+
+  // ---- markets, grouped like the in-game trade screen: items and company shares
+  const GROUPS = [['money', 'Items'], ['shares', 'Company shares']];
+  const collapsed = new Set();
   function renderMarkets() {
     const q = $('search').value.trim().toLowerCase();
-    const ul = $('markets');
-    ul.replaceChildren();
-    for (const m of state.markets) {
-      const name = displayName(m);
-      if (q && !name.toLowerCase().includes(q) && !m.itemId.toLowerCase().includes(q)) continue;
-      const li = el('li', m.id === state.sel ? 'sel' : '');
-      li.title = m.itemId;
-      li.append(el('span', 'dot ' + m.state), el('span', 'name', name), el('span', 'price', fmtPrice(m.price)));
-      li.onclick = () => select(m.id);
-      ul.append(li);
+    const box = $('markets');
+    box.replaceChildren();
+    for (const [cat, title] of GROUPS) {
+      const list = state.markets.filter(m => m.category === cat && (!q || displayName(m).toLowerCase().includes(q) || m.itemId.toLowerCase().includes(q)));
+      if (!list.length) continue;
+      const group = el('details');
+      group.open = !collapsed.has(cat);
+      group.ontoggle = () => { if (group.open) collapsed.delete(cat); else collapsed.add(cat); };
+      group.append(el('summary', '', `${title} (${list.length})`));
+      const ul = el('ul');
+      for (const m of list) {
+        const li = el('li', m.id === state.sel ? 'sel' : '');
+        li.title = m.itemId;
+        li.append(el('span', 'dot ' + m.state), icon(m.itemId, displayName(m)), el('span', 'name', displayName(m)), el('span', 'price', fmtPrice(m.price)));
+        li.onclick = () => select(m.id);
+        ul.append(li);
+      }
+      group.append(ul);
+      box.append(group);
     }
   }
   function renderHead() {
     const m = state.markets.find(x => x.id === state.sel);
     $('mName').textContent = m ? displayName(m) : 'No market selected';
+    const key = m ? m.itemId : '';
+    if ($('mIcon').dataset.item !== key) { // keep the image while the market stays the same
+      $('mIcon').dataset.item = key;
+      $('mIcon').replaceChildren(...(m ? [icon(m.itemId, displayName(m))] : []));
+    }
     $('mPrice').textContent = m ? fmtPrice(m.price) : '';
     $('mState').textContent = m ? m.state : '';
     $('mId').textContent = m ? m.itemId : '';
