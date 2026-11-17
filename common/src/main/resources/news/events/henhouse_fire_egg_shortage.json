@@ -1,0 +1,35 @@
+{
+  "id": "henhouse_fire_egg_shortage",
+  "picture": "henhouse_fire_egg_shortage.png",
+  "headline": {
+    "en_us": "Henhouse fire wipes out laying flocks - eggs vanish!",
+    "zh_cn": "鸡舍失火，蛋鸡全军覆没——鸡蛋绝迹！",
+    "de_de": "Hühnerstallbrand vernichtet die Legescharen - Eier verschwinden!"
+  },
+  "text": {
+    "en_us": "A fire that tore through the district's henhouses overnight has left the laying flocks in ashes, and baskets stood empty at market before word of the blaze had even spread. Bakers scrambling for eggs found prices already leaping, as if the shortage had been felt before it was announced. It will be weeks before new pullets come into lay.",
+    "zh_cn": "一场夜间大火烧毁了本区的鸡舍，蛋鸡尽成灰烬；消息尚未传开，市集上的蛋筐已经空了。抢购鸡蛋的面包师发现价格早已跳涨，仿佛短缺在公告之前就已被感知。新一批小母鸡开产还需数周。",
+    "de_de": "Ein Feuer, das über Nacht durch die Hühnerställe des Viertels raste, hat die Legescharen in Asche gelegt, und die Körbe standen schon leer am Markt, ehe sich die Kunde vom Brand überhaupt verbreitet hatte. Bäcker, die nach Eiern jagten, fanden die Preise bereits im Sprung vor, als hätte man die Knappheit gespürt, bevor sie verkündet wurde. Es wird Wochen dauern, bis neue Junghennen zu legen beginnen."
+  },
+  "category": "disaster",
+  "weight": 4,
+  "cooldownSeconds": 7200,
+  "announceDelayMs": {
+    "min": -45000,
+    "max": -15000
+  },
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.4,
+    "durationSeconds": 1500,
+    "reversal": "exponential",
+    "reversalSeconds": 3600,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:egg",
+      "weightFactor": 1.0
+    }
+  ]
+}

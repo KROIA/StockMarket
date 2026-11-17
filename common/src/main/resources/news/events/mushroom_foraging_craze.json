@@ -1,0 +1,44 @@
+{
+  "id": "mushroom_foraging_craze",
+  "picture": "mushroom_foraging_craze.png",
+  "headline": {
+    "en_us": "Foraging craze sends mushroom prices soaring",
+    "zh_cn": "采菇热潮推高蘑菇价格",
+    "de_de": "Sammelfieber treibt die Pilzpreise nach oben"
+  },
+  "text": {
+    "en_us": "A craze for wild mushroom stew has gripped the villages, and every innkeeper wants red and brown caps by the basketful. Prices for both mushrooms and ready-made stew are climbing fast, while the bakers grumble that villagers off foraging in the woods are buying far less bread.",
+    "zh_cn": "一股野生蘑菇炖菜的风潮席卷村庄，每个旅店老板都想要成筐的红菇与褐菇。蘑菇与现成炖菜的价格快速上涨，而面包师则抱怨进林采菇的村民买走的面包少了许多。",
+    "de_de": "Ein Fieber nach Waldpilzeintopf hat die Dörfer erfasst, und jeder Wirt will rote und braune Kappen körbeweise. Die Preise für beide Pilzsorten und für fertigen Eintopf steigen rasch, während die Bäcker murren, dass die Dorfbewohner beim Pilzesammeln im Wald weit weniger Brot kaufen."
+  },
+  "category": "commodities",
+  "weight": 6,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.24,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:red_mushroom",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:brown_mushroom",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:mushroom_stew",
+      "weightFactor": 0.6
+    },
+    {
+      "item": "minecraft:bread",
+      "weightFactor": -0.2
+    }
+  ]
+}

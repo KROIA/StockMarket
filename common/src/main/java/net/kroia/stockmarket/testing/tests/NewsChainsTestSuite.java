@@ -11,6 +11,7 @@ import net.kroia.stockmarket.news.NewsEventDefinition;
 import net.kroia.stockmarket.news.NewsEventLibrary;
 import net.kroia.stockmarket.news.NewsHistory;
 import net.kroia.stockmarket.news.NewsRecord;
+import net.kroia.stockmarket.news.NewsRequirement;
 import net.kroia.stockmarket.news.NewsWorldRegistry;
 import net.kroia.stockmarket.news.ServerNewsPublisher;
 import net.kroia.stockmarket.news.ValidationReport;
@@ -112,6 +113,12 @@ public class NewsChainsTestSuite extends TestSuite {
 
         // sameMarkets
         addTest("same_markets_chain_uses_source_markets", this::test_sameMarkets_usesSourceMarkets);
+
+        // SM-341: luxury tax fires once until repealed; the repeal undoes the exact bake
+        addTest("luxury_tax_blocked_while_active", this::test_luxuryTax_blockedWhileActive);
+        addTest("luxury_repeal_needs_tax_and_two_days", this::test_luxuryRepeal_needsTaxAndTwoDays);
+        addTest("luxury_repeal_restores_default_price_exactly", this::test_luxuryRepeal_restoresDefaultPriceExactly);
+        addTest("luxury_tax_can_fire_again_after_repeal", this::test_luxuryTax_canFireAgainAfterRepeal);
     }
 
     // ========================================================================
@@ -1104,6 +1111,195 @@ public class NewsChainsTestSuite extends TestSuite {
             r = assertTrue("override must contain M1", override.containsKey(M1));
             if (!r.passed()) return r;
             return assertTrue("override must contain M2", override.containsKey(M2));
+        } catch (IOException e) {
+            return fail("setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    // ========================================================================
+    // SM-341: luxury_goods_tax / luxury_tax_repealed (shipped defaults)
+    // ========================================================================
+
+    private static final String TAX = "luxury_goods_tax";
+    private static final String REPEAL = "luxury_tax_repealed";
+    private static final long TWO_DAYS_MS = 172_800_000L;
+
+    /** Loads the shipped default events (an empty folder gets the shipped file). */
+    private static NewsEventLibrary shippedLibrary(Path dir) {
+        NewsEventLibrary library = new NewsEventLibrary();
+        library.reload(dir);
+        return library;
+    }
+
+    /** What a publish does to the registry: fire record + the event's records{}. */
+    private static void publishToRegistry(NewsEventLibrary library, NewsWorldRegistry registry,
+                                          String eventId, long epochMs) {
+        registry.recordFire(eventId, epochMs, 1);
+        library.getDefinition(eventId).getRecords().forEach(registry::putValue);
+    }
+
+    private static boolean eligible(NewsEventLibrary library, NewsWorldRegistry registry,
+                                    String eventId, long epochMs) {
+        return NewsRequirement.allMet(library.getDefinition(eventId).getRequirements(), registry, epochMs);
+    }
+
+    /** The tax is eligible on a fresh world and blocked once it fired (cut still in force). */
+    private TestResult test_luxuryTax_blockedWhileActive() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsEventLibrary library = shippedLibrary(dir);
+            NewsWorldRegistry registry = new NewsWorldRegistry();
+            long t = 1_000_000_000_000L;
+            TestResult r = assertTrue("tax eligible on a fresh world", eligible(library, registry, TAX, t));
+            if (!r.passed()) return r;
+            publishToRegistry(library, registry, TAX, t);
+            r = assertFalse("tax blocked right after it fired", eligible(library, registry, TAX, t + 1));
+            if (!r.passed()) return r;
+            return assertFalse("tax still blocked weeks later without a repeal",
+                    eligible(library, registry, TAX, t + 10 * TWO_DAYS_MS));
+        } catch (IOException e) {
+            return fail("setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * The repeal needs the tax and 2 days since its MOST RECENT firing: firedBefore's
+     * minSecondsAgo measures from lastFiredEpochMs, so the second cycle waits again.
+     */
+    private TestResult test_luxuryRepeal_needsTaxAndTwoDays() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsEventLibrary library = shippedLibrary(dir);
+            NewsWorldRegistry registry = new NewsWorldRegistry();
+            long t = 1_000_000_000_000L;
+            TestResult r = assertFalse("repeal blocked before any tax", eligible(library, registry, REPEAL, t));
+            if (!r.passed()) return r;
+            publishToRegistry(library, registry, TAX, t);
+            r = assertFalse("repeal blocked 1 ms before 2 days",
+                    eligible(library, registry, REPEAL, t + TWO_DAYS_MS - 1));
+            if (!r.passed()) return r;
+            r = assertTrue("repeal eligible after 2 days", eligible(library, registry, REPEAL, t + TWO_DAYS_MS));
+            if (!r.passed()) return r;
+
+            // Second cycle: repeal, tax again later -> the repeal waits 2 days again.
+            publishToRegistry(library, registry, REPEAL, t + TWO_DAYS_MS);
+            r = assertFalse("repeal blocked once the tax is repealed",
+                    eligible(library, registry, REPEAL, t + 3 * TWO_DAYS_MS));
+            if (!r.passed()) return r;
+            long t2 = t + 5 * TWO_DAYS_MS;
+            publishToRegistry(library, registry, TAX, t2);
+            r = assertFalse("second repeal blocked right after the second tax",
+                    eligible(library, registry, REPEAL, t2 + 1000));
+            if (!r.passed()) return r;
+            return assertTrue("second repeal eligible 2 days after the second tax",
+                    eligible(library, registry, REPEAL, t2 + TWO_DAYS_MS));
+        } catch (IOException e) {
+            return fail("setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * Shipped file (impactStrengthMultiplier 0.5, impactDurationMultiplier 3): the tax bake
+     * lowers diamond/emerald/gold and stores the absolute change per market; the change
+     * survives a registry save/load; the repeal adds it back exactly (even after the
+     * default price moved in between), clears it, and leaves a market the tax did not hit
+     * untouched.
+     */
+    private TestResult test_luxuryRepeal_restoresDefaultPriceExactly() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsPluginTestSuite.TestNewsPlugin plugin = new NewsPluginTestSuite.TestNewsPlugin();
+            plugin.getLibrary().reload(dir);
+            plugin.test_setLibraryLoaded(true);
+            NewsWorldRegistry registry = new NewsWorldRegistry();
+            plugin.setRegistrySupplier(() -> registry);
+            ItemID m4 = new ItemID((short) 4);
+
+            NewsPluginTestSuite.TestMarket diamond = new NewsPluginTestSuite.TestMarket(M1, 160);
+            NewsPluginTestSuite.TestMarket emerald = new NewsPluginTestSuite.TestMarket(M2, 100);
+            NewsPluginTestSuite.TestMarket gold = new NewsPluginTestSuite.TestMarket(M3, 50);
+            NewsPluginTestSuite.TestMarket other = new NewsPluginTestSuite.TestMarket(m4, 70);
+            var mkts = markets(diamond, emerald, gold, other);
+
+            Map<ItemID, Float> taxWeights = new LinkedHashMap<>();
+            taxWeights.put(M1, 1.0f);
+            taxWeights.put(M2, 0.8f);
+            taxWeights.put(M3, 0.6f);
+            TestResult r = assertNotNull("tax activates",
+                    plugin.activate(plugin.getLibrary().getDefinition(TAX), taxWeights));
+            if (!r.passed()) return r;
+            plugin.advanceTime(3 * 3900 * 1000L + 1, mkts); // (1200 + 2700) s x 3 -> bake
+            r = assertTrue("tax bake: diamond 160 x (1 - 0.2 x 0.5) = 144, got " + diamond.defaultPrice,
+                    Math.abs(diamond.defaultPrice - 144.0) < 1e-9);
+            if (!r.passed()) return r;
+            Double diamondDelta = registry.getBakeDelta(TAX, M1);
+            r = assertTrue("stored diamond delta -16, got " + diamondDelta,
+                    diamondDelta != null && Math.abs(diamondDelta + 16.0) < 1e-9);
+            if (!r.passed()) return r;
+            r = assertTrue("no delta for a market the tax did not hit", registry.getBakeDelta(TAX, m4) == null);
+            if (!r.passed()) return r;
+
+            // Registry save/load (world restart) keeps the deltas.
+            CompoundTag saved = new CompoundTag();
+            registry.save(saved);
+            NewsWorldRegistry reloaded = new NewsWorldRegistry();
+            reloaded.load(saved);
+            plugin.setRegistrySupplier(() -> reloaded);
+
+            // Something else moves diamond meanwhile: the repeal still returns the tax's own 16.
+            diamond.defaultPrice = 150.0;
+
+            Map<ItemID, Float> repealWeights = new LinkedHashMap<>(taxWeights);
+            repealWeights.put(m4, 1.0f);
+            r = assertNotNull("repeal activates",
+                    plugin.activate(plugin.getLibrary().getDefinition(REPEAL), repealWeights));
+            if (!r.passed()) return r;
+            plugin.advanceTime(3 * 3900 * 1000L + 1, mkts);
+            r = assertTrue("diamond gets +16 back (150 -> 166), got " + diamond.defaultPrice,
+                    Math.abs(diamond.defaultPrice - 166.0) < 1e-9);
+            if (!r.passed()) return r;
+            r = assertTrue("emerald back to exactly 100, got " + emerald.defaultPrice,
+                    Math.abs(emerald.defaultPrice - 100.0) < 1e-9);
+            if (!r.passed()) return r;
+            r = assertTrue("gold back to exactly 50, got " + gold.defaultPrice,
+                    Math.abs(gold.defaultPrice - 50.0) < 1e-9);
+            if (!r.passed()) return r;
+            r = assertTrue("untaxed market untouched (70), got " + other.defaultPrice,
+                    Math.abs(other.defaultPrice - 70.0) < 1e-9);
+            if (!r.passed()) return r;
+            r = assertTrue("deltas cleared after the repeal",
+                    reloaded.getBakeDelta(TAX, M1) == null && reloaded.getBakeDelta(TAX, M2) == null
+                            && reloaded.getBakeDelta(TAX, M3) == null);
+            if (!r.passed()) return r;
+            return assertTrue("the repeal stores no delta of its own", reloaded.getBakeDelta(REPEAL, M1) == null);
+        } catch (IOException e) {
+            return fail("setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** After the repeal the tax is eligible again (tax/repeal cycle). */
+    private TestResult test_luxuryTax_canFireAgainAfterRepeal() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsEventLibrary library = shippedLibrary(dir);
+            NewsWorldRegistry registry = new NewsWorldRegistry();
+            long t = 1_000_000_000_000L;
+            publishToRegistry(library, registry, TAX, t);
+            publishToRegistry(library, registry, REPEAL, t + TWO_DAYS_MS);
+            return assertTrue("tax eligible again after the repeal",
+                    eligible(library, registry, TAX, t + TWO_DAYS_MS + 1));
         } catch (IOException e) {
             return fail("setup failed: " + e);
         } finally {

@@ -1,0 +1,31 @@
+{
+  "id": "honey_bumper_season",
+  "picture": "honey_bumper_season.png",
+  "headline": {
+    "en_us": "Bee colonies boom - honey floods the market",
+    "zh_cn": "蜂群繁盛——蜂蜜大量涌入市场",
+    "de_de": "Bienenvölker im Höhenflug - Honig überschwemmt den Markt"
+  },
+  "text": {
+    "en_us": "Beekeepers report an extraordinary season - hives are overflowing and orchards buzzing with pollinators. With honey, honeycombs and sweet berries piling up in warehouses, prices are drifting down as sellers compete for buyers.",
+    "zh_cn": "养蜂人报告了一个异常丰产的季节——蜂箱满溢，果园里授粉昆虫嗡嗡作响。蜂蜜、蜜脾与甜浆果在仓库堆积，卖家争抢买家，价格持续走低。",
+    "de_de": "Imker melden eine außergewöhnliche Saison - die Stöcke laufen über, die Obstgärten summen vor Bestäubern. Da sich Honig, Waben und Süßbeeren in den Lagern stapeln, geben die Preise nach, während Verkäufer um Käufer buhlen."
+  },
+  "category": "commodities",
+  "weight": 6,
+  "cooldownSeconds": 5400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.22,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2700,
+    "reversal": "ramp",
+    "reversalSeconds": 2400,
+    "noise": 0.03
+  },
+  "markets": [
+    { "item": "minecraft:honey_bottle",  "weightFactor": 1.0 },
+    { "item": "minecraft:honeycomb",     "weightFactor": 0.8 },
+    { "item": "minecraft:sweet_berries", "weightFactor": 0.5 }
+  ]
+}

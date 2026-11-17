@@ -99,6 +99,7 @@ public class NewsPluginTestSuite extends TestSuite {
         // reversal:none bake-in
         addTest("permanent_bake_happens_exactly_once", this::test_permanentBake_happensExactlyOnce);
         addTest("permanent_bake_no_double_bake_after_save_load", this::test_permanentBake_noDoubleBakeAfterSaveLoad);
+        addTest("impact_multipliers_scale_duration_and_strength", this::test_impactMultipliers_scaleDurationAndStrength);
 
         // Lifecycle & persistence
         addTest("unsubscribe_drops_market_and_retires_event", this::test_unsubscribe_dropsMarketAndRetiresEvent);
@@ -803,6 +804,49 @@ public class NewsPluginTestSuite extends TestSuite {
             plugin.advanceTime(60_000, markets);
             return assertTrue("default price must not be baked twice (got " + m1.defaultPrice + ")",
                     Math.abs(m1.defaultPrice - 150.0) < 1e-6);
+        } catch (IOException e) {
+            return fail("temp dir failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * SM-338: the scheduler's impactDurationMultiplier stretches every step and
+     * impactStrengthMultiplier scales every target, including the permanent bake and the
+     * published record (peak 0.5 x 0.5 = 0.25, hold 10 s x 3 = 30 s).
+     */
+    private TestResult test_impactMultipliers_scaleDurationAndStrength() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            TestNewsPlugin plugin = pluginWithFile(dir, fileJson(
+                    "\"impactDurationMultiplier\":3,\"impactStrengthMultiplier\":0.5",
+                    eventJson("perma", "\"impact\":{\"type\":\"shock\",\"peakFactor\":0.5,"
+                            + "\"rampUpSeconds\":0,\"durationSeconds\":10,\"reversal\":\"none\"}")));
+            TestMarket m1 = new TestMarket(M1, 100);
+            List<MarketInterface> markets = markets(m1);
+
+            ActiveNewsEvent event = plugin.activate(plugin.getLibrary().getDefinition("perma"), weights(M1, 1.0f));
+            TestResult r = assertNotNull("activation must succeed", event);
+            if (!r.passed()) return r;
+            r = assertEquals("sequence must last 3 x 10 s", 30_000L, event.getSequence().totalDurationMs());
+            if (!r.passed()) return r;
+            r = assertTrue("record peak must be 0.25 (got " + plugin.published.get(0).getPeakFactor() + ")",
+                    Math.abs(plugin.published.get(0).getPeakFactor() - 0.25f) < 1e-6);
+            if (!r.passed()) return r;
+
+            plugin.advanceTime(15_000, markets); // mid-hold (unscaled event would have baked at 10 s)
+            r = assertTrue("factor mid-hold must be 1.25 (got " + plugin.combinedFactorFor(M1, 1.0f, false) + ")",
+                    Math.abs(plugin.combinedFactorFor(M1, 1.0f, false) - 1.25) < 1e-6);
+            if (!r.passed()) return r;
+            r = assertTrue("default price untouched during the hold",
+                    Math.abs(m1.defaultPrice - 100.0) < EPSILON);
+            if (!r.passed()) return r;
+
+            plugin.advanceTime(15_001, markets); // crosses into PERMANENT
+            return assertTrue("default price must be baked to 125 (got " + m1.defaultPrice + ")",
+                    Math.abs(m1.defaultPrice - 125.0) < 1e-6);
         } catch (IOException e) {
             return fail("temp dir failed: " + e);
         } finally {

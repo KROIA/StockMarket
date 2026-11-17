@@ -63,6 +63,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         public static final Component SUBSCRIBE_MARKET_TOOLTIP = Component.translatable(PREFIX + "subscribe_market.tooltip");
         public static final Component MARKET_BUTTON_TOOLTIP = Component.translatable(PREFIX + "market_button.tooltip");
         public static final Component SUBSCRIBE_TOGGLE_TOOLTIP = Component.translatable(PREFIX + "subscribe_toggle.tooltip");
+        public static final Component MANAGER_LOGGER = Component.translatable(PREFIX + "manager_logger");
+        public static final Component MANAGER_LOGGER_TOOLTIP = Component.translatable(PREFIX + "manager_logger.tooltip");
     }
 
     private final Label titleLabel;
@@ -71,6 +73,11 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
     private final CheckBox debugMarkersCheckBox;
     /** State of {@link #debugMarkersCheckBox}, kept for the game session only (no setting). */
     private static boolean showDebugMarkers = true;
+    /**
+     * SM-329: the master's plugin manager logger switch. Read from the master when the screen opens; until that
+     * answer arrives it has no callback, so a click sends nothing. Each change is sent at once.
+     */
+    private final CheckBox managerLoggerCheckBox;
     /**
      * T-123 / T-125 (untrusted slave gate): red info banner shown across the
      * top of the plugin management screen on an untrusted slave. Every
@@ -162,6 +169,15 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         debugMarkersCheckBox.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_LEFT);
         performanceBar = new PluginPerformanceBar();
 
+        managerLoggerCheckBox = new CheckBox(Texts.MANAGER_LOGGER.getString());
+        PluginGuiElement.setSettingTooltip(Texts.MANAGER_LOGGER_TOOLTIP, managerLoggerCheckBox);
+        // Same untrusted-slave gate as the Add Plugin button
+        if (isUntrustedSlave()) {
+            managerLoggerCheckBox.setEnabled(false);
+        } else {
+            getPluginManager().requestPluginManagerLogger(null).thenAccept(this::showManagerLoggerState);
+        }
+
         listView = new VerticalListView();
         LayoutVertical layout = new LayoutVertical();
         layout.stretchX = true;
@@ -171,6 +187,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         addElement(titleLabel);
         addElement(addPluginButton);
         addElement(debugMarkersCheckBox);
+        addElement(managerLoggerCheckBox);
         addElement(untrustedSlaveBanner1);
         addElement(untrustedSlaveBanner2);
         addElement(untrustedSlaveBanner3);
@@ -187,6 +204,22 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         // updateLayout() when the screen is re-initialised after returning
         // from a child (PluginDetailScreen etc.).
         startTimingStream();
+    }
+
+    /**
+     * SM-329: shows the master's logger state in {@link #managerLoggerCheckBox} without sending it back, then
+     * (re)attaches the change callback. Ignores a refused request (null).
+     *
+     * @param state the master's state, or null if the request was refused
+     */
+    private void showManagerLoggerState(@Nullable Boolean state) {
+        if (state == null) return;
+        net.minecraft.client.Minecraft.getInstance().execute(() -> {
+            managerLoggerCheckBox.setOnStateChanged(null);
+            managerLoggerCheckBox.setChecked(state);
+            managerLoggerCheckBox.setOnStateChanged(enabled ->
+                    getPluginManager().requestPluginManagerLogger(enabled).thenAccept(this::showManagerLoggerState));
+        });
     }
 
     /**
@@ -243,8 +276,11 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         // width - box (eh - 4) - 5 px, plus a few px for the label's own padding.
         int debugW = Math.min(debugMarkersCheckBox.getTextWidth(Texts.DEBUG_MARKERS.getString()) + (eh - 4) + 5 + 8, width / 2);
         debugMarkersCheckBox.setBounds(padding, padding, debugW, eh);
-        titleLabel.setBounds(debugMarkersCheckBox.getRight() + spacing, padding, width - debugW - addBtnWidth - 2 * spacing, eh);
-        addPluginButton.setBounds(titleLabel.getRight() + spacing, padding, addBtnWidth, eh);
+        // SM-329: plugin manager logger checkbox between the title and the Add Plugin button, same width rule
+        int loggerW = Math.min(managerLoggerCheckBox.getTextWidth(Texts.MANAGER_LOGGER.getString()) + (eh - 4) + 5 + 8, width / 4);
+        titleLabel.setBounds(debugMarkersCheckBox.getRight() + spacing, padding, width - debugW - loggerW - addBtnWidth - 3 * spacing, eh);
+        managerLoggerCheckBox.setBounds(titleLabel.getRight() + spacing, padding, loggerW, eh);
+        addPluginButton.setBounds(managerLoggerCheckBox.getRight() + spacing, padding, addBtnWidth, eh);
 
         // T-123 / T-125 banner: three stacked lines sitting under the title
         // bar, above the chart+list area. Each line is a single Label because

@@ -1,0 +1,30 @@
+{
+  "id": "post_solstice_slump",
+  "picture": "post_solstice_slump.png",
+  "headline": {
+    "en_us": "After the solstice: gift-market demand collapses",
+    "zh_cn": "冬至过后：礼品市场需求崩塌",
+    "de_de": "Nach der Sonnenwende: Nachfrage im Geschenkmarkt bricht ein"
+  },
+  "text": {
+    "en_us": "With the gifting season over, households are done buying and warehouses are still stuffed. Cakes go stale on the shelves, cookie tins gather dust, and dyed wool is discounted aggressively as merchants offload year-end stock.",
+    "zh_cn": "赠礼季结束，家家户户停止采购，仓库却仍堆得满满。蛋糕在架上放陈，曲奇罐积起灰尘，染色羊毛被大幅折价。",
+    "de_de": "Mit dem Ende der Schenkzeit sind die Haushalte durch, und die Lager sind noch immer voll. Kuchen werden im Regal alt, Keksdosen setzen Staub an, und gefärbte Wolle wird aggressiv verramscht, während die Händler ihre Jahresendbestände loswerden."
+  },
+  "category": "cultural",
+  "weight": 3,
+  "cooldownSeconds": 43200,
+  "impact": {
+    "type": "crash",
+    "peakFactor": -0.28,
+    "durationSeconds": 1200,
+    "reversal": "exponential",
+    "reversalSeconds": 4500,
+    "noise": 0.04
+  },
+  "markets": [
+    { "item": "minecraft:cake",   "weightFactor": 1.0 },
+    { "item": "minecraft:cookie", "weightFactor": 0.8 },
+    { "item": "#minecraft:wool",  "weightFactor": 0.5 }
+  ]
+}

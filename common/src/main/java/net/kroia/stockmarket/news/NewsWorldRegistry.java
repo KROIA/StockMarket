@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.news;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.NbtCompat;
 
 import net.kroia.modutilities.persistence.ServerSaveable;
@@ -33,6 +34,9 @@ import java.util.Map;
  *       key and value each at most {@value #MAX_KEY_LENGTH}/{@value #MAX_VALUE_LENGTH}
  *       characters — a write beyond a cap is <b>refused</b> (WARN log,
  *       {@link #putValue} returns false).</li>
+ *   <li><b>Permanent bake deltas</b> (SM-341) — per event id and market, the absolute
+ *       default-price change its permanent bakes applied ({@link #addBakeDelta}); an
+ *       event with {@code "undoes"} adds it back ({@link #takeBakeDelta}).</li>
  * </ul>
  * <p>
  * <b>Consumers of this contract:</b> the T-097 requirement predicates read via
@@ -71,6 +75,9 @@ public class NewsWorldRegistry implements ServerSaveable {
     private static final String KEY_FIRE_FIRST_MS = "firstMs";
     private static final String KEY_FIRE_LAST_MS = "lastMs";
     private static final String KEY_FIRE_GAME_DAY = "gameDay";
+    private static final String KEY_BAKE_DELTAS = "bakeDeltas";
+    private static final String KEY_BAKE_EVENT = "event";
+    private static final String KEY_BAKE_DELTA = "delta";
 
     /**
      * Immutable per-event fire record — the auto-recorded side of the registry.
@@ -93,6 +100,54 @@ public class NewsWorldRegistry implements ServerSaveable {
 
     /** Custom key/value store (insertion order kept for stable listing). */
     private final Map<String, String> customValues = new LinkedHashMap<>();
+
+    /**
+     * SM-341: absolute default-price change each event's permanent bakes applied, per
+     * event id and market (summed over repeated bakes). An event with {@code "undoes"}
+     * takes the entry of the event it undoes and adds it back.
+     */
+    private final Map<String, Map<ItemID, Double>> bakeDeltas = new LinkedHashMap<>();
+
+    // ── Permanent bake deltas (SM-341) ───────────────────────────────────
+
+    /**
+     * Adds the absolute default-price change a permanent bake of {@code eventId} applied
+     * to {@code marketID} (summed with earlier, not yet undone bakes of that event there).
+     *
+     * @param eventId  the baking event's id (null/blank ignored)
+     * @param marketID the market whose default price changed (null ignored)
+     * @param delta    new default price minus old default price (real units)
+     */
+    public void addBakeDelta(@Nullable String eventId, @Nullable ItemID marketID, double delta) {
+        if (eventId == null || eventId.isBlank() || marketID == null || !Double.isFinite(delta)) return;
+        bakeDeltas.computeIfAbsent(eventId, k -> new LinkedHashMap<>()).merge(marketID, delta, Double::sum);
+    }
+
+    /**
+     * @param eventId  the baking event's id
+     * @param marketID the market
+     * @return the stored delta of that event on that market, or null if none is stored
+     */
+    public @Nullable Double getBakeDelta(@Nullable String eventId, @Nullable ItemID marketID) {
+        Map<ItemID, Double> perMarket = eventId == null ? null : bakeDeltas.get(eventId);
+        return perMarket == null ? null : perMarket.get(marketID);
+    }
+
+    /**
+     * Removes and returns the stored delta of {@code eventId} on {@code marketID}
+     * (used by an {@code "undoes"} event, which adds it back once).
+     *
+     * @param eventId  the undone event's id
+     * @param marketID the market
+     * @return the removed delta, or null if none was stored
+     */
+    public @Nullable Double takeBakeDelta(@Nullable String eventId, @Nullable ItemID marketID) {
+        Map<ItemID, Double> perMarket = eventId == null ? null : bakeDeltas.get(eventId);
+        if (perMarket == null) return null;
+        Double delta = perMarket.remove(marketID);
+        if (perMarket.isEmpty()) bakeDeltas.remove(eventId);
+        return delta;
+    }
 
     // ── Auto fire records ────────────────────────────────────────────────
 
@@ -253,15 +308,16 @@ public class NewsWorldRegistry implements ServerSaveable {
         return removeValue(key);
     }
 
-    /** Wipes the whole registry: all fire records and all custom pairs. */
+    /** Wipes the whole registry: all fire records, custom pairs and bake deltas. */
     public void clearAll() {
         fireInfos.clear();
         customValues.clear();
+        bakeDeltas.clear();
     }
 
-    /** @return true if the registry holds neither fire records nor custom pairs */
+    /** @return true if the registry holds no fire records, custom pairs or bake deltas */
     public boolean isEmpty() {
-        return fireInfos.isEmpty() && customValues.isEmpty();
+        return fireInfos.isEmpty() && customValues.isEmpty() && bakeDeltas.isEmpty();
     }
 
     // ── NBT persistence (ServerSaveable) ─────────────────────────────────
@@ -294,6 +350,18 @@ public class NewsWorldRegistry implements ServerSaveable {
             valuesTag.putString(entry.getKey(), entry.getValue());
         }
         tag.put(KEY_VALUES, valuesTag);
+
+        ListTag deltasTag = new ListTag();
+        for (Map.Entry<String, Map<ItemID, Double>> perEvent : bakeDeltas.entrySet()) {
+            for (Map.Entry<ItemID, Double> entry : perEvent.getValue().entrySet()) {
+                CompoundTag deltaTag = new CompoundTag();
+                deltaTag.putString(KEY_BAKE_EVENT, perEvent.getKey());
+                entry.getKey().save(deltaTag);
+                deltaTag.putDouble(KEY_BAKE_DELTA, entry.getValue());
+                deltasTag.add(deltaTag);
+            }
+        }
+        tag.put(KEY_BAKE_DELTAS, deltasTag);
         return true;
     }
 
@@ -335,6 +403,16 @@ public class NewsWorldRegistry implements ServerSaveable {
                 // Re-apply the write caps (a saved file honors them, but the file may
                 // have been edited by hand); putValue logs the WARN for each refusal.
                 putValue(key, NbtCompat.getString(valuesTag, key));
+            }
+        }
+        if (NbtCompat.contains(tag, KEY_BAKE_DELTAS, Tag.TAG_LIST)) {
+            ListTag deltasTag = NbtCompat.getList(tag, KEY_BAKE_DELTAS, Tag.TAG_COMPOUND);
+            for (int i = 0; i < deltasTag.size(); i++) {
+                CompoundTag deltaTag = NbtCompat.getCompound(deltasTag, i);
+                ItemID marketID = ItemID.createFromTag(deltaTag);
+                if (marketID == null || marketID.getShort() == 0) continue;
+                addBakeDelta(NbtCompat.getString(deltaTag, KEY_BAKE_EVENT), marketID,
+                        NbtCompat.getDouble(deltaTag, KEY_BAKE_DELTA));
             }
         }
         return true;

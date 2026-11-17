@@ -1,0 +1,44 @@
+{
+  "id": "luxury_tax_repealed",
+  "picture": "luxury_tax_repealed.png",
+  "headline": {
+    "en_us": "Council scraps the luxury tax on gems and gold",
+    "zh_cn": "议会废除宝石与黄金奢侈税",
+    "de_de": "Rat schafft die Luxussteuer auf Edelsteine und Gold ab"
+  },
+  "text": {
+    "en_us": "After months of empty jewellers' shops and loud protests from the guilds, the trade council has repealed the luxury tax on diamonds, emeralds and gold. Merchants are dusting off their display cases, and buyers who held back are expected to return to the market.",
+    "zh_cn": "在珠宝店门可罗雀数月、行会抗议声浪不断之后，贸易议会废除了对钻石、绿宝石与黄金征收的奢侈税。商人们正擦去展柜上的灰尘，此前持币观望的买家预计将重返市场。",
+    "de_de": "Nach Monaten leerer Juweliergeschäfte und lautstarker Proteste der Gilden hat der Handelsrat die Luxussteuer auf Diamanten, Smaragde und Gold aufgehoben. Die Händler stauben ihre Vitrinen ab, und Käufer, die sich zurückgehalten haben, dürften an den Markt zurückkehren."
+  },
+  "category": "politics",
+  "weight": 2,
+  "cooldownSeconds": 86400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.22,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 2700,
+    "reversal": "none"
+  },
+  "markets": [
+    {
+      "item": "minecraft:diamond",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:emerald",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 0.6
+    }
+  ],
+  "requires": [
+    { "type": "firedBefore", "eventId": "luxury_goods_tax", "minSecondsAgo": 172800 },
+    { "type": "keyEquals",   "key": "luxury_tax", "value": "active" }
+  ],
+  "records": { "luxury_tax": "repealed" },
+  "undoes": "luxury_goods_tax"
+}
