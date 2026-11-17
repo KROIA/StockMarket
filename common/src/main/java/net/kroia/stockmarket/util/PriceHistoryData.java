@@ -248,40 +248,29 @@ public class PriceHistoryData
         for(int i=0; i<other.candles.size(); i++)
         {
             Candle candle = other.candles.get(i);
-            if(candle.openTimestamp > nextTime)
+            // The current bucket is [startTime, nextTime): a candle opening exactly at nextTime
+            // already belongs to the next bucket (matters for the client's second pass over
+            // candles the server already floored to bucket starts).
+            if(candle.openTimestamp >= nextTime)
             {
                 Candle newCandle = Candle.merge(other.candles, startTime, startCandleIndex, newCandleCount);
                 candles.add(newCandle);
                 newCandleCount = 1;
                 startCandleIndex = i;
-                startTime = nextTime;
-                nextTime += candleDeltaTimeMs;
+                // SM-331: the new candle starts in its own bucket, not in the slot right after the
+                // previous candle (after offline time those are days apart).
+                long candleStart = floorTime(candle.openTimestamp, candleDeltaTimeMs);
                 if(createEmptyCandleForTimeGaps) {
-                    if(candle.openTimestamp > nextTime) {
-                        long nextMarketPrice = candle.open;
-                        /*for (int j = i + 1; j < other.candles.size(); j++) {
-                            Candle jCandle = other.candles.get(j);
-                            if (jCandle.openTimestamp < nextTime) {
-                                nextMarketPrice = jCandle.open;
-                                break;
-                            }
-                        }*/
-                        while (candle.openTimestamp > nextTime) {
-
-
-
-                            this.currentMarketPrice = nextMarketPrice;
-                            startNewCandle(nextTime);
-                            nextTime += candleDeltaTimeMs;
-                            //nextTime = floorTime(candle.openTimestamp + candleDeltaTimeMs, candleDeltaTimeMs);
-                        }
+                    // Flat fill candles at the next real candle's open, only for the empty
+                    // buckets strictly between the previous bucket and the new one.
+                    this.currentMarketPrice = candle.open;
+                    while (nextTime < candleStart) {
+                        startNewCandle(nextTime);
+                        nextTime += candleDeltaTimeMs;
                     }
                 }
-                else
-                {
-                    if(candle.openTimestamp + candleDeltaTimeMs > nextTime)
-                        nextTime = floorTime(candle.openTimestamp + candleDeltaTimeMs, candleDeltaTimeMs);
-                }
+                startTime = candleStart;
+                nextTime = candleStart + candleDeltaTimeMs;
             }
             else {
                 newCandleCount++;

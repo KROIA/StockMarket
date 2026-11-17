@@ -1,0 +1,39 @@
+{
+  "id": "ink_dye_market_crash",
+  "picture": "ink_dye_market_crash.png",
+  "headline": {
+    "en_us": "Black-dye trade collapses as fashion turns pale",
+    "zh_cn": "时尚转淡，黑色染料贸易崩塌",
+    "de_de": "Handel mit Schwarzfärbemitteln bricht ein, als die Mode ins Helle kippt"
+  },
+  "text": {
+    "en_us": "The season's taste has swung hard toward pale and undyed cloth, and the once-coveted black dye has fallen out of favour overnight. Warehouses full of ink sacs and finished black dye have lost their buyers, and dyers are dumping stock at any price. Pale and white dyes, by contrast, are suddenly the colour everyone wants.",
+    "zh_cn": "本季审美急剧转向浅色与本色布料，曾备受追捧的黑色染料一夜失宠。堆满墨囊与成品黑色染料的仓库失去了买家，染工不惜任何价格抛售存货。相比之下，浅色与白色染料骤然成为人人争抢的颜色。",
+    "de_de": "Der Geschmack der Saison ist hart zu blassem und ungefärbtem Tuch umgeschwenkt, und das einst begehrte Schwarz ist über Nacht aus der Mode gefallen. Lagerhäuser voller Tintenbeutel und fertigem Schwarzfärbemittel haben ihre Käufer verloren, und die Färber verramschen ihre Bestände zu jedem Preis. Blasse und weiße Farben hingegen sind mit einem Mal das, was alle wollen."
+  },
+  "category": "markets",
+  "weight": 4,
+  "cooldownSeconds": 14400,
+  "impact": {
+    "type": "crash",
+    "peakFactor": -0.4,
+    "durationSeconds": 900,
+    "reversal": "exponential",
+    "reversalSeconds": 6000,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:ink_sac",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:black_dye",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:white_dye",
+      "weightFactor": -0.3
+    }
+  ]
+}

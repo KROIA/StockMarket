@@ -1,0 +1,35 @@
+{
+  "id": "potato_blight_return",
+  "picture": "potato_blight_return.png",
+  "headline": {
+    "en_us": "Blight returns to the potato fields!",
+    "zh_cn": "枯萎病重返马铃薯田！",
+    "de_de": "Krautfäule kehrt auf die Kartoffelfelder zurück!"
+  },
+  "text": {
+    "en_us": "The dreaded blight has crept back into the potato fields overnight, blackening entire rows before the farmers could react. With the storehouses barely half full, prices for potatoes and baked potatoes are shooting up as households rush to secure what little remains.",
+    "zh_cn": "可怕的枯萎病一夜之间重回马铃薯田，成排作物在农夫反应过来之前就已发黑。粮仓尚不满半，家家户户争抢所剩无几的存货，马铃薯与烤马铃薯价格骤涨。",
+    "de_de": "Über Nacht hat sich die gefürchtete Krautfäule zurück auf die Kartoffelfelder geschlichen und ganze Reihen geschwärzt, ehe die Bauern reagieren konnten. Da die Vorratshäuser kaum halb voll sind, schießen die Preise für Kartoffeln und Ofenkartoffeln in die Höhe, während die Haushalte sich um die letzten Reste reißen."
+  },
+  "category": "disaster",
+  "weight": 4,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.4,
+    "durationSeconds": 1500,
+    "reversal": "exponential",
+    "reversalSeconds": 3600,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:potato",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:baked_potato",
+      "weightFactor": 0.6
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "id": "dockworkers_strike",
+  "picture": "dockworkers_strike.png",
+  "headline": {
+    "en_us": "Dockworkers walk out - harbor cranes fall silent!",
+    "zh_cn": "码头工人罢工——港口吊机沉寂！",
+    "de_de": "Hafenarbeiter legen die Arbeit nieder - die Krane stehen still!"
+  },
+  "text": {
+    "en_us": "The dockworkers' guild has downed tools over withheld wages, and not a single crate now moves across the wharves. Metal and timber shipments are stranded on the quays, and merchants are already bidding up whatever iron, copper and planks remain inside the city walls.",
+    "zh_cn": "码头工人工会因欠薪停工，如今码头上一个货箱也动不了。金属与木材运输滞留在码头，商人已开始哄抬城墙内剩余的每一份铁、铜与木板。",
+    "de_de": "Die Zunft der Hafenarbeiter hat wegen einbehaltener Löhne die Arbeit niedergelegt, und keine einzige Kiste bewegt sich mehr über die Kais. Metall- und Holzlieferungen stranden an den Anlegern, und Händler treiben bereits die Preise für alles Eisen, Kupfer und Bauholz in die Höhe, das noch innerhalb der Stadtmauern liegt."
+  },
+  "category": "labor",
+  "weight": 6,
+  "cooldownSeconds": 10800,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.4,
+    "durationSeconds": 1800,
+    "reversal": "exponential",
+    "reversalSeconds": 3600,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:iron_ingot",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:copper_ingot",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "#minecraft:planks",
+      "weightFactor": 0.4
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "id": "wheat_harvest_festival",
+  "picture": "wheat_harvest_festival.png",
+  "headline": {
+    "en_us": "Harvest festival drives up grain demand!",
+    "zh_cn": "丰收节推高谷物需求！",
+    "de_de": "Erntefest treibt die Getreidenachfrage in die Höhe!"
+  },
+  "text": {
+    "en_us": "Villages across the land are preparing for the annual harvest festival. Bakeries stockpile flour, brewers order barley in bulk, and prices for wheat and bread climb ahead of the celebrations.",
+    "zh_cn": "各地村庄正在筹备一年一度的丰收节。面包坊囤积面粉，酿酒师大批订购大麦，小麦与面包价格在庆典前节节攀升。",
+    "de_de": "Überall bereiten sich die Dörfer auf das jährliche Erntefest vor. Bäckereien horten Mehl, Brauer bestellen Gerste in großen Mengen, und die Preise für Weizen und Brot steigen vor den Feierlichkeiten."
+  },
+  "category": "commodities",
+  "weight": 5,
+  "cooldownSeconds": 5400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.22,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.04
+  },
+  "markets": [
+    { "item": "minecraft:wheat", "weightFactor": 1.0 },
+    { "item": "minecraft:bread", "weightFactor": 0.6 }
+  ]
+}

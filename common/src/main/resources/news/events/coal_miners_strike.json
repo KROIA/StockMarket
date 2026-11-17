@@ -1,0 +1,28 @@
+{
+  "id": "coal_miners_strike",
+  "picture": "coal_miners_strike.png",
+  "headline": {
+    "en_us": "Coal miners walk out - furnaces run cold!",
+    "zh_cn": "煤矿工人罢工——炉火渐冷！",
+    "de_de": "Kohlekumpel legen die Arbeit nieder - Öfen bleiben kalt!"
+  },
+  "text": {
+    "en_us": "Coal miners across the region have walked off the job in protest over unsafe shafts. Furnaces are running cold, smiths are hoarding what fuel they have, and the price of coal and charcoal is climbing by the hour.",
+    "zh_cn": "全区煤矿工人因矿井安全隐患停工抗议。高炉渐冷，铁匠们囤积手头仅有的燃料，煤炭与木炭价格每小时都在上涨。",
+    "de_de": "Kohlekumpel in der ganzen Region haben aus Protest gegen unsichere Schächte die Arbeit niedergelegt. Die Öfen bleiben kalt, Schmiede horten ihren letzten Brennstoff, und die Preise für Kohle und Holzkohle klettern stündlich."
+  },
+  "category": "labor",
+  "weight": 6,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.36,
+    "durationSeconds": 1800,
+    "reversal": "exponential",
+    "reversalSeconds": 3600,
+    "noise": 0.04
+  },
+  "markets": [
+    { "item": "#minecraft:coals", "weightFactor": 1.0 }
+  ]
+}

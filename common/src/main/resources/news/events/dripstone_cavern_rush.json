@@ -1,0 +1,36 @@
+{
+  "id": "dripstone_cavern_rush",
+  "picture": "dripstone_cavern_rush.png",
+  "headline": {
+    "en_us": "Dripstone the new fashion in grand halls!",
+    "zh_cn": "滴水石成为厅堂新时尚！",
+    "de_de": "Tropfstein wird zur neuen Mode in den Prunkhallen!"
+  },
+  "text": {
+    "en_us": "Master builders have taken to lining grand halls with dripstone columns, and every noble house wants the dramatic cavern look for its own. Demand for dripstone blocks and pointed spikes is climbing steadily as masons compete for the fashionable stone.",
+    "zh_cn": "建筑大师们开始用滴水石柱装饰宏伟厅堂，每个贵族府邸都想要那种戏剧性的洞窟质感。石匠争抢这种时髦石料，滴水石块与滴水石锥的需求稳步攀升。",
+    "de_de": "Baumeister haben begonnen, Prunkhallen mit Tropfsteinsäulen auszukleiden, und jedes Adelshaus will den dramatischen Höhlenlook für sich. Die Nachfrage nach Tropfsteinblöcken und spitzem Tropfstein steigt stetig, während Steinmetze um das modische Gestein wetteifern."
+  },
+  "category": "commodities",
+  "weight": 7,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.28,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.03
+  },
+  "markets": [
+    {
+      "item": "minecraft:dripstone_block",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:pointed_dripstone",
+      "weightFactor": 0.7
+    }
+  ]
+}
