@@ -54,8 +54,8 @@
   .tfs button.sel, .tfs button:hover { color: var(--text); border-color: var(--accent); }
   #chart { flex: 1; min-height: 320px; }
   .modes { display: flex; gap: 4px; padding: 10px 16px 0; }
-  .modes button, #pairSwap { background: transparent; border: 1px solid var(--line); color: var(--muted); padding: 4px 14px; border-radius: 4px; font: inherit; cursor: pointer; }
-  .modes button.sel, .modes button:hover, #pairSwap:hover { color: var(--text); border-color: var(--accent); }
+  .modes button, #pairSwap, #pairStyle button { background: transparent; border: 1px solid var(--line); color: var(--muted); padding: 4px 14px; border-radius: 4px; font: inherit; cursor: pointer; }
+  .modes button.sel, .modes button:hover, #pairSwap:hover, #pairStyle button.sel, #pairStyle button:hover { color: var(--text); border-color: var(--accent); }
   #pairBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px 0; }
   #pairBar[hidden] { display: none; }
   #pairBar label { color: var(--muted); font-size: 12px; }
@@ -108,6 +108,7 @@
       <label for="pairHave">I have</label><span id="pairHaveIcon"></span><select id="pairHave"></select>
       <button id="pairSwap" title="Swap" aria-label="Swap">&#8646;</button>
       <label for="pairWant">I want</label><span id="pairWantIcon"></span><select id="pairWant"></select>
+      <span id="pairStyle"><button id="styleCandles" class="sel">Candles</button> <button id="styleLine">Line</button></span>
       <div id="pairRates"></div>
     </div>
     <div class="head">

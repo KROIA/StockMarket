@@ -7,7 +7,8 @@
   const WALL_LABELS = { 60000: '1m', 300000: '5m', 900000: '15m', 3600000: '1h', 14400000: '4h', 86400000: '1D' };
 
   const state = { markets: [], sel: null, tf: null, tfs: [], gameTime: false, candleStart: null, lastBar: null, historyAt: 0,
-    mode: 'market', have: null, want: null, pairStarts: '', pairAt: 0, pairLast: null, pairOptions: '', startPair: false };
+    mode: 'market', have: null, want: null, pairStarts: '', pairAt: 0, pairLast: null, pairOptions: '', startPair: false,
+    pairStyle: (() => { try { return localStorage.getItem('sm.pairStyle') === 'line' ? 'line' : 'candles'; } catch (e) { return 'candles'; } })() };
 
   // ---- formatting
   const fmtPrice = n => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: Math.abs(n) < 1 ? 4 : 2 });
@@ -62,29 +63,45 @@
     priceScaleId: '', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false,
   });
   volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
-  // pair view: price ratio as a line on the same chart, visible only in pair mode
-  const pairSeries = chart.addSeries(LC.LineSeries, { color: '#2ec4b6', lineWidth: 2, visible: false,
-    priceFormat: { type: 'price', precision: 4, minMove: 0.0001 } });
+  // pair view: price ratio as candles or a line on the same chart, visible only in pair mode (no volume)
+  const ratioFormat = { type: 'price', precision: 4, minMove: 0.0001 };
+  const pairCandles = chart.addSeries(LC.CandlestickSeries, {
+    upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+    visible: false, priceFormat: ratioFormat });
+  const pairSeries = chart.addSeries(LC.LineSeries, { color: '#2ec4b6', lineWidth: 2, visible: false, priceFormat: ratioFormat });
 
   /**
-   * Pair rate history like the in-game cross-rate chart (CrossRateMarket): candles of both markets matched by
-   * timestamp within half a timeframe, rate = want / have = how many "have" items one "want" item costs.
-   * Buckets missing in either market or with a price of 0 are skipped. Pure: candles in, line points out.
-   * @param have candles of the "I have" market ({t seconds, c close}, oldest first)
+   * Pair rate candles built exactly like the in-game cross-rate chart (CrossRateMarket.recomputeCrossRateData):
+   * candles of both markets matched by timestamp within half a timeframe, rate = want / have = how many "have"
+   * items one "want" item costs. open = wantO/haveO; high/low = max/min of the open, wantH/haveH and wantL/haveL;
+   * close = the next candle's open, the newest close = the current rate; high/low are widened to cover the close.
+   * Buckets missing in either market, or whose "have" open/high/low is 0, are skipped. Pure: candles in, candles out.
+   * @param have candles of the "I have" market ({t seconds, o, h, l, c}, oldest first; c = current price on the newest)
    * @param want candles of the "I want" market, same format
    * @param tfMs timeframe in milliseconds
    */
-  function ratioSeries(have, want, tfMs) {
+  function ratioCandles(have, want, tfMs) {
     const tol = tfMs / 2000; // candle times are in seconds
     const out = [];
-    let i = 0, j = 0;
+    let i = 0, j = 0, last = null;
     while (i < have.length && j < want.length) {
-      const d = have[i].t - want[j].t;
+      const hc = have[i], wc = want[j], d = hc.t - wc.t;
       if (Math.abs(d) <= tol) {
-        if (have[i].c > 0 && want[j].c > 0) out.push({ time: have[i].t, value: want[j].c / have[i].c });
+        if (hc.o > 0 && hc.h > 0 && hc.l > 0) {
+          const o = wc.o / hc.o, hh = wc.h / hc.h, ll = wc.l / hc.l;
+          out.push({ time: hc.t, open: o, high: Math.max(o, hh, ll), low: Math.min(o, hh, ll), close: o });
+          last = [hc, wc];
+        }
         i++; j++;
       } else if (d > 0) j++;
       else i++;
+    }
+    for (let k = 0; k < out.length; k++) {
+      const c = out[k];
+      if (k + 1 < out.length) c.close = out[k + 1].open;
+      else if (last[0].c > 0) c.close = last[1].c / last[0].c; // newest: the current rate
+      c.high = Math.max(c.high, c.close);
+      c.low = Math.min(c.low, c.close);
     }
     return out;
   }
@@ -238,7 +255,7 @@
     $('side').classList.toggle('dim', mode === 'pair');
     candleSeries.applyOptions({ visible: mode === 'market' });
     volumeSeries.applyOptions({ visible: mode === 'market' });
-    pairSeries.applyOptions({ visible: mode === 'pair' });
+    showPairStyle();
     $('mIcon').dataset.item = '';
     if (mode === 'pair') {
       if (!byId(state.have) || !byId(state.want) || state.have === state.want) {
@@ -301,8 +318,10 @@
     if (h.candleStart + ',' + w.candleStart !== state.pairStarts || Date.now() - state.pairAt > 30000) {
       loadPair(false);
     } else if (state.pairLast && h.price > 0 && w.price > 0) {
-      state.pairLast.value = w.price / h.price;
-      pairSeries.update(state.pairLast);
+      const b = state.pairLast, r = w.price / h.price; // move the newest candle with the live rate
+      b.close = r; b.high = Math.max(b.high, r); b.low = Math.min(b.low, r);
+      pairCandles.update(b);
+      pairSeries.update({ time: b.time, value: r });
     }
   }
   async function loadPair(fit) {
@@ -316,9 +335,10 @@
       const [hd, wd] = await Promise.all([
         api(`api/history?market=${have}&tf=${tf}&max=500`), api(`api/history?market=${want}&tf=${tf}&max=500`)]);
       if (have !== state.have || want !== state.want || tf !== state.tf || state.mode !== 'pair') return;
-      const points = ratioSeries(hd.candles, wd.candles, tf);
-      pairSeries.setData(points);
-      state.pairLast = points.length ? { ...points[points.length - 1] } : null;
+      const candles = ratioCandles(hd.candles, wd.candles, tf);
+      pairCandles.setData(candles);
+      pairSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
+      state.pairLast = candles.length ? { ...candles[candles.length - 1] } : null;
       if (fit) chart.timeScale().fitContent();
     } catch (e) { /* next poll retries */ }
   }
@@ -326,9 +346,25 @@
     state.have = Number($('pairHave').value);
     state.want = Number($('pairWant').value);
     state.pairLast = null;
+    pairCandles.setData([]);
     pairSeries.setData([]);
     renderHead();
     loadPair(true);
+  }
+  /** Shows the pair as candles or as a line (remembered per browser); both series always hold the data. */
+  function showPairStyle() {
+    const pair = state.mode === 'pair';
+    pairCandles.applyOptions({ visible: pair && state.pairStyle === 'candles' });
+    pairSeries.applyOptions({ visible: pair && state.pairStyle === 'line' });
+    $('styleCandles').classList.toggle('sel', state.pairStyle === 'candles');
+    $('styleLine').classList.toggle('sel', state.pairStyle === 'line');
+  }
+  for (const style of ['candles', 'line']) {
+    $(style === 'line' ? 'styleLine' : 'styleCandles').onclick = () => {
+      state.pairStyle = style;
+      try { localStorage.setItem('sm.pairStyle', style); } catch (e) { /* only a convenience */ }
+      showPairStyle();
+    };
   }
   $('pairHave').onchange = pairChanged;
   $('pairWant').onchange = pairChanged;

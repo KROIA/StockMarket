@@ -44,7 +44,7 @@ Item-for-item trades (the "I have / I want" pair in the trade screen) have no ma
 
 * Pick **I have** and **I want** (any two items or company shares); the arrow button swaps them.
 * The header shows the current rate both ways, for example `1 Gold Ingot = 8.5 Iron Ingot` and `1 Iron Ingot = 0.1176 Gold Ingot`. It is the "want" price divided by the "have" price, the same rate the in-game pair selector shows, without fees.
-* The chart is a line of that price ratio over time for the selected timeframe. Points where either market has no candle or a price of 0 are left out. It is not a market of its own: there is no order book, volume or trade list for a pair, so the side panel keeps showing the last selected market.
+* The chart shows that price ratio over time for the selected timeframe, as candles (the default) or as a line; the page remembers your choice. The candles are built the same way as the in-game pair chart: open, high and low come from the ratio of the two markets' open, high and low prices, and each candle closes at the next candle's open. Times where either market has no candle are left out. It is not a market of its own: there is no order book, volume or trade list for a pair, so the side panel keeps showing the last selected market.
 
 The address of the page remembers the pair (`#pair=...`), so you can bookmark it or send the link. Clicking a market in the list goes back to the normal market view.
 
