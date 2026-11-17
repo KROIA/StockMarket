@@ -202,14 +202,16 @@ public class PluginOrderBook implements IPluginOrderBook
      * @param centerPrice the real price the calculators centre their distribution on
      * @param currentMarketPrice the real price the bid/ask split is made at (loop-invariant, fetched by the caller)
      * @param pickPrice the real value price at which the volume gets measured
+     * @param staticOnly SM-340: true = {@link IVolumeDistributionCalculator#getStaticVolume} (no history terms)
      * @return the signed real volume at the given price
      */
-    private float computeDefaultRealVolume(double centerPrice, float currentMarketPrice, double pickPrice)
+    private float computeDefaultRealVolume(double centerPrice, float currentMarketPrice, double pickPrice, boolean staticOnly)
     {
         float volume = 0;
         for(IVolumeDistributionCalculator distributionCalculator : volumeDistributionCalculators)
         {
-            volume += Math.abs(distributionCalculator.getVolume(centerPrice, pickPrice));
+            volume += Math.abs(staticOnly ? distributionCalculator.getStaticVolume(centerPrice, pickPrice)
+                    : distributionCalculator.getVolume(centerPrice, pickPrice));
         }
         if(currentMarketPrice > pickPrice)
             return volume;
@@ -243,13 +245,16 @@ public class PluginOrderBook implements IPluginOrderBook
     public float getDefaultRealVolume(double pickPrice)
     {
         float currentMarketPrice = (float)MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
-        return computeDefaultRealVolume(depthCenter(currentMarketPrice), currentMarketPrice, pickPrice);
+        return computeDefaultRealVolume(depthCenter(currentMarketPrice), currentMarketPrice, pickPrice, false);
     }
-    /** {@inheritDoc} Evaluates the registered calculators centred on {@code centerPrice} and splits bid/ask there. */
+    /**
+     * {@inheritDoc} Evaluates the registered calculators' static profile ({@link IVolumeDistributionCalculator#getStaticVolume},
+     * SM-340: without the slow-average wall) centred on {@code centerPrice} and splits bid/ask there.
+     */
     @Override
     public float getDefaultRealVolumeAround(double centerPrice, double pickPrice)
     {
-        return computeDefaultRealVolume((float) centerPrice, (float) centerPrice, pickPrice);
+        return computeDefaultRealVolume((float) centerPrice, (float) centerPrice, pickPrice, true);
     }
 
     @Override
@@ -284,7 +289,7 @@ public class PluginOrderBook implements IPluginOrderBook
         for(int i = 0; i < count; i++)
         {
             double pickPrice = MarketManager.convertToRealAmountStatic(backendStartPrice + i);
-            volumes[i] = computeDefaultRealVolume(center, currentMarketPrice, pickPrice) * scaleFactor;
+            volumes[i] = computeDefaultRealVolume(center, currentMarketPrice, pickPrice, false) * scaleFactor;
         }
         return volumes;
     }

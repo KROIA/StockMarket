@@ -60,6 +60,7 @@ import java.util.UUID;
  *   <li>{@code stockmarket.longrun.news}: {@code off} leaves the NewsPlugin out (default on)</li>
  *   <li>{@code stockmarket.longrun.volatility}: {@code off} runs the VolatilityPlugin with scale 0, so its walk adds
  *       nothing and the bot target is the bare NetFlow equilibrium (default on)</li>
+ *   <li>{@code stockmarket.longrun.wall}: {@code off} sets the SM-340 wall strength to 0 (default on)</li>
  *   <li>{@code stockmarket.longrun.out}: output folder (default {@code longrun} in the game directory)</li>
  * </ul>
  */
@@ -110,6 +111,11 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
     }
 
     // ── Properties ──────────────────────────────────────────────────────────────────────────────
+
+    /** SM-340: false with {@code -Dstockmarket.longrun.wall=off} (wall strength 0, the pre-SM-340 book). */
+    private static boolean wallEnabled() {
+        return !"off".equalsIgnoreCase(System.getProperty("stockmarket.longrun.wall", "on").trim());
+    }
 
     private static boolean requested(String market, String scenario) {
         String v = System.getProperty("stockmarket.longrun", "").trim();
@@ -527,8 +533,9 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
             market.resetNetPlayerItemFlow();
 
             MarketCache cache = new MarketCache(market);
-            cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
-                    harnessCalc(s.price(), DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(s.price(), s.abundance(), 1f)));
+            DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc =
+                    harnessCalc(s.price(), DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(s.price(), s.abundance(), 1f));
+            cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(calc);
             market.test_resetVirtualOrderBookVolume();
             List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
             IPluginOrderBook book = cache.getPluginOrderBook();
@@ -540,6 +547,15 @@ public class LongRunMarketTestSuite extends PluginTestSuite {
             HarnessModel model = new HarnessModel(itemID, NetFlowPlugin.Settings.createDefault(),
                     volatility ? VolatilityPlugin.DEFAULT_VOLATILITY_SCALE : 0f);
             DefaultOrderbookVolumeDistributionPlugin refill = newHarnessRefill();
+            // SM-340: the registered calculator is the harness one, so the plugin's slow-average wall is mirrored onto
+            // it (production registers the plugin's own calculator); stockmarket.longrun.wall=off: strength 0
+            if (!wallEnabled())
+                applySettings(refill, DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC,
+                        DefaultOrderbookVolumeDistributionPlugin.Settings.createDefault().withWall(
+                                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_PERIOD_MINUTES,
+                                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_DEAD_ZONE, 0f,
+                                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_CAP));
+            refill.test_mirrorWallTo(itemID, calc);
             TargetPriceBot bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
             bot.onMarketSubscribed(itemID);

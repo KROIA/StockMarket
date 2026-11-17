@@ -193,6 +193,12 @@ public class PluginTestSuite extends TestSuite {
         addTest("volumeDistribution_trend_codec_legacy", this::test_volumeDistribution_trendCodec);
         addTest("volumeDistribution_trend_reachesBook", this::test_volumeDistribution_trendReachesBook);
         // trend_onOff_report (report only): T208GateTestSuite
+        // SM-340: slow-average wall
+        addTest("volumeDistribution_wall_deadZone_noVolume", this::test_wall_deadZone);
+        addTest("volumeDistribution_wall_sideAndGrowth", this::test_wall_sideAndGrowth);
+        addTest("volumeDistribution_wall_codec_legacy", this::test_wall_codec);
+        addTest("volumeDistribution_wall_nbt_legacy", this::test_wall_nbt);
+        addTest("volumeDistribution_wall_reachesCalculator", this::test_wall_reachesCalculator);
         // T-214: depth per relative price, sized to the max order
         addTest("depthScale_diamond_matchesOld", this::test_depthScale_diamondMatchesOld);
         addTest("depthScale_scaleInvariance", this::test_depthScale_scaleInvariance);
@@ -3021,6 +3027,158 @@ public class PluginTestSuite extends TestSuite {
         } finally {
             vob.setDepthSideFactors(1f, 1f);
             market.test_setCurrentMarketPrice(originalPrice);
+        }
+    }
+
+    // ── SM-340: slow-average wall ────────────────────────────────────────────────────────────────
+
+    /** SM-340: diamond calculator (160, abundance 50) with the default wall around the slow average {@code ma} at {@code price}. */
+    private static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator wallCalc(double ma, double price) {
+        var c = t214Calc(160, 50f);
+        c.setWall(new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator.Wall(Math.log(ma), price,
+                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_DEAD_ZONE,
+                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_STRENGTH,
+                DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_CAP));
+        return c;
+    }
+
+    /** SM-340: inside the dead zone (price 10% above the average, levels within +-15%) the book is unchanged. */
+    private TestResult test_wall_deadZone() {
+        var c = wallCalc(160, 176);
+        for (double p : new double[]{140, 150, 160, 170, 175.9, 176.1, 180, 185})
+            if (c.wallShape(p) != 0 || c.getVolume(160, p) != c.getStaticVolume(160, p))
+                return fail("Level " + p + " inside the dead zone got wall volume " + c.wallShape(p));
+        var off = t214Calc(160, 50f);
+        for (double p : new double[]{150, 180, 250})
+            if (off.getVolume(160, p) != off.getStaticVolume(160, p)) return fail("No wall must equal the static profile at " + p);
+        return pass("levels within +-15% of the average and a calculator without wall: no extra volume");
+    }
+
+    /**
+     * SM-340: beyond the dead zone the wall sits only on the side facing away from the average (asks above it,
+     * bids below it), grows with the distance and stops at the cap; its depth per relative price at the cap is
+     * {@code cap x 250 x reference order} at any level.
+     */
+    private TestResult test_wall_sideAndGrowth() {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        float strength = DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_STRENGTH;
+        float cap = DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_CAP;
+        float dz = DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_DEAD_ZONE;
+        StringBuilder out = new StringBuilder();
+        // price 25% above the average: asks get the wall, bids between the average and the price do not
+        var up = wallCalc(160, 200);
+        if (up.wallShape(195) != 0 || up.wallShape(190) != 0) return fail("Bids above the average must not get wall volume");
+        double prev = 0;
+        for (double p : new double[]{205, 210, 220, 230}) {
+            double w = up.wallShape(p), expected = Math.min(cap, strength * (Math.log(p / 160) - dz));
+            out.append(String.format(Locale.ROOT, " ask %.0f: %.2f;", p, w));
+            if (Math.abs(w - expected) > 1e-6 * expected || !(w > prev)) return fail("Ask wall must grow as min(cap, k(g - dz)):" + out);
+            prev = w;
+        }
+        if (up.wallShape(300) != cap || up.wallShape(1000) != cap) return fail("Far asks must hold the cap:" + out);
+        // price 25% below the average: bids get the wall, asks between the price and the average do not
+        var down = wallCalc(160, 125);
+        if (down.wallShape(130) != 0 || down.wallShape(150) != 0) return fail("Asks below the average must not get wall volume");
+        if (!(down.wallShape(120) > 0) || !(down.wallShape(110) > down.wallShape(120)) || down.wallShape(50) != cap)
+            return fail("Bid wall must appear below the dead zone and grow to the cap: " + down.wallShape(120) + " / " + down.wallShape(110));
+        // depth per relative price at the cap: cap x 250 x 3,200 at any level
+        double refDensity = cap * DefaultOrderbookVolumeDistributionPlugin.DEPTH_PER_MAX_ORDER
+                * DefaultOrderbookVolumeDistributionPlugin.referenceOrderSize(50f);
+        for (double p : new double[]{400, 1000}) {
+            double density = (up.getVolume(160, p) - (double) up.getStaticVolume(160, p)) * p / tick;
+            out.append(String.format(Locale.ROOT, " density %.0f: %.4g;", p, density));
+            if (Math.abs(density / refDensity - 1) > 1e-3) return fail("Cap density must be " + refDensity + ":" + out);
+        }
+        return pass(out.toString());
+    }
+
+    /** SM-340: an 11-float (round-level era) payload decodes with the wall defaults; 15-float payloads round-trip. */
+    private TestResult test_wall_codec() {
+        ByteBuf old = Unpooled.buffer();
+        old.writeFloat(2f); old.writeFloat(0.1f); old.writeFloat(0.2f); old.writeFloat(0.03f); old.writeBoolean(false);
+        old.writeFloat(5f); old.writeFloat(3f); old.writeFloat(2f);
+        old.writeFloat(0.5f); old.writeFloat(0.01f); old.writeFloat(2f);
+        DefaultOrderbookVolumeDistributionPlugin.Settings a = DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.decode(old);
+        old.release();
+        if (a.roundLevelRange() != 2f
+                || a.wallPeriodMinutes() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_PERIOD_MINUTES
+                || a.wallDeadZone() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_DEAD_ZONE
+                || a.wallStrength() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_STRENGTH
+                || a.wallCap() != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_CAP)
+            return fail("11-float payload decoded as " + a);
+        DefaultOrderbookVolumeDistributionPlugin.Settings b = a.withWall(1000f, 0.1f, 50f, 10f);
+        ByteBuf buf = Unpooled.buffer();
+        DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.encode(buf, b);
+        DefaultOrderbookVolumeDistributionPlugin.Settings c = DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC.decode(buf);
+        boolean rest = buf.isReadable();
+        buf.release();
+        if (rest) return fail("15-float payload left bytes");
+        return b.equals(c) ? pass("11-float payload -> wall defaults, 15-float payload round-trips") : fail(b + " -> " + c);
+    }
+
+    /** SM-340: wall settings and the slow average survive save/load; a save without the keys loads the defaults and NaN. */
+    private TestResult test_wall_nbt() {
+        DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
+        p.setLoggerEnabled(false);
+        p.onMarketSubscribed(itemID);
+        applySettings(p, DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC,
+                DefaultOrderbookVolumeDistributionPlugin.Settings.createDefault().withWall(1000f, 0.1f, 50f, 10f));
+        p.test_setWallLnMA(itemID, 5.25);
+        CompoundTag tag = new CompoundTag();
+        p.save(tag);
+        DefaultOrderbookVolumeDistributionPlugin q = new DefaultOrderbookVolumeDistributionPlugin();
+        q.setLoggerEnabled(false);
+        q.onMarketSubscribed(itemID);
+        q.load(tag);
+        if (q.test_getWallLnMA(itemID) != 5.25) return fail("Slow average lost on save/load: " + q.test_getWallLnMA(itemID));
+        CompoundTag again = new CompoundTag();
+        q.save(again);
+        CompoundTag m2 = net.kroia.modutilities.NbtCompat.getCompound((ListTag) again.get("marketData"), 0);
+        if (net.kroia.modutilities.NbtCompat.getFloat(m2, "wallStrength") != 50f
+                || net.kroia.modutilities.NbtCompat.getFloat(m2, "wallCap") != 10f
+                || net.kroia.modutilities.NbtCompat.getFloat(m2, "wallDeadZone") != 0.1f
+                || net.kroia.modutilities.NbtCompat.getFloat(m2, "wallPeriodMinutes") != 1000f)
+            return fail("Wall settings lost on save/load: " + m2);
+        CompoundTag m = net.kroia.modutilities.NbtCompat.getCompound((ListTag) tag.get("marketData"), 0);
+        for (String key : new String[]{"wallPeriodMinutes", "wallDeadZone", "wallStrength", "wallCap", "wallLnMA"}) m.remove(key);
+        DefaultOrderbookVolumeDistributionPlugin legacy = new DefaultOrderbookVolumeDistributionPlugin();
+        legacy.setLoggerEnabled(false);
+        legacy.onMarketSubscribed(itemID);
+        legacy.load(tag);
+        if (!Double.isNaN(legacy.test_getWallLnMA(itemID))) return fail("Old save must start the average at the next price");
+        CompoundTag l = new CompoundTag();
+        legacy.save(l);
+        CompoundTag lm = net.kroia.modutilities.NbtCompat.getCompound((ListTag) l.get("marketData"), 0);
+        if (net.kroia.modutilities.NbtCompat.getFloat(lm, "wallStrength") != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_STRENGTH
+                || net.kroia.modutilities.NbtCompat.getFloat(lm, "wallPeriodMinutes") != DefaultOrderbookVolumeDistributionPlugin.DEFAULT_WALL_PERIOD_MINUTES)
+            return fail("Old save must load the wall defaults: " + lm);
+        return pass("settings + slow average round-trip; old save -> defaults, average NaN");
+    }
+
+    /**
+     * SM-340, plugin path: an update starts the slow average at the price and hands the wall to the calculator;
+     * strength 0 switches it off (no wall, average forgotten).
+     */
+    private TestResult test_wall_reachesCalculator() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        try {
+            MarketCache cache = new MarketCache(market);
+            List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+            DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
+            p.setLoggerEnabled(false);
+            p.onMarketSubscribed(itemID);
+            p.update(markets);
+            var wall = p.test_getCalculator(itemID).getWall();
+            double lnP = Math.log((float) cache.getPluginMarket().getPrice());
+            if (wall == null || Math.abs(wall.lnMA() - lnP) > 1e-9) return fail("Fresh average must start at the price: " + wall);
+            applySettings(p, DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC,
+                    DefaultOrderbookVolumeDistributionPlugin.Settings.createDefault().withWall(2880f, 0.15f, 0f, 40f));
+            p.update(markets);
+            if (p.test_getCalculator(itemID).getWall() != null || !Double.isNaN(p.test_getWallLnMA(itemID)))
+                return fail("Strength 0 must switch the wall off");
+            return pass("average starts at the price, strength 0 -> off");
+        } catch (Exception e) {
+            return fail("Exception: " + e);
         }
     }
 

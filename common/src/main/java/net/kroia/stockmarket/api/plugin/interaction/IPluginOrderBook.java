@@ -228,7 +228,8 @@ public interface IPluginOrderBook {
      * Like {@link #getDefaultRealVolume(double)}, but evaluates the volume distribution calculators centred on
      * {@code centerPrice} and splits bid/ask there, instead of the fair price and the current price. Used to
      * read the <i>default</i> book around the market's default price, whatever the price is now (T-208
-     * permanent impact capacity).
+     * permanent impact capacity). SM-340: only the calculators' static profile
+     * ({@link IVolumeDistributionCalculator#getStaticVolume}), so the slow-average wall does not count.
      * <p>
      * Default: falls back to {@link #getDefaultRealVolume(double)}, for implementations that cannot re-centre.
      *
