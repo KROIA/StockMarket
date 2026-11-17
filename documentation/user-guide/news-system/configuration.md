@@ -92,6 +92,7 @@ One file = an optional `scheduler` block + an `events` array:
 | `picture` | string | -- | Bare file name of a PNG in `config/StockMarket/news/pictures/`, printed with the headline. A bad value is an error that only drops the field, a missing file only a warning -- the event loads either way. See [News Event Pictures](pictures.md). |
 | `requires` | array | -- | Trigger requirements against the world-event registry (e.g. `notFired`, `firedBefore`, `keyEquals`). All entries must hold for the event to become eligible; an unknown requirement type skips the whole event. See [Trigger Requirements](advanced-events.md#trigger-requirements). |
 | `records` | object | -- | String→string pairs written into the world-event registry when the event publishes (last write wins). See [The World-Event Registry](advanced-events.md#the-world-event-registry). |
+| `undoes` | string | -- | Id of another event whose permanent shift this event takes back. When this event's permanent shift ends, each market gets back exactly the default-price change that event left there; markets it never touched stay as they are. See [Taking Back a Permanent Shift](advanced-events.md#taking-back-a-permanent-shift-undoes). |
 | `chains` | array | -- | Follow-up events fired by this event -- on publish, on a named step, or on natural completion, each with a chance and a delay range. See [Event Chains](advanced-events.md#event-chains). |
 
 Unknown fields anywhere in the schema are reported as warnings and ignored.

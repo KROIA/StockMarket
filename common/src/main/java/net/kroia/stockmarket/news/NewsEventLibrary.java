@@ -334,6 +334,8 @@ public class NewsEventLibrary {
             } else {
                 // SM-338: move an untouched pre-2.2 scheduler block to the new defaults.
                 DefaultNewsEvents.migrateOldSchedulerDefaults(newsDir);
+                // SM-341: give an unedited old luxury_goods_tax its "once until repealed" gate.
+                DefaultNewsEvents.migrateOldLuxuryTax(newsDir);
             }
         } catch (IOException e) {
             report.addError("", null, "failed to access news config directory '" + newsDir

@@ -105,6 +105,7 @@ public class NewsSystemTestSuite extends TestSuite {
         addTest("library_scheduler_last_loaded_wins", this::test_library_scheduler_lastLoadedWins);
         addTest("library_heals_missing_default_events", this::test_library_healsMissingDefaultEvents);
         addTest("library_migrates_old_scheduler_defaults", this::test_library_migratesOldSchedulerDefaults);
+        addTest("library_migrates_old_luxury_tax", this::test_library_migratesOldLuxuryTax);
 
         // NewsRecord round-trips
         addTest("record_nbt_round_trip", this::test_record_nbtRoundTrip);
@@ -883,6 +884,82 @@ public class NewsSystemTestSuite extends TestSuite {
         } finally {
             deleteRecursively(dir);
         }
+    }
+
+    /**
+     * SM-341 upgrade: an unedited old {@code luxury_goods_tax} entry (with or without zh_cn)
+     * is replaced by the shipped one and the repeal event is appended; an admin-edited
+     * entry is kept; once the file holds the repeal the step never runs again.
+     */
+    private TestResult test_library_migratesOldLuxuryTax() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            Path file = dir.resolve(DefaultNewsEvents.DEFAULT_FILE_NAME);
+            JsonObject shippedTax = DefaultNewsEvents.getDefaultEventObjectsById().get("luxury_goods_tax");
+            JsonObject oldTax = JsonUtilities.fromString(DefaultNewsEvents.OLD_LUXURY_GOODS_TAX_JSON).getAsJsonObject();
+            JsonObject oldTaxNoZh = oldTax.deepCopy();
+            oldTaxNoZh.getAsJsonObject("headline").remove("zh_cn");
+            oldTaxNoZh.getAsJsonObject("text").remove("zh_cn");
+            JsonObject editedTax = oldTax.deepCopy();
+            editedTax.addProperty("weight", 5);
+
+            // (a) old entry with zh_cn, (b) without: replaced, repeal appended, no errors
+            for (JsonObject old : List.of(oldTax, oldTaxNoZh)) {
+                writeEventsFile(file, old);
+                ValidationReport report = new NewsEventLibrary().reload(dir);
+                TestResult r = assertFalse("migration must not produce errors: " + report, report.hasErrors());
+                if (!r.passed()) return r;
+                r = assertTrue("old entry replaced by the shipped one",
+                        shippedTax.equals(fileEvent(file, "luxury_goods_tax")));
+                if (!r.passed()) return r;
+                r = assertNotNull("repeal appended", fileEvent(file, "luxury_tax_repealed"));
+                if (!r.passed()) return r;
+            }
+
+            // (c) runs once: the old entry put back next to the repeal stays as it is
+            JsonObject root = JsonUtilities.fromString(Files.readString(file)).getAsJsonObject();
+            JsonArray events = root.getAsJsonArray("events");
+            for (int i = 0; i < events.size(); i++) {
+                if (shippedTax.equals(events.get(i))) events.set(i, oldTax);
+            }
+            Files.writeString(file, JsonUtilities.toPrettyString(root));
+            new NewsEventLibrary().reload(dir);
+            TestResult r = assertTrue("no second migration once the repeal is in the file",
+                    oldTax.equals(fileEvent(file, "luxury_goods_tax")));
+            if (!r.passed()) return r;
+
+            // (d) admin-edited entry: kept, repeal still appended
+            writeEventsFile(file, editedTax);
+            new NewsEventLibrary().reload(dir);
+            r = assertTrue("admin-edited tax kept", editedTax.equals(fileEvent(file, "luxury_goods_tax")));
+            if (!r.passed()) return r;
+            return assertNotNull("repeal appended next to the edited tax", fileEvent(file, "luxury_tax_repealed"));
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** Writes a default_events.json holding only the given event. */
+    private static void writeEventsFile(Path file, JsonObject event) throws IOException {
+        JsonObject root = new JsonObject();
+        JsonArray events = new JsonArray();
+        events.add(event);
+        root.add("events", events);
+        Files.writeString(file, JsonUtilities.toPrettyString(root));
+    }
+
+    /** @return the event object with the given id in the file, or null */
+    private static JsonObject fileEvent(Path file, String id) throws IOException {
+        JsonObject root = JsonUtilities.fromString(Files.readString(file)).getAsJsonObject();
+        for (var el : root.getAsJsonArray("events")) {
+            if (el.isJsonObject() && id.equals(el.getAsJsonObject().get("id").getAsString())) {
+                return el.getAsJsonObject();
+            }
+        }
+        return null;
     }
 
     /** Compares the loaded scheduler interval and multipliers. */

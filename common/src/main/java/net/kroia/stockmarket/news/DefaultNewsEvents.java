@@ -50,8 +50,8 @@ import java.util.Set;
  * default whose id is present in <b>no</b> loaded {@code .json} is parsed into the live
  * pool and appended to the file by {@link #appendMissingToFile}. Existing entries
  * (including admin-customized defaults) and the {@code scheduler} block are never modified
- * or overwritten (one exception: the one-time SM-338 scheduler upgrade,
- * {@link #migrateOldSchedulerDefaults}), so a server that predates newly shipped events receives them without
+ * or overwritten (exceptions: the one-time SM-338 scheduler upgrade and the SM-341 luxury tax upgrade,
+ * {@link #migrateOldSchedulerDefaults}, {@link #migrateOldLuxuryTax}), so a server that predates newly shipped events receives them without
  * losing its edits. The full file is written from scratch only on the first run (empty
  * folder, see {@link #writeDefaultFile}); a folder that has no {@code default_events.json}
  * is left untouched. The default pictures are healed independently and per id into
@@ -141,6 +141,7 @@ public final class DefaultNewsEvents {
             "gemstone_heist",
             "royal_purple_fashion",
             "luxury_goods_tax",
+            "luxury_tax_repealed",
             "speculation_mania",
             "margin_call_crash");
 
@@ -359,6 +360,94 @@ public final class DefaultNewsEvents {
         }
     }
 
+    /**
+     * SM-341 upgrade of an existing {@code default_events.json}: the pre-2.2
+     * {@code luxury_goods_tax} entry has no {@code requires}/{@code records}, so it could
+     * stack its permanent cut. If the file's entry is still exactly an old shipped version
+     * (with or without the zh_cn translations), it is replaced by the shipped one; an
+     * admin-edited entry is never touched. Runs once: the step is skipped as soon as the
+     * file holds {@code luxury_tax_repealed}, which the library's self-heal appends later
+     * in the same reload. Never throws; a file that cannot be parsed is left unchanged.
+     *
+     * @param newsDir the news config directory
+     * @return true if the file was rewritten
+     */
+    public static boolean migrateOldLuxuryTax(Path newsDir) {
+        Path file = newsDir.resolve(DEFAULT_FILE_NAME);
+        if (!Files.exists(file)) return false;
+        try {
+            JsonElement rootEl = JsonUtilities.fromString(Files.readString(file, StandardCharsets.UTF_8));
+            if (rootEl == null || !rootEl.isJsonObject()) return false;
+            JsonElement eventsEl = rootEl.getAsJsonObject().get("events");
+            if (eventsEl == null || !eventsEl.isJsonArray()) return false;
+            JsonArray events = eventsEl.getAsJsonArray();
+            for (JsonElement el : events) {
+                if (el.isJsonObject() && "luxury_tax_repealed".equals(idOf(el.getAsJsonObject()))) return false;
+            }
+            JsonObject oldWithZh = JsonUtilities.fromString(OLD_LUXURY_GOODS_TAX_JSON).getAsJsonObject();
+            JsonObject oldWithoutZh = oldWithZh.deepCopy();
+            oldWithoutZh.getAsJsonObject("headline").remove("zh_cn");
+            oldWithoutZh.getAsJsonObject("text").remove("zh_cn");
+            for (int i = 0; i < events.size(); i++) {
+                JsonElement el = events.get(i);
+                if (el.equals(oldWithZh) || el.equals(oldWithoutZh)) {
+                    events.set(i, getDefaultEventObjectsById().get("luxury_goods_tax"));
+                    Files.writeString(file, JsonUtilities.toPrettyString(rootEl), StandardCharsets.UTF_8);
+                    StockMarketMod.LOGGER.info("[NewsEventLibrary] Updated the unedited luxury_goods_tax"
+                            + " event in {} (fires once until repealed)", file);
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.warn("[NewsEventLibrary] Could not migrate luxury_goods_tax in {}"
+                    + " - file left unchanged", DEFAULT_FILE_NAME, e);
+            return false;
+        }
+    }
+
+    /** @return the string {@code id} of an event object, or null */
+    private static @Nullable String idOf(JsonObject event) {
+        JsonElement idEl = event.get("id");
+        return idEl != null && idEl.isJsonPrimitive() ? idEl.getAsString() : null;
+    }
+
+    /**
+     * The {@code luxury_goods_tax} entry as shipped before SM-341 (2.0.4 .. 2.1.x without
+     * zh_cn, 2.2 dev builds with it). Only {@link #migrateOldLuxuryTax} and its test use it.
+     */
+    public static final String OLD_LUXURY_GOODS_TAX_JSON = """
+            {
+              "id": "luxury_goods_tax",
+              "picture": "luxury_goods_tax.png",
+              "headline": {
+                "en_us": "Council levies steep luxury tax on gems and gold",
+                "zh_cn": "议会对宝石与黄金课以重税",
+                "de_de": "Rat erhebt saftige Luxussteuer auf Edelsteine und Gold"
+              },
+              "text": {
+                "en_us": "To fill the war chest the trade council has slapped a punishing luxury tax on every sale of diamonds, emeralds and gold. Buyers are balking at the new surcharge, demand for finery is cooling sharply, and analysts expect the chill on luxury prices to become a lasting fixture of the market.",
+                "zh_cn": "为充实战备金库，贸易议会对钻石、绿宝石与黄金的每笔交易课以惩罚性奢侈税。买家面对新增费用望而却步，奢侈品需求急剧降温，分析师预计这轮寒潮将成为市场的长期特征。",
+                "de_de": "Um die Kriegskasse zu füllen, hat der Handelsrat eine drückende Luxussteuer auf jeden Verkauf von Diamanten, Smaragden und Gold verhängt. Käufer schrecken vor dem neuen Aufschlag zurück, die Nachfrage nach Prunk kühlt merklich ab, und Analysten erwarten, dass die Preisdämpfung im Luxussegment zu einer dauerhaften Erscheinung am Markt wird."
+              },
+              "category": "politics",
+              "weight": 2,
+              "cooldownSeconds": 86400,
+              "impact": {
+                "type": "trend",
+                "peakFactor": -0.2,
+                "rampUpSeconds": 1200,
+                "durationSeconds": 2700,
+                "reversal": "none"
+              },
+              "markets": [
+                { "item": "minecraft:diamond",    "weightFactor": 1.0 },
+                { "item": "minecraft:emerald",    "weightFactor": 0.8 },
+                { "item": "minecraft:gold_ingot", "weightFactor": 0.6 }
+              ]
+            }
+            """;
+
     /** @return true if {@code json.key} is a number equal to {@code expected} */
     private static boolean isNumber(JsonObject json, String key, long expected) {
         JsonElement el = json.get(key);
@@ -375,7 +464,7 @@ public final class DefaultNewsEvents {
     //   part 1: diamond_rush .. great_forest_fire_recovery (18 events, incl. scheduler)
     //   part 2: import_tariff_treaty .. sugarcane_plantation_boom (18 events)
     //   part 3: cocoa_trade_route_opens .. ender_pearl_expedition_boom (18 events)
-    //   part 4: ghast_tear_apothecary_craze .. margin_call_crash (18 events)
+    //   part 4: ghast_tear_apothecary_craze .. margin_call_crash (19 events)
     private static final String DEFAULT_EVENTS_JSON_1 = """
             {
               "scheduler": {
@@ -2931,9 +3020,9 @@ public final class DefaultNewsEvents {
                     "de_de": "Rat erhebt saftige Luxussteuer auf Edelsteine und Gold"
                   },
                   "text": {
-                    "en_us": "To fill the war chest the trade council has slapped a punishing luxury tax on every sale of diamonds, emeralds and gold. Buyers are balking at the new surcharge, demand for finery is cooling sharply, and analysts expect the chill on luxury prices to become a lasting fixture of the market.",
-                    "zh_cn": "为充实战备金库，贸易议会对钻石、绿宝石与黄金的每笔交易课以惩罚性奢侈税。买家面对新增费用望而却步，奢侈品需求急剧降温，分析师预计这轮寒潮将成为市场的长期特征。",
-                    "de_de": "Um die Kriegskasse zu füllen, hat der Handelsrat eine drückende Luxussteuer auf jeden Verkauf von Diamanten, Smaragden und Gold verhängt. Käufer schrecken vor dem neuen Aufschlag zurück, die Nachfrage nach Prunk kühlt merklich ab, und Analysten erwarten, dass die Preisdämpfung im Luxussegment zu einer dauerhaften Erscheinung am Markt wird."
+                    "en_us": "To fill the war chest the trade council has slapped a punishing luxury tax on every sale of diamonds, emeralds and gold. Buyers are balking at the new surcharge, demand for finery is cooling sharply, and analysts expect the chill on luxury prices to last for as long as the tax stays on the books.",
+                    "zh_cn": "为充实战备金库，贸易议会对钻石、绿宝石与黄金的每笔交易课以惩罚性奢侈税。买家面对新增费用望而却步，奢侈品需求急剧降温，分析师预计只要这项税收仍在实施，这轮寒潮就会一直持续。",
+                    "de_de": "Um die Kriegskasse zu füllen, hat der Handelsrat eine drückende Luxussteuer auf jeden Verkauf von Diamanten, Smaragden und Gold verhängt. Käufer schrecken vor dem neuen Aufschlag zurück, die Nachfrage nach Prunk kühlt merklich ab, und Analysten erwarten, dass die Preisdämpfung im Luxussegment anhält, solange die Steuer in Kraft bleibt."
                   },
                   "category": "politics",
                   "weight": 2,
@@ -2958,7 +3047,55 @@ public final class DefaultNewsEvents {
                       "item": "minecraft:gold_ingot",
                       "weightFactor": 0.6
                     }
-                  ]
+                  ],
+                  "requires": [
+                    { "type": "keyNotEquals", "key": "luxury_tax", "value": "active" }
+                  ],
+                  "records": { "luxury_tax": "active" }
+                },
+                {
+                  "id": "luxury_tax_repealed",
+                  "picture": "luxury_tax_repealed.png",
+                  "headline": {
+                    "en_us": "Council scraps the luxury tax on gems and gold",
+                    "zh_cn": "议会废除宝石与黄金奢侈税",
+                    "de_de": "Rat schafft die Luxussteuer auf Edelsteine und Gold ab"
+                  },
+                  "text": {
+                    "en_us": "After months of empty jewellers' shops and loud protests from the guilds, the trade council has repealed the luxury tax on diamonds, emeralds and gold. Merchants are dusting off their display cases, and buyers who held back are expected to return to the market.",
+                    "zh_cn": "在珠宝店门可罗雀数月、行会抗议声浪不断之后，贸易议会废除了对钻石、绿宝石与黄金征收的奢侈税。商人们正擦去展柜上的灰尘，此前持币观望的买家预计将重返市场。",
+                    "de_de": "Nach Monaten leerer Juweliergeschäfte und lautstarker Proteste der Gilden hat der Handelsrat die Luxussteuer auf Diamanten, Smaragde und Gold aufgehoben. Die Händler stauben ihre Vitrinen ab, und Käufer, die sich zurückgehalten haben, dürften an den Markt zurückkehren."
+                  },
+                  "category": "politics",
+                  "weight": 2,
+                  "cooldownSeconds": 86400,
+                  "impact": {
+                    "type": "trend",
+                    "peakFactor": 0.22,
+                    "rampUpSeconds": 1200,
+                    "durationSeconds": 2700,
+                    "reversal": "none"
+                  },
+                  "markets": [
+                    {
+                      "item": "minecraft:diamond",
+                      "weightFactor": 1.0
+                    },
+                    {
+                      "item": "minecraft:emerald",
+                      "weightFactor": 0.8
+                    },
+                    {
+                      "item": "minecraft:gold_ingot",
+                      "weightFactor": 0.6
+                    }
+                  ],
+                  "requires": [
+                    { "type": "firedBefore", "eventId": "luxury_goods_tax", "minSecondsAgo": 172800 },
+                    { "type": "keyEquals",   "key": "luxury_tax", "value": "active" }
+                  ],
+                  "records": { "luxury_tax": "repealed" },
+                  "undoes": "luxury_goods_tax"
                 },
                 {
                   "id": "speculation_mania",
@@ -3143,6 +3280,9 @@ public final class DefaultNewsEvents {
      *       registry; ALL must hold for the event to become eligible.</li>
      *   <li>{@code records{}} — string→string registry writes applied at publish
      *       (last write wins).</li>
+     *   <li>{@code undoes} — optional event id; when this event's permanent shift bakes it
+     *       adds back, per market, the default-price change that event's bakes left there
+     *       (e.g. {@code luxury_tax_repealed} undoes {@code luxury_goods_tax}).</li>
      *   <li>{@code chains[]} — follow-up activations triggered on
      *       {@code publish|step|completion} with a chance and a delay range.</li>
      * </ul>

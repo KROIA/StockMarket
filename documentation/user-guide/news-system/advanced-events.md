@@ -217,6 +217,34 @@ Act two -- `end_of_gold_standard` only becomes eligible once act one fired **at 
 
 Each event runs **once per world** -- unless an admin re-arms the story with `/stockmarket news registry clear <eventId>`.
 
+### Example: The Luxury Tax Cycle
+
+`luxury_goods_tax` permanently lowers diamond, emerald and gold. It writes `luxury_tax = active` and is blocked while that value is set, so it can never cut the same markets twice:
+
+```json
+"requires": [ { "type": "keyNotEquals", "key": "luxury_tax", "value": "active" } ],
+"records": { "luxury_tax": "active" }
+```
+
+`luxury_tax_repealed` becomes eligible **2 real days after the tax last fired**, and only while the tax is active. It takes the cut back exactly (see [`undoes`](#taking-back-a-permanent-shift-undoes)) and writes `luxury_tax = repealed`, so the tax can come back later and the cycle repeats:
+
+```json
+"requires": [
+  { "type": "firedBefore", "eventId": "luxury_goods_tax", "minSecondsAgo": 172800 },
+  { "type": "keyEquals",   "key": "luxury_tax", "value": "active" }
+],
+"records": { "luxury_tax": "repealed" },
+"undoes": "luxury_goods_tax"
+```
+
+`firedBefore` with `minSecondsAgo` measures from the event's **most recent** fire, so every new tax waits the full 2 days for its repeal.
+
+### Taking Back a Permanent Shift: `undoes`
+
+Every permanent shift (`reversal: "none"`, or a sequence ending in a permanent step) records how much it changed each market's default price, for example `-16` when diamond went from 160 to 144. The amounts are kept with the world and survive restarts. If the same event bakes into a market again before it is taken back, the amounts add up.
+
+An event with `"undoes": "<eventId>"` uses those amounts. When its own permanent shift ends, it does not apply its own percentage. Instead it gives each market exactly the recorded amount back and then forgets it. Markets the undone event never touched keep their default price. The event's own `impact` still drives the price smoothly while it runs, so give it roughly the opposite size of the event it undoes. If the default price moved for other reasons in between, only the undone event's own amount comes back.
+
 ## Event Chains
 
 `chains` lets an event schedule follow-up events -- the "gold standard adopted" story above has a 50% chance to spawn a gold-rush rumor 5 to 15 minutes into its hold phase:
@@ -269,6 +297,7 @@ A malformed chain entry (missing `eventId`/`on`, unknown `on` value, bad `chance
 The shipped default events **self-heal additively**: on every reload (including `/stockmarket news reload`), any shipped default whose id is present in none of your `.json` files is added to the pool and appended to `default_events.json`. Existing servers that already have a `default_events.json` therefore receive newly shipped events -- such as the showcase events `gold_rush_rumor`, `end_of_gold_standard` and the upgraded `gold_reserve_standard` -- automatically on the next reload, **without** overwriting any file, existing entry, or default you customized.
 
 - **If you kept the shipped `default_events.json`:** just run `/stockmarket news reload` (or restart) -- the missing defaults are appended in place.
+- **The luxury tax upgrade:** if your `default_events.json` still holds the old, unedited `luxury_goods_tax`, it is replaced once by the new version, which can't fire again until `luxury_tax_repealed` has taken it back. If you edited that entry, your version is kept: add the `requires` and `records` shown in [The Luxury Tax Cycle](#example-the-luxury-tax-cycle) yourself if you want the new behaviour.
 - **If you redefined a default under its original id in your own files:** your version wins and is left untouched -- the heal will not duplicate or overwrite it. To adopt an upgraded default (e.g. the `requires`/`records`/`chains` added to `gold_reserve_standard`), edit your copy using this page as a reference.
 
 The default **pictures** heal the same way, per id: on every reload any shipped default picture missing from `pictures/` is written as `<eventId>.png` (see [Default Pictures](pictures.md#default-pictures)), while your own art and any default you modified are never overwritten. So the new events get their pictures automatically -- no need to empty the folder.

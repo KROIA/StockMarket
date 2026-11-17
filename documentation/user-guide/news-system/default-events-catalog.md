@@ -2,7 +2,7 @@
 
 > Auto-generated catalog — do not hand-edit; regenerated from the default news events.
 
-**72 events total** · 72 with a picture · 0 picture pending. Generated 2026-07-19.
+**73 events total** · 73 with a picture · 0 picture pending. Generated 2026-07-19.
 
 ## Original events
 
@@ -1957,6 +1957,9 @@ Die Königin hat Königspurpur zur Farbe der Saison erklärt, und jedes Adelshau
 
 **Impact:** trend, peak -20%, ramp 1200s / hold 2700s / reversal none (permanent)
 
+- requires registry `luxury_tax` != `active`
+- records `luxury_tax`=`active`
+
 **Markets:**
 
 | Item | weightFactor | Direction |
@@ -1965,13 +1968,46 @@ Die Königin hat Königspurpur zur Farbe der Saison erklärt, und jedes Adelshau
 | `minecraft:emerald` | 0.8 | ▼ |
 | `minecraft:gold_ingot` | 0.6 | ▼ |
 
-**EN:** To fill the war chest the trade council has slapped a punishing luxury tax on every sale of diamonds, emeralds and gold. Buyers are balking at the new surcharge, demand for finery is cooling sharply, and analysts expect the chill on luxury prices to become a lasting fixture of the market.
+**EN:** To fill the war chest the trade council has slapped a punishing luxury tax on every sale of diamonds, emeralds and gold. Buyers are balking at the new surcharge, demand for finery is cooling sharply, and analysts expect the chill on luxury prices to last for as long as the tax stays on the books.
 
 <details><summary>Deutsch</summary>
 
 **Rat erhebt saftige Luxussteuer auf Edelsteine und Gold**
 
-Um die Kriegskasse zu füllen, hat der Handelsrat eine drückende Luxussteuer auf jeden Verkauf von Diamanten, Smaragden und Gold verhängt. Käufer schrecken vor dem neuen Aufschlag zurück, die Nachfrage nach Prunk kühlt merklich ab, und Analysten erwarten, dass die Preisdämpfung im Luxussegment zu einer dauerhaften Erscheinung am Markt wird.
+Um die Kriegskasse zu füllen, hat der Handelsrat eine drückende Luxussteuer auf jeden Verkauf von Diamanten, Smaragden und Gold verhängt. Käufer schrecken vor dem neuen Aufschlag zurück, die Nachfrage nach Prunk kühlt merklich ab, und Analysten erwarten, dass die Preisdämpfung im Luxussegment anhält, solange die Steuer in Kraft bleibt.
+
+</details>
+
+---
+
+### Council scraps the luxury tax on gems and gold
+
+<img src="../../../common/src/main/resources/news_pictures/luxury_tax_repealed.png" width="220" alt="luxury_tax_repealed">
+
+`luxury_tax_repealed` · politics · weight 2 · cooldown 24h · picture: `luxury_tax_repealed.png`
+
+**Impact:** trend, peak +22%, ramp 1200s / hold 2700s / reversal none (permanent)
+
+- requires `luxury_goods_tax` fired ≥48h ago
+- requires registry `luxury_tax` == `active`
+- records `luxury_tax`=`repealed`
+- undoes `luxury_goods_tax`: gives each market back the default-price change its bake left
+
+**Markets:**
+
+| Item | weightFactor | Direction |
+|---|---|---|
+| `minecraft:diamond` | 1.0 | ▲ |
+| `minecraft:emerald` | 0.8 | ▲ |
+| `minecraft:gold_ingot` | 0.6 | ▲ |
+
+**EN:** After months of empty jewellers' shops and loud protests from the guilds, the trade council has repealed the luxury tax on diamonds, emeralds and gold. Merchants are dusting off their display cases, and buyers who held back are expected to return to the market.
+
+<details><summary>Deutsch</summary>
+
+**Rat schafft die Luxussteuer auf Edelsteine und Gold ab**
+
+Nach Monaten leerer Juweliergeschäfte und lautstarker Proteste der Gilden hat der Handelsrat die Luxussteuer auf Diamanten, Smaragde und Gold aufgehoben. Die Händler stauben ihre Vitrinen ab, und Käufer, die sich zurückgehalten haben, dürften an den Markt zurückkehren.
 
 </details>
 

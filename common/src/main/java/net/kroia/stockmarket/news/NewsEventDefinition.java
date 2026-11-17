@@ -51,7 +51,7 @@ public final class NewsEventDefinition {
     private static final Set<String> KNOWN_EVENT_KEYS = Set.of(
             "id", "headline", "text", "category", "weight", "cooldownSeconds",
             "adminOnly", "announceDelayMs", "impact", "sequences", "markets", "picture",
-            "requires", "records", "chains");
+            "requires", "records", "chains", "undoes");
     private static final Set<String> KNOWN_IMPACT_KEYS = Set.of(
             "type", "peakFactor", "rampUpSeconds", "durationSeconds",
             "reversal", "reversalSeconds", "noise");
@@ -585,6 +585,7 @@ public final class NewsEventDefinition {
     private final List<NewsRequirement> requirements;
     private final Map<String, String> records;
     private final List<ChainDefinition> chains;
+    private final @Nullable String undoesEventId;
 
     private NewsEventDefinition(String id, Map<String, String> headline, Map<String, String> text,
                                 String category, float weight, long cooldownSeconds,
@@ -593,7 +594,7 @@ public final class NewsEventDefinition {
                                 List<SequenceDefinition> sequences, List<MarketMatcher> markets,
                                 @Nullable String pictureFileName,
                                 List<NewsRequirement> requirements, Map<String, String> records,
-                                List<ChainDefinition> chains) {
+                                List<ChainDefinition> chains, @Nullable String undoesEventId) {
         this.id = id;
         this.headline = Collections.unmodifiableMap(headline);
         this.text = Collections.unmodifiableMap(text);
@@ -609,6 +610,7 @@ public final class NewsEventDefinition {
         this.requirements = Collections.unmodifiableList(requirements);
         this.records = Collections.unmodifiableMap(records);
         this.chains = Collections.unmodifiableList(chains);
+        this.undoesEventId = undoesEventId;
     }
 
     // ── Accessors ────────────────────────────────────────────────────────
@@ -717,6 +719,16 @@ public final class NewsEventDefinition {
      *         when the event has no {@code chains} array)
      */
     public List<ChainDefinition> getChains() { return chains; }
+
+    /**
+     * SM-341: the optional {@code "undoes"} event id. When this event's permanent shift
+     * bakes, each market gets back exactly the absolute default-price change the undone
+     * event's bakes left there (stored in {@link NewsWorldRegistry#takeBakeDelta}) instead
+     * of this event's own factor; markets without a stored change keep their default price.
+     *
+     * @return the undone event's id, or null when the event bakes normally
+     */
+    public @Nullable String getUndoesEventId() { return undoesEventId; }
 
     // ── Matcher resolution ───────────────────────────────────────────────
 
@@ -1021,6 +1033,20 @@ public final class NewsEventDefinition {
             }
         }
 
+        // undoes — optional id of the event whose permanent bakes this event reverts
+        // (SM-341). Non-fatal like 'records': a broken value only drops the field.
+        String undoesEventId = null;
+        if (json.has("undoes")) {
+            JsonElement undoesEl = json.get("undoes");
+            if (undoesEl.isJsonPrimitive() && undoesEl.getAsJsonPrimitive().isString()
+                    && !undoesEl.getAsString().isBlank()) {
+                undoesEventId = undoesEl.getAsString();
+            } else {
+                report.addError(file, id, "'undoes' must be a non-blank event id string — field ignored, event kept");
+                nonFatalErrors++;
+            }
+        }
+
         // chains[] — optional event-chain entries (sequences plan §4, task T-098).
         // Malformed chain entries are ERRORs for the entry (the entry is skipped) but do
         // NOT kill the whole event — same non-fatal pattern as 'picture'/'records'.
@@ -1092,7 +1118,7 @@ public final class NewsEventDefinition {
 
         return new NewsEventDefinition(id, headline, text, category, weight, cooldownSeconds,
                 adminOnly, announceDelay, impact, sequences, matchers, pictureFileName,
-                requirements, records, chains);
+                requirements, records, chains, undoesEventId);
     }
 
     /**
