@@ -488,11 +488,13 @@ The `scheduler` block tunes the random-event pacing. It is **optional** and may 
 ```json
 {
   "scheduler": {
-    "minSecondsBetweenEvents": 900,
-    "maxSecondsBetweenEvents": 3600,
+    "minSecondsBetweenEvents": 10800,
+    "maxSecondsBetweenEvents": 32400,
     "maxActiveEventsGlobal": 3,
     "maxActiveEventsPerMarket": 1,
-    "historyMaxEntries": 1000
+    "historyMaxEntries": 1000,
+    "impactDurationMultiplier": 3.0,
+    "impactStrengthMultiplier": 0.5
   },
   "events": [ ... ]
 }
@@ -500,10 +502,12 @@ The `scheduler` block tunes the random-event pacing. It is **optional** and may 
 
 | Field | Default | Effect |
 |-------|---------|--------|
-| `minSecondsBetweenEvents` | `900` | Lower bound of the wait between two random activations. |
-| `maxSecondsBetweenEvents` | `3600` | Upper bound. Each interval is uniformly sampled from `[min, max]`. If an attempt fires nothing (caps reached, everything on cooldown), a full new interval waits. |
+| `minSecondsBetweenEvents` | `10800` | Lower bound of the wait between two random activations (3 hours). |
+| `maxSecondsBetweenEvents` | `32400` | Upper bound (9 hours), so about 4 news per real day. Each interval is uniformly sampled from `[min, max]`. If an attempt fires nothing (caps reached, everything on cooldown), a full new interval waits. |
 | `maxActiveEventsGlobal` | `3` | Cap of simultaneously active events across all markets. |
 | `maxActiveEventsPerMarket` | `1` | Cap per market. A market at its cap is skipped by new events. |
+| `impactDurationMultiplier` | `1` (shipped file: `3`) | Stretches every event's steps (ramp, hold, reversal) by this factor when the event starts. `3` = each event's impact lasts three times as long as written. Applies to all events, also manual triggers and chains. Must be greater than 0. |
+| `impactStrengthMultiplier` | `1` (shipped file: `0.5`) | Scales every event's price targets by this factor when the event starts, including permanent shifts. `0.5` = each event moves the price half as far as written. Must be greater than 0. |
 | `historyMaxEntries` | `1000` | How many published records the server keeps. **Prefer a multiple of 100** for exact retention -- see [History Persistence and Chunk Layout](configuration.md#history-persistence-and-chunk-layout). |
 
 Because scheduler fields merge per-field, you can drop a small `pacing.json` file with just a scheduler override:

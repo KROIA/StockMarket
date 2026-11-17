@@ -72,7 +72,8 @@ public class NewsEventLibrary {
     private static final Set<String> KNOWN_ROOT_KEYS = Set.of("scheduler", "events");
     private static final Set<String> KNOWN_SCHEDULER_KEYS = Set.of(
             "minSecondsBetweenEvents", "maxSecondsBetweenEvents",
-            "maxActiveEventsGlobal", "maxActiveEventsPerMarket", "historyMaxEntries");
+            "maxActiveEventsGlobal", "maxActiveEventsPerMarket", "historyMaxEntries",
+            "impactDurationMultiplier", "impactStrengthMultiplier");
 
     /** @return the absolute news config directory ({@code config/StockMarket/news}) */
     public static Path getNewsConfigPath() {
@@ -87,10 +88,29 @@ public class NewsEventLibrary {
      */
     public static final class SchedulerConfig {
 
-        /** Default minimum seconds between two random event activations. */
-        public static final long DEFAULT_MIN_SECONDS_BETWEEN_EVENTS = 900;
-        /** Default maximum seconds between two random event activations. */
-        public static final long DEFAULT_MAX_SECONDS_BETWEEN_EVENTS = 3600;
+        /**
+         * Default minimum seconds between two random event activations (3 h). SM-338: was
+         * 900 up to 2.1.x; together with the max this gives ~4 events per real day.
+         */
+        public static final long DEFAULT_MIN_SECONDS_BETWEEN_EVENTS = 10800;
+        /** Default maximum seconds between two random event activations (9 h; SM-338: was 3600). */
+        public static final long DEFAULT_MAX_SECONDS_BETWEEN_EVENTS = 32400;
+        /** SM-338: min interval written into {@code default_events.json} by releases up to 2.1.x. */
+        public static final long OLD_DEFAULT_MIN_SECONDS_BETWEEN_EVENTS = 900;
+        /** SM-338: max interval written into {@code default_events.json} by releases up to 2.1.x. */
+        public static final long OLD_DEFAULT_MAX_SECONDS_BETWEEN_EVENTS = 3600;
+        /**
+         * Built-in impact duration multiplier when no file sets one: 1 = events play exactly
+         * as authored. The shipped {@code default_events.json} sets
+         * {@link #SHIPPED_IMPACT_DURATION_MULTIPLIER} (SM-338).
+         */
+        public static final double DEFAULT_IMPACT_DURATION_MULTIPLIER = 1.0;
+        /** Built-in impact strength multiplier when no file sets one (1 = as authored). */
+        public static final double DEFAULT_IMPACT_STRENGTH_MULTIPLIER = 1.0;
+        /** SM-338: duration multiplier of the shipped defaults file: every step lasts 3x as long. */
+        public static final double SHIPPED_IMPACT_DURATION_MULTIPLIER = 3.0;
+        /** SM-338: strength multiplier of the shipped defaults file: every step target is halved. */
+        public static final double SHIPPED_IMPACT_STRENGTH_MULTIPLIER = 0.5;
         /** Default cap of simultaneously active events across all markets. */
         public static final int DEFAULT_MAX_ACTIVE_EVENTS_GLOBAL = 3;
         /** Default cap of simultaneously active events per market. */
@@ -113,6 +133,8 @@ public class NewsEventLibrary {
         private int maxActiveEventsGlobal = DEFAULT_MAX_ACTIVE_EVENTS_GLOBAL;
         private int maxActiveEventsPerMarket = DEFAULT_MAX_ACTIVE_EVENTS_PER_MARKET;
         private int historyMaxEntries = DEFAULT_HISTORY_MAX_ENTRIES;
+        private double impactDurationMultiplier = DEFAULT_IMPACT_DURATION_MULTIPLIER;
+        private double impactStrengthMultiplier = DEFAULT_IMPACT_STRENGTH_MULTIPLIER;
 
         /** @return minimum seconds between two random event activations */
         public long getMinSecondsBetweenEvents() { return minSecondsBetweenEvents; }
@@ -124,6 +146,20 @@ public class NewsEventLibrary {
         public int getMaxActiveEventsPerMarket() { return maxActiveEventsPerMarket; }
         /** @return cap of retained news history records */
         public int getHistoryMaxEntries() { return historyMaxEntries; }
+        /**
+         * SM-338: factor applied to every rolled step duration at activation (all events,
+         * also admin triggers and chains). 3 = each event's impact lasts three times as long.
+         *
+         * @return the impact duration multiplier (&gt; 0)
+         */
+        public double getImpactDurationMultiplier() { return impactDurationMultiplier; }
+        /**
+         * SM-338: factor applied to every step target at activation, so also to permanent
+         * shifts baked into the default price. 0.5 = each event moves the price half as far.
+         *
+         * @return the impact strength multiplier (&gt; 0)
+         */
+        public double getImpactStrengthMultiplier() { return impactStrengthMultiplier; }
 
         /**
          * Applies one file's {@code scheduler} block on top of the current values.
@@ -154,6 +190,10 @@ public class NewsEventLibrary {
                 }
                 historyMaxEntries = (int) Math.min(Integer.MAX_VALUE, historyMax);
             }
+            Double durationMult = readPositiveDouble(json, "impactDurationMultiplier", file, report);
+            if (durationMult != null) impactDurationMultiplier = durationMult;
+            Double strengthMult = readPositiveDouble(json, "impactStrengthMultiplier", file, report);
+            if (strengthMult != null) impactStrengthMultiplier = strengthMult;
 
             if (minSecondsBetweenEvents > maxSecondsBetweenEvents) {
                 report.addError(file, null, "scheduler minSecondsBetweenEvents ("
@@ -162,6 +202,20 @@ public class NewsEventLibrary {
                 minSecondsBetweenEvents = DEFAULT_MIN_SECONDS_BETWEEN_EVENTS;
                 maxSecondsBetweenEvents = DEFAULT_MAX_SECONDS_BETWEEN_EVENTS;
             }
+        }
+
+        /** Reads a positive finite number field; invalid values are reported and yield null. */
+        private static @Nullable Double readPositiveDouble(JsonObject json, String key,
+                                                           String file, ValidationReport report) {
+            if (!json.has(key)) return null;
+            JsonElement el = json.get(key);
+            if (el.isJsonPrimitive() && el.getAsJsonPrimitive().isNumber()) {
+                double value = el.getAsDouble();
+                if (Double.isFinite(value) && value > 0) return value;
+            }
+            report.addError(file, null, "scheduler '" + key
+                    + "' must be a positive number — value ignored");
+            return null;
         }
 
         /** Reads a non-negative integer field; invalid values are reported and yield null. */
@@ -277,6 +331,9 @@ public class NewsEventLibrary {
             if (files.isEmpty()) {
                 DefaultNewsEvents.writeDefaultFile(newsDir);
                 files = listJsonFiles(newsDir);
+            } else {
+                // SM-338: move an untouched pre-2.2 scheduler block to the new defaults.
+                DefaultNewsEvents.migrateOldSchedulerDefaults(newsDir);
             }
         } catch (IOException e) {
             report.addError("", null, "failed to access news config directory '" + newsDir

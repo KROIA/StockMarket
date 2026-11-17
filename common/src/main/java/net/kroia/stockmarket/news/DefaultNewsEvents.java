@@ -50,7 +50,8 @@ import java.util.Set;
  * default whose id is present in <b>no</b> loaded {@code .json} is parsed into the live
  * pool and appended to the file by {@link #appendMissingToFile}. Existing entries
  * (including admin-customized defaults) and the {@code scheduler} block are never modified
- * or overwritten, so a server that predates newly shipped events receives them without
+ * or overwritten (one exception: the one-time SM-338 scheduler upgrade,
+ * {@link #migrateOldSchedulerDefaults}), so a server that predates newly shipped events receives them without
  * losing its edits. The full file is written from scratch only on the first run (empty
  * folder, see {@link #writeDefaultFile}); a folder that has no {@code default_events.json}
  * is left untouched. The default pictures are healed independently and per id into
@@ -308,6 +309,63 @@ public final class DefaultNewsEvents {
         }
     }
 
+    /**
+     * SM-338 upgrade of an existing {@code default_events.json}: files written before 2.2
+     * have no {@code impactDurationMultiplier} in their {@code scheduler} block. Such a file
+     * gets the shipped multipliers ({@link NewsEventLibrary.SchedulerConfig#SHIPPED_IMPACT_DURATION_MULTIPLIER},
+     * {@link NewsEventLibrary.SchedulerConfig#SHIPPED_IMPACT_STRENGTH_MULTIPLIER}) for each
+     * one it lacks, and the new event interval only if both interval fields are still at the
+     * old defaults (900 / 3600 s): an admin-tuned interval is kept. The added multiplier key
+     * marks the file as migrated, so the step runs once and later admin edits (even back to
+     * 900 / 3600) are never touched again. A missing file or scheduler block is left alone.
+     * Never throws; a file that cannot be parsed is left unchanged.
+     *
+     * @param newsDir the news config directory
+     * @return true if the file was rewritten
+     */
+    public static boolean migrateOldSchedulerDefaults(Path newsDir) {
+        Path file = newsDir.resolve(DEFAULT_FILE_NAME);
+        if (!Files.exists(file)) return false;
+        try {
+            JsonElement rootEl = JsonUtilities.fromString(Files.readString(file, StandardCharsets.UTF_8));
+            if (rootEl == null || !rootEl.isJsonObject()) return false;
+            JsonElement schedulerEl = rootEl.getAsJsonObject().get("scheduler");
+            if (schedulerEl == null || !schedulerEl.isJsonObject()) return false;
+            JsonObject scheduler = schedulerEl.getAsJsonObject();
+            if (scheduler.has("impactDurationMultiplier")) return false; // already migrated
+            scheduler.addProperty("impactDurationMultiplier",
+                    NewsEventLibrary.SchedulerConfig.SHIPPED_IMPACT_DURATION_MULTIPLIER);
+            if (!scheduler.has("impactStrengthMultiplier")) {
+                scheduler.addProperty("impactStrengthMultiplier",
+                        NewsEventLibrary.SchedulerConfig.SHIPPED_IMPACT_STRENGTH_MULTIPLIER);
+            }
+            if (isNumber(scheduler, "minSecondsBetweenEvents",
+                    NewsEventLibrary.SchedulerConfig.OLD_DEFAULT_MIN_SECONDS_BETWEEN_EVENTS)
+                    && isNumber(scheduler, "maxSecondsBetweenEvents",
+                    NewsEventLibrary.SchedulerConfig.OLD_DEFAULT_MAX_SECONDS_BETWEEN_EVENTS)) {
+                scheduler.addProperty("minSecondsBetweenEvents",
+                        NewsEventLibrary.SchedulerConfig.DEFAULT_MIN_SECONDS_BETWEEN_EVENTS);
+                scheduler.addProperty("maxSecondsBetweenEvents",
+                        NewsEventLibrary.SchedulerConfig.DEFAULT_MAX_SECONDS_BETWEEN_EVENTS);
+            }
+            Files.writeString(file, JsonUtilities.toPrettyString(rootEl), StandardCharsets.UTF_8);
+            StockMarketMod.LOGGER.info("[NewsEventLibrary] Moved the news scheduler in {} to the 2.2 defaults"
+                    + " (rarer, longer, weaker events)", file);
+            return true;
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.warn("[NewsEventLibrary] Could not migrate the scheduler block of {}"
+                    + " - file left unchanged", DEFAULT_FILE_NAME, e);
+            return false;
+        }
+    }
+
+    /** @return true if {@code json.key} is a number equal to {@code expected} */
+    private static boolean isNumber(JsonObject json, String key, long expected) {
+        JsonElement el = json.get(key);
+        return el != null && el.isJsonPrimitive() && el.getAsJsonPrimitive().isNumber()
+                && el.getAsDouble() == expected;
+    }
+
     // The shipped defaults exceed the 65535-byte JVM limit for a single String
     // constant, so the JSON is stored as four text-block chunks and joined at
     // RUNTIME (String.join, not '+') to avoid javac re-folding them into one
@@ -321,11 +379,13 @@ public final class DefaultNewsEvents {
     private static final String DEFAULT_EVENTS_JSON_1 = """
             {
               "scheduler": {
-                "minSecondsBetweenEvents": 900,
-                "maxSecondsBetweenEvents": 3600,
+                "minSecondsBetweenEvents": 10800,
+                "maxSecondsBetweenEvents": 32400,
                 "maxActiveEventsGlobal": 3,
                 "maxActiveEventsPerMarket": 1,
-                "historyMaxEntries": 1000
+                "historyMaxEntries": 1000,
+                "impactDurationMultiplier": 3.0,
+                "impactStrengthMultiplier": 0.5
               },
               "events": [
                 {

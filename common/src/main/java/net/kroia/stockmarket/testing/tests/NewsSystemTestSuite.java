@@ -104,6 +104,7 @@ public class NewsSystemTestSuite extends TestSuite {
         addTest("library_failed_reload_keeps_previous", this::test_library_failedReload_keepsPrevious);
         addTest("library_scheduler_last_loaded_wins", this::test_library_scheduler_lastLoadedWins);
         addTest("library_heals_missing_default_events", this::test_library_healsMissingDefaultEvents);
+        addTest("library_migrates_old_scheduler_defaults", this::test_library_migratesOldSchedulerDefaults);
 
         // NewsRecord round-trips
         addTest("record_nbt_round_trip", this::test_record_nbtRoundTrip);
@@ -833,6 +834,66 @@ public class NewsSystemTestSuite extends TestSuite {
         } finally {
             deleteRecursively(dir);
         }
+    }
+
+    /**
+     * SM-338 upgrade: a pre-2.2 {@code default_events.json} (no multiplier keys) gets the
+     * shipped multipliers; its interval moves to the new defaults only when it is still
+     * 900 / 3600, an admin-tuned interval is kept, and once migrated an admin who sets
+     * 900 / 3600 again keeps it. A fresh folder gets the new values from the shipped file.
+     */
+    private TestResult test_library_migratesOldSchedulerDefaults() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            Path file = dir.resolve(DefaultNewsEvents.DEFAULT_FILE_NAME);
+            NewsEventLibrary library = new NewsEventLibrary();
+
+            // (a) untouched old block -> everything moves
+            Files.writeString(file, "{\"scheduler\":{\"minSecondsBetweenEvents\":900,"
+                    + "\"maxSecondsBetweenEvents\":3600},\"events\":[]}");
+            library.reload(dir);
+            TestResult r = assertSchedulerEquals("old defaults", library, 10800, 32400, 3.0, 0.5);
+            if (!r.passed()) return r;
+
+            // (b) after the migration the admin sets 900 / 3600 again: kept
+            JsonObject root = JsonUtilities.fromString(Files.readString(file)).getAsJsonObject();
+            root.getAsJsonObject("scheduler").addProperty("minSecondsBetweenEvents", 900);
+            root.getAsJsonObject("scheduler").addProperty("maxSecondsBetweenEvents", 3600);
+            Files.writeString(file, JsonUtilities.toPrettyString(root));
+            library.reload(dir);
+            r = assertSchedulerEquals("admin edit after migration", library, 900, 3600, 3.0, 0.5);
+            if (!r.passed()) return r;
+
+            // (c) admin-tuned old interval: kept, multipliers still added
+            Files.writeString(file, "{\"scheduler\":{\"minSecondsBetweenEvents\":600,"
+                    + "\"maxSecondsBetweenEvents\":1200},\"events\":[]}");
+            library.reload(dir);
+            r = assertSchedulerEquals("tuned interval", library, 600, 1200, 3.0, 0.5);
+            if (!r.passed()) return r;
+
+            // (d) fresh folder: shipped file
+            deleteRecursively(dir);
+            dir = createTempDir();
+            library = new NewsEventLibrary();
+            library.reload(dir);
+            return assertSchedulerEquals("fresh install", library, 10800, 32400, 3.0, 0.5);
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** Compares the loaded scheduler interval and multipliers. */
+    private TestResult assertSchedulerEquals(String label, NewsEventLibrary library, long min, long max,
+                                             double duration, double strength) {
+        NewsEventLibrary.SchedulerConfig c = library.getSchedulerConfig();
+        String got = c.getMinSecondsBetweenEvents() + "/" + c.getMaxSecondsBetweenEvents() + " x"
+                + c.getImpactDurationMultiplier() + " x" + c.getImpactStrengthMultiplier();
+        return assertTrue(label + ": expected " + min + "/" + max + " x" + duration + " x" + strength + ", got " + got,
+                c.getMinSecondsBetweenEvents() == min && c.getMaxSecondsBetweenEvents() == max
+                        && c.getImpactDurationMultiplier() == duration && c.getImpactStrengthMultiplier() == strength);
     }
 
     /**

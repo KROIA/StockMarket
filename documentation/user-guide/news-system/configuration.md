@@ -30,11 +30,13 @@ One file = an optional `scheduler` block + an `events` array:
 ```json
 {
   "scheduler": {
-    "minSecondsBetweenEvents": 900,
-    "maxSecondsBetweenEvents": 3600,
+    "minSecondsBetweenEvents": 10800,
+    "maxSecondsBetweenEvents": 32400,
     "maxActiveEventsGlobal": 3,
     "maxActiveEventsPerMarket": 1,
-    "historyMaxEntries": 1000
+    "historyMaxEntries": 1000,
+    "impactDurationMultiplier": 3.0,
+    "impactStrengthMultiplier": 0.5
   },
   "events": [
     {
@@ -190,13 +192,15 @@ Global scheduler tuning. The block is optional and may appear in **any** file; e
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `minSecondsBetweenEvents` | `900` | Minimum seconds between two random event activations. |
-| `maxSecondsBetweenEvents` | `3600` | Maximum seconds between two random activations. Each interval is sampled uniformly from `[min, max]`. If an attempt fires nothing (caps reached, everything on cooldown), the scheduler waits a full new interval. |
+| `minSecondsBetweenEvents` | `10800` | Minimum seconds between two random event activations (3 hours). Together with the max this gives about 4 news per real day. |
+| `maxSecondsBetweenEvents` | `32400` | Maximum seconds between two random activations. Each interval is sampled uniformly from `[min, max]`. If an attempt fires nothing (caps reached, everything on cooldown), the scheduler waits a full new interval. |
 | `maxActiveEventsGlobal` | `3` | Cap of simultaneously active events across all markets. |
 | `maxActiveEventsPerMarket` | `1` | Cap of simultaneously active events per market. A market at its cap is skipped by new events. |
+| `impactDurationMultiplier` | `1` (shipped file: `3`) | Stretches every event's steps (ramp, hold, reversal) by this factor when the event starts. `3` = each event's impact lasts three times as long as written. Applies to all events, also manual triggers and chains. Must be greater than 0. |
+| `impactStrengthMultiplier` | `1` (shipped file: `0.5`) | Scales every event's price targets by this factor when the event starts, including permanent shifts. `0.5` = each event moves the price half as far as written. Must be greater than 0. |
 | `historyMaxEntries` | `1000` | How many published news records the server keeps (and serves to the newspaper). `0` disables history (warning). See [History Persistence and Chunk Layout](#history-persistence-and-chunk-layout) for the retention semantics -- **a multiple of 100 gives exact retention**; other values fluctuate slightly. |
 
-All fields must be non-negative numbers. `min > max` resets both to their defaults with an error.
+All fields must be non-negative numbers (the two multipliers greater than 0). `min > max` resets both to their defaults with an error.
 
 When the scheduler interval elapses, the plugin picks one event with a **weighted random roll** among all eligible events -- eligible means: not `adminOnly`, `weight > 0`, off cooldown, not already active, all its [trigger requirements](advanced-events.md#trigger-requirements) hold, and at least one matched market is subscribed, news-enabled and below the per-market cap. The impact then applies exactly to that matched-and-eligible subset. ([Chain-fired](advanced-events.md#event-chains) events follow their own rules -- they bypass the caps and the cooldown.)
 

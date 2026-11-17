@@ -1661,13 +1661,18 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
 
         // 2. Roll every step's concrete duration (fixed durations consume no RNG value)
         //    and resolve every step's market map. Both are frozen into the event below.
+        //    SM-338: the scheduler config's global multipliers stretch every rolled duration
+        //    and scale every step target (1.0 / 1.0 = as authored, no extra RNG use).
+        NewsEventLibrary.SchedulerConfig scheduler = library.getSchedulerConfig();
+        double durationMultiplier = scheduler.getImpactDurationMultiplier();
         List<NewsEventDefinition.StepDefinition> steps = sequenceDefinition.getSteps();
         long[] rolledDurationsMs = new long[steps.size()];
         List<Map<ItemID, Float>> stepMarkets = new ArrayList<>(steps.size());
         boolean anyMarket = false;
         for (int i = 0; i < steps.size(); i++) {
             NewsEventDefinition.StepDefinition step = steps.get(i);
-            rolledDurationsMs[i] = sampleUniformMs(step.getDurationMinMs(), step.getDurationMaxMs());
+            rolledDurationsMs[i] = Math.round(
+                    sampleUniformMs(step.getDurationMinMs(), step.getDurationMaxMs()) * durationMultiplier);
             Map<ItemID, Float> stepMap =
                     resolveStepMarkets(definition, step, resolvedMarkets, stepCandidates);
             stepMarkets.add(stepMap);
@@ -1678,7 +1683,8 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
                     + "': no step resolves any market");
             return null;
         }
-        NewsSequence sequence = sequenceDefinition.createSequence(rolledDurationsMs);
+        NewsSequence sequence = sequenceDefinition.createSequence(rolledDurationsMs,
+                scheduler.getImpactStrengthMultiplier());
 
         // 3. Announce delay + freeze. The legacy envelope (null for sequence-authored
         //    events) rides along as a record/phase-name descriptor snapshot.
@@ -1884,7 +1890,9 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         if (envelope != null) {
             // Legacy impact event: byte-identical record fields to pre-T-095.
             impactType = envelope.getType().jsonName();
-            peakFactor = (float) envelope.getPeakFactor();
+            // SM-338: the peak the event really applies (strength multiplier included);
+            // equals envelope.getPeakFactor() at multiplier 1.
+            peakFactor = (float) peakSequenceValue(event.getSequence());
             reversal = envelope.getReversal().jsonName();
         } else {
             NewsSequence sequence = event.getSequence();

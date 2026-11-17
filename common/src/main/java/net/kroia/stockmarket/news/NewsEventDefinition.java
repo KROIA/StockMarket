@@ -457,6 +457,18 @@ public final class NewsEventDefinition {
          *                                  match {@link #getStepCount()} (API misuse)
          */
         public NewsSequence createSequence(long[] rolledDurationsMs) {
+            return createSequence(rolledDurationsMs, 1.0);
+        }
+
+        /**
+         * Like {@link #createSequence(long[])}, with every step target scaled by
+         * {@code strengthMultiplier} (SM-338 global impact strength; 1 = as authored).
+         *
+         * @param rolledDurationsMs  one concrete duration per step, in step order
+         * @param strengthMultiplier factor applied to every step's {@code targetFactor}
+         * @return the resolved sequence
+         */
+        public NewsSequence createSequence(long[] rolledDurationsMs, double strengthMultiplier) {
             if (rolledDurationsMs == null || rolledDurationsMs.length != steps.size()) {
                 throw new IllegalArgumentException("rolledDurationsMs must contain exactly "
                         + steps.size() + " duration(s) for sequence '" + name + "', got "
@@ -466,7 +478,7 @@ public final class NewsEventDefinition {
             for (int i = 0; i < steps.size(); i++) {
                 StepDefinition step = steps.get(i);
                 specs.add(new NewsSequence.StepSpec(step.getName(), rolledDurationsMs[i],
-                        step.getTargetFactor(), step.getCurve(), step.getNoise(),
+                        step.getTargetFactor() * strengthMultiplier, step.getCurve(), step.getNoise(),
                         step.isPermanent()));
             }
             return NewsSequence.create(specs);
