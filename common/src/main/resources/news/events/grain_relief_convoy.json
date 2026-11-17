@@ -1,0 +1,51 @@
+{
+  "id": "grain_relief_convoy",
+  "picture": "grain_relief_convoy.png",
+  "headline": {
+    "en_us": "Relief caravans pour grain into the stricken markets",
+    "zh_cn": "救济商队向受灾市场倾运谷物",
+    "de_de": "Hilfskarawanen schütten Getreide in die notleidenden Märkte"
+  },
+  "text": {
+    "en_us": "Long relief caravans from the untouched river provinces are rolling into the drought-stricken markets, their wagons heavy with grain and root crops. As the sacks pile up on the market squares, the shortage premium on staples is unwinding and prices are settling back toward normal.",
+    "zh_cn": "来自未受旱情影响河省的漫长救济商队正驶入受灾市场，车上满载谷物与块根作物。随着麻袋在市集广场堆起，主粮的短缺溢价正在消退，价格向常态回落。",
+    "de_de": "Lange Hilfskarawanen aus den verschonten Flussprovinzen rollen in die von der Dürre gezeichneten Märkte, die Wagen schwer beladen mit Getreide und Wurzelfrüchten. Während sich die Säcke auf den Marktplätzen stapeln, baut sich der knappheitsbedingte Aufschlag auf Grundnahrungsmittel ab, und die Preise pendeln sich wieder auf normalem Niveau ein."
+  },
+  "category": "recovery",
+  "weight": 0,
+  "cooldownSeconds": 21600,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.2,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2700,
+    "noise": 0.03
+  },
+  "markets": [
+    {
+      "item": "minecraft:wheat",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:potato",
+      "weightFactor": 0.9
+    },
+    {
+      "item": "minecraft:carrot",
+      "weightFactor": 0.9
+    },
+    {
+      "item": "minecraft:beetroot",
+      "weightFactor": 0.8
+    }
+  ],
+  "requires": [
+    {
+      "type": "firedBefore",
+      "eventId": "great_drought",
+      "minSecondsAgo": 60
+    }
+  ]
+}

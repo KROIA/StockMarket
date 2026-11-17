@@ -440,7 +440,7 @@ public class NewsEventLibrary {
         List<String> added = new ArrayList<>(missing.size());
         for (String id : missing) {
             JsonObject obj = shipped.get(id);
-            if (obj == null) continue; // unreachable: DEFAULT_EVENT_IDS mirror the shipped JSON
+            if (obj == null) continue; // unreachable: DEFAULT_EVENT_IDS are derived from the shipped JSON
             NewsEventDefinition def = NewsEventDefinition.parse(
                     obj, DefaultNewsEvents.DEFAULT_FILE_NAME, report);
             if (def == null) continue; // shipped defaults parse clean; guard defensively anyway

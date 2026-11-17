@@ -8,7 +8,7 @@
 
 ### Diamond rush in the northern mountains!
 
-<img src="../../../common/src/main/resources/news_pictures/diamond_rush.png" width="220" alt="diamond_rush">
+<img src="../../../common/src/main/resources/news/pictures/diamond_rush.png" width="220" alt="diamond_rush">
 
 `diamond_rush` · commodities · weight 10 · cooldown 2h · picture: `diamond_rush.png`
 
@@ -39,7 +39,7 @@ Schürfer melden riesige Diamantvorkommen in den nördlichen Bergen. Experten er
 
 ### Mine collapse halts iron production!
 
-<img src="../../../common/src/main/resources/news_pictures/iron_supply_disruption.png" width="220" alt="iron_supply_disruption">
+<img src="../../../common/src/main/resources/news/pictures/iron_supply_disruption.png" width="220" alt="iron_supply_disruption">
 
 `iron_supply_disruption` · commodities · weight 12 · cooldown 1h30m · picture: `iron_supply_disruption.png`
 
@@ -67,7 +67,7 @@ Ein schwerer Mineneinsturz hat mehrere Eisenschächte abgeschnitten. Hütten war
 
 ### Ore bubble bursts - mining stocks in free fall!
 
-<img src="../../../common/src/main/resources/news_pictures/ore_market_crash.png" width="220" alt="ore_market_crash">
+<img src="../../../common/src/main/resources/news/pictures/ore_market_crash.png" width="220" alt="ore_market_crash">
 
 `ore_market_crash` · markets · weight 4 · cooldown 6h · picture: `ore_market_crash.png`
 
@@ -94,7 +94,7 @@ Nach Monaten der Spekulation ist die Erzblase endlich geplatzt. Panikverkäufe e
 
 ### Trade council adopts the gold standard!
 
-<img src="../../../common/src/main/resources/news_pictures/gold_reserve_standard.png" width="220" alt="gold_reserve_standard">
+<img src="../../../common/src/main/resources/news/pictures/gold_reserve_standard.png" width="220" alt="gold_reserve_standard">
 
 `gold_reserve_standard` · politics · weight 2 · cooldown 24h · picture: `gold_reserve_standard.png`
 
@@ -124,7 +124,7 @@ Der Handelsrat hat beschlossen, den gesamten Handel zwischen den Dörfern mit Go
 
 ### Rumors of a massive gold strike sweep the trading floor!
 
-<img src="../../../common/src/main/resources/news_pictures/gold_rush_rumor.png" width="220" alt="gold_rush_rumor">
+<img src="../../../common/src/main/resources/news/pictures/gold_rush_rumor.png" width="220" alt="gold_rush_rumor">
 
 `gold_rush_rumor` · rumors · weight 6 · cooldown 3h · picture: `gold_rush_rumor.png`
 
@@ -153,7 +153,7 @@ Geflüster über eine gewaltige Goldader treibt die Händler in den Goldmarkt. G
 
 ### Trade council abandons the gold standard!
 
-<img src="../../../common/src/main/resources/news_pictures/end_of_gold_standard.png" width="220" alt="end_of_gold_standard">
+<img src="../../../common/src/main/resources/news/pictures/end_of_gold_standard.png" width="220" alt="end_of_gold_standard">
 
 `end_of_gold_standard` · politics · weight 2 · cooldown 24h · picture: `end_of_gold_standard.png`
 
@@ -184,7 +184,7 @@ Nach Jahren goldgedeckten Handels hat der Rat beschlossen, den Handel zwischen d
 
 ### Counterfeit emeralds flood the market!
 
-<img src="../../../common/src/main/resources/news_pictures/emerald_counterfeit_scandal.png" width="220" alt="emerald_counterfeit_scandal">
+<img src="../../../common/src/main/resources/news/pictures/emerald_counterfeit_scandal.png" width="220" alt="emerald_counterfeit_scandal">
 
 `emerald_counterfeit_scandal` · crime · weight 5 · cooldown 4h · **adminOnly** · picture: `emerald_counterfeit_scandal.png`
 
@@ -211,7 +211,7 @@ Inspektoren haben einen groß angelegten Fälscherring aufgedeckt. Das Vertrauen
 
 ### Leaked: expedition secures massive ancient debris hoard
 
-<img src="../../../common/src/main/resources/news_pictures/netherite_insider_leak.png" width="220" alt="netherite_insider_leak">
+<img src="../../../common/src/main/resources/news/pictures/netherite_insider_leak.png" width="220" alt="netherite_insider_leak">
 
 `netherite_insider_leak` · commodities · weight 3 · cooldown 8h · picture: `netherite_insider_leak.png`
 
@@ -241,7 +241,7 @@ Heute Nacht geleakte Dokumente zeigen, dass eine private Expedition bereits vor 
 
 ### Engineering breakthrough doubles redstone efficiency!
 
-<img src="../../../common/src/main/resources/news_pictures/redstone_breakthrough.png" width="220" alt="redstone_breakthrough">
+<img src="../../../common/src/main/resources/news/pictures/redstone_breakthrough.png" width="220" alt="redstone_breakthrough">
 
 `redstone_breakthrough` · technology · weight 8 · cooldown 3h · picture: `redstone_breakthrough.png`
 
@@ -269,7 +269,7 @@ Eine Ingenieursgilde hat ein kompaktes Schaltungsdesign veröffentlicht, das den
 
 ### Construction boom drives lumber demand to record highs
 
-<img src="../../../common/src/main/resources/news_pictures/lumber_construction_boom.png" width="220" alt="lumber_construction_boom">
+<img src="../../../common/src/main/resources/news/pictures/lumber_construction_boom.png" width="220" alt="lumber_construction_boom">
 
 `lumber_construction_boom` · economy · weight 9 · cooldown 2h · picture: `lumber_construction_boom.png`
 
@@ -297,7 +297,7 @@ Eine Ingenieursgilde hat ein kompaktes Schaltungsdesign veröffentlicht, das den
 
 ### Harvest festival drives up grain demand!
 
-<img src="../../../common/src/main/resources/news_pictures/wheat_harvest_festival.png" width="220" alt="wheat_harvest_festival">
+<img src="../../../common/src/main/resources/news/pictures/wheat_harvest_festival.png" width="220" alt="wheat_harvest_festival">
 
 `wheat_harvest_festival` · commodities · weight 5 · cooldown 1h30m · picture: `wheat_harvest_festival.png`
 
@@ -324,7 +324,7 @@ Eine Ingenieursgilde hat ein kompaktes Schaltungsdesign veröffentlicht, das den
 
 ### Locust swarm ravages farmland - staple crops in short supply!
 
-<img src="../../../common/src/main/resources/news_pictures/crop_pest_outbreak.png" width="220" alt="crop_pest_outbreak">
+<img src="../../../common/src/main/resources/news/pictures/crop_pest_outbreak.png" width="220" alt="crop_pest_outbreak">
 
 `crop_pest_outbreak` · disaster · weight 4 · cooldown 2h · picture: `crop_pest_outbreak.png`
 
@@ -353,7 +353,7 @@ Ein gewaltiger Heuschreckenschwarm hat sich über die zentralen Felder hergemach
 
 ### Bee colonies boom - honey floods the market
 
-<img src="../../../common/src/main/resources/news_pictures/honey_bumper_season.png" width="220" alt="honey_bumper_season">
+<img src="../../../common/src/main/resources/news/pictures/honey_bumper_season.png" width="220" alt="honey_bumper_season">
 
 `honey_bumper_season` · commodities · weight 6 · cooldown 1h30m · picture: `honey_bumper_season.png`
 
@@ -381,7 +381,7 @@ Imker melden eine außergewöhnliche Saison - die Stöcke laufen über, die Obst
 
 ### Massive copper seam opened in coastal cliffs!
 
-<img src="../../../common/src/main/resources/news_pictures/copper_seam_discovery.png" width="220" alt="copper_seam_discovery">
+<img src="../../../common/src/main/resources/news/pictures/copper_seam_discovery.png" width="220" alt="copper_seam_discovery">
 
 `copper_seam_discovery` · commodities · weight 8 · cooldown 1h30m · picture: `copper_seam_discovery.png`
 
@@ -409,7 +409,7 @@ Vermesser haben eine gewaltige neue Kupferader entlang der Küstenklippen erschl
 
 ### Coal miners walk out - furnaces run cold!
 
-<img src="../../../common/src/main/resources/news_pictures/coal_miners_strike.png" width="220" alt="coal_miners_strike">
+<img src="../../../common/src/main/resources/news/pictures/coal_miners_strike.png" width="220" alt="coal_miners_strike">
 
 `coal_miners_strike` · labor · weight 6 · cooldown 2h · picture: `coal_miners_strike.png`
 
@@ -435,7 +435,7 @@ Kohlekumpel in der ganzen Region haben aus Protest gegen unsichere Schächte die
 
 ### Volcano erupts - villages fortify against ashfall!
 
-<img src="../../../common/src/main/resources/news_pictures/volcanic_eruption.png" width="220" alt="volcanic_eruption">
+<img src="../../../common/src/main/resources/news/pictures/volcanic_eruption.png" width="220" alt="volcanic_eruption">
 
 `volcanic_eruption` · disaster · weight 2 · cooldown 6h · **adminOnly** · picture: `volcanic_eruption.png`
 
@@ -463,7 +463,7 @@ Ein schlafender Vulkan ist über Nacht wieder erwacht und hat den Osten unter ei
 
 ### Wildfires sweep the taiga - lumber prices spike!
 
-<img src="../../../common/src/main/resources/news_pictures/great_forest_fire.png" width="220" alt="great_forest_fire">
+<img src="../../../common/src/main/resources/news/pictures/great_forest_fire.png" width="220" alt="great_forest_fire">
 
 `great_forest_fire` · disaster · weight 3 · cooldown 4h · picture: `great_forest_fire.png`
 
@@ -494,7 +494,7 @@ Waldbrände, ausgelöst durch ein trockenes Gewitter, rasen durch die nördliche
 
 ### Disaster relief planks flood the lumber market
 
-<img src="../../../common/src/main/resources/news_pictures/great_forest_fire_recovery.png" width="220" alt="great_forest_fire_recovery">
+<img src="../../../common/src/main/resources/news/pictures/great_forest_fire_recovery.png" width="220" alt="great_forest_fire_recovery">
 
 `great_forest_fire_recovery` · recovery · weight 4 · cooldown 6h · picture: `great_forest_fire_recovery.png`
 
@@ -523,7 +523,7 @@ Notlieferungen von Brettern und geborgenen Stämmen aus unversehrten Regionen st
 
 ### Trade council signs sweeping import tariff treaty
 
-<img src="../../../common/src/main/resources/news_pictures/import_tariff_treaty.png" width="220" alt="import_tariff_treaty">
+<img src="../../../common/src/main/resources/news/pictures/import_tariff_treaty.png" width="220" alt="import_tariff_treaty">
 
 `import_tariff_treaty` · politics · weight 1 · cooldown 24h · picture: `import_tariff_treaty.png`
 
@@ -552,7 +552,7 @@ Nach monatelangen Verhandlungen hat der Handelsrat einen umfassenden Einfuhrzoll
 
 ### Winter solstice gifting season lifts sweets and textiles
 
-<img src="../../../common/src/main/resources/news_pictures/winter_solstice_gifting.png" width="220" alt="winter_solstice_gifting">
+<img src="../../../common/src/main/resources/news/pictures/winter_solstice_gifting.png" width="220" alt="winter_solstice_gifting">
 
 `winter_solstice_gifting` · cultural · weight 4 · cooldown 12h · picture: `winter_solstice_gifting.png`
 
@@ -582,7 +582,7 @@ Die Schenkzeit zur Wintersonnenwende ist in vollem Gang. Bäckereien bekommen ka
 
 ### After the solstice: gift-market demand collapses
 
-<img src="../../../common/src/main/resources/news_pictures/post_solstice_slump.png" width="220" alt="post_solstice_slump">
+<img src="../../../common/src/main/resources/news/pictures/post_solstice_slump.png" width="220" alt="post_solstice_slump">
 
 `post_solstice_slump` · cultural · weight 3 · cooldown 12h · picture: `post_solstice_slump.png`
 
@@ -610,7 +610,7 @@ Mit dem Ende der Schenkzeit sind die Haushalte durch, und die Lager sind noch im
 
 ### Kingdoms race to build redstone defenses
 
-<img src="../../../common/src/main/resources/news_pictures/redstone_arms_race.png" width="220" alt="redstone_arms_race">
+<img src="../../../common/src/main/resources/news/pictures/redstone_arms_race.png" width="220" alt="redstone_arms_race">
 
 `redstone_arms_race` · conflict · weight 3 · cooldown 3h · picture: `redstone_arms_race.png`
 
@@ -642,7 +642,7 @@ Rivalisierende Königreiche stecken massiv Mittel in automatisierte Verteidigung
 
 ### Nether quartz glut buries the market!
 
-<img src="../../../common/src/main/resources/news_pictures/nether_quartz_glut.png" width="220" alt="nether_quartz_glut">
+<img src="../../../common/src/main/resources/news/pictures/nether_quartz_glut.png" width="220" alt="nether_quartz_glut">
 
 `nether_quartz_glut` · commodities · weight 8 · cooldown 2h · picture: `nether_quartz_glut.png`
 
@@ -669,7 +669,7 @@ Neue Schürfcamps in den karmesinroten Ödländern haben die Karawanen mit Nethe
 
 ### Colossal geode cracked open - amethyst everywhere!
 
-<img src="../../../common/src/main/resources/news_pictures/amethyst_geode_discovery.png" width="220" alt="amethyst_geode_discovery">
+<img src="../../../common/src/main/resources/news/pictures/amethyst_geode_discovery.png" width="220" alt="amethyst_geode_discovery">
 
 `amethyst_geode_discovery` · commodities · weight 4 · cooldown 12h · picture: `amethyst_geode_discovery.png`
 
@@ -695,7 +695,7 @@ Bergleute in den tiefen Höhlen sind in eine Geode so groß wie eine Dorfhalle v
 
 ### Enchanting craze sends lapis demand soaring!
 
-<img src="../../../common/src/main/resources/news_pictures/lapis_enchanting_craze.png" width="220" alt="lapis_enchanting_craze">
+<img src="../../../common/src/main/resources/news/pictures/lapis_enchanting_craze.png" width="220" alt="lapis_enchanting_craze">
 
 `lapis_enchanting_craze` · technology · weight 7 · cooldown 3h · picture: `lapis_enchanting_craze.png`
 
@@ -724,7 +724,7 @@ Eine neue Mode für verzauberte Ausrüstung hat die Gildenhallen erfasst, und je
 
 ### Glowstone farms flood the market with light!
 
-<img src="../../../common/src/main/resources/news_pictures/glowstone_farm_boom.png" width="220" alt="glowstone_farm_boom">
+<img src="../../../common/src/main/resources/news/pictures/glowstone_farm_boom.png" width="220" alt="glowstone_farm_boom">
 
 `glowstone_farm_boom` · commodities · weight 8 · cooldown 2h · picture: `glowstone_farm_boom.png`
 
@@ -751,7 +751,7 @@ Findige Baumeister haben unter den Netherdecken weitläufige Glowstone-Ernteanla
 
 ### Deep quarry opens - deepslate cheap for good
 
-<img src="../../../common/src/main/resources/news_pictures/deepslate_quarry_expansion.png" width="220" alt="deepslate_quarry_expansion">
+<img src="../../../common/src/main/resources/news/pictures/deepslate_quarry_expansion.png" width="220" alt="deepslate_quarry_expansion">
 
 `deepslate_quarry_expansion` · economy · weight 5 · cooldown 12h · picture: `deepslate_quarry_expansion.png`
 
@@ -778,7 +778,7 @@ Der Handelsrat hat einen gewaltigen Steinbruch bis in die tiefen Gesteinsschicht
 
 ### Ocean monument stripped bare - prismarine floods in!
 
-<img src="../../../common/src/main/resources/news_pictures/prismarine_monument_raid.png" width="220" alt="prismarine_monument_raid">
+<img src="../../../common/src/main/resources/news/pictures/prismarine_monument_raid.png" width="220" alt="prismarine_monument_raid">
 
 `prismarine_monument_raid` · commodities · weight 5 · cooldown 4h · picture: `prismarine_monument_raid.png`
 
@@ -806,7 +806,7 @@ Eine Taucherzunft hat ein großes Ozeanmonument gestürmt und seine Wände über
 
 ### Cartel corners quartz supply - prices squeezed!
 
-<img src="../../../common/src/main/resources/news_pictures/quartz_cartel_squeeze.png" width="220" alt="quartz_cartel_squeeze">
+<img src="../../../common/src/main/resources/news/pictures/quartz_cartel_squeeze.png" width="220" alt="quartz_cartel_squeeze">
 
 `quartz_cartel_squeeze` · crime · weight 3 · cooldown 8h · **adminOnly** · picture: `quartz_cartel_squeeze.png`
 
@@ -832,7 +832,7 @@ Aus den Hinterzimmern heißt es, ein Ring von Händlern habe still und heimlich 
 
 ### Dripstone the new fashion in grand halls!
 
-<img src="../../../common/src/main/resources/news_pictures/dripstone_cavern_rush.png" width="220" alt="dripstone_cavern_rush">
+<img src="../../../common/src/main/resources/news/pictures/dripstone_cavern_rush.png" width="220" alt="dripstone_cavern_rush">
 
 `dripstone_cavern_rush` · commodities · weight 7 · cooldown 2h · picture: `dripstone_cavern_rush.png`
 
@@ -859,7 +859,7 @@ Baumeister haben begonnen, Prunkhallen mit Tropfsteinsäulen auszukleiden, und j
 
 ### Tuff-and-calcite facades sweep the townhouses
 
-<img src="../../../common/src/main/resources/news_pictures/tuff_facade_fashion.png" width="220" alt="tuff_facade_fashion">
+<img src="../../../common/src/main/resources/news/pictures/tuff_facade_fashion.png" width="220" alt="tuff_facade_fashion">
 
 `tuff_facade_fashion` · cultural · weight 6 · cooldown 3h · picture: `tuff_facade_fashion.png`
 
@@ -887,7 +887,7 @@ Eine Modewelle für helle Tuff-und-Kalzit-Fassaden hat die Stadthäuser erfasst,
 
 ### Speculators pile into amethyst on wild rumors!
 
-<img src="../../../common/src/main/resources/news_pictures/amethyst_speculation.png" width="220" alt="amethyst_speculation">
+<img src="../../../common/src/main/resources/news/pictures/amethyst_speculation.png" width="220" alt="amethyst_speculation">
 
 `amethyst_speculation` · rumors · weight 6 · cooldown 3h · picture: `amethyst_speculation.png`
 
@@ -918,7 +918,7 @@ Gerüchte über einen geheimen königlichen Amethyst-Auftrag treiben die Händle
 
 ### Blight returns to the potato fields!
 
-<img src="../../../common/src/main/resources/news_pictures/potato_blight_return.png" width="220" alt="potato_blight_return">
+<img src="../../../common/src/main/resources/news/pictures/potato_blight_return.png" width="220" alt="potato_blight_return">
 
 `potato_blight_return` · disaster · weight 4 · cooldown 2h · picture: `potato_blight_return.png`
 
@@ -945,7 +945,7 @@ Gerüchte über einen geheimen königlichen Amethyst-Auftrag treiben die Händle
 
 ### Autumn festival lifts the pumpkin trade!
 
-<img src="../../../common/src/main/resources/news_pictures/pumpkin_autumn_festival.png" width="220" alt="pumpkin_autumn_festival">
+<img src="../../../common/src/main/resources/news/pictures/pumpkin_autumn_festival.png" width="220" alt="pumpkin_autumn_festival">
 
 `pumpkin_autumn_festival` · cultural · weight 5 · cooldown 12h · picture: `pumpkin_autumn_festival.png`
 
@@ -974,7 +974,7 @@ Das alljährliche Herbstfest steht vor der Tür, und auf jedem Dorfplatz werden 
 
 ### Bumper summer floods the market with melons
 
-<img src="../../../common/src/main/resources/news_pictures/melon_summer_glut.png" width="220" alt="melon_summer_glut">
+<img src="../../../common/src/main/resources/news/pictures/melon_summer_glut.png" width="220" alt="melon_summer_glut">
 
 `melon_summer_glut` · commodities · weight 6 · cooldown 6h · picture: `melon_summer_glut.png`
 
@@ -1001,7 +1001,7 @@ Ein langer, warmer Sommer hat die Melonenfelder unter der Last der Ernte ächzen
 
 ### New river plantations turn sugar cane cheap for good
 
-<img src="../../../common/src/main/resources/news_pictures/sugarcane_plantation_boom.png" width="220" alt="sugarcane_plantation_boom">
+<img src="../../../common/src/main/resources/news/pictures/sugarcane_plantation_boom.png" width="220" alt="sugarcane_plantation_boom">
 
 `sugarcane_plantation_boom` · economy · weight 5 · cooldown 24h · picture: `sugarcane_plantation_boom.png`
 
@@ -1029,7 +1029,7 @@ Entlang der großen Flussdeltas sind weite neue Zuckerrohrplantagen entstanden, 
 
 ### Southern trade route opens the cocoa floodgates
 
-<img src="../../../common/src/main/resources/news_pictures/cocoa_trade_route_opens.png" width="220" alt="cocoa_trade_route_opens">
+<img src="../../../common/src/main/resources/news/pictures/cocoa_trade_route_opens.png" width="220" alt="cocoa_trade_route_opens">
 
 `cocoa_trade_route_opens` · commodities · weight 7 · cooldown 3h · picture: `cocoa_trade_route_opens.png`
 
@@ -1055,7 +1055,7 @@ Eine neue Karawanenroute durch die südlichen Dschungel ist endlich gesichert, u
 
 ### Foraging craze sends mushroom prices soaring
 
-<img src="../../../common/src/main/resources/news_pictures/mushroom_foraging_craze.png" width="220" alt="mushroom_foraging_craze">
+<img src="../../../common/src/main/resources/news/pictures/mushroom_foraging_craze.png" width="220" alt="mushroom_foraging_craze">
 
 `mushroom_foraging_craze` · commodities · weight 6 · cooldown 2h · picture: `mushroom_foraging_craze.png`
 
@@ -1084,7 +1084,7 @@ Ein Fieber nach Waldpilzeintopf hat die Dörfer erfasst, und jeder Wirt will rot
 
 ### Brewers empty the nether wart stocks!
 
-<img src="../../../common/src/main/resources/news_pictures/netherwart_brewing_shortage.png" width="220" alt="netherwart_brewing_shortage">
+<img src="../../../common/src/main/resources/news/pictures/netherwart_brewing_shortage.png" width="220" alt="netherwart_brewing_shortage">
 
 `netherwart_brewing_shortage` · commodities · weight 5 · cooldown 3h · picture: `netherwart_brewing_shortage.png`
 
@@ -1112,7 +1112,7 @@ Ein sprunghaft gestiegener Trankbedarf hat die Brauergilde jede letzte Kiste Net
 
 ### Record beetroot harvest weighs on prices
 
-<img src="../../../common/src/main/resources/news_pictures/beetroot_harvest_surplus.png" width="220" alt="beetroot_harvest_surplus">
+<img src="../../../common/src/main/resources/news/pictures/beetroot_harvest_surplus.png" width="220" alt="beetroot_harvest_surplus">
 
 `beetroot_harvest_surplus` · commodities · weight 6 · cooldown 2h · picture: `beetroot_harvest_surplus.png`
 
@@ -1139,7 +1139,7 @@ Die Anbauer melden in diesem Jahr eine Rekordernte an Roten Rüben, die Keller q
 
 ### Great drought scorches the croplands!
 
-<img src="../../../common/src/main/resources/news_pictures/great_drought.png" width="220" alt="great_drought">
+<img src="../../../common/src/main/resources/news/pictures/great_drought.png" width="220" alt="great_drought">
 
 `great_drought` · disaster · weight 3 · cooldown 6h · picture: `great_drought.png`
 
@@ -1171,7 +1171,7 @@ Wochen ohne Regen haben das Ackerland zu Staub werden lassen, und die Brunnen ve
 
 ### Relief caravans pour grain into the stricken markets
 
-<img src="../../../common/src/main/resources/news_pictures/grain_relief_convoy.png" width="220" alt="grain_relief_convoy">
+<img src="../../../common/src/main/resources/news/pictures/grain_relief_convoy.png" width="220" alt="grain_relief_convoy">
 
 `grain_relief_convoy` · recovery · weight 0 · cooldown 6h · picture: `grain_relief_convoy.png`
 
@@ -1204,7 +1204,7 @@ Lange Hilfskarawanen aus den verschonten Flussprovinzen rollen in die von der D�
 
 ### Spring shearing floods the wool market
 
-<img src="../../../common/src/main/resources/news_pictures/spring_shearing_glut.png" width="220" alt="spring_shearing_glut">
+<img src="../../../common/src/main/resources/news/pictures/spring_shearing_glut.png" width="220" alt="spring_shearing_glut">
 
 `spring_shearing_glut` · commodities · weight 6 · cooldown 2h · picture: `spring_shearing_glut.png`
 
@@ -1232,7 +1232,7 @@ Die ersten warmen Tage haben die Herden aller Schäfer zugleich unter die Schere
 
 ### New tanneries drive a run on leather
 
-<img src="../../../common/src/main/resources/news_pictures/leather_tannery_boom.png" width="220" alt="leather_tannery_boom">
+<img src="../../../common/src/main/resources/news/pictures/leather_tannery_boom.png" width="220" alt="leather_tannery_boom">
 
 `leather_tannery_boom` · economy · weight 7 · cooldown 2h · picture: `leather_tannery_boom.png`
 
@@ -1259,7 +1259,7 @@ Entlang des Flusses hat eine Reihe neuer Gerbereien eröffnet, und ihr Hunger na
 
 ### Cattle plague fells the herds - meat and hides grow scarce!
 
-<img src="../../../common/src/main/resources/news_pictures/cattle_plague_outbreak.png" width="220" alt="cattle_plague_outbreak">
+<img src="../../../common/src/main/resources/news/pictures/cattle_plague_outbreak.png" width="220" alt="cattle_plague_outbreak">
 
 `cattle_plague_outbreak` · disaster · weight 3 · cooldown 6h · **adminOnly** · picture: `cattle_plague_outbreak.png`
 
@@ -1287,7 +1287,7 @@ Eine Viehseuche fegt über die Weidegründe und hat binnen Tagen ganze Herden da
 
 ### Great salmon run fills the nets
 
-<img src="../../../common/src/main/resources/news_pictures/salmon_spawning_run.png" width="220" alt="salmon_spawning_run">
+<img src="../../../common/src/main/resources/news/pictures/salmon_spawning_run.png" width="220" alt="salmon_spawning_run">
 
 `salmon_spawning_run` · commodities · weight 6 · cooldown 1h30m · picture: `salmon_spawning_run.png`
 
@@ -1314,7 +1314,7 @@ Die Flüsse sind dicht vom jahreszeitlichen Lachszug, und die Fischerflotten hol
 
 ### Overfishing collapses the cod grounds for good
 
-<img src="../../../common/src/main/resources/news_pictures/cod_overfishing_crisis.png" width="220" alt="cod_overfishing_crisis">
+<img src="../../../common/src/main/resources/news/pictures/cod_overfishing_crisis.png" width="220" alt="cod_overfishing_crisis">
 
 `cod_overfishing_crisis` · disaster · weight 3 · cooldown 24h · picture: `cod_overfishing_crisis.png`
 
@@ -1341,7 +1341,7 @@ Jahrelanges Leerfischen der Schwärme hat die großen Dorschgründe endgültig a
 
 ### Aquarium fad grips the wealthy
 
-<img src="../../../common/src/main/resources/news_pictures/tropical_fish_aquarium_fad.png" width="220" alt="tropical_fish_aquarium_fad">
+<img src="../../../common/src/main/resources/news/pictures/tropical_fish_aquarium_fad.png" width="220" alt="tropical_fish_aquarium_fad">
 
 `tropical_fish_aquarium_fad` · cultural · weight 5 · cooldown 3h · picture: `tropical_fish_aquarium_fad.png`
 
@@ -1367,7 +1367,7 @@ Eine Begeisterung für gläserne Becken mit schillernden tropischen Fischen hat 
 
 ### Henhouse fire wipes out laying flocks - eggs vanish!
 
-<img src="../../../common/src/main/resources/news_pictures/henhouse_fire_egg_shortage.png" width="220" alt="henhouse_fire_egg_shortage">
+<img src="../../../common/src/main/resources/news/pictures/henhouse_fire_egg_shortage.png" width="220" alt="henhouse_fire_egg_shortage">
 
 `henhouse_fire_egg_shortage` · disaster · weight 4 · cooldown 2h · picture: `henhouse_fire_egg_shortage.png`
 
@@ -1395,7 +1395,7 @@ Ein Feuer, das über Nacht durch die Hühnerställe des Viertels raste, hat die 
 
 ### Archery muster empties the fletchers' feather stores
 
-<img src="../../../common/src/main/resources/news_pictures/fletcher_feather_demand.png" width="220" alt="fletcher_feather_demand">
+<img src="../../../common/src/main/resources/news/pictures/fletcher_feather_demand.png" width="220" alt="fletcher_feather_demand">
 
 `fletcher_feather_demand` · conflict · weight 5 · cooldown 2h · picture: `fletcher_feather_demand.png`
 
@@ -1421,7 +1421,7 @@ Da das Aufgebot einberufen und jeder taugliche Bogenschütze an die Schießstän
 
 ### Black-dye trade collapses as fashion turns pale
 
-<img src="../../../common/src/main/resources/news_pictures/ink_dye_market_crash.png" width="220" alt="ink_dye_market_crash">
+<img src="../../../common/src/main/resources/news/pictures/ink_dye_market_crash.png" width="220" alt="ink_dye_market_crash">
 
 `ink_dye_market_crash` · markets · weight 4 · cooldown 4h · picture: `ink_dye_market_crash.png`
 
@@ -1449,7 +1449,7 @@ Der Geschmack der Saison ist hart zu blassem und ungefärbtem Tuch umgeschwenkt,
 
 ### Winter craze for rabbit stew empties the warrens
 
-<img src="../../../common/src/main/resources/news_pictures/rabbit_stew_winter_craze.png" width="220" alt="rabbit_stew_winter_craze">
+<img src="../../../common/src/main/resources/news/pictures/rabbit_stew_winter_craze.png" width="220" alt="rabbit_stew_winter_craze">
 
 `rabbit_stew_winter_craze` · cultural · weight 4 · cooldown 12h · picture: `rabbit_stew_winter_craze.png`
 
@@ -1480,7 +1480,7 @@ Ein strenger Frost und die Mode für heißen Kanincheneintopf haben jedes Wirtsh
 
 ### Alchemists' guild empties the blaze-rod stalls!
 
-<img src="../../../common/src/main/resources/news_pictures/blaze_rod_brewing_rush.png" width="220" alt="blaze_rod_brewing_rush">
+<img src="../../../common/src/main/resources/news/pictures/blaze_rod_brewing_rush.png" width="220" alt="blaze_rod_brewing_rush">
 
 `blaze_rod_brewing_rush` · commodities · weight 6 · cooldown 3h · picture: `blaze_rod_brewing_rush.png`
 
@@ -1507,7 +1507,7 @@ Die Alchemistengilde hat eine Dauerbestellung auf jede Lohenrute aufgegeben, die
 
 ### Expedition fever drives ender-pearl demand sky-high
 
-<img src="../../../common/src/main/resources/news_pictures/ender_pearl_expedition_boom.png" width="220" alt="ender_pearl_expedition_boom">
+<img src="../../../common/src/main/resources/news/pictures/ender_pearl_expedition_boom.png" width="220" alt="ender_pearl_expedition_boom">
 
 `ender_pearl_expedition_boom` · commodities · weight 6 · cooldown 3h · picture: `ender_pearl_expedition_boom.png`
 
@@ -1534,7 +1534,7 @@ Eine Welle von Grenzland-Expeditionen bricht in die fernen Weiten auf, und jede 
 
 ### Apothecaries bid up ghast tears for healing tonics!
 
-<img src="../../../common/src/main/resources/news_pictures/ghast_tear_apothecary_craze.png" width="220" alt="ghast_tear_apothecary_craze">
+<img src="../../../common/src/main/resources/news/pictures/ghast_tear_apothecary_craze.png" width="220" alt="ghast_tear_apothecary_craze">
 
 `ghast_tear_apothecary_craze` · commodities · weight 4 · cooldown 4h · picture: `ghast_tear_apothecary_craze.png`
 
@@ -1560,7 +1560,7 @@ Ein plötzlicher Rausch um Regenerationstränke lässt die Apothekergilde erbitt
 
 ### End raids stall - shulker shells scarce for good
 
-<img src="../../../common/src/main/resources/news_pictures/shulker_shell_shortage.png" width="220" alt="shulker_shell_shortage">
+<img src="../../../common/src/main/resources/news/pictures/shulker_shell_shortage.png" width="220" alt="shulker_shell_shortage">
 
 `shulker_shell_shortage` · commodities · weight 3 · cooldown 12h · picture: `shulker_shell_shortage.png`
 
@@ -1586,7 +1586,7 @@ Die Raubzüge, die einst die End-Städte plünderten, sind ins Stocken geraten, 
 
 ### Outer islands yield a chorus-fruit glut
 
-<img src="../../../common/src/main/resources/news_pictures/chorus_fruit_bumper_harvest.png" width="220" alt="chorus_fruit_bumper_harvest">
+<img src="../../../common/src/main/resources/news/pictures/chorus_fruit_bumper_harvest.png" width="220" alt="chorus_fruit_bumper_harvest">
 
 `chorus_fruit_bumper_harvest` · commodities · weight 5 · cooldown 2h · picture: `chorus_fruit_bumper_harvest.png`
 
@@ -1613,7 +1613,7 @@ Die Choruspflanzen der äußeren End-Inseln sind in dieser Saison wild gewuchert
 
 ### Fire-resistance brewing drives magma-cream demand
 
-<img src="../../../common/src/main/resources/news_pictures/magma_cream_alchemy_demand.png" width="220" alt="magma_cream_alchemy_demand">
+<img src="../../../common/src/main/resources/news/pictures/magma_cream_alchemy_demand.png" width="220" alt="magma_cream_alchemy_demand">
 
 `magma_cream_alchemy_demand` · commodities · weight 6 · cooldown 3h · picture: `magma_cream_alchemy_demand.png`
 
@@ -1639,7 +1639,7 @@ Da Expeditionen immer tiefer in die Lavameere vordringen, kommen die Brauer mit 
 
 ### Rush to repair elytra empties membrane stocks
 
-<img src="../../../common/src/main/resources/news_pictures/phantom_membrane_repair_run.png" width="220" alt="phantom_membrane_repair_run">
+<img src="../../../common/src/main/resources/news/pictures/phantom_membrane_repair_run.png" width="220" alt="phantom_membrane_repair_run">
 
 `phantom_membrane_repair_run` · commodities · weight 5 · cooldown 3h · picture: `phantom_membrane_repair_run.png`
 
@@ -1665,7 +1665,7 @@ Nach einer Saison harten Fliegens versucht jeder Gleiter-Pilot des Reiches, abge
 
 ### Triumphant End expedition floods the market with relics!
 
-<img src="../../../common/src/main/resources/news_pictures/end_expedition_returns.png" width="220" alt="end_expedition_returns">
+<img src="../../../common/src/main/resources/news/pictures/end_expedition_returns.png" width="220" alt="end_expedition_returns">
 
 `end_expedition_returns` · commodities · weight 2 · cooldown 24h · picture: `end_expedition_returns.png`
 
@@ -1695,7 +1695,7 @@ Eine große Expedition ist im Triumph aus dem End zurückgekehrt, ihre Schiffe b
 
 ### Respawn anchors become the must-have - crying obsidian soars
 
-<img src="../../../common/src/main/resources/news_pictures/crying_obsidian_anchor_fad.png" width="220" alt="crying_obsidian_anchor_fad">
+<img src="../../../common/src/main/resources/news/pictures/crying_obsidian_anchor_fad.png" width="220" alt="crying_obsidian_anchor_fad">
 
 `crying_obsidian_anchor_fad` · cultural · weight 5 · cooldown 3h · picture: `crying_obsidian_anchor_fad.png`
 
@@ -1722,7 +1722,7 @@ Kein Grenzlager gilt in dieser Saison als vollständig ohne Seelenanker, und die
 
 ### Warlord posts a bounty on wither skulls!
 
-<img src="../../../common/src/main/resources/news_pictures/wither_skull_bounty.png" width="220" alt="wither_skull_bounty">
+<img src="../../../common/src/main/resources/news/pictures/wither_skull_bounty.png" width="220" alt="wither_skull_bounty">
 
 `wither_skull_bounty` · conflict · weight 3 · cooldown 6h · **adminOnly** · picture: `wither_skull_bounty.png`
 
@@ -1751,7 +1751,7 @@ Ein Kriegsherr, der zum Krieg rüstet, hat ein üppiges Kopfgeld auf jeden Withe
 
 ### The mint recoins the realm's currency!
 
-<img src="../../../common/src/main/resources/news_pictures/mint_recoinage_reform.png" width="220" alt="mint_recoinage_reform">
+<img src="../../../common/src/main/resources/news/pictures/mint_recoinage_reform.png" width="220" alt="mint_recoinage_reform">
 
 `mint_recoinage_reform` · politics · weight 2 · cooldown 24h · picture: `mint_recoinage_reform.png`
 
@@ -1781,7 +1781,7 @@ Auf Erlass des Handelsrats hat die königliche Münze begonnen, jede umlaufende 
 
 ### Dockworkers walk out - harbor cranes fall silent!
 
-<img src="../../../common/src/main/resources/news_pictures/dockworkers_strike.png" width="220" alt="dockworkers_strike">
+<img src="../../../common/src/main/resources/news/pictures/dockworkers_strike.png" width="220" alt="dockworkers_strike">
 
 `dockworkers_strike` · labor · weight 6 · cooldown 3h · picture: `dockworkers_strike.png`
 
@@ -1809,7 +1809,7 @@ Die Zunft der Hafenarbeiter hat wegen einbehaltener Löhne die Arbeit niedergele
 
 ### Trade council embargoes all foreign metals!
 
-<img src="../../../common/src/main/resources/news_pictures/metals_export_embargo.png" width="220" alt="metals_export_embargo">
+<img src="../../../common/src/main/resources/news/pictures/metals_export_embargo.png" width="220" alt="metals_export_embargo">
 
 `metals_export_embargo` · politics · weight 2 · cooldown 24h · picture: `metals_export_embargo.png`
 
@@ -1837,7 +1837,7 @@ Um die heimischen Gießereien zu schützen, hat der Handelsrat ein Embargo auf j
 
 ### Royal treasury floods the market with fresh coin
 
-<img src="../../../common/src/main/resources/news_pictures/treasury_stimulus_windfall.png" width="220" alt="treasury_stimulus_windfall">
+<img src="../../../common/src/main/resources/news/pictures/treasury_stimulus_windfall.png" width="220" alt="treasury_stimulus_windfall">
 
 `treasury_stimulus_windfall` · economy · weight 6 · cooldown 4h · picture: `treasury_stimulus_windfall.png`
 
@@ -1868,7 +1868,7 @@ Die königliche Schatzkammer hat ihre Gewölbe geöffnet und schüttet frisch ge
 
 ### Counterfeit gold coin floods the market - trust collapses!
 
-<img src="../../../common/src/main/resources/news_pictures/counterfeit_coin_scandal.png" width="220" alt="counterfeit_coin_scandal">
+<img src="../../../common/src/main/resources/news/pictures/counterfeit_coin_scandal.png" width="220" alt="counterfeit_coin_scandal">
 
 `counterfeit_coin_scandal` · crime · weight 3 · cooldown 6h · **adminOnly** · picture: `counterfeit_coin_scandal.png`
 
@@ -1894,7 +1894,7 @@ Ein Schmugglerring hat das Reich mit meisterhaft gefälschten Goldmünzen übers
 
 ### Daring vault heist empties the gem exchange!
 
-<img src="../../../common/src/main/resources/news_pictures/gemstone_heist.png" width="220" alt="gemstone_heist">
+<img src="../../../common/src/main/resources/news/pictures/gemstone_heist.png" width="220" alt="gemstone_heist">
 
 `gemstone_heist` · crime · weight 4 · cooldown 4h · picture: `gemstone_heist.png`
 
@@ -1923,7 +1923,7 @@ Diebe knackten über Nacht das tiefste Gewölbe der Edelsteinbörse und machten 
 
 ### Court adopts royal purple - dye prices soar!
 
-<img src="../../../common/src/main/resources/news_pictures/royal_purple_fashion.png" width="220" alt="royal_purple_fashion">
+<img src="../../../common/src/main/resources/news/pictures/royal_purple_fashion.png" width="220" alt="royal_purple_fashion">
 
 `royal_purple_fashion` · cultural · weight 5 · cooldown 3h · picture: `royal_purple_fashion.png`
 
@@ -1951,7 +1951,7 @@ Die Königin hat Königspurpur zur Farbe der Saison erklärt, und jedes Adelshau
 
 ### Council levies steep luxury tax on gems and gold
 
-<img src="../../../common/src/main/resources/news_pictures/luxury_goods_tax.png" width="220" alt="luxury_goods_tax">
+<img src="../../../common/src/main/resources/news/pictures/luxury_goods_tax.png" width="220" alt="luxury_goods_tax">
 
 `luxury_goods_tax` · politics · weight 2 · cooldown 24h · picture: `luxury_goods_tax.png`
 
@@ -1982,7 +1982,7 @@ Um die Kriegskasse zu füllen, hat der Handelsrat eine drückende Luxussteuer au
 
 ### Council scraps the luxury tax on gems and gold
 
-<img src="../../../common/src/main/resources/news_pictures/luxury_tax_repealed.png" width="220" alt="luxury_tax_repealed">
+<img src="../../../common/src/main/resources/news/pictures/luxury_tax_repealed.png" width="220" alt="luxury_tax_repealed">
 
 `luxury_tax_repealed` · politics · weight 2 · cooldown 24h · picture: `luxury_tax_repealed.png`
 
@@ -2015,7 +2015,7 @@ Nach Monaten leerer Juweliergeschäfte und lautstarker Proteste der Gilden hat d
 
 ### Speculative mania grips the trading floor!
 
-<img src="../../../common/src/main/resources/news_pictures/speculation_mania.png" width="220" alt="speculation_mania">
+<img src="../../../common/src/main/resources/news/pictures/speculation_mania.png" width="220" alt="speculation_mania">
 
 `speculation_mania` · rumors · weight 4 · cooldown 4h · picture: `speculation_mania.png`
 
@@ -2048,7 +2048,7 @@ Ein Rausch hat das Parkett gepackt - Schreiber wie Höflinge beleihen ihre Häus
 
 ### Margin calls wipe out overleveraged traders in a cascade!
 
-<img src="../../../common/src/main/resources/news_pictures/margin_call_crash.png" width="220" alt="margin_call_crash">
+<img src="../../../common/src/main/resources/news/pictures/margin_call_crash.png" width="220" alt="margin_call_crash">
 
 `margin_call_crash` · markets · weight 0 · cooldown 4h · picture: `margin_call_crash.png`
 

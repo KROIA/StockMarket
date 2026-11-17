@@ -1,0 +1,57 @@
+{
+  "id": "great_drought",
+  "picture": "great_drought.png",
+  "headline": {
+    "en_us": "Great drought scorches the croplands!",
+    "zh_cn": "大旱炙烤农田！",
+    "de_de": "Große Dürre verdorrt das Ackerland!"
+  },
+  "text": {
+    "en_us": "Weeks without rain have turned the croplands to dust, and the wells are running dangerously low. Wheat wilts in the fields, root crops shrivel underground, and prices for every staple are surging as farmers and merchants brace for a hungry season.",
+    "zh_cn": "数周无雨让农田化作尘土，水井水位低得危险。小麦在田里枯萎，块根作物在地下干瘪，农夫与商人都在为饥荒季节做准备，各类主粮价格全面飙升。",
+    "de_de": "Wochen ohne Regen haben das Ackerland zu Staub werden lassen, und die Brunnen versiegen bedenklich. Der Weizen verwelkt auf den Feldern, die Wurzelfrüchte verkümmern im Boden, und die Preise für alle Grundnahrungsmittel schnellen empor, während sich Bauern und Händler auf eine hungrige Zeit einstellen."
+  },
+  "category": "disaster",
+  "weight": 3,
+  "cooldownSeconds": 21600,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.4,
+    "durationSeconds": 1800,
+    "reversal": "exponential",
+    "reversalSeconds": 4500,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:wheat",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:potato",
+      "weightFactor": 0.9
+    },
+    {
+      "item": "minecraft:carrot",
+      "weightFactor": 0.9
+    },
+    {
+      "item": "minecraft:beetroot",
+      "weightFactor": 0.8
+    }
+  ],
+  "records": {
+    "climate": "drought"
+  },
+  "chains": [
+    {
+      "eventId": "grain_relief_convoy",
+      "on": "completion",
+      "chance": 0.7,
+      "delaySeconds": {
+        "min": 600,
+        "max": 1800
+      }
+    }
+  ]
+}

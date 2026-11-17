@@ -98,6 +98,7 @@ public class NewsSystemTestSuite extends TestSuite {
         // Library
         addTest("library_generates_defaults_on_empty_folder", this::test_library_generatesDefaults);
         addTest("library_default_events_parse_clean", this::test_library_defaultEventsParseClean);
+        addTest("default_events_resources_consistent", this::test_defaultEventsResourcesConsistent);
         addTest("library_drop_in_merges_files", this::test_library_dropIn_mergesFiles);
         addTest("library_duplicate_id_error_later_wins", this::test_library_duplicateId_laterWins);
         addTest("library_malformed_file_never_throws", this::test_library_malformedFile_neverThrows);
@@ -628,6 +629,56 @@ public class NewsSystemTestSuite extends TestSuite {
         } finally {
             deleteRecursively(dir);
         }
+    }
+
+    /**
+     * SM-342: the per-event default resources are consistent. The index loads and has unique
+     * ids, every index id has {@code news/events/<id>.json} whose {@code id} equals the file
+     * name and whose picture is {@code <id>.png} (a baked PNG or the generated placeholder),
+     * the assembled defaults hold exactly the index ids in order, and (when the source folder
+     * is on disk, e.g. dev runs) every file in it is listed in the index.
+     */
+    private TestResult test_defaultEventsResourcesConsistent() {
+        String indexText = DefaultNewsEvents.readResource(
+                DefaultNewsEvents.RESOURCE_DIR + DefaultNewsEvents.INDEX_RESOURCE);
+        if (indexText == null) return fail("news index resource missing");
+        List<String> ids = new ArrayList<>();
+        for (JsonElement el : JsonUtilities.fromString(indexText).getAsJsonArray()) {
+            String id = el.getAsString();
+            if (ids.contains(id)) return fail("duplicate id in news index: " + id);
+            ids.add(id);
+        }
+        if (ids.isEmpty()) return fail("news index is empty");
+        for (String id : ids) {
+            String text = DefaultNewsEvents.readResource(DefaultNewsEvents.RESOURCE_DIR
+                    + DefaultNewsEvents.EVENTS_RESOURCE_DIR + id + ".json");
+            if (text == null) return fail("index id has no event file: " + id);
+            JsonObject event = JsonUtilities.fromString(text).getAsJsonObject();
+            if (!event.has("id") || !id.equals(event.get("id").getAsString())) {
+                return fail("event file " + id + ".json has id " + event.get("id"));
+            }
+            if (event.has("picture") && !(id + ".png").equals(event.get("picture").getAsString())) {
+                return fail("event " + id + " must reference " + id + ".png (baked or placeholder)");
+            }
+        }
+        TestResult r = assertEquals("DEFAULT_EVENT_IDS must equal the index (order included)",
+                ids, DefaultNewsEvents.DEFAULT_EVENT_IDS);
+        if (!r.passed()) return r;
+        for (String rel : List.of("src/main/resources/news/events", "common/src/main/resources/news/events")) {
+            Path dir = Path.of(rel);
+            if (!Files.isDirectory(dir)) continue;
+            try (Stream<Path> files = Files.list(dir)) {
+                for (Path f : (Iterable<Path>) files::iterator) {
+                    String name = f.getFileName().toString();
+                    if (!name.endsWith(".json")) continue;
+                    String id = name.substring(0, name.length() - ".json".length());
+                    if (!ids.contains(id)) return fail("event file not listed in news index: " + name);
+                }
+            } catch (IOException e) {
+                return fail("could not list " + dir + ": " + e);
+            }
+        }
+        return pass(ids.size() + " default event resources consistent");
     }
 
     /** The shipped defaults must be exemplary: zero errors AND zero warnings. */

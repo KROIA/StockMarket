@@ -1,0 +1,29 @@
+{
+  "id": "redstone_breakthrough",
+  "picture": "redstone_breakthrough.png",
+  "headline": {
+    "en_us": "Engineering breakthrough doubles redstone efficiency!",
+    "zh_cn": "工程学突破：红石效率翻倍！",
+    "de_de": "Technischer Durchbruch verdoppelt Redstone-Effizienz!"
+  },
+  "text": {
+    "en_us": "A guild of engineers has published a compact circuit design that halves the redstone needed for common contraptions. Workshops across the land are ordering dust in bulk to retool.",
+    "zh_cn": "一个工程师公会公布了紧凑型电路设计，使常见机械所需的红石减半。各地工坊正大批订购红石粉以改造设备。",
+    "de_de": "Eine Ingenieursgilde hat ein kompaktes Schaltungsdesign veröffentlicht, das den Redstone-Bedarf gängiger Konstruktionen halbiert. Werkstätten im ganzen Land bestellen Staub in großen Mengen für die Umrüstung."
+  },
+  "category": "technology",
+  "weight": 8,
+  "cooldownSeconds": 10800,
+  "announceDelayMs": { "min": 15000, "max": 90000 },
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.3,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 3000
+  },
+  "markets": [
+    { "item": "minecraft:redstone", "weightFactor": 1.0 }
+  ]
+}
