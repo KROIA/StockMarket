@@ -1,0 +1,44 @@
+{
+  "id": "gold_rush_rumor",
+  "picture": "gold_rush_rumor.png",
+  "headline": {
+    "en_us": "Rumors of a massive gold strike sweep the trading floor!",
+    "zh_cn": "巨额金矿传闻席卷交易大厅！",
+    "de_de": "Gerüchte über riesigen Goldfund fegen über das Parkett!"
+  },
+  "text": {
+    "en_us": "Whispers of an enormous gold vein have traders piling into gold. Nobody has actually seen the nugget yet - seasoned brokers warn that rumors like this often collapse as fast as they spread, punishing whoever buys the top.",
+    "zh_cn": "坊间盛传发现巨型金矿，交易者纷纷涌入黄金。然而至今无人真正见过那块金块——资深经纪人警告，此类传闻往往传播得多快、崩塌得就多快，追高者将付出代价。",
+    "de_de": "Geflüster über eine gewaltige Goldader treibt die Händler in den Goldmarkt. Gesehen hat den Fund bisher niemand - erfahrene Makler warnen, dass solche Gerüchte oft so schnell zusammenbrechen, wie sie sich verbreiten, und den Letzten beißen die Hunde."
+  },
+  "category": "rumors",
+  "weight": 6,
+  "cooldownSeconds": 10800,
+  "sequences": [
+    {
+      "name": "pump_and_dump",
+      "weight": 2,
+      "steps": [
+        { "name": "hype",     "durationSeconds": { "min": 450, "max": 1200 }, "targetFactor": 0.4,   "curve": "linear",      "noise": 0.05 },
+        { "name": "peak",     "durationSeconds": { "min": 300, "max": 600 },                        "curve": "hold",        "noise": 0.08 },
+        { "name": "sell_off", "durationSeconds": { "min": 100, "max": 300 },  "targetFactor": -0.15, "curve": "exponential", "noise": 0.04,
+          "markets": [
+            { "item": "minecraft:gold_ingot", "weightFactor": 1.0 },
+            { "item": "minecraft:raw_gold",   "weightFactor": 0.6 }
+          ] },
+        { "name": "recover",  "durationSeconds": 1500, "targetFactor": 0.0, "curve": "linear" }
+      ]
+    },
+    {
+      "name": "fizzle",
+      "weight": 1,
+      "steps": [
+        { "name": "stir",   "durationSeconds": { "min": 300, "max": 600 }, "targetFactor": 0.15, "curve": "linear", "noise": 0.04 },
+        { "name": "denial", "durationSeconds": { "min": 300, "max": 900 }, "targetFactor": 0.0,  "curve": "exponential" }
+      ]
+    }
+  ],
+  "markets": [
+    { "item": "minecraft:gold_ingot", "weightFactor": 1.0 }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "id": "mint_recoinage_reform",
+  "picture": "mint_recoinage_reform.png",
+  "headline": {
+    "en_us": "The mint recoins the realm's currency!",
+    "zh_cn": "铸币厂重铸全国通货！",
+    "de_de": "Die Münze prägt das Reichsgeld neu!"
+  },
+  "text": {
+    "en_us": "By decree of the trade council the royal mint has begun recoining every coin in circulation to a heavier gold-and-iron standard. Every old piece must be melted and struck anew, and the mint's insatiable demand for metal is expected to keep prices structurally elevated for good.",
+    "zh_cn": "依贸易议会法令，皇家铸币厂开始将流通中的每一枚钱币按更重的金铁标准重铸。所有旧币必须熔毁重打，铸币厂对金属的贪求预计将把价格永久性地维持在高位。",
+    "de_de": "Auf Erlass des Handelsrats hat die königliche Münze begonnen, jede umlaufende Münze auf einen schwereren Gold-und-Eisen-Standard umzuprägen. Jedes alte Stück muss eingeschmolzen und neu geschlagen werden, und der unstillbare Metallhunger der Münze dürfte die Preise dauerhaft strukturell erhöht halten."
+  },
+  "category": "politics",
+  "weight": 2,
+  "cooldownSeconds": 86400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.28,
+    "rampUpSeconds": 1500,
+    "durationSeconds": 3000,
+    "reversal": "none"
+  },
+  "markets": [
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:iron_ingot",
+      "weightFactor": 0.6
+    }
+  ],
+  "requires": [
+    {
+      "type": "notFired",
+      "eventId": "mint_recoinage_reform"
+    }
+  ],
+  "records": {
+    "currency": "reformed"
+  }
+}

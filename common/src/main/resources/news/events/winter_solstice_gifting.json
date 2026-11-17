@@ -1,0 +1,34 @@
+{
+  "id": "winter_solstice_gifting",
+  "picture": "winter_solstice_gifting.png",
+  "headline": {
+    "en_us": "Winter solstice gifting season lifts sweets and textiles",
+    "zh_cn": "冬至赠礼季提振甜点与织物",
+    "de_de": "Wintersonnenwende-Schenkzeit beflügelt Süßwaren und Textilien"
+  },
+  "text": {
+    "en_us": "The winter solstice gifting season is in full swing. Bakeries can barely keep cakes and cookies on the shelves, and dyed wool orders are stacking up in every village hall as households prepare gifts and decorations.",
+    "zh_cn": "冬至赠礼季正酣。面包坊的蛋糕与曲奇几乎上不了架，各村庄礼堂堆满了染色羊毛订单，家家户户都在准备礼物与装饰。",
+    "de_de": "Die Schenkzeit zur Wintersonnenwende ist in vollem Gang. Bäckereien bekommen kaum genug Kuchen und Kekse ins Regal, und Bestellungen für gefärbte Wolle stapeln sich in jeder Dorfhalle, während Haushalte Geschenke und Schmuck vorbereiten."
+  },
+  "category": "cultural",
+  "weight": 4,
+  "cooldownSeconds": 43200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.28,
+    "rampUpSeconds": 1050,
+    "durationSeconds": 2700,
+    "reversal": "ramp",
+    "reversalSeconds": 2400,
+    "noise": 0.04
+  },
+  "markets": [
+    { "item": "minecraft:cake",   "weightFactor": 1.0 },
+    { "item": "minecraft:cookie", "weightFactor": 0.8 },
+    { "item": "#minecraft:wool",  "weightFactor": 0.5 }
+  ],
+  "chains": [
+    { "eventId": "post_solstice_slump", "on": "completion", "chance": 0.6, "delaySeconds": { "min": 600, "max": 1800 }, "sameMarkets": true }
+  ]
+}

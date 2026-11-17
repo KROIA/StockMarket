@@ -29,14 +29,13 @@ The setting is **per market**. Select a market icon in the plugin entry of the [
 
 Strength of the random wobble, relative to the equilibrium price. `0` turns the wobble off; the target then sits exactly on the equilibrium.
 
-The random walk is a sum of five slow, mean-reverting random walks. It advances every 0.1 to 1.1 seconds; its fastest part changes over seconds, its slowest part over about half an hour. Measured over long runs, the random value is usually within +-0.15, 90 % of the time within +-0.39 and 99 % of the time within +-0.61. Multiplied by the Volatility Scale this gives:
+The random walk is a sum of four mean-reverting parts with different speeds: one changes over minutes, one over about an hour, one over about 8 hours and one over 2 to 3 days. Most of the movement sits in the slowest part, so the price drifts in up and down trends that can last days, while the change within one hour stays small. The walk follows real time, so it looks the same however often it is updated. The random value is usually within +-0.32, 90 % of the time within +-0.77 and 99 % of the time within +-1.2. Multiplied by the Volatility Scale this gives:
 
-| Volatility Scale | Typical deviation | 90 % of the time within | Practically never beyond |
-|---|---|---|---|
-| 0.1 | +-1.5 % | +-4 % | +-9 % |
-| 0.3 (default) | +-4.4 % | +-12 % | +-26 % |
-| 0.6 | +-9 % | +-23 % | +-53 % |
-| 1.0 | +-15 % | +-39 % | +-88 % |
+| Volatility Scale | Typical deviation | 90 % of the time within | Practically never beyond | Typical change within one hour |
+|---|---|---|---|---|
+| 0.1 | +-3 % | +-8 % | +-14 % | +-1 % |
+| 0.3 (default) | +-10 % | +-23 % | +-42 % | +-2 % |
+| 0.6 | +-19 % | +-46 % | +-85 % | +-5 % |
 
 <p align="center">
   <img src="../../../images/plugins/volatility_scale_random_walk.svg" width="600" alt="Two hours of target price around an equilibrium of 160. The same random walk is shown at Volatility Scale 0.1 (stays within about 150 to 170), 0.3 (about 130 to 190) and 0.6 (about 100 to 220).">
@@ -46,7 +45,7 @@ The random walk is a sum of five slow, mean-reverting random walks. It advances 
 
 - `0.1`-`0.2` for staples that should feel stable (food, building blocks).
 - `0.3` (default) for a lively market.
-- `0.5`-`0.8` for speculative items. Keep it below about `1`: the target is cut off at 0, so very large values can drive the target price to zero in a deep swing.
+- `0.4`-`0.5` for speculative items. Keep it below about `0.6`: the target is cut off at 0, so larger values can drive the target price to zero in a deep swing.
 - The deviation is a percentage, so the same value behaves the same on cheap and expensive items.
 
 ## Generic Settings
