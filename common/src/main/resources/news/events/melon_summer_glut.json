@@ -1,0 +1,36 @@
+{
+  "id": "melon_summer_glut",
+  "picture": "melon_summer_glut.png",
+  "headline": {
+    "en_us": "Bumper summer floods the market with melons",
+    "zh_cn": "盛夏丰收，西瓜淹没市场",
+    "de_de": "Rekordsommer überschwemmt den Markt mit Melonen"
+  },
+  "text": {
+    "en_us": "A long, warm summer has left the melon patches groaning under the weight of the harvest. Carts of fruit arrive at market faster than the stalls can sell them, and with warehouses stuffed to the rafters the price of melons and melon slices is sliding lower by the day.",
+    "zh_cn": "漫长炎热的夏季让瓜田被沉甸甸的收成压弯。运瓜车到市的速度快过摊位卖出的速度，仓库堆至屋梁，西瓜与西瓜片的价格逐日下滑。",
+    "de_de": "Ein langer, warmer Sommer hat die Melonenfelder unter der Last der Ernte ächzen lassen. Wagen um Wagen voller Früchte erreicht den Markt schneller, als die Stände sie verkaufen können, und da die Lager bis unter das Dach gefüllt sind, rutscht der Preis für Melonen und Melonenscheiben von Tag zu Tag tiefer."
+  },
+  "category": "commodities",
+  "weight": 6,
+  "cooldownSeconds": 21600,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.22,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2700,
+    "reversal": "ramp",
+    "reversalSeconds": 2400,
+    "noise": 0.03
+  },
+  "markets": [
+    {
+      "item": "minecraft:melon_slice",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:melon",
+      "weightFactor": 0.7
+    }
+  ]
+}

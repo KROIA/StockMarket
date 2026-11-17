@@ -1,0 +1,38 @@
+{
+  "id": "metals_export_embargo",
+  "picture": "metals_export_embargo.png",
+  "headline": {
+    "en_us": "Trade council embargoes all foreign metals!",
+    "zh_cn": "贸易议会禁运所有外国金属！",
+    "de_de": "Handelsrat verhängt Embargo auf alle ausländischen Metalle!"
+  },
+  "text": {
+    "en_us": "In a bid to protect the home foundries the trade council has slammed an embargo on every foreign metal crossing the border. With cheap imports cut off, domestic iron, copper and gold lose their foreign competition - analysts expect home prices to settle permanently higher.",
+    "zh_cn": "为保护本土铸造业，贸易议会已对所有跨境的外国金属实施禁运。廉价进口被切断，本国铁、铜与金失去外来竞争——分析师预计国内价格将永久性走高。",
+    "de_de": "Um die heimischen Gießereien zu schützen, hat der Handelsrat ein Embargo auf jedes ausländische Metall verhängt, das die Grenze überquert. Da die billigen Einfuhren wegfallen, verlieren heimisches Eisen, Kupfer und Gold ihre ausländische Konkurrenz - Analysten erwarten dauerhaft höhere Inlandspreise."
+  },
+  "category": "politics",
+  "weight": 2,
+  "cooldownSeconds": 86400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.24,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 2700,
+    "reversal": "none"
+  },
+  "markets": [
+    {
+      "item": "minecraft:iron_ingot",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:copper_ingot",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 0.6
+    }
+  ]
+}

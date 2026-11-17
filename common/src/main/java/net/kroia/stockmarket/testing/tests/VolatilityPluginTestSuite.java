@@ -38,6 +38,7 @@ public class VolatilityPluginTestSuite extends TestSuite {
         addTest("codec_round_trip_and_legacy", this::test_codec);
         addTest("nbt_round_trip", this::test_nbt);
         addTest("walks_around_published_equilibrium", this::test_equilibrium);
+        addTest("seeded_walk_on_simulated_clock", this::test_seededClock);
     }
 
     /** One float round-trips; pre-T-213 payloads (scale + flow fields) decode their scale and are fully consumed. */
@@ -86,5 +87,39 @@ public class VolatilityPluginTestSuite extends TestSuite {
         market.setEquilibriumPrice(123.25);
         plugin.update(markets);
         return assertEquals("target = published equilibrium", 123.25, market.targetPrice);
+    }
+
+    /**
+     * SM-337: with the SM-336 hooks (seed + simulated clock) two plugins replay the same walk, and the walk moves
+     * the target away from the equilibrium over simulated hours (time-stepped, not step-count driven).
+     */
+    private TestResult test_seededClock() {
+        ItemID id = new ItemID((short) 1);
+        long[] clock = {1};
+        try {
+            VolatilityPlugin.test_setSeed(99L);
+            VolatilityPlugin.test_setClock(() -> clock[0]);
+            NewsPluginTestSuite.TestMarket ma = new NewsPluginTestSuite.TestMarket(id, DEFAULT_PRICE);
+            NewsPluginTestSuite.TestMarket mb = new NewsPluginTestSuite.TestMarket(id, DEFAULT_PRICE);
+            VolatilityPlugin a = new VolatilityPlugin();
+            VolatilityPlugin b = new VolatilityPlugin();
+            a.onMarketSubscribed(id);
+            b.onMarketSubscribed(id);
+            List<MarketInterface> la = List.of(new MarketInterface(ma, null));
+            List<MarketInterface> lb = List.of(new MarketInterface(mb, null));
+            double maxDev = 0;
+            for (int t = 0; t < 6 * 72_000; t++) { // 6 simulated hours at 20 TPS
+                clock[0] += 50;
+                a.update(la);
+                b.update(lb);
+                if (ma.targetPrice != mb.targetPrice)
+                    return fail("seeded walks diverged at tick " + t + ": " + ma.targetPrice + " vs " + mb.targetPrice);
+                maxDev = Math.max(maxDev, Math.abs(ma.targetPrice / DEFAULT_PRICE - 1));
+            }
+            return assertTrue("walk moved the target within 6 h (max deviation " + maxDev + ")", maxDev > 0.005);
+        } finally {
+            VolatilityPlugin.test_setSeed(null);
+            VolatilityPlugin.test_setClock(null);
+        }
     }
 }

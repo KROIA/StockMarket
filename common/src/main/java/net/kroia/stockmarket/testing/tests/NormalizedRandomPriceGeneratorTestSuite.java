@@ -1,7 +1,5 @@
 package net.kroia.stockmarket.testing.tests;
 
-import net.kroia.modutilities.NbtCompat;
-
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -9,9 +7,13 @@ import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.NormalizedRandomPriceGenerator;
 import net.minecraft.nbt.CompoundTag;
 
+import java.util.Random;
+
+/** SM-337: tests of the time-stepped multi-component noise {@link NormalizedRandomPriceGenerator}. */
 public class NormalizedRandomPriceGeneratorTestSuite extends TestSuite {
 
     private static final double EPSILON = 0.0001;
+    private static final long HOUR_MS = 3_600_000L;
 
     @Override
     public TestCategory getCategory() {
@@ -25,150 +27,96 @@ public class NormalizedRandomPriceGeneratorTestSuite extends TestSuite {
 
     @Override
     public void registerTests() {
-        addTest("constructor_zero_order_becomes_one", this::test_constructor_zeroOrder_becomesOne);
-        addTest("coefficients_normalized_correctly", this::test_coefficients_normalizedCorrectly);
-        addTest("get_next_value_updates_counter", this::test_getNextValue_updatesCounter);
-        addTest("get_next_value_selective_walk_update", this::test_getNextValue_selectiveWalkUpdate);
+        addTest("fresh_generator_starts_at_zero", this::test_freshAtZero);
+        addTest("seeded_is_deterministic", this::test_seededDeterministic);
+        addTest("slow_trends_low_hourly_noise", this::test_slowTrends);
         addTest("save_load_round_trip", this::test_save_load_roundTrip);
-        addTest("load_invalid_order", this::test_load_invalidOrder);
+        addTest("load_pre_sm337_save_starts_fresh", this::test_loadOldFormat);
     }
 
-    /**
-     * Order <= 0 is clamped to 1. The generator should still function.
-     */
-    private TestResult test_constructor_zeroOrder_becomesOne() {
-        try {
-            NormalizedRandomPriceGenerator gen = new NormalizedRandomPriceGenerator(0);
-            // Should not throw, and should produce values
-            double val = gen.getNextValue();
-            // Just verify it runs without error
-            return pass("Constructor with order=0 successfully clamped to 1");
-        } catch (Exception e) {
-            return fail("Constructor with order=0 threw: " + e.getMessage());
+    private TestResult test_freshAtZero() {
+        return assertEquals("fresh value", 0.0, new NormalizedRandomPriceGenerator().getCurrentValue());
+    }
+
+    /** Same seed source, same steps -> same values. */
+    private TestResult test_seededDeterministic() {
+        NormalizedRandomPriceGenerator a = new NormalizedRandomPriceGenerator(new Random(7));
+        NormalizedRandomPriceGenerator b = new NormalizedRandomPriceGenerator(new Random(7));
+        for (int i = 0; i < 1000; i++) {
+            long dt = 100 + (i * 37L) % 1001;
+            if (a.step(dt) != b.step(dt)) return fail("diverged at step " + i);
         }
+        return pass("seeded generators match");
     }
 
     /**
-     * Sum of weighted coefficients matches expected normalization.
-     * After normalization: sum of coefficients[i] * 1 for each walk should produce
-     * values that are scaled appropriately.
+     * 30 simulated days at 600 ms steps: the level spread is large (slow components, theory ~0.47 noise)
+     * and the hourly change small (theory ~0.11 noise), i.e. trends rather than jitter.
      */
-    private TestResult test_coefficients_normalizedCorrectly() {
-        NormalizedRandomPriceGenerator gen = new NormalizedRandomPriceGenerator(5);
-        // Save to NBT to inspect coefficients
-        CompoundTag tag = new CompoundTag();
-        gen.save(tag);
-
-        int order = NbtCompat.getInt(tag, "order");
-        TestResult r = assertEquals("Order should be 5", 5, order);
+    private TestResult test_slowTrends() {
+        NormalizedRandomPriceGenerator gen = new NormalizedRandomPriceGenerator(new Random(1234));
+        int hours = 30 * 24;
+        long stepsPerHour = HOUR_MS / 600;
+        double[] level = new double[hours + 1];
+        for (int h = 1; h <= hours; h++) {
+            for (long s = 0; s < stepsPerHour; s++) gen.step(600);
+            level[h] = gen.getCurrentValue();
+        }
+        double sum = 0, sumSq = 0, chSq = 0;
+        for (int h = 1; h <= hours; h++) {
+            sum += level[h];
+            sumSq += level[h] * level[h];
+            double ch = level[h] - level[h - 1];
+            chSq += ch * ch;
+        }
+        double mean = sum / hours;
+        double levelStd = Math.sqrt(sumSq / hours - mean * mean);
+        double hourlyStd = Math.sqrt(chSq / hours);
+        String msg = String.format(java.util.Locale.ROOT, "level std %.3f, hourly change std %.3f", levelStd, hourlyStd);
+        TestResult r = assertTrue("level std in [0.2, 0.8]: " + msg, levelStd > 0.2 && levelStd < 0.8);
         if (!r.passed()) return r;
-
-        // Verify all coefficients are present
-        double sumCoeffs = 0;
-        for (int i = 0; i < order; i++) {
-            double coeff = NbtCompat.getDouble(tag, "coefficient_" + i);
-            sumCoeffs += coeff;
-        }
-        // The normalization formula: coefficients[i] = (i+1) * order / sum(1..order)
-        // Sum of normalized coefficients = sum((i+1)*order/sum) = order * sum / sum = order
-        // So total sum should equal 'order'
-        return assertTrue("Sum of coefficients should equal order (5), got: " + sumCoeffs,
-                Math.abs(sumCoeffs - 5.0) < EPSILON);
-    }
-
-    /**
-     * Counter increments each call to getNextValue().
-     */
-    private TestResult test_getNextValue_updatesCounter() {
-        NormalizedRandomPriceGenerator gen = new NormalizedRandomPriceGenerator(3);
-
-        // Call getNextValue several times
-        for (int i = 0; i < 10; i++) {
-            gen.getNextValue();
-        }
-
-        // Save and check counter
-        CompoundTag tag = new CompoundTag();
-        gen.save(tag);
-        long counter = NbtCompat.getLong(tag, "counter");
-        return assertEquals("Counter should be 10 after 10 calls", 10L, counter);
-    }
-
-    /**
-     * Not all walks update every tick due to modulo logic.
-     * Walk i updates when counter % (10*i*i + 1) == 0.
-     * Walk 0: updates every tick (10*0*0+1 = 1)
-     * Walk 1: updates every 11th tick (10*1*1+1 = 11)
-     * Walk 2: updates every 41st tick (10*2*2+1 = 41)
-     */
-    private TestResult test_getNextValue_selectiveWalkUpdate() {
-        NormalizedRandomPriceGenerator gen = new NormalizedRandomPriceGenerator(3);
-
-        // After 1 call, counter=1, walk 0 always updates, walk 1 updates at counter%11==0
-        gen.getNextValue(); // counter becomes 1
-
-        // Save state after 1 tick
-        CompoundTag tag1 = new CompoundTag();
-        gen.save(tag1);
-
-        // Walk 0 should have been updated (counter=1, 1%1==0)
-        CompoundTag walk0 = NbtCompat.getCompound(tag1, "walk_0");
-        double walk0Value = NbtCompat.getDouble(walk0, "currentValue");
-        // Walk 0 should have a non-zero value after 1 update (statistically very likely)
-        // But walk 1 might not have updated yet, or it updated at counter=1 since 1%11!=0
-        // Actually at counter=1: 1 % (10*1*1+1) = 1 % 11 = 1 != 0, so walk 1 does NOT update
-
-        // The important thing is that the generator runs without error and counter advances
-        long counter = NbtCompat.getLong(tag1, "counter");
-        TestResult r = assertEquals("Counter should be 1", 1L, counter);
+        r = assertTrue("hourly change std in [0.06, 0.2]: " + msg, hourlyStd > 0.06 && hourlyStd < 0.2);
         if (!r.passed()) return r;
-
-        return pass("Selective walk update follows modulo logic without errors");
+        return assertTrue("hourly change well below the level spread: " + msg, hourlyStd < 0.5 * levelStd);
     }
 
-    /**
-     * Full state preserved through save/load.
-     */
+    /** Full state preserved through save/load. */
     private TestResult test_save_load_roundTrip() {
-        NormalizedRandomPriceGenerator original = new NormalizedRandomPriceGenerator(4);
-        // Generate some values to build state
-        for (int i = 0; i < 100; i++) {
-            original.getNextValue();
-        }
+        NormalizedRandomPriceGenerator original = new NormalizedRandomPriceGenerator();
+        for (int i = 0; i < 100; i++) original.step(60_000);
         double savedValue = original.getCurrentValue();
 
         CompoundTag tag = new CompoundTag();
         original.save(tag);
 
-        NormalizedRandomPriceGenerator loaded = new NormalizedRandomPriceGenerator(1); // will be overwritten by load
-        boolean loadResult = loaded.load(tag);
-        TestResult r = assertTrue("load() should return true", loadResult);
+        NormalizedRandomPriceGenerator loaded = new NormalizedRandomPriceGenerator();
+        TestResult r = assertTrue("load() should return true", loaded.load(tag));
         if (!r.passed()) return r;
-
-        r = assertTrue("currentValue should match after load, expected: " + savedValue + " got: " + loaded.getCurrentValue(),
+        return assertTrue("currentValue should match after load, expected: " + savedValue + " got: " + loaded.getCurrentValue(),
                 Math.abs(loaded.getCurrentValue() - savedValue) < EPSILON);
-        if (!r.passed()) return r;
-
-        // Verify counter was preserved
-        CompoundTag checkTag = new CompoundTag();
-        loaded.save(checkTag);
-        r = assertEquals("Counter should be 100 after load", 100L, NbtCompat.getLong(checkTag, "counter"));
-        if (!r.passed()) return r;
-
-        return pass("Save/load round-trip preserves full state");
     }
 
-    /**
-     * Order <= 0 in saved data returns false on load.
-     */
-    private TestResult test_load_invalidOrder() {
+    /** A pre-SM-337 save (order, walk_i, coefficient_i, counter) loads without error and starts at 0. */
+    private TestResult test_loadOldFormat() {
         CompoundTag tag = new CompoundTag();
-        tag.putInt("order", 0); // Invalid: order <= 0
-        tag.putLong("counter", 5);
-        tag.putDouble("currentValue", 1.0);
+        tag.putInt("order", 5);
+        for (int i = 0; i < 5; i++) {
+            CompoundTag walk = new CompoundTag();
+            walk.putDouble("currentValue", 0.7);
+            walk.putDouble("stepSize", 0.05);
+            walk.putDouble("meanReversionStrength", 0.05);
+            tag.put("walk_" + i, walk);
+            tag.putDouble("coefficient_" + i, (i + 1) / 3.0);
+        }
+        tag.putLong("counter", 12345);
+        tag.putDouble("currentValue", 1.5);
 
-        NormalizedRandomPriceGenerator gen = new NormalizedRandomPriceGenerator(1);
-        boolean loaded = gen.load(tag);
-        return assertFalse("load() should return false for order <= 0", loaded);
+        NormalizedRandomPriceGenerator gen = new NormalizedRandomPriceGenerator();
+        TestResult r = assertTrue("old save loads", gen.load(tag));
+        if (!r.passed()) return r;
+        r = assertEquals("old save starts fresh", 0.0, gen.getCurrentValue());
+        if (!r.passed()) return r;
+        gen.step(1000);
+        return assertTrue("steps after loading an old save", Double.isFinite(gen.getCurrentValue()));
     }
 }

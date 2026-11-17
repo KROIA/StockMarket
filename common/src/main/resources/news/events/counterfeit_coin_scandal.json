@@ -1,0 +1,32 @@
+{
+  "id": "counterfeit_coin_scandal",
+  "picture": "counterfeit_coin_scandal.png",
+  "headline": {
+    "en_us": "Counterfeit gold coin floods the market - trust collapses!",
+    "zh_cn": "假金币涌入市场——信任崩塌！",
+    "de_de": "Gefälschte Goldmünzen überschwemmen den Markt - das Vertrauen bricht ein!"
+  },
+  "text": {
+    "en_us": "A smuggling ring has flooded the realm with expertly forged gold coin, and no one can tell true metal from lead-cored fakes. Assayers are refusing gold at the counter until every hoard is tested, and the panic to dump suspect coin has sent the gold market into free fall.",
+    "zh_cn": "一个走私团伙把工艺精湛的伪金币灌入境内，无人能分辨真金与铅芯假货。验金师在逐批检验之前拒收黄金，恐慌性抛售可疑钱币令黄金市场直线坠落。",
+    "de_de": "Ein Schmugglerring hat das Reich mit meisterhaft gefälschten Goldmünzen überschwemmt, und niemand kann echtes Metall von bleigefüllten Fälschungen unterscheiden. Prüfmeister verweigern Gold am Tresen, bis jeder Hort geprüft ist, und die Panik, verdächtige Münzen abzustoßen, hat den Goldmarkt in den freien Fall gestürzt."
+  },
+  "category": "crime",
+  "weight": 3,
+  "cooldownSeconds": 21600,
+  "adminOnly": true,
+  "impact": {
+    "type": "crash",
+    "peakFactor": -0.42,
+    "durationSeconds": 900,
+    "reversal": "exponential",
+    "reversalSeconds": 5000,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 1.0
+    }
+  ]
+}

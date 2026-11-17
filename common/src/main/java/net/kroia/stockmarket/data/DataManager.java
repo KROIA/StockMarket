@@ -200,6 +200,11 @@ public class DataManager extends DataPersistence {
             return false;
         }
         Path absPath = getAbsoluteSavePath(MARKET_MANAGER_FOLDER);
+        // SM-332: a new world has no save folder yet; that is not an error, start with no markets
+        if(!folderExists(absPath)) {
+            info("No saved StockMarket data yet, starting fresh.");
+            return true;
+        }
         Map<String, ListTag> dataListMap = readDataCompoundListMap(absPath);
         return marketManager.load(dataListMap);
     }
@@ -241,6 +246,10 @@ public class DataManager extends DataPersistence {
             return false;
         }
         Path absPath = getAbsoluteSavePath(PLUGIN_MANAGER_FOLDER);
+        // SM-332: no save folder yet -> skip the read (it would log a false ERROR), but still call
+        // load with an empty map, because that is what creates the default plugins (loadDefaults)
+        if(!folderExists(absPath))
+            return pluginManager.load(new HashMap<>());
         Map<String, ListTag> dataListMap = readDataCompoundListMap(absPath);
         return pluginManager.load(dataListMap);
     }

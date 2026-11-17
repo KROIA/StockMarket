@@ -1,0 +1,27 @@
+{
+  "id": "emerald_counterfeit_scandal",
+  "picture": "emerald_counterfeit_scandal.png",
+  "headline": {
+    "en_us": "Counterfeit emeralds flood the market!",
+    "zh_cn": "假绿宝石充斥市场！",
+    "de_de": "Gefälschte Smaragde überschwemmen den Markt!"
+  },
+  "text": {
+    "en_us": "Inspectors have uncovered a large-scale counterfeiting ring. Confidence in emerald certificates has collapsed and villagers are refusing payment in gems until audits conclude.",
+    "zh_cn": "稽查人员破获一个大规模造假团伙。绿宝石鉴定证书的信誉已然崩塌，在审计结束之前，村民拒绝以宝石支付。",
+    "de_de": "Inspektoren haben einen groß angelegten Fälscherring aufgedeckt. Das Vertrauen in Smaragdzertifikate ist eingebrochen, und Dorfbewohner verweigern Edelstein-Zahlungen, bis die Prüfungen abgeschlossen sind."
+  },
+  "category": "crime",
+  "weight": 5,
+  "cooldownSeconds": 14400,
+  "adminOnly": true,
+  "impact": {
+    "type": "crash",
+    "peakFactor": -0.4,
+    "reversalSeconds": 4500
+  },
+  "markets": [
+    { "item": "minecraft:emerald",       "weightFactor": 1.0 },
+    { "item": "minecraft:emerald_block", "weightFactor": 1.0 }
+  ]
+}

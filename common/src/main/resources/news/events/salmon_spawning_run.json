@@ -1,0 +1,36 @@
+{
+  "id": "salmon_spawning_run",
+  "picture": "salmon_spawning_run.png",
+  "headline": {
+    "en_us": "Great salmon run fills the nets",
+    "zh_cn": "鲑鱼大洄游装满渔网",
+    "de_de": "Großer Lachszug füllt die Netze"
+  },
+  "text": {
+    "en_us": "The rivers are thick with the seasonal salmon run, and the fishing fleets are hauling in more than the smokehouses can cure. Barrels of fresh and cooked salmon are stacking up on every quay, and prices are sliding as the catch outpaces demand. Old hands know the glut lasts only as long as the fish keep running.",
+    "zh_cn": "河中鲑鱼成群，正值洄游季，渔船捕获量已超出熏制作坊的处理能力。各码头堆满鲜鲑鱼与熟鲑鱼的木桶，捕捞速度超过需求，价格随之下滑。老手都清楚，这波过剩只能持续到鱼群停止洄游为止。",
+    "de_de": "Die Flüsse sind dicht vom jahreszeitlichen Lachszug, und die Fischerflotten holen mehr ein, als die Räuchereien pökeln können. Fässer mit frischem und gebratenem Lachs stapeln sich an jedem Kai, und die Preise rutschen, da der Fang die Nachfrage übertrifft. Alte Hasen wissen, dass die Schwemme nur so lange anhält, wie die Fische ziehen."
+  },
+  "category": "commodities",
+  "weight": 6,
+  "cooldownSeconds": 5400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.25,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2700,
+    "reversal": "ramp",
+    "reversalSeconds": 2400,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:salmon",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:cooked_salmon",
+      "weightFactor": 0.6
+    }
+  ]
+}

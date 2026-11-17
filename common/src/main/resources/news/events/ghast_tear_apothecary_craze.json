@@ -1,0 +1,31 @@
+{
+  "id": "ghast_tear_apothecary_craze",
+  "picture": "ghast_tear_apothecary_craze.png",
+  "headline": {
+    "en_us": "Apothecaries bid up ghast tears for healing tonics!",
+    "zh_cn": "药剂师为治疗药剂哄抬恶魂之泪！",
+    "de_de": "Apotheker treiben die Preise für Ghast-Tränen für Heiltränke hoch!"
+  },
+  "text": {
+    "en_us": "A sudden craze for regeneration tonics has the apothecaries' guild bidding furiously on every ghast tear that reaches the market. Brave delvers who face the wailing beasts of the Nether are being paid a king's ransom, and prices have spiked overnight.",
+    "zh_cn": "一股对生命恢复药剂的骤然热捧，让药剂师公会对每一滴上市恶魂之泪疯狂竞价。敢于直面下界哀嚎恶兽的勇士获得国王级的报酬，价格一夜暴涨。",
+    "de_de": "Ein plötzlicher Rausch um Regenerationstränke lässt die Apothekergilde erbittert um jede Ghast-Träne bieten, die den Markt erreicht. Mutige Delver, die sich den heulenden Bestien des Nethers stellen, werden fürstlich entlohnt, und die Preise sind über Nacht in die Höhe geschossen."
+  },
+  "category": "commodities",
+  "weight": 4,
+  "cooldownSeconds": 14400,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.4,
+    "durationSeconds": 1500,
+    "reversal": "exponential",
+    "reversalSeconds": 3600,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:ghast_tear",
+      "weightFactor": 1.0
+    }
+  ]
+}
