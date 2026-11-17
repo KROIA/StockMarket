@@ -1,0 +1,31 @@
+{
+  "id": "volcanic_eruption",
+  "picture": "volcanic_eruption.png",
+  "headline": {
+    "en_us": "Volcano erupts - villages fortify against ashfall!",
+    "zh_cn": "火山喷发——村庄加固以抵御火山灰！",
+    "de_de": "Vulkan bricht aus - Dörfer verschanzen sich gegen den Ascheregen!"
+  },
+  "text": {
+    "en_us": "A dormant volcano roared back to life overnight, blanketing the eastern reaches in ash. Villages are ordering obsidian, basalt and blackstone in bulk to reinforce shelters and dampen embers - defensive-stone traders have never seen a rush like this.",
+    "zh_cn": "一座休眠火山一夜之间复苏，东部边陲被火山灰覆盖。村庄大批订购黑曜石、玄武岩与黑石以加固掩体、阻隔余烬——防护石料商人从未见过如此抢购。",
+    "de_de": "Ein schlafender Vulkan ist über Nacht wieder erwacht und hat den Osten unter einer Ascheschicht begraben. Dörfer bestellen Obsidian, Basalt und Blackstone in großen Mengen, um Unterstände zu verstärken und Glutnester zu ersticken - Händler mit Verteidigungsgestein haben so einen Ansturm noch nie erlebt."
+  },
+  "category": "disaster",
+  "weight": 2,
+  "cooldownSeconds": 21600,
+  "adminOnly": true,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.48,
+    "durationSeconds": 2100,
+    "reversal": "exponential",
+    "reversalSeconds": 6000,
+    "noise": 0.06
+  },
+  "markets": [
+    { "item": "minecraft:obsidian",   "weightFactor": 1.0 },
+    { "item": "minecraft:basalt",     "weightFactor": 0.8 },
+    { "item": "minecraft:blackstone", "weightFactor": 0.7 }
+  ]
+}

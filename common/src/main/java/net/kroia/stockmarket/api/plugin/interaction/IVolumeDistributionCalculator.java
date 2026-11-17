@@ -20,4 +20,17 @@ public interface IVolumeDistributionCalculator {
      */
     float getVolume(double marketPrice, double volumePickPrice);
 
+    /**
+     * SM-340: the static depth profile only, without terms that react to the market's recent history (e.g. the
+     * slow-average wall of the default volume distribution plugin). Used where the book's normal shape is
+     * measured ({@link IPluginOrderBook#getDefaultRealVolumeAround}, the NetFlowPlugin's depth calibration).
+     *
+     * @param marketPrice     the price the distribution is centred on, see {@link #getVolume}
+     * @param volumePickPrice the price on which the volume gets measured
+     * @return the static volume at the pick price (default: {@link #getVolume})
+     */
+    default float getStaticVolume(double marketPrice, double volumePickPrice) {
+        return getVolume(marketPrice, volumePickPrice);
+    }
+
 }

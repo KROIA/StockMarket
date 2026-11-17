@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, TargetPriceBot.RuntimeStreamData> {
 
@@ -44,10 +45,43 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
      *                             negative = 0
      * @param oscillationAmplitude T-208: initial swing towards the target as a fraction of the spike's
      *                             excess over the target (0 = no swing); negative = 0
+     * @param availableVolumeLevels SM-334: price levels of the bot's "available volume", counted from the first
+     *                             level with volume in its direction (see
+     *                             {@link IPluginOrderBook#getRealVirtualAvailableVolume}). One bot order takes at most
+     *                             a share of it, so one step moves the price at most through an empty stretch plus
+     *                             this many levels. &lt;= 0 = {@link #DEFAULT_AVAILABLE_VOLUME_LEVELS}
+     * @param maxRampFraction      SM-334: share of the available volume one bot order may take once fully ramped
+     *                             (2 = 200%). Above 1 the order walks past the measured levels into the unmeasured
+     *                             book; the volume-to-target and order limit caps still apply. &lt;= 0 or not finite =
+     *                             {@link #DEFAULT_MAX_RAMP_FRACTION}
      */
     public record Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
                            float maxTargetMovePerSecond, float reversionTimeSeconds, float oscillationPeriodSeconds,
-                           float oscillationDamping, float oscillationAmplitude) {
+                           float oscillationDamping, float oscillationAmplitude, int availableVolumeLevels,
+                           float maxRampFraction) {
+        /** SM-334: invalid values (level count &lt;= 0, ramp fraction &lt;= 0 or not finite) become their defaults. */
+        public Settings {
+            if (availableVolumeLevels <= 0) availableVolumeLevels = DEFAULT_AVAILABLE_VOLUME_LEVELS;
+            if (!(maxRampFraction > 0) || Float.isInfinite(maxRampFraction)) maxRampFraction = DEFAULT_MAX_RAMP_FRACTION;
+        }
+
+        /** Settings with the SM-334 max ramp fraction at its default. */
+        public Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
+                        float maxTargetMovePerSecond, float reversionTimeSeconds, float oscillationPeriodSeconds,
+                        float oscillationDamping, float oscillationAmplitude, int availableVolumeLevels) {
+            this(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond, reversionTimeSeconds,
+                    oscillationPeriodSeconds, oscillationDamping, oscillationAmplitude, availableVolumeLevels,
+                    DEFAULT_MAX_RAMP_FRACTION);
+        }
+
+        /** Settings with the SM-334 available volume levels and max ramp fraction at their defaults. */
+        public Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
+                        float maxTargetMovePerSecond, float reversionTimeSeconds, float oscillationPeriodSeconds,
+                        float oscillationDamping, float oscillationAmplitude) {
+            this(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond, reversionTimeSeconds,
+                    oscillationPeriodSeconds, oscillationDamping, oscillationAmplitude, DEFAULT_AVAILABLE_VOLUME_LEVELS);
+        }
+
         /** Settings with the T-208 reference model at its defaults. */
         public Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
                         float maxTargetMovePerSecond) {
@@ -64,7 +98,21 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         /** @return a copy with the given T-208 reference model parameters */
         public Settings withReference(float reversionTime, float period, float damping, float amplitude) {
             return new Settings(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond,
-                    reversionTime, period, damping, amplitude);
+                    reversionTime, period, damping, amplitude, availableVolumeLevels, maxRampFraction);
+        }
+
+        /** @return a copy with the given SM-334 available volume levels (&lt;= 0 = default) */
+        public Settings withAvailableVolumeLevels(int levels) {
+            return new Settings(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond,
+                    reversionTimeSeconds, oscillationPeriodSeconds, oscillationDamping, oscillationAmplitude, levels,
+                    maxRampFraction);
+        }
+
+        /** @return a copy with the given SM-334 max ramp fraction (&lt;= 0 = default) */
+        public Settings withMaxRampFraction(float fraction) {
+            return new Settings(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond,
+                    reversionTimeSeconds, oscillationPeriodSeconds, oscillationDamping, oscillationAmplitude,
+                    availableVolumeLevels, fraction);
         }
 
         public static final StreamCodec<ByteBuf, Settings> CODEC = new StreamCodec<>() {
@@ -85,7 +133,11 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                 float period = buf.isReadable() ? buf.readFloat() : DEFAULT_OSCILLATION_PERIOD_SECONDS;
                 float damping = buf.isReadable() ? buf.readFloat() : DEFAULT_OSCILLATION_DAMPING;
                 float amplitude = buf.isReadable() ? buf.readFloat() : DEFAULT_OSCILLATION_AMPLITUDE;
-                return new Settings(p, i, d, rate, factor, maxMove, reversion, period, damping, amplitude);
+                // SM-334 available volume levels, appended after the reference model.
+                int levels = buf.isReadable() ? buf.readInt() : DEFAULT_AVAILABLE_VOLUME_LEVELS;
+                // SM-334 max ramp fraction, appended after the level count.
+                float maxRamp = buf.isReadable() ? buf.readFloat() : DEFAULT_MAX_RAMP_FRACTION;
+                return new Settings(p, i, d, rate, factor, maxMove, reversion, period, damping, amplitude, levels, maxRamp);
             }
             @Override
             public void encode(ByteBuf buf, Settings s) {
@@ -99,6 +151,8 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                 buf.writeFloat(s.oscillationPeriodSeconds());
                 buf.writeFloat(s.oscillationDamping());
                 buf.writeFloat(s.oscillationAmplitude());
+                buf.writeInt(s.availableVolumeLevels());
+                buf.writeFloat(s.maxRampFraction());
             }
         };
     }
@@ -146,6 +200,18 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
          * yet. Limits the gap guard to {@link #GAP_GUARD_MAX_BLOCK_SECONDS} after a fill.
          */
         int stepsSinceFill = Integer.MAX_VALUE;
+        /**
+         * SM-334: gap guard pause after the last player fill, in seconds, re-rolled on every fill from
+         * [{@link #GAP_GUARD_MIN_BLOCK_SECONDS}, {@link #GAP_GUARD_MAX_BLOCK_SECONDS}] so the bot's timing isn't predictable.
+         */
+        double guardBlockSeconds = (GAP_GUARD_MIN_BLOCK_SECONDS + GAP_GUARD_MAX_BLOCK_SECONDS) / 2;
+        /**
+         * SM-334: bot steps the bot was allowed to trade since the last player fill (drives {@link #rampFraction}).
+         * {@link Integer#MAX_VALUE} = fully ramped (no fill seen yet).
+         */
+        int rampSteps = Integer.MAX_VALUE;
+        /** SM-334: rolls {@link #guardBlockSeconds}; seeded by {@link #test_setGapGuardSeed} in tests. */
+        final Random rng = guardSeed != null ? new Random(guardSeed) : new Random();
         float pidP, pidI, pidD, pidRate;
 
         RuntimeData(float p, float i, float d, float rate) {
@@ -410,8 +476,68 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
      * to refill that job is done. Without the limit, steady player buying (one order every 30 s) kept the
      * window below the minimum fill for good, so the bot never traded and the price ignored the plugins'
      * equilibrium. Each new fill restarts the window.
+     * <p>
+     * SM-334: the pause is rolled per fill, uniformly from [{@link #GAP_GUARD_MIN_BLOCK_SECONDS}, this] (mean 60 s,
+     * as before), so a player can't time a trade to the moment the bot wakes up.
      */
-    public static final double GAP_GUARD_MAX_BLOCK_SECONDS = 60;
+    public static final double GAP_GUARD_MAX_BLOCK_SECONDS = 75;
+    /** SM-334: shortest gap guard pause after a player fill, see {@link #GAP_GUARD_MAX_BLOCK_SECONDS}. */
+    public static final double GAP_GUARD_MIN_BLOCK_SECONDS = 45;
+
+    /** SM-334: test seed of the pause rolls, null = random. Read when a market's bot data is created. */
+    private static Long guardSeed = null;
+
+    /**
+     * Test hook (SM-334): seeds the gap guard pause rolls of every bot market subscribed afterwards, so tests stay
+     * deterministic.
+     *
+     * @param seed the seed, or null for unseeded (production) rolls
+     */
+    public static void test_setGapGuardSeed(Long seed) { guardSeed = seed; }
+
+    /**
+     * Test hook (SM-334): the gap guard pause rolled at the last player fill on {@code marketID}.
+     *
+     * @return the pause in seconds, NaN if not subscribed
+     */
+    public double test_getGapGuardBlockSeconds(ItemID marketID) {
+        RuntimeData data = marketData.get(marketID);
+        return data == null ? Double.NaN : data.guardBlockSeconds;
+    }
+
+    /**
+     * SM-334: default of {@link Settings#availableVolumeLevels}: price levels the bot's "available volume" spans,
+     * from the first level with volume in its direction (empty levels before it are skipped), that level and the
+     * next ones. One bot order never takes more than this volume.
+     */
+    public static final int DEFAULT_AVAILABLE_VOLUME_LEVELS = 50;
+    /** SM-334: share of the available volume the bot's first order after a player push may take. */
+    public static final double RAMP_START_FRACTION = 0.02;
+    /**
+     * SM-334: seconds of trading after a player push until the bot may take its full share
+     * ({@link Settings#maxRampFraction}) of the available volume per step. The share grows linearly in between, so
+     * the price starts to slide slowly and then faster.
+     */
+    public static final double RAMP_SECONDS = 180;
+    /**
+     * SM-334: default of {@link Settings#maxRampFraction}: once fully ramped one order may take 200% of the measured
+     * available volume. The bot measures only a few levels so the scan stays cheap, but can still order more.
+     */
+    public static final float DEFAULT_MAX_RAMP_FRACTION = 2f;
+
+    /**
+     * SM-334: share of the available volume the bot may take after {@code steps} trading steps since the last
+     * player fill: linear from {@link #RAMP_START_FRACTION} to {@code max} over {@link #RAMP_SECONDS}.
+     *
+     * @param steps bot steps past the gap guard since the last fill; {@link Integer#MAX_VALUE} = no fill seen
+     * @param max   the share once fully ramped ({@link Settings#maxRampFraction}); below the start share it is used
+     *              from the first step
+     * @return the share in [min(RAMP_START_FRACTION, max), max]
+     */
+    public static double rampFraction(int steps, double max) {
+        if (max <= RAMP_START_FRACTION) return max;
+        return Math.min(max, RAMP_START_FRACTION + (max - RAMP_START_FRACTION) * steps * STEP_SECONDS / RAMP_SECONDS);
+    }
 
     /** T-207: default of {@link #gapMinFill}. */
     public static final double DEFAULT_GAP_MIN_FILL = 0.25;
@@ -508,8 +634,14 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
             // #96: never further from the fair price than the bot's band (SM-241: floor E x BOT_MIN_PRICE_MULT)
             data.ref = anchorReference(data.ref, Math.log(rawTarget),
                     Math.log(referenceAnchorPrice(currentPrice, market.market.getEquilibriumPrice())), s, maxMove);
-        // T-208: restart the gap guard window on every player fill
-        if (!Double.isNaN(data.refLastRaw) && raw != data.refLastRaw) data.stepsSinceFill = 0;
+        // T-208: restart the gap guard window on every player fill. SM-334: with a freshly rolled pause, and the
+        // bot's order size ramps up again from the start.
+        if (!Double.isNaN(data.refLastRaw) && raw != data.refLastRaw) {
+            data.stepsSinceFill = 0;
+            data.rampSteps = 0;
+            data.guardBlockSeconds = GAP_GUARD_MIN_BLOCK_SECONDS
+                    + data.rng.nextDouble() * (GAP_GUARD_MAX_BLOCK_SECONDS - GAP_GUARD_MIN_BLOCK_SECONDS);
+        }
         else if (data.stepsSinceFill < Integer.MAX_VALUE) data.stepsSinceFill++;
         data.refLastRaw = raw;
         Reference next = data.ref.active() ? stepReference(data.ref, Math.log(rawTarget), s, maxMove, STEP_SECONDS) : data.ref;
@@ -549,15 +681,25 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         // stay empty (and the frozen reference with it) until the swept range refills completely.
         double guardTarget = !next.active() || data.targetPrice == currentPrice ? data.targetPrice
                 : currentPrice * (data.targetPrice > currentPrice ? 1 + GAP_WINDOW_FRACTION : 1 - GAP_WINDOW_FRACTION);
-        // T-208: only within GAP_GUARD_MAX_BLOCK_SECONDS of the last player fill
-        boolean guardWindow = data.stepsSinceFill * STEP_SECONDS < GAP_GUARD_MAX_BLOCK_SECONDS;
+        // T-208: only within the pause after the last player fill (SM-334: rolled per fill)
+        boolean guardWindow = data.stepsSinceFill * STEP_SECONDS < data.guardBlockSeconds;
         if (gapGuardEnabled && guardWindow && crossesEmptyGap(market.oderBook, currentPrice, guardTarget)) {
             // T-208: the reference freezes while the bot can't trade, so it doesn't run ahead of the price.
             if (data.ref.active()) data.targetPrice = Math.exp(data.ref.y());
             return;
         }
         data.ref = next;
-        double absVolumeToTarget = Math.min(limit, Math.abs(volumeToTarget));
+        // SM-334: take only a share of the available volume (the first availableVolumeLevels levels with volume in
+        // the bot's direction, empty levels before them skipped), ramped up after a player push. Without it, after
+        // the pause the bot sold the whole (thin, barely refilled) range between a pumped price and its target in
+        // one go. An empty stretch before the first volume is still crossed in one step.
+        double ramp = rampFraction(data.rampSteps, s.maxRampFraction());
+        if (data.rampSteps < Integer.MAX_VALUE) data.rampSteps++;
+        double available = Math.abs(market.oderBook.getRealVirtualAvailableVolume(data.targetPrice, s.availableVolumeLevels(), limit));
+        // At least 0.01 (the smallest order) once any volume is available, so a small share of a thin book doesn't
+        // truncate to no order at all and stall the bot until the ramp catches up.
+        double absVolumeToTarget = Math.min(Math.min(limit, Math.abs(volumeToTarget)),
+                available > 0 ? Math.max(ramp * available, 0.01) : 0);
         // Direction to the target: +1 buy, -1 sell. The PID output only sets the urgency; if its sign
         // still points the other way (filter lag right after the price crossed the target), don't
         // trade instead of pushing the price further away.

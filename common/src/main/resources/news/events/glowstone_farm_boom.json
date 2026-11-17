@@ -1,0 +1,36 @@
+{
+  "id": "glowstone_farm_boom",
+  "picture": "glowstone_farm_boom.png",
+  "headline": {
+    "en_us": "Glowstone farms flood the market with light!",
+    "zh_cn": "荧石农场让光明充斥市场！",
+    "de_de": "Glowstone-Farmen überschwemmen den Markt mit Licht!"
+  },
+  "text": {
+    "en_us": "Enterprising builders have set up sprawling glowstone harvesting operations across the nether ceilings, and the dust is now pouring back through the portals by the cartload. With supply outrunning even the busiest lamp-makers, the price of glowstone dust and blocks is drifting steadily downward.",
+    "zh_cn": "有眼光的建造者在下界顶部建起大片荧石采集场，荧石粉正成车地穿过传送门运回。供给已超过最忙碌的灯具匠所能消化，荧石粉与荧石块的价格持续走低。",
+    "de_de": "Findige Baumeister haben unter den Netherdecken weitläufige Glowstone-Ernteanlagen errichtet, und der Staub strömt nun karrenweise durch die Portale zurück. Da das Angebot selbst die fleißigsten Lampenbauer übersteigt, geben die Preise für Glowstone-Staub und -Blöcke stetig nach."
+  },
+  "category": "commodities",
+  "weight": 8,
+  "cooldownSeconds": 7200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.25,
+    "rampUpSeconds": 900,
+    "durationSeconds": 2400,
+    "reversal": "ramp",
+    "reversalSeconds": 2400,
+    "noise": 0.03
+  },
+  "markets": [
+    {
+      "item": "minecraft:glowstone_dust",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:glowstone",
+      "weightFactor": 0.8
+    }
+  ]
+}

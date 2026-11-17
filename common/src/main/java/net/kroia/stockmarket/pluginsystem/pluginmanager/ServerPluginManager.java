@@ -42,6 +42,11 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         PluginOrderBook.setBackend(backend);
     }
 
+    /**
+     * SM-329: gates this manager's own log lines (info/warn/error/debug). Off by default; set from the checkbox at
+     * the top of the Plugin management screen ({@code PluginManagerLoggerRequest}) and saved as "loggerEnabled" in
+     * the manager data (missing in older saves = off).
+     */
     private boolean loggerEnabled = false;
     private final Map<ItemID, MarketCache> marketCaches = new HashMap<>(); // Contains all caches, instance ownership belongs to this class
     /**
@@ -383,6 +388,22 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         return plugins;
     }
 
+    /** SM-329: whether this manager's own log lines are written. */
+    public boolean isLoggerEnabled()
+    {
+        return loggerEnabled;
+    }
+
+    /**
+     * SM-329: turns this manager's own log lines on or off, effective at once; saved with the manager data.
+     *
+     * @param enabled true to write the plugin manager's log lines
+     */
+    public void setLoggerEnabled(boolean enabled)
+    {
+        loggerEnabled = enabled;
+    }
+
     /**
      * Reorders a plugin in the execution order.
      * @param instanceID The UUID of the plugin to move
@@ -471,6 +492,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         flagsTag.putBoolean("newsPluginAutoCreateDone", true);
         // T-213: same pattern; false only after a failed migration (retried on the next load)
         flagsTag.putBoolean("netFlowPluginMigrationDone", netFlowMigrationDone);
+        flagsTag.putBoolean("loggerEnabled", loggerEnabled); // SM-329
         managerDataTag.add(flagsTag);
         listTags.put("managerData", managerDataTag);
         return true;
@@ -478,6 +500,8 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
     @Override
     public boolean load(Map<String, ListTag> listTags) {
+        // SM-329: first, so the load's own log lines already follow the saved switch (missing = off)
+        loggerEnabled = readManagerFlag(listTags, "loggerEnabled");
         ListTag pluginsTag = listTags.get("plugins");
 
         // First-run fallback: no save data exists, create default plugins
@@ -654,7 +678,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         } catch (Exception e) {
             return rollbackNetFlowMigration(created, "failed", e);
         }
-        // SM-327: StockMarketMod.LOGGER, not info(): this manager's loggerEnabled is always false, so info() is silent
+        // SM-327: StockMarketMod.LOGGER, not info(): a one-time migration line must appear even with the logger switch off
         if (!created.isEmpty())
             StockMarketMod.LOGGER.info(getLogPrefix() + "T-213: split " + created.size() + " VolatilityPlugin(s): the"
                     + " net-flow price model now runs in a NetFlowPlugin placed before each, with the same markets and"

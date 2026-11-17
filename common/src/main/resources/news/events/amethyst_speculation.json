@@ -1,0 +1,91 @@
+{
+  "id": "amethyst_speculation",
+  "picture": "amethyst_speculation.png",
+  "headline": {
+    "en_us": "Speculators pile into amethyst on wild rumors!",
+    "zh_cn": "投机者凭离奇传闻涌入紫水晶！",
+    "de_de": "Spekulanten stürzen sich auf Amethyst - wilde Gerüchte!"
+  },
+  "text": {
+    "en_us": "Whispers of a secret royal amethyst commission have traders bidding the crystal up hard, though nobody can name a source. Seasoned brokers caution that speculation like this often peaks in a frenzy and collapses just as fast - and sometimes the story never gets off the ground at all.",
+    "zh_cn": "传闻王室有一笔秘密紫水晶采购，交易者据此大举推高价格，却无人能说清消息来源。资深经纪人告诫，这类投机往往在狂热中见顶、又以同样的速度崩塌——有时故事压根就没开始过。",
+    "de_de": "Gerüchte über einen geheimen königlichen Amethyst-Auftrag treiben die Händler dazu, den Kristall kräftig hochzubieten, auch wenn niemand eine Quelle nennen kann. Erfahrene Makler warnen, dass solche Spekulationen oft in einem Rausch gipfeln und ebenso schnell zusammenbrechen - und manchmal kommt die Geschichte gar nicht erst in Fahrt."
+  },
+  "category": "rumors",
+  "weight": 6,
+  "cooldownSeconds": 10800,
+  "sequences": [
+    {
+      "name": "pump_and_dump",
+      "weight": 2,
+      "steps": [
+        {
+          "name": "hype",
+          "durationSeconds": {
+            "min": 450,
+            "max": 1200
+          },
+          "targetFactor": 0.4,
+          "curve": "linear",
+          "noise": 0.05
+        },
+        {
+          "name": "peak",
+          "durationSeconds": {
+            "min": 300,
+            "max": 600
+          },
+          "curve": "hold",
+          "noise": 0.08
+        },
+        {
+          "name": "sell_off",
+          "durationSeconds": {
+            "min": 100,
+            "max": 300
+          },
+          "targetFactor": -0.15,
+          "curve": "exponential",
+          "noise": 0.04
+        },
+        {
+          "name": "recover",
+          "durationSeconds": 1500,
+          "targetFactor": 0.0,
+          "curve": "linear"
+        }
+      ]
+    },
+    {
+      "name": "fizzle",
+      "weight": 1,
+      "steps": [
+        {
+          "name": "stir",
+          "durationSeconds": {
+            "min": 300,
+            "max": 600
+          },
+          "targetFactor": 0.15,
+          "curve": "linear",
+          "noise": 0.04
+        },
+        {
+          "name": "denial",
+          "durationSeconds": {
+            "min": 300,
+            "max": 900
+          },
+          "targetFactor": 0.0,
+          "curve": "exponential"
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:amethyst_shard",
+      "weightFactor": 1.0
+    }
+  ]
+}

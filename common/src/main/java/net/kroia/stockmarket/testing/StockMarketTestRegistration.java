@@ -24,6 +24,7 @@ import net.kroia.stockmarket.testing.tests.MarketSettingsTestSuite;
 import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
 import net.kroia.stockmarket.testing.tests.ModSettingsTestSuite;
 import net.kroia.stockmarket.testing.tests.NewsAdminTestSuite;
+import net.kroia.stockmarket.testing.tests.WebInterfaceTestSuite;
 import net.kroia.stockmarket.testing.tests.NewsHistoryRequestTestSuite;
 import net.kroia.stockmarket.testing.tests.NewsHistoryChunksTestSuite;
 import net.kroia.stockmarket.testing.tests.NewsHistoryTestSuite;
@@ -43,6 +44,7 @@ import net.kroia.stockmarket.testing.tests.PIDTestSuite;
 import net.kroia.stockmarket.testing.tests.PlaceholderNamingTestSuite;
 import net.kroia.stockmarket.testing.tests.PortSmokeTestSuite;
 import net.kroia.stockmarket.testing.tests.PluginTestSuite;
+import net.kroia.stockmarket.testing.tests.LongRunMarketTestSuite;
 import net.kroia.stockmarket.testing.tests.PumpDumpDetectorTestSuite;
 import net.kroia.stockmarket.testing.tests.PriceHistoryCacheTestSuite;
 import net.kroia.stockmarket.testing.tests.PriceHistoryTestSuite;
@@ -151,12 +153,15 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new NewsPictureRequestTestSuite());
         TestRegistry.register(new PumpDumpDetectorTestSuite()); // T-192 pump-and-dump detector + alert toggle
         TestRegistry.register(new DiscordIntegrationTestSuite()); // T-217 Discord feed via the sink seam, never a real webhook
+        TestRegistry.register(new WebInterfaceTestSuite()); // SM-347 read-only web interface
         // The long market simulation gates, one topic each; autotest-out/test-selection.json keeps them off
         TestRegistry.register(new PluginTestSuite.T207GateTestSuite());
         TestRegistry.register(new PluginTestSuite.T208GateTestSuite());
         TestRegistry.register(new PluginTestSuite.T213GateG1TestSuite());
         TestRegistry.register(new PluginTestSuite.T213GateG2TestSuite());
         TestRegistry.register(new PluginTestSuite.T213GateG3G4TestSuite());
+        // SM-336 long-run market simulation (observation tool; every test skips without -Dstockmarket.longrun)
+        TestRegistry.register(new LongRunMarketTestSuite());
         // Admin flag sync against a real LuckPerms (skip without it), then "LuckPerms removed" phase 1/2.
         // Last: the removed-suite's phase 1 leaves the sync setting on (autotest runs only).
         TestRegistry.register(new AdminFlagSyncLuckPermsTests());

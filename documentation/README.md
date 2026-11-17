@@ -11,6 +11,7 @@ For players, server admins and content creators.
 - [Trading Hours](user-guide/trading-hours.md) — daily open/close windows, `/stockmarket open|close`, closed markets vs. maintenance mode
 - [Candle Timebase](user-guide/candle-timebase.md) — price candles on real time or in-game hours, chart timeframes and `Day N` labels
 - [Placeholders](user-guide/placeholders.md) — text placeholders (prices, 24h change, volume, player orders and portfolio) for scoreboards, tab lists and chat
+- [Web interface](user-guide/web-interface.md) — read-only web page with charts, order book depth, open player orders and recent trades
 
 ### News System
 - [Overview](user-guide/news-system/overview.md) — how news events publish headlines and move prices
