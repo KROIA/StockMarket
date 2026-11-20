@@ -238,5 +238,5 @@ public class StockMarketTestCategories {
     public static final TestCategory EXPLOIT = new TestCategory("stockmarket", "sm_exploit", "SM-335: round trips over three markets with inter-market swaps (pump then swap, swap before the bot reacts, A-B-A and triangle cycles, split orders); net profit must stay <= 5% of the capital at risk", MASTER_ONLY, true);
 
     // TK-6: cross-server scenario (TestKit Scenario): runs on every server of a master + slaveA + slaveB setup, skips elsewhere.
-    public static final TestCategory SCENARIO = new TestCategory("stockmarket", "sm_scenario", "TK-6: a seller on slaveA and a buyer on slaveB trade; the master checks the fill and both players' balances", BOTH, true);
+    public static final TestCategory SCENARIO = new TestCategory("stockmarket", "sm_scenario", "TK-6: a seller on slaveA and a buyer on slaveB trade; the master checks the fill and both players' balances; SM-352: two game clients trade through the trade screen", BOTH, true);
 }

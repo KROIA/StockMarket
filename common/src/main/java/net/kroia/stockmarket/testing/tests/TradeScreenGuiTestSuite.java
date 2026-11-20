@@ -192,7 +192,7 @@ public class TradeScreenGuiTestSuite extends TestSuite {
     }
 
     /** Diagnostic: subtrees of the trading panels and the closed/maintenance banner, capped at ~3000 chars. */
-    private static String describeTradingArea() {
+    static String describeTradingArea() { // also used by ScreenTradeClientSteps
         StringBuilder sb = new StringBuilder();
         for (GuiNode n : Gui.findAll(n -> n.handle() instanceof TradingPanel || n.handle() instanceof InterMarketTradingPanel
                 || ("Label".equals(n.type()) && (n.text().contains("Closed") || n.text().contains("Maintenance"))))) {

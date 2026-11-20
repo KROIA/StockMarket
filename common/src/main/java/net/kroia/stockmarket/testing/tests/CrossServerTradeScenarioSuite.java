@@ -45,13 +45,13 @@ import java.util.UUID;
  */
 public class CrossServerTradeScenarioSuite extends TestSuite {
 
-    private static final long WAIT_MS = 15_000;
+    static final long WAIT_MS = 15_000;
     /** Fake names only: never a real player's. */
     private static final String SELLER = "ScenarioSeller", BUYER = "ScenarioBuyer";
     /** A vanilla item no default preset trades; its market is recreated by every run. */
-    private static final ItemStack ITEM = new ItemStack(Items.DEAD_BUSH);
+    static final ItemStack ITEM = new ItemStack(Items.DEAD_BUSH);
     /** Items traded (real units). */
-    private static final int ITEMS = 2;
+    static final int ITEMS = 2;
 
     @Override
     public TestCategory getCategory() {
@@ -69,8 +69,9 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
     }
 
     /** What the master's first step remembers for its last one (both run in the master's JVM). */
-    private static final class MasterState {
-        ItemID item;
+    static final class MasterState {
+        ItemID item, money;
+        UUID seller, buyer;
         long price, since, sellerItems, sellerMoney, buyerItems, buyerMoney;
         int scale;
     }
@@ -87,7 +88,7 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
                 .step("master", "clean market and funded players", () -> setUpOnMaster(server, s))
                 .step("slaveA", "seller places a limit sell", () -> placeOnSlave(server, SELLER, false))
                 .step("slaveB", "buyer places a limit buy at the same price", () -> placeOnSlave(server, BUYER, true))
-                .step("master", "orders filled and balances moved", () -> checkOnMaster(server, s))
+                .step("master", "orders filled and balances moved", () -> checkOnMaster(s))
                 .run("trade_across_slaves", server);
     }
 
@@ -95,6 +96,21 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
 
     /** Recreates the market (empty book), detaches its plugins, turns the virtual book off and funds both players. */
     private TestResult setUpOnMaster(MinecraftServer server, MasterState s) {
+        ServerPlayer seller = FakePlayers.get(server, SELLER), buyer = FakePlayers.get(server, BUYER);
+        return setUpOnMaster(s, seller.getUUID(), seller, SELLER, buyer.getUUID(), buyer, BUYER);
+    }
+
+    /**
+     * Recreates the market for {@link #ITEM} (empty book), detaches its plugins, turns the virtual book off, funds the
+     * seller with {@link #ITEMS} items and the buyer with enough money, and remembers price and balances in {@code s}.
+     * Shared with {@link ScreenTradeScenarioSuite} (real players instead of fake ones).
+     *
+     * @param sellerPlayer the seller to add as a BankSystem user if it is none yet, or null for a real player (its
+     *                     join adds it)
+     * @param buyerPlayer  the same for the buyer
+     */
+    TestResult setUpOnMaster(MasterState s, UUID seller, @Nullable ServerPlayer sellerPlayer, String sellerName,
+                             UUID buyer, @Nullable ServerPlayer buyerPlayer, String buyerName) {
         StockMarketModBackend.ServerInstances b = StockMarketModBackend.getServerInstances();
         if (b == null || b.MARKET_MANAGER.isSlave()) return fail("the 'master' instance is not the StockMarket master");
         s.item = await(ItemIDManager.registerItemStackServerSide(ITEM), WAIT_MS);
@@ -114,16 +130,18 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
         if (s.price <= 0) return fail("market has no price: " + s.price);
         IAsyncBankManager bank = BankSystemMod.getAPI().getServerBankManager().getAsync();
         s.scale = await(bank.getItemFractionScaleFactorAsync(), WAIT_MS);
-        ItemID money = await(b.MARKET_MANAGER.getAsync().getTradingCurrencyIDAsync(), WAIT_MS);
+        s.money = await(b.MARKET_MANAGER.getAsync().getTradingCurrencyIDAsync(), WAIT_MS);
+        s.seller = seller;
+        s.buyer = buyer;
 
-        String error = fund(server, bank, SELLER, s.item, (long) ITEMS * s.scale);
-        if (error == null) error = fund(server, bank, BUYER, money, 2 * s.price * ITEMS + 100);
+        String error = fund(bank, seller, sellerPlayer, sellerName, s.item, (long) ITEMS * s.scale);
+        if (error == null) error = fund(bank, buyer, buyerPlayer, buyerName, s.money, 2 * s.price * ITEMS + 100);
         if (error != null) return fail(error);
 
-        s.sellerItems = balance(bank, SELLER, s.item, server);
-        s.sellerMoney = balance(bank, SELLER, money, server);
-        s.buyerItems = balance(bank, BUYER, s.item, server);
-        s.buyerMoney = balance(bank, BUYER, money, server);
+        s.sellerItems = balance(bank, seller, s.item);
+        s.sellerMoney = balance(bank, seller, s.money);
+        s.buyerItems = balance(bank, buyer, s.item);
+        s.buyerMoney = balance(bank, buyer, s.money);
         s.since = System.currentTimeMillis();
         return pass("market " + s.item + " at " + s.price);
     }
@@ -131,11 +149,11 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
     /**
      * Reads both players' filled orders from the order history, then their balances; deletes the market at the end.
      */
-    private TestResult checkOnMaster(MinecraftServer server, MasterState s) {
+    TestResult checkOnMaster(MasterState s) {
         StockMarketModBackend.ServerInstances b = StockMarketModBackend.getServerInstances();
         if (b == null || s.item == null) return fail("the master's set-up step did not run");
         try {
-            UUID seller = FakePlayers.get(server, SELLER).getUUID(), buyer = FakePlayers.get(server, BUYER).getUUID();
+            UUID seller = s.seller, buyer = s.buyer;
             OrderRecordStruct sell = null, buy = null;
             for (long end = System.currentTimeMillis() + WAIT_MS; (sell == null || buy == null) && System.currentTimeMillis() < end; pump(250)) {
                 List<OrderRecordStruct> rows = await(b.ORDER_RECORD_MANAGER.getHistory(
@@ -159,13 +177,12 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
             }
 
             IAsyncBankManager bank = BankSystemMod.getAPI().getServerBankManager().getAsync();
-            ItemID money = await(b.MARKET_MANAGER.getAsync().getTradingCurrencyIDAsync(), WAIT_MS);
-            r = assertEquals("seller gave the items", s.sellerItems - volume, balance(bank, SELLER, s.item, server));
+            r = assertEquals("seller gave the items", s.sellerItems - volume, balance(bank, seller, s.item));
             if (!r.passed()) return r;
-            r = assertEquals("buyer got the items", s.buyerItems + volume, balance(bank, BUYER, s.item, server));
+            r = assertEquals("buyer got the items", s.buyerItems + volume, balance(bank, buyer, s.item));
             if (!r.passed()) return r;
-            long paid = s.buyerMoney - balance(bank, BUYER, money, server);
-            long earned = balance(bank, SELLER, money, server) - s.sellerMoney;
+            long paid = s.buyerMoney - balance(bank, buyer, s.money);
+            long earned = balance(bank, seller, s.money) - s.sellerMoney;
             r = assertTrue("buyer paid (" + paid + ")", paid > 0);
             if (!r.passed()) return r;
             return assertEquals("seller got what the buyer paid", paid, earned);
@@ -184,16 +201,16 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
     }
 
     /**
-     * Makes the fake player a BankSystem and StockMarket user with a personal account and deposits {@code amount}
+     * Makes the player a BankSystem and StockMarket user with a personal account and deposits {@code amount}
      * into its bank for {@code item}.
      *
+     * @param player the player to add as a BankSystem user if it is none yet; null for a real player, whose join
+     *               adds it (this then only waits for it)
      * @return why it failed, or null on success
      */
-    private @Nullable String fund(MinecraftServer server, IAsyncBankManager bank, String name, ItemID item, long amount) {
-        ServerPlayer player = FakePlayers.get(server, name);
-        UUID uuid = player.getUUID();
+    private @Nullable String fund(IAsyncBankManager bank, UUID uuid, @Nullable ServerPlayer player, String name, ItemID item, long amount) {
         if (!Boolean.TRUE.equals(await(bank.userExistsAsync(uuid), WAIT_MS))) {
-            bank.addUserAsync(player);
+            if (player != null) bank.addUserAsync(player);
             for (int i = 0; !Boolean.TRUE.equals(await(bank.userExistsAsync(uuid), WAIT_MS)); i++) {
                 if (i >= 50) return name + " not added as a BankSystem user";
                 pump(100);
@@ -208,9 +225,9 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
         return status == BankStatus.SUCCESS ? null : name + ": deposit of " + amount + " failed: " + status;
     }
 
-    private long balance(IAsyncBankManager bank, String name, ItemID item, MinecraftServer server) {
-        IAsyncBank b = await(bank.getOrCreatePersonalBankAsync(FakePlayers.get(server, name).getUUID(), item), WAIT_MS);
-        if (b == null) throw new IllegalStateException(name + " has no bank for " + item);
+    private long balance(IAsyncBankManager bank, UUID player, ItemID item) {
+        IAsyncBank b = await(bank.getOrCreatePersonalBankAsync(player, item), WAIT_MS);
+        if (b == null) throw new IllegalStateException(player + " has no bank for " + item);
         return await(b.getBalanceAsync(), WAIT_MS);
     }
 

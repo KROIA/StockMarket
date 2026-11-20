@@ -28,8 +28,10 @@ public final class DevBootstrap {
                 TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", "stockmarket",
                         StockMarketCommands.isSlaveServer()));
         // TK-3: GUI suites run on the game client only; a dedicated server must never load their client classes.
-        if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT)
+        if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT) {
             TestRegistry.register(new TradeScreenGuiTestSuite());
+            TestRegistry.register(new ScreenTradeClientScenarioSuite()); // SM-352: client part of the two-client trade scenario
+        }
     }
 
     /**
