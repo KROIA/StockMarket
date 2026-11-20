@@ -11,6 +11,7 @@ import net.kroia.stockmarket.screen.uiElements.trading_panel.InterMarketTradingP
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
@@ -18,6 +19,7 @@ import net.kroia.testkit.gui.Gui;
 import net.kroia.testkit.gui.GuiNode;
 import net.kroia.testkit.gui.Layout;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
@@ -95,10 +97,16 @@ public class TradeScreenGuiTestSuite extends TestSuite {
      * player the StockMarket admin flag with {@code /stockmarket op} (the autotest player is an op; master only, so
      * on a slave the test skips) and sends the create request from the client. The market is deleted and the admin
      * flag reset in {@code finally}, also when the test fails.
+     * <p>
+     * On an untrusted slave the order panels are hidden for players (T-123) and the master answers no admin-flag
+     * read, so nothing is clicked or awaited there: the test checks the hidden state instead
+     * ({@link #assertUntrustedSlaveHidesPlus10()}).
      */
     private TestResult test_plus10() {
         StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
         if (client == null) return skip("not in a world");
+        if (Gui.onClient(StockMarketGuiElement::isUntrustedSlave))
+            return assertUntrustedSlaveHidesPlus10();
         IAsyncMarketManager async = AsyncMarketManager.createClientManager(); // admin flag + exists checks
         UUID self = Gui.onClient(() -> Minecraft.getInstance().player.getUUID());
         boolean wasAdmin = Boolean.TRUE.equals(await(Gui.onClient(() -> async.isStockmarketAdminAsync(self)), WAIT_MS));
@@ -156,6 +164,25 @@ public class TradeScreenGuiTestSuite extends TestSuite {
             }
             if (!wasAdmin)
                 Gui.sendCommand("stockmarket deop");
+        }
+    }
+
+    /**
+     * Untrusted slave: the trade screen shows the untrusted banner and no visible "+10" button. Opens the screen
+     * without a preselected market (no market can be created here); the panels are disabled at construction
+     * regardless of the market.
+     */
+    private TestResult assertUntrustedSlaveHidesPlus10() {
+        try {
+            String skip = open();
+            if (skip != null) return skip(skip);
+            String banner = Gui.onClient(() -> Component.translatable("gui.stockmarket.untrusted_slave.banner_line1").getString());
+            TestResult r = assertTrue("untrusted-slave banner shown; trading area: " + describeTradingArea(),
+                    !Gui.findAll(n -> n.visible() && "Label".equals(n.type()) && banner.equals(n.text())).isEmpty());
+            if (!r.passed()) return r;
+            return assertNull("no visible '+10' button on an untrusted slave", findPlus10());
+        } finally {
+            Gui.close();
         }
     }
 
