@@ -43,7 +43,9 @@
   // ---- chart (Lightweight Charts v5 API)
   const chart = LC.createChart($('chart'), {
     autoSize: true,
-    layout: { background: { type: 'solid', color: '#0d1424' }, textColor: '#7d8aa3', attributionLogo: true },
+    layout: { background: { type: 'solid', color: '#0d1424' }, textColor: '#7d8aa3',
+      // no logo inside the chart: the TradingView credit is the footer link in index.html and must stay (license)
+      attributionLogo: false },
     grid: { vertLines: { color: '#152035' }, horzLines: { color: '#152035' } },
     // candles use the top 5-75 %, the volume histogram the bottom 20 %: they never overlap, at any height
     rightPriceScale: { borderColor: '#1c2840', scaleMargins: { top: 0.05, bottom: 0.25 } },
