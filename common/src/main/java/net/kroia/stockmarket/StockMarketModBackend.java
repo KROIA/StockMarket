@@ -981,7 +981,11 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         if (SERVER_INSTANCES == null) // SM-325: start refused by the data migration, the server is stopping
             return;
-        SERVER_INSTANCES.MARKET_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
+        // SM-333: the master refuses OnPlayerJoin from an untrusted slave (it writes the master's user records) and,
+        // as the call carries no player, BankSystem broadcasts the refusal to every player on this slave. Skip it
+        // when the master has reported this slave as untrusted. SlaveTrustCache is always null on the master.
+        if (!Boolean.FALSE.equals(net.kroia.stockmarket.util.SlaveTrustCache.get()))
+            SERVER_INSTANCES.MARKET_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         PlayerJoinSyncPacket.send(player);
     }
 
