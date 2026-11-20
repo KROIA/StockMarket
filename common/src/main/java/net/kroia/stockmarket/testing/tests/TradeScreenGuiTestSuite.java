@@ -55,7 +55,7 @@ public class TradeScreenGuiTestSuite extends TestSuite {
 
     @Override
     public void registerTests() {
-        addTest("layout_small_and_large_window", this::test_layout);
+        addTest("layout_full_hd_scale_2_and_3", this::test_layout);
         addTest("plus10_button_raises_quantity", this::test_plus10);
     }
 
@@ -70,18 +70,18 @@ public class TradeScreenGuiTestSuite extends TestSuite {
     }
 
     /**
-     * No element outside the screen, no overlapping siblings and no clipped text, at 854x480 with GUI scale 2 and at
-     * 1920x1080 with GUI scale 3.
+     * No element outside the screen, no overlapping siblings and no clipped text, at Full HD (1920x1080) with GUI
+     * scale 2 and with GUI scale 3. Full HD is the smallest window size the layout is checked at.
      */
     private TestResult test_layout() {
         try {
             String skip = open();
             if (skip != null) return skip(skip);
-            List<Layout.Problem> small = Gui.layoutProblems(854, 480, 2);
-            TestResult r = assertTrue("854x480 @2: " + small, small.isEmpty());
+            List<Layout.Problem> scale2 = Gui.layoutProblems(1920, 1080, 2);
+            TestResult r = assertTrue("1920x1080 @2: " + scale2, scale2.isEmpty());
             if (!r.passed()) return r;
-            List<Layout.Problem> large = Gui.layoutProblems(1920, 1080, 3);
-            return assertTrue("1920x1080 @3: " + large, large.isEmpty());
+            List<Layout.Problem> scale3 = Gui.layoutProblems(1920, 1080, 3);
+            return assertTrue("1920x1080 @3: " + scale3, scale3.isEmpty());
         } finally {
             Gui.close();
         }

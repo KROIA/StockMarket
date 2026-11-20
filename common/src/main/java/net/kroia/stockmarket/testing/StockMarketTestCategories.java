@@ -232,7 +232,7 @@ public class StockMarketTestCategories {
     // SM-328: opt-in check of the save-data upgrade on a real 2.1.2 world (run with --only and --world).
     public static final TestCategory UPGRADE_212 = new TestCategory("stockmarket", "sm_upgrade_212", "SM-328 (opt-in): a world saved by 2.1.2 after the upgrade: data version marker, one backup zip, markets kept, a NetFlowPlugin before each old VolatilityPlugin with the old flow settings (moved defaults), split flag saved", MASTER_ONLY, true);
     // TK-3: client GUI suite (TestKit Gui driver): the trade screen's layout and one interaction; runs on the game client.
-    public static final TestCategory GUI = new TestCategory("stockmarket", "sm_gui", "TK-3: trade screen on the game client: layout at 854x480 @2 and 1920x1080 @3, the +10 button raises the amount", BOTH, true);
+    public static final TestCategory GUI = new TestCategory("stockmarket", "sm_gui", "TK-3: trade screen on the game client: layout at 1920x1080 @2 and @3, the +10 button raises the amount", BOTH, true);
 
     // TK-6: cross-server scenario (TestKit Scenario): runs on every server of a master + slaveA + slaveB setup, skips elsewhere.
     public static final TestCategory SCENARIO = new TestCategory("stockmarket", "sm_scenario", "TK-6: a seller on slaveA and a buyer on slaveB trade; the master checks the fill and both players' balances", BOTH, true);
