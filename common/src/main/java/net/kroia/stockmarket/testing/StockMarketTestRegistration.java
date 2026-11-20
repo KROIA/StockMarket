@@ -155,6 +155,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new DiscordIntegrationTestSuite()); // T-217 Discord feed via the sink seam, never a real webhook
         TestRegistry.register(new WebInterfaceTestSuite()); // SM-347 read-only web interface
         TestRegistry.register(new net.kroia.stockmarket.testing.tests.CrossServerTradeScenarioSuite()); // TK-6 (master + slaveA + slaveB setups only)
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.InterMarketRoundTripTestSuite()); // SM-335 inter-market round-trip exploit scenarios
         // The long market simulation gates, one topic each; autotest-out/test-selection.json keeps them off
         TestRegistry.register(new PluginTestSuite.T207GateTestSuite());
         TestRegistry.register(new PluginTestSuite.T208GateTestSuite());

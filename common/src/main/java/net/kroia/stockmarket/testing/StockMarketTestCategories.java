@@ -234,6 +234,9 @@ public class StockMarketTestCategories {
     // TK-3: client GUI suite (TestKit Gui driver): the trade screen's layout and one interaction; runs on the game client.
     public static final TestCategory GUI = new TestCategory("stockmarket", "sm_gui", "TK-3: trade screen on the game client: layout at 1920x1080 @2 and @3, the +10 button raises the amount", BOTH, true);
 
+    // SM-335: profit-taking round trips over three markets with inter-market swaps (pump, swap before the bot reacts, split orders).
+    public static final TestCategory EXPLOIT = new TestCategory("stockmarket", "sm_exploit", "SM-335: round trips over three markets with inter-market swaps (pump then swap, swap before the bot reacts, A-B-A and triangle cycles, split orders); net profit must stay <= 5% of the capital at risk", MASTER_ONLY, true);
+
     // TK-6: cross-server scenario (TestKit Scenario): runs on every server of a master + slaveA + slaveB setup, skips elsewhere.
     public static final TestCategory SCENARIO = new TestCategory("stockmarket", "sm_scenario", "TK-6: a seller on slaveA and a buyer on slaveB trade; the master checks the fill and both players' balances", BOTH, true);
 }
