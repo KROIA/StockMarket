@@ -54,6 +54,13 @@ import java.util.function.Consumer;
  * absolute and in % of the capital at risk (largest cash drawdown + start items value). Pass: profit <=
  * {@link #THRESHOLD_PCT}% (no fees exist, so balances are already net). The numbers are logged for every scenario.
  * <p>
+ * Big-order preset ({@code bigorder_*}, mirrors a reported live setup): A has abundance 5 and a max order of 320,000
+ * (1000x the 320 default), B is a 100 market with abundance 8 (max order 512) and the NetFlow anchor off; every other
+ * plugin and mod setting at its default. The pump is {@link #BIG_PUMP} items in {@link #BIG_CHUNK} orders (as live,
+ * ~1e9 money, A 160 to ~65x). A swap's want leg is capped by B's max order (512 x ~100 = ~50k money), so one swap
+ * sells only a few A items: the live sell leg stayed at the pumped price because it was tiny, not because the book
+ * held. Swap routes here stop after {@link #BIG_SWAPS} swaps (as live) and close the rest with plain market sells.
+ * <p>
  * Topic {@code stockmarket/sm_exploit/InterMarketRoundTripTestSuite}, master only; a scenario takes a few thousand
  * simulated ticks (no in-game wait).
  */
@@ -71,6 +78,30 @@ public class InterMarketRoundTripTestSuite extends PluginTestSuite {
     static final int PUMP = 30;
     /** Start cash (real), large enough for any route. */
     static final double CASH = 1e12;
+    /** Big-order preset pump: the live pump's size (3 x 100,000 + 95,527 items). */
+    static final long BIG_PUMP = 395_527;
+    /** Big-order preset pump order size (live). */
+    static final long BIG_CHUNK = 100_000;
+    /** Big-order preset: swaps per swap route (live: 5). */
+    static final int BIG_SWAPS = 5;
+    /** Big-order preset: ticks between pump end and the first swap (live: ~49 s). */
+    static final int BIG_SWAP_DELAY = 980;
+
+    /**
+     * Market settings of a run (A's price stays 160, C stays 8 / 300).
+     *
+     * @param aAbundance natural abundance of A
+     * @param aMaxOrder  max order volume of A (real items), &lt;= 0 = the abundance default
+     * @param bPrice     default price of B
+     * @param bAbundance natural abundance of B
+     * @param bAnchor    NetFlow long-term anchor on B
+     */
+    record Preset(float aAbundance, long aMaxOrder, double bPrice, float bAbundance, boolean bAnchor) {}
+
+    /** Default harness: A diamond 160 / 50, B netherite 22,000 / 5. */
+    static final Preset DEFAULT = new Preset(50, 0, 22_000, 5, true);
+    /** Big-order preset: thin A with a 1000x max order, cheap B with a small max order and no anchor. */
+    static final Preset BIG_ORDER = new Preset(5, 320_000, 100, 8, false);
 
     private IServerMarket marketB, marketC;
 
@@ -160,6 +191,48 @@ public class InterMarketRoundTripTestSuite extends PluginTestSuite {
             e.swapAll(e.a, e.b, 20);
             e.sellAll(e.b);
         }));
+
+        // Big-order preset (see class Javadoc): same routes, live pump size, BIG_SWAPS swaps each.
+        addTest("bigorder_live_route", () -> run("bigorder_live_route", BIG_ORDER, e -> {
+            e.buy(e.a, BIG_PUMP, BIG_CHUNK);
+            e.advance(BIG_SWAP_DELAY);
+            e.swap(e.a, e.b, 1, BIG_SWAPS);
+            e.sellAll(e.b);
+        }));
+        addTest("bigorder_control_pump_A_sell_A", () -> run("bigorder_control_pump_A_sell_A", BIG_ORDER, e -> {
+            e.buy(e.a, BIG_PUMP, BIG_CHUNK);
+            e.sellAll(e.a);
+        }));
+        addTest("bigorder_pump_A_swap_A_to_B_sell_B", () -> run("bigorder_pump_A_swap_A_to_B_sell_B", BIG_ORDER, e -> {
+            e.buy(e.a, BIG_PUMP, BIG_CHUNK);
+            e.swap(e.a, e.b, 1, BIG_SWAPS);
+            e.sellAll(e.b);
+        }));
+        addTest("bigorder_frozen_pump_A_swap_A_to_B_sell_B", () -> run("bigorder_frozen_pump_A_swap_A_to_B_sell_B", BIG_ORDER, e -> {
+            e.frozen = true;
+            e.buy(e.a, BIG_PUMP, BIG_CHUNK);
+            e.swap(e.a, e.b, 1, BIG_SWAPS);
+            e.sellAll(e.b);
+        }));
+        addTest("bigorder_pump_A_wait_30s_swap_A_to_B_sell_B", () -> run("bigorder_pump_A_wait_30s_swap_A_to_B_sell_B", BIG_ORDER, e -> {
+            e.buy(e.a, BIG_PUMP, BIG_CHUNK);
+            e.advance(600);
+            e.swap(e.a, e.b, 1, BIG_SWAPS);
+            e.sellAll(e.b);
+        }));
+        addTest("bigorder_cash_A_B_A_cash_x5", () -> run("bigorder_cash_A_B_A_cash_x5", BIG_ORDER, e -> {
+            for (int i = 0; i < 5; i++) {
+                e.buy(e.a, BIG_CHUNK, BIG_CHUNK);
+                e.swap(e.a, e.b, 1, BIG_SWAPS);
+                e.swapAll(e.b, e.a, 1);
+                e.sellAll(e.a);
+            }
+        }));
+        addTest("bigorder_pump_A_swap_20x_smaller_chunks", () -> run("bigorder_pump_A_swap_20x_smaller_chunks", BIG_ORDER, e -> {
+            e.buy(e.a, BIG_PUMP, BIG_CHUNK);
+            e.swap(e.a, e.b, 20, 20 * BIG_SWAPS);
+            e.sellAll(e.b);
+        }));
     }
 
     @Override
@@ -177,9 +250,12 @@ public class InterMarketRoundTripTestSuite extends PluginTestSuite {
     }
 
     /** Runs one scenario on a fresh {@link Env}, logs its numbers and asserts the profit threshold. */
-    private TestResult run(String name, Consumer<Env> route) {
+    private TestResult run(String name, Consumer<Env> route) { return run(name, DEFAULT, route); }
+
+    /** Runs one scenario with the given market settings. */
+    private TestResult run(String name, Preset preset, Consumer<Env> route) {
         long wall = System.nanoTime();
-        try (Env e = new Env()) {
+        try (Env e = new Env(preset)) {
             route.accept(e);
             e.frozen = false;
             for (Mk m : e.all) e.sellAll(m);
@@ -207,14 +283,15 @@ public class InterMarketRoundTripTestSuite extends PluginTestSuite {
         final long maxOrder;
         double peak;
 
-        Mk(String name, IServerMarket m, double price, float abundance) {
+        /** @param maxOrderOverride max order volume (real items), &lt;= 0 = the abundance default */
+        Mk(String name, IServerMarket m, double price, float abundance, long maxOrderOverride) {
             this.name = name;
             market = (ServerMarket) m;
             id = m.getItemID();
             MarketSettings s = market.getSettings();
             s.defaultPrice = MarketManager.convertToRawAmountStatic(price);
             s.naturalAbundance = abundance;
-            s.maxOrderVolume = maxOrder = MarketSettings.defaultMaxOrderVolume(abundance);
+            s.maxOrderVolume = maxOrder = maxOrderOverride > 0 ? maxOrderOverride : MarketSettings.defaultMaxOrderVolume(abundance);
             market.setMaintenance(false);
             market.test_clearOrderbook();
             market.test_clearIncomingOrderBuffers();
@@ -263,15 +340,15 @@ public class InterMarketRoundTripTestSuite extends PluginTestSuite {
         double startCash, minCash, startItemsValue;
         final List<SwapStats> swaps = new ArrayList<>();
 
-        Env() {
+        Env(Preset preset) {
             modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(modSettings.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue());
             modSettings.PROFIT_ALERT_THRESHOLD.set(0f);
             VolatilityPlugin.test_setSeed(SEED);
             VolatilityPlugin.test_setClock(() -> clockMs[0]);
             TargetPriceBot.test_setGapGuardSeed(SEED);
-            a = new Mk("A", serverMarket, 160, 50);
-            b = new Mk("B", marketB, 22_000, 5);
-            c = new Mk("C", marketC, 8, 300);
+            a = new Mk("A", serverMarket, 160, preset.aAbundance(), preset.aMaxOrder());
+            b = new Mk("B", marketB, preset.bPrice(), preset.bAbundance(), 0);
+            c = new Mk("C", marketC, 8, 300, 0);
             all = List.of(a, b, c);
             for (Mk m : all) {
                 manager.cancelInterMarketOrdersForMarket(m.id);
@@ -287,7 +364,8 @@ public class InterMarketRoundTripTestSuite extends PluginTestSuite {
                 vol.onMarketSubscribed(m.id);
                 refill.onMarketSubscribed(m.id);
                 bot.onMarketSubscribed(m.id);
-                apply(flow, NetFlowPlugin.Settings.CODEC, NetFlowPlugin.Settings.createDefault(), m.id);
+                apply(flow, NetFlowPlugin.Settings.CODEC,
+                        NetFlowPlugin.Settings.createDefault().withAnchorEnabled(m != b || preset.bAnchor()), m.id);
                 apply(vol, VolatilityPlugin.Settings.CODEC, new VolatilityPlugin.Settings(VolatilityPlugin.DEFAULT_VOLATILITY_SCALE), m.id);
                 apply(bot, TargetPriceBot.Settings.CODEC, TargetPriceBot.Settings.createDefault(), m.id);
                 refill.test_mirrorWallTo(m.id, m.calc);
@@ -352,9 +430,12 @@ public class InterMarketRoundTripTestSuite extends PluginTestSuite {
         }
 
         /** Market-buys {@code real} items in max-order chunks, one per {@link #step()}. */
-        void buy(Mk m, long real) {
+        void buy(Mk m, long real) { buy(m, real, m.maxOrder); }
+
+        /** Market-buys {@code real} items in orders of at most {@code chunk} (capped at the max order). */
+        void buy(Mk m, long real, long chunk) {
             for (long left = real; left > 0; ) {
-                long n = Math.min(left, m.maxOrder);
+                long n = Math.min(left, Math.min(chunk, m.maxOrder));
                 m.market.putOrder(new Order(m.id, Order.Type.MARKET, n * sf, 0, now(), player, account.getAccountNumber()));
                 left -= n;
                 step();
@@ -378,11 +459,14 @@ public class InterMarketRoundTripTestSuite extends PluginTestSuite {
          * {@link #step()}. Chunk = the largest the request accepts (have max order, want leg estimated at current
          * prices within the want max order), divided by {@code split}.
          */
-        void swapAll(Mk have, Mk want, int split) {
+        void swapAll(Mk have, Mk want, int split) { swap(have, want, split, 5_000); }
+
+        /** As {@link #swapAll}, but stops after {@code maxOrders} swaps; the rest stays in {@code have}. */
+        void swap(Mk have, Mk want, int split, int maxOrders) {
             IServerBank items = bank(have);
             double sold = 0, value = 0, bought = 0, priceAtSwap = have.price();
             int orders = 0;
-            for (int guard = 0, stalls = 0; guard < 5_000 && stalls < 3 && items.getBalance() > 0; guard++) {
+            for (int guard = 0, stalls = 0; guard < maxOrders && stalls < 3 && items.getBalance() > 0; guard++) {
                 double limit = Math.min(have.maxOrder, want.maxOrder * want.price() / have.price());
                 long raw = Math.min(items.getBalance(), Math.max(1, (long) Math.floor(limit * sf / split)));
                 long before = items.getTotalBalance();
