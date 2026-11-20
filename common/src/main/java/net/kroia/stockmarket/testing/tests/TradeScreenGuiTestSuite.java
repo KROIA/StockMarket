@@ -94,19 +94,24 @@ public class TradeScreenGuiTestSuite extends TestSuite {
      * <p>
      * The order panels are hidden while no market is shown (an --only run starts in a world without markets), so the
      * test first creates a temporary market for {@link #ITEM} the way the management screen does: it gives the
-     * player the StockMarket admin flag with {@code /stockmarket op} (the autotest player is an op; master only, so
-     * on a slave the test skips) and sends the create request from the client. The market is deleted and the admin
+     * player the StockMarket admin flag with {@code /stockmarket op} (the autotest player is an op; master only)
+     * and sends the create request from the client. The market is deleted and the admin
      * flag reset in {@code finally}, also when the test fails.
      * <p>
      * On an untrusted slave the order panels are hidden for players (T-123) and the master answers no admin-flag
      * read, so nothing is clicked or awaited there: the test checks the hidden state instead
-     * ({@link #assertUntrustedSlaveHidesPlus10()}).
+     * ({@link #assertUntrustedSlaveHidesPlus10()}). On a trusted slave the test skips before any admin read:
+     * {@code /stockmarket op} is master-only, so the admin flag (and with it the temporary market) cannot be set
+     * there. The slave is detected from the join-synced client setting ({@link StockMarketGuiElement#isMasterServer()}).
      */
     private TestResult test_plus10() {
         StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
         if (client == null) return skip("not in a world");
         if (Gui.onClient(StockMarketGuiElement::isUntrustedSlave))
             return assertUntrustedSlaveHidesPlus10();
+        // join-synced client setting, no server round trip; /stockmarket op answers command_master_only on a slave
+        if (!Gui.onClient(StockMarketGuiElement::isMasterServer))
+            return skip("/stockmarket op is master-only: no admin flag or temporary market on a trusted slave");
         IAsyncMarketManager async = AsyncMarketManager.createClientManager(); // admin flag + exists checks
         UUID self = Gui.onClient(() -> Minecraft.getInstance().player.getUUID());
         boolean wasAdmin = Boolean.TRUE.equals(await(Gui.onClient(() -> async.isStockmarketAdminAsync(self)), WAIT_MS));
