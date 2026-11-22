@@ -9,9 +9,9 @@ import net.kroia.banksystem.api.ledger.TradeRowKind;
 import net.kroia.banksystem.api.ledger.TradeSide;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
@@ -22,6 +22,9 @@ import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
+import net.kroia.stockmarket.api.integration.IStockMarketIntegration;
+import net.kroia.stockmarket.networking.stream.MarketPriceStream;
+import net.kroia.stockmarket.stockmarket.marketmanager.StockMarketIntegrationImpl;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
@@ -77,6 +80,7 @@ public class ServerMarketTestSuite extends TestSuite {
         addTest("load_missingOrderbook", this::test_load_missingOrderbook);
         addTest("load_restoresCandleState", this::test_load_restoresCandleState);
         addTest("save_load_maintenancePersisted", this::test_save_load_maintenancePersisted);
+        addTest("integration_closeReason_syncPersistClear", this::test_integration_closeReason);
 
         // Candle Tracking
         addTest("getCurrentMarketPriceStructAndReset_resets", this::test_getCurrentMarketPriceStructAndReset_resets);
@@ -463,6 +467,82 @@ public class ServerMarketTestSuite extends TestSuite {
             return pass("Maintenance flag persists and old NBT defaults to not under maintenance");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * SM-354: closing through the integration API with a reason makes the reason visible to the
+     * getter and to clients (the price-stream TradingStatus), persists it across save/load into a fresh
+     * market (old NBT without the key loads without a reason), and every reopen clears it. The 2-arg
+     * call still closes/opens exactly as before and carries no reason.
+     */
+    private TestResult test_integration_closeReason() {
+        IStockMarketIntegration api = new StockMarketIntegrationImpl(() -> backend);
+        ServerMarketManager manager = (ServerMarketManager) backend.MARKET_MANAGER.getSync();
+        String key = "test.market_closed.reason";
+        IServerMarket fresh = null;
+        try {
+            resetMarket(100, true);
+            api.setMarketOpen(itemID, false, key);
+            TestResult r = assertFalse("closed with a reason -> not open", api.isMarketOpen(itemID));
+            if (!r.passed()) return r;
+            r = assertEquals("getter returns the reason", key, api.getMarketCloseReason(itemID));
+            if (!r.passed()) return r;
+            MarketPriceStream.TradingStatus status = MarketPriceStream.buildTradingStatus(manager, serverMarket);
+            r = assertEquals("client status is MAINTENANCE", MarketSettings.TradingState.MAINTENANCE, status.getTradingState());
+            if (!r.passed()) return r;
+            r = assertEquals("client status carries the reason", key, status.maintenanceReason());
+            if (!r.passed()) return r;
+
+            // Restart: save, load into a fresh market.
+            CompoundTag tag = new CompoundTag();
+            r = assertTrue("save succeeds", ((ServerMarket) serverMarket).save(tag));
+            if (!r.passed()) return r;
+            fresh = fixture.createMarket("closeReason");
+            ((ServerMarket) fresh).load(tag);
+            r = assertTrue("maintenance survives load", fresh.isUnderMaintenance());
+            if (!r.passed()) return r;
+            r = assertEquals("reason survives load", key, fresh.getMaintenanceReason());
+            if (!r.passed()) return r;
+            tag.remove("maintenanceReason");
+            ((ServerMarket) fresh).load(tag);
+            r = assertTrue("old NBT without reason still loads under maintenance", fresh.isUnderMaintenance());
+            if (!r.passed()) return r;
+            r = assertEquals("old NBT without reason loads without a reason", null, fresh.getMaintenanceReason());
+            if (!r.passed()) return r;
+
+            // Reopen via the API clears the reason.
+            api.setMarketOpen(itemID, true);
+            r = assertTrue("reopened", api.isMarketOpen(itemID));
+            if (!r.passed()) return r;
+            r = assertEquals("reopen clears the reason", null, api.getMarketCloseReason(itemID));
+            if (!r.passed()) return r;
+            r = assertEquals("client status reason cleared", "", MarketPriceStream.buildTradingStatus(manager, serverMarket).maintenanceReason());
+            if (!r.passed()) return r;
+
+            // Reopen via the admin maintenance toggle clears it too; a later plain close has no stale reason.
+            api.setMarketOpen(itemID, false, key);
+            serverMarket.setMaintenance(false);
+            r = assertEquals("admin reopen clears the reason", null, api.getMarketCloseReason(itemID));
+            if (!r.passed()) return r;
+
+            // 2-arg call behaves as before: closes without a reason, reopens.
+            api.setMarketOpen(itemID, false);
+            r = assertFalse("2-arg close -> not open", api.isMarketOpen(itemID));
+            if (!r.passed()) return r;
+            r = assertEquals("2-arg close has no reason", null, api.getMarketCloseReason(itemID));
+            if (!r.passed()) return r;
+            r = assertEquals("2-arg close: client status has no reason", "", MarketPriceStream.buildTradingStatus(manager, serverMarket).maintenanceReason());
+            if (!r.passed()) return r;
+            api.setMarketOpen(itemID, true);
+            r = assertTrue("2-arg reopen -> open", api.isMarketOpen(itemID));
+            if (!r.passed()) return r;
+            return pass("Close reason is visible, synced, persisted and cleared on reopen; 2-arg unchanged");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            if (fresh != null) fresh.setMaintenance(false);
+            resetMarket(100, true);
         }
     }
 
