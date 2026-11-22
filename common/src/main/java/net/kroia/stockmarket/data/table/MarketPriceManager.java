@@ -26,10 +26,15 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
     public static final String DELETE = "DELETE FROM MarketPrice";
     public static final String COUNT =  "SELECT COUNT(*) FROM MarketPrice";
     public static final String MIN_TIME = "SELECT MIN(time) FROM MarketPrice";
-    /** Per-market volume sum + oldest open since a timestamp (both ? bind the same window start). */
-    public static final String WINDOW_STATS = "SELECT m.marketid, SUM(m.traded_volume), "
-            + "(SELECT o.open FROM MarketPrice o WHERE o.marketid = m.marketid AND o.time >= ? ORDER BY o.time ASC LIMIT 1) "
-            + "FROM MarketPrice m WHERE m.time >= ? GROUP BY m.marketid";
+    /**
+     * One market's volume sum + oldest open since a timestamp (?1 = marketid, ?2 = window start).
+     * SM-348: queried per market on purpose. With {@code marketid = ?} both parts are range seeks on
+     * idx_marketprice_marketid_time, so the cost scales with the window's rows. A single
+     * {@code WHERE time >= ? GROUP BY marketid} can't seek that index and scans the whole history.
+     */
+    public static final String WINDOW_STATS = "SELECT SUM(traded_volume), "
+            + "(SELECT open FROM MarketPrice WHERE marketid = ?1 AND time >= ?2 ORDER BY time ASC LIMIT 1) "
+            + "FROM MarketPrice WHERE marketid = ?1 AND time >= ?2";
 
     public MarketPriceManager(DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
@@ -262,28 +267,33 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
     }
 
     /**
-     * Rolling-window aggregate for every market in one query (used by the placeholder system).
-     * Runs on the database thread.
+     * Rolling-window aggregate for the given markets (used by the placeholder system).
+     * Runs on the database thread, one index seek per market (see {@link #WINDOW_STATS}).
      *
-     * @param sinceMs window start (inclusive) as epoch milliseconds, e.g. {@code now - 24h}
+     * @param marketIds markets to aggregate (ItemID shorts)
+     * @param sinceMs   window start (inclusive) as epoch milliseconds, e.g. {@code now - 24h}
      * @return a future completing with {@code marketid -> {oldestOpen, tradedVolumeSum}}, where
      *         {@code oldestOpen} is the open of the oldest candle with {@code time >= sinceMs} and
      *         {@code tradedVolumeSum} is the raw traded volume of all candles in the window.
      *         Markets without candles in the window are absent. Empty map on SQL error.
      */
-    public CompletableFuture<Map<Short, double[]>> getWindowStats(long sinceMs) {
+    public CompletableFuture<Map<Short, double[]>> getWindowStats(List<Short> marketIds, long sinceMs) {
         return CompletableFuture.supplyAsync(() -> {
             Map<Short, double[]> result = new HashMap<>();
             try (PreparedStatement ps = databaseManager.getConnection().prepareStatement(WINDOW_STATS)) {
-                ps.setLong(1, sinceMs);
-                ps.setLong(2, sinceMs);
-                try (ResultSet rs = ps.executeQuery()) {
-                    // Read-only SELECT — no commit needed (see rationale in query()).
-                    while (rs.next())
-                        result.put(rs.getShort(1), new double[]{rs.getDouble(3), rs.getDouble(2)});
+                for (short id : marketIds) {
+                    ps.setShort(1, id);
+                    ps.setLong(2, sinceMs);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        // Read-only SELECT — no commit needed (see rationale in query()).
+                        // SUM over no rows is NULL: the market had no candles in the window.
+                        if (rs.next() && rs.getObject(1) != null)
+                            result.put(id, new double[]{rs.getDouble(2), rs.getDouble(1)});
+                    }
                 }
             } catch (SQLException e) {
                 StockMarketMod.LOGGER.warn("Failed to query MarketPrice window stats: {}", e.getMessage());
+                result.clear();
             }
             return result;
         }, databaseManager.getDatabaseThread());
