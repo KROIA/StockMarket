@@ -104,13 +104,13 @@ if ((findProperty('with_luckperms') ?: 'false').toBoolean()) {
 // modLocalRuntime: dev runtime only, never in the mod jar or the published POM/Gradle module metadata.
 repositories {
     flatDir {
-        dir "../../../MC_TestKit/mc_${minecraft_version}_MC_TestKit/fabric/build/libs"
+        dir "../../../MC_TestKit/mc_26.1_MC_TestKit/fabric/build/libs"
     }
 }
 if ((findProperty('with_testkit') ?: 'false').toBoolean()) {
     dependencies {
-        modLocalRuntime "net.kroia:testkit-fabric:${rootProject.testkit_version}" // mc<=1.21.11
-        //localRuntime "net.kroia:testkit-fabric:${rootProject.testkit_version}" // mc>=26.1
+        //modLocalRuntime "net.kroia:testkit-fabric:${rootProject.testkit_version}" // mc<=1.21.11
+        localRuntime "net.kroia:testkit-fabric:${rootProject.testkit_version}" // mc>=26.1
     }
 }
 
