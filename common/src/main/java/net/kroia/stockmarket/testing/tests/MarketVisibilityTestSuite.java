@@ -3,9 +3,9 @@ package net.kroia.stockmarket.testing.tests;
 import net.kroia.banksystem.api.MoneyFormat;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.minecraft.compat.StockMarketPlaceholders;
@@ -18,6 +18,7 @@ import net.kroia.stockmarket.stockmarket.market.MarketSettings.TradingState;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.util.MultiServerUtils;
+import net.kroia.stockmarket.util.SlaveTrustCache;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.networking.request.OrderHistoryRequest;
@@ -356,7 +357,8 @@ public class MarketVisibilityTestSuite extends TestSuite {
     /**
      * SM-283, slave only: the real {@code /stockmarket} dispatcher neither suggests a market this slave cannot
      * resolve ({@code open}, {@code close} and the root {@code <market>} argument) nor accepts it
-     * ({@code open <id>} answers "not found"). The master of a test cell keeps no markets, so like the other tests
+     * ({@code open <id>} answers "not found"; on a known-untrusted slave SM-333 refuses the console first, so
+     * it answers {@code command_slave_untrusted}). The master of a test cell keeps no markets, so like the other tests
      * here the slave's market manager is swapped for the real slave {@link AsyncMarketManager} on a fake transport
      * that lists two resolvable items; nothing reaches the master. Checks first that the market is suggested while
      * it resolves, so the hidden case cannot pass vacuously.
@@ -411,8 +413,12 @@ public class MarketVisibilityTestSuite extends TestSuite {
                 return fail("command did not parse: " + e.getMessage());
             }
             pumpUntil(() -> !failures.isEmpty(), WAIT_MS);
-            return assertTrue("'stockmarket open " + numericID + "' answers not found, got " + failures,
-                    failures.stream().anyMatch(c -> hasTranslationKey(c, "message.stockmarket.command_market_remove_not_found")));
+            // SM-333: on a known-untrusted slave runAsAdmin refuses the console before the market lookup
+            String expectedKey = Boolean.FALSE.equals(SlaveTrustCache.get())
+                    ? "message.stockmarket.command_slave_untrusted"
+                    : "message.stockmarket.command_market_remove_not_found";
+            return assertTrue("'stockmarket open " + numericID + "' answers " + expectedKey + ", got " + failures,
+                    failures.stream().anyMatch(c -> hasTranslationKey(c, expectedKey)));
         } finally {
             MultiServerUtils.setUnresolvableForTesting(hidden, false);
             BACKEND_INSTANCES.MARKET_MANAGER = real;
