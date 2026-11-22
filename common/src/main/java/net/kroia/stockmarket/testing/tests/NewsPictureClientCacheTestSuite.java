@@ -1,8 +1,8 @@
 package net.kroia.stockmarket.testing.tests;
 
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.networking.request.NewsPictureRequest;
 import net.kroia.stockmarket.networking.request.NewsPictureRequest.Picture;
 import net.kroia.stockmarket.news.ClientNewsPictureCache;

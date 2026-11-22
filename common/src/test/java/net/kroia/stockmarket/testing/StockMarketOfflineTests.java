@@ -4,7 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.PlatformAbstraction;
 import net.kroia.modutilities.UtilitiesPlatform;
-import net.kroia.modutilities.testing.OfflineTests;
+import net.kroia.testkit.OfflineTests;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
 //import net.minecraft.resources.ResourceLocation; // mc<=1.21.10

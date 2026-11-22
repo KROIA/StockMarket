@@ -118,6 +118,8 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final java.util.Map<ItemID, Boolean> maintenanceFallback = new java.util.HashMap<>();
     /** T-158: last trading state applied to the panels / banner; UI is only touched on change. */
     private @Nullable MarketSettings.TradingState appliedTradingState = null;
+    /** SM-354: maintenance close reason (translation key, "" = none) last applied to the banner. */
+    private String appliedMaintenanceReason = "";
     /**
      * T-123 / T-125 (untrusted slave gate): banner shown across the top of the
      * trading area when the client is connected to a slave that the master
@@ -675,20 +677,25 @@ public class TradeScreen extends StockMarketGuiScreen {
             state = getEffectiveTradingState(currentMarketID);
         }
 
-        if (state != appliedTradingState) {
+        ClientMarket displayMarket = displayID != null ? getMarket(displayID) : null;
+        MarketPriceStream.TradingStatus status = displayMarket != null ? displayMarket.getTradingStatus() : null;
+        // SM-354: a maintenance close reason (translation key) replaces the plain maintenance text.
+        String reason = state == MarketSettings.TradingState.MAINTENANCE && status != null ? status.maintenanceReason() : "";
+
+        if (state != appliedTradingState || !reason.equals(appliedMaintenanceReason)) {
             appliedTradingState = state;
+            appliedMaintenanceReason = reason;
             boolean open = state == MarketSettings.TradingState.OPEN;
             // Only gates the buy/sell buttons; cancelling pending orders (orders panel / chart) stays usable.
             tradingPanel.setMarketOpen(open);
             interMarketTradingPanel.setMarketOpen(open);
-            marketClosedLabel.setText((state == MarketSettings.TradingState.MAINTENANCE
-                    ? Texts.MAINTENANCE : Texts.MARKET_CLOSED).getString());
+            Component bannerText = !reason.isEmpty() ? Component.translatable(reason)
+                    : state == MarketSettings.TradingState.MAINTENANCE ? Texts.MAINTENANCE : Texts.MARKET_CLOSED;
+            marketClosedLabel.setText(bannerText.getString());
             marketClosedLabel.setEnabled(!open);
         }
 
         String hoursText = "";
-        ClientMarket displayMarket = displayID != null ? getMarket(displayID) : null;
-        MarketPriceStream.TradingStatus status = displayMarket != null ? displayMarket.getTradingStatus() : null;
         if (status != null) {
             String hours = status.isAlwaysOpen()
                     ? Component.translatable(Texts.TRADING_HOURS_ALWAYS).getString()

@@ -31,7 +31,7 @@ Switching the setting off stops the web server right away.
 ## What the page shows
 
 * **Market list** with search, an item icon, the current price and a status dot: green = open, grey = closed (outside trading hours), amber = maintenance. The list has two collapsible groups like the in-game trade screen: **Items** and **Company shares** (BankSystem company shares). All prices are in the trading currency.
-* **Candlestick chart** with a volume histogram. Timeframes are 1m, 5m, 15m, 1h, 4h and 1D. When candles follow in-game time (see [Candle timebase](candle-timebase.md)) the timeframes are in-game hours: 1h, 4h, 1D and 1W; the chart's time axis still shows real-world clock times.
+* **Candlestick chart** with a volume histogram. Timeframes are 1m, 5m, 15m, 1h, 4h and 1D. When candles follow in-game time (see [Candle timebase](candle-timebase.md)) the timeframes are in-game hours: 1h, 4h, 1D and 1W and the time axis shows the in-game day and hour, like the in-game chart. With real-world time, times when the server was offline show as flat candles without volume at the last price, as in game, so every candle sits at its real time.
 * **Order book depth** within 25 % of the current price, sell volume above the price and buy volume below it. This includes the bot liquidity, the same as the in-game order book.
 * **Open player orders**, grouped by limit price: buy volume, sell volume and the number of orders at each price.
 * **Recent trades**: the finished player orders of the last 24 hours (filled, or cancelled after a partial fill), with side, amount and average price. One row is one order, not each individual fill.
