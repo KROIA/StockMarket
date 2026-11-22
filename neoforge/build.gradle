@@ -112,8 +112,8 @@ repositories {
 }
 if ((findProperty('with_testkit') ?: 'false').toBoolean()) {
     dependencies {
-        modLocalRuntime "net.kroia:testkit-neoforge:${rootProject.testkit_version}" // mc<=1.21.11
-        //localRuntime "net.kroia:testkit-neoforge:${rootProject.testkit_version}" // mc>=26.1
+        //modLocalRuntime "net.kroia:testkit-neoforge:${rootProject.testkit_version}" // mc<=1.21.11
+        localRuntime "net.kroia:testkit-neoforge:${rootProject.testkit_version}" // mc>=26.1
     }
 }
 
