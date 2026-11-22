@@ -466,12 +466,14 @@ public final class StockMarketWebInterface {
         short market = marketParam(q);
         long tf = longParam(q, "tf", -1);
         int max = (int) Math.max(1, Math.min(MAX_CANDLES, longParam(q, "max", DEFAULT_CANDLES)));
+        boolean[] gameMode = new boolean[1]; // written on the server thread, read after onServer() returned
         PriceHistoryData data = onServer(b -> {
             ServerMarketManager smm = b.MARKET_MANAGER.getServerMarketManager();
             ItemID id = new ItemID(market);
             if (smm == null || smm.getServerMarket(id) == null)
                 throw new ApiError(404, "unknown market");
             boolean gameTime = smm.isCandleUseGameTime();
+            gameMode[0] = gameTime;
             boolean offered = false;
             for (long t : timeframes(gameTime))
                 offered |= t == tf;
@@ -480,14 +482,27 @@ public final class StockMarketWebInterface {
             return b.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.handleOnMasterServer(
                     new MarketPriceHistoryRequest.InputData(id, tf, -1, Long.MAX_VALUE, max, gameTime), "", null);
         });
+        boolean gameTime = gameMode[0];
+        // game-hour candles are never gap-filled, like the in-game chart (game time stands still while offline)
+        if (!gameTime) {
+            // SM-349: the request keeps time gaps (server offline = no rows). Run the same second pass as the
+            // in-game chart (ClientMarket.PriceHistoryContainer.loadFrom, always gap-filled) so every empty bucket
+            // becomes a flat zero-volume candle at the next real open. Needed because Lightweight Charts places
+            // bars by index, not by time, and would draw the candles on both sides of a gap back to back.
+            PriceHistoryData filled = data.createFromDifferentCandleDeltaTime(System.currentTimeMillis(), tf, data.getCurrentMarketPrice(), true);
+            filled.setTruncated(data.isTruncated());
+            data = filled;
+        }
+        List<PriceHistoryData.Candle> candles = data.getCandles();
+        // gap fill can add many candles (a week offline at 1m); keep the newest max like the request does
+        int first = Math.max(0, candles.size() - max);
         JsonObject o = new JsonObject();
         o.addProperty("market", market);
         o.addProperty("tf", tf);
-        o.addProperty("truncated", data.isTruncated());
+        o.addProperty("truncated", data.isTruncated() || first > 0);
         JsonArray arr = new JsonArray();
-        List<PriceHistoryData.Candle> candles = data.getCandles();
         long lastT = Long.MIN_VALUE;
-        for (int i = 0; i < candles.size(); i++) {
+        for (int i = first; i < candles.size(); i++) {
             PriceHistoryData.Candle c = candles.get(i);
             long t = c.openTimestamp / 1000;
             if (t <= lastT)
@@ -501,6 +516,11 @@ public final class StockMarketWebInterface {
             j.addProperty("l", data.toRealPrice(Math.min(c.low, Math.min(c.open, close))));
             j.addProperty("c", data.toRealPrice(close));
             j.addProperty("v", c.tradedVolume);
+            if (gameTime && c.gameTime >= 0) {
+                // axis labels like the in-game chart in game-time mode ("Day N" / "hh:00"); legacy candles keep wall time
+                j.addProperty("gd", PriceHistoryData.gameDay(c.gameTime));
+                j.addProperty("gh", PriceHistoryData.gameHourLabel(c.gameTime));
+            }
             arr.add(j);
         }
         o.add("candles", arr);

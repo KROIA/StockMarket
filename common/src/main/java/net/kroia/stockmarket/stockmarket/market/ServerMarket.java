@@ -68,6 +68,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
     // Callback fired when this market enters maintenance, used by ServerMarketManager to cancel inter-market orders
     private @Nullable Consumer<ItemID> marketMaintenanceCallback;
+    // SM-354: translation key of the maintenance close reason; null = plain maintenance text.
+    // Cleared whenever maintenance ends. Persisted in NBT ("maintenanceReason").
+    private @Nullable String maintenanceReason;
 
     // ---- Trading hours (T-158) ----
     // Runtime "inside trading hours" flag. When false: putOrder rejects ALL orders (player, bot,
@@ -546,6 +549,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public boolean setMaintenance(boolean maintenance)
     {
         this.settings.maintenance = maintenance;
+        if (!maintenance)
+            maintenanceReason = null; // SM-354: every reopen clears the close reason
         if (maintenance) {
             int cancelledCount = cancelAllPlayerOrdersAndBuffers();
             if (cancelledCount > 0)
@@ -555,6 +560,21 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             }
         }
         return true;
+    }
+
+    @Override
+    public boolean setMaintenance(boolean maintenance, @Nullable String reasonKey)
+    {
+        setMaintenance(maintenance);
+        if (maintenance)
+            maintenanceReason = reasonKey;
+        return true;
+    }
+
+    @Override
+    public @Nullable String getMaintenanceReason()
+    {
+        return settings.maintenance ? maintenanceReason : null;
     }
 
     @Override
@@ -798,6 +818,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             setMaintenance(true);
         else
             this.settings.maintenance = settings.maintenance;
+        if (!this.settings.maintenance)
+            maintenanceReason = null; // SM-354: reopening via the settings panel clears the reason
         this.settings.defaultPrice = settings.defaultPrice;
         this.settings.naturalAbundance = settings.naturalAbundance;
         this.settings.virtualOrderbookEnabled = settings.virtualOrderbookEnabled;
@@ -1229,6 +1251,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         tag.putBoolean("ignorePluginAutosubscribe", settings.ignorePluginAutosubscribe);
         // Persist the admin/integration maintenance flag so it survives restarts (missing on old NBT -> not under maintenance).
         tag.putBoolean("maintenance", settings.maintenance);
+        // SM-354: close reason (only while under maintenance; missing key -> no reason).
+        if (settings.maintenance && maintenanceReason != null)
+            tag.putString("maintenanceReason", maintenanceReason);
         // Trading hours. Override stored as byte: -1 = none, 0 = forced closed, 1 = forced open.
         tag.putInt("tradingOpenMinute", settings.tradingOpenMinute);
         tag.putInt("tradingCloseMinute", settings.tradingCloseMinute);
@@ -1293,6 +1318,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         // Restore the maintenance flag only — do NOT call setMaintenance(): player orders were already
         // cancelled when maintenance was enabled, so the side effects must not re-run on load.
         settings.maintenance = tag.contains("maintenance") && NbtCompat.getBoolean(tag, "maintenance");
+        maintenanceReason = settings.maintenance && tag.contains("maintenanceReason")
+                ? NbtCompat.getString(tag, "maintenanceReason") : null;
         // Trading hours: missing keys (old saves) -> always open, no override.
         applyTradingWindow(
                 tag.contains("tradingOpenMinute") ? NbtCompat.getInt(tag, "tradingOpenMinute") : 0,
