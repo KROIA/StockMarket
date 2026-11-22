@@ -2,9 +2,9 @@ package net.kroia.stockmarket.testing.tests;
 
 import io.netty.buffer.Unpooled;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.news.DefaultNewsPictures;
 import net.kroia.stockmarket.news.NewsEventLibrary;
 import net.kroia.stockmarket.news.NewsHistory;

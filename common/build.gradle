@@ -11,6 +11,7 @@ repositories {
     flatDir {
         dir "../../../BankSystem/mc_26.1_BankSystem/common/build/libs"
         dir "../../../MC_ModUtilities/mc_26.1_MC_ModUtilities/common/build/libs"
+        dir "../../../MC_TestKit/mc_26.1_MC_TestKit/common/build/libs" // TestKit (dev-only test framework mod)
     }
     maven { url 'https://jitpack.io' }
 
@@ -42,7 +43,7 @@ dependencies {
     // in nested classes loaded only when LuckPerms is present.
     compileOnly "net.luckperms:api:${rootProject.luckperms_api_version}"
 
-    // Offline unit tests (T-223): ModUtilities' testing.OfflineTests runs the TestSuites as JUnit DynamicTests.
+    // Offline unit tests (T-223): TestKit's OfflineTests runs the TestSuites as JUnit DynamicTests.
     testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
     // SM-325: DataMigrationTestSuite migrates a SQLite file offline (in game BankSystem provides the driver).
@@ -51,18 +52,32 @@ dependencies {
     }
 }
 
+// TestKit (dev-only test framework mod, TK-1): the testing package compiles against it. Dev builds need its jar;
+// release builds use it only for the JUnit run and skip that run without the jar (e.g. on JitPack). Never shipped.
+def devFeatures = (rootProject.findProperty('enable_dev_features') ?: 'false').toBoolean()
+def withTestKit = devFeatures || file("../../../MC_TestKit/mc_${minecraft_version}_MC_TestKit/common/build/libs/testkit-common-${rootProject.testkit_version}.jar").exists()
+if (withTestKit) {
+    dependencies {
+        modCompileOnly "net.kroia:testkit-common:${rootProject.testkit_version}" // mc<=1.21.11
+        //compileOnly "net.kroia:testkit-common:${rootProject.testkit_version}:dev" // mc>=26.1 (common jar carries the dev classifier on 26.1)
+    }
+} else {
+    compileTestJava.enabled = false
+    test.enabled = false
+}
+
 // `gradlew :common:test` runs the test suites that need no game (TestSuite.needsGame() == false), see
 // src/test/java/.../StockMarketOfflineTests. Release mode (enable_dev_features=false) keeps testing/** out of main, so
 // the test source set compiles it itself; the include pattern also covers src/test/java, whose classes therefore live
 // in the testing package.
-if (!(rootProject.findProperty('enable_dev_features') ?: 'false').toBoolean()) {
+if (!devFeatures) {
     sourceSets.test.java {
         srcDir 'src/main/java'
         include 'net/kroia/stockmarket/testing/**'
     }
 }
-configurations.testCompileOnly.extendsFrom configurations.compileOnly // ModUtilities/BankSystem/LuckPerms/JEI APIs
-// ModUtilities and BankSystem are modCompileOnly (the game provides them); offline the tests need them at runtime.
+configurations.testCompileOnly.extendsFrom configurations.compileOnly // ModUtilities/BankSystem/TestKit/LuckPerms/JEI APIs
+// ModUtilities, BankSystem and TestKit are modCompileOnly (the game provides them); offline the tests need them at runtime.
 // Loom creates the remapped configuration only after evaluation.
 //afterEvaluate { configurations.testRuntimeClasspath.extendsFrom configurations.modCompileClasspathMainMapped } // mc<=1.21.11
 configurations.testRuntimeClasspath.extendsFrom configurations.compileOnly // mc>=26.1 (no remapping: ModUtilities/BankSystem are plain compileOnly)
