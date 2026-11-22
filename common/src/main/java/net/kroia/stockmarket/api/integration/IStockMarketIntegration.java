@@ -2,6 +2,7 @@ package net.kroia.stockmarket.api.integration;
 
 import net.kroia.banksystem.util.ItemID;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * In-process integration SPI for creating, querying, and closing markets from
@@ -95,6 +96,34 @@ public interface IStockMarketIntegration {
      *                close it (destructive — see above)
      */
     void setMarketOpen(@NotNull ItemID subject, boolean open);
+
+    /**
+     * SM-354: like {@link #setMarketOpen(ItemID, boolean)}, but closing also stores a close reason.
+     * The reason is persisted with the maintenance flag, synced to clients (slaves included) and shown
+     * in the trade screen's maintenance banner via {@code Component.translatable(reasonKey)} instead
+     * of the plain "Under Maintenance" text. Any reopen ({@code open=true}, from any path: this API,
+     * the admin panel, commands) clears it. The 2-arg overload is this method with {@code null}.
+     * Player orders and bots behave exactly as with the 2-arg overload.
+     * <p>
+     * Server-thread only.
+     *
+     * @param subject   the ItemID whose market should be opened/closed (never null)
+     * @param open      {@code true} to open the market (clears the reason), {@code false} to close it
+     * @param reasonKey translation key of the close reason (the caller owns its lang text), or
+     *                  {@code null} for the plain maintenance text; ignored when {@code open=true}
+     */
+    void setMarketOpen(@NotNull ItemID subject, boolean open, @Nullable String reasonKey);
+
+    /**
+     * SM-354: returns the close reason set by {@link #setMarketOpen(ItemID, boolean, String)}.
+     * <p>
+     * Server-thread only.
+     *
+     * @param subject the ItemID whose market to query (never null)
+     * @return the reason translation key, or {@code null} if the market is open, was closed
+     *         without a reason, or does not exist
+     */
+    @Nullable String getMarketCloseReason(@NotNull ItemID subject);
 
     /**
      * Returns whether the market for the given subject is currently open for
