@@ -91,6 +91,21 @@ public interface ISyncServerMarket {
      * @return {@code true} on success
      */
     boolean setMaintenance(boolean maintenance);
+    /**
+     * SM-354: like {@link #setMaintenance(boolean)}, but entering maintenance also stores a close
+     * reason that the trade screen shows instead of the plain maintenance text. Ending maintenance
+     * clears the reason (as every reopen path does).
+     * @param maintenance {@code true} to enter maintenance, {@code false} to end it
+     * @param reasonKey   translation key of the close reason, or {@code null} for the plain
+     *                    maintenance text; ignored when {@code maintenance} is {@code false}
+     * @return {@code true} on success
+     */
+    boolean setMaintenance(boolean maintenance, @org.jetbrains.annotations.Nullable String reasonKey);
+    /**
+     * SM-354: translation key of the reason this market was put under maintenance.
+     * @return the reason key, or {@code null} if none was given or the market is not under maintenance
+     */
+    @org.jetbrains.annotations.Nullable String getMaintenanceReason();
 
     /**
      * @return {@code true} if the market is currently inside its trading hours (or forced open by

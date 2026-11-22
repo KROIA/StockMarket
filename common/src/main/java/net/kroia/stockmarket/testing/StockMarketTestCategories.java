@@ -1,10 +1,10 @@
 package net.kroia.stockmarket.testing;
 
-import net.kroia.modutilities.testing.TestCategory;
+import net.kroia.testkit.TestCategory;
 
-import static net.kroia.modutilities.testing.TestCategory.ServerType.BOTH;
-import static net.kroia.modutilities.testing.TestCategory.ServerType.MASTER_ONLY;
-import static net.kroia.modutilities.testing.TestCategory.ServerType.SLAVE_ONLY;
+import static net.kroia.testkit.TestCategory.ServerType.BOTH;
+import static net.kroia.testkit.TestCategory.ServerType.MASTER_ONLY;
+import static net.kroia.testkit.TestCategory.ServerType.SLAVE_ONLY;
 
 public class StockMarketTestCategories {
 
@@ -231,4 +231,12 @@ public class StockMarketTestCategories {
 
     // SM-328: opt-in check of the save-data upgrade on a real 2.1.2 world (run with --only and --world).
     public static final TestCategory UPGRADE_212 = new TestCategory("stockmarket", "sm_upgrade_212", "SM-328 (opt-in): a world saved by 2.1.2 after the upgrade: data version marker, one backup zip, markets kept, a NetFlowPlugin before each old VolatilityPlugin with the old flow settings (moved defaults), split flag saved", MASTER_ONLY, true);
+    // TK-3: client GUI suite (TestKit Gui driver): the trade screen's layout and one interaction; runs on the game client.
+    public static final TestCategory GUI = new TestCategory("stockmarket", "sm_gui", "TK-3: trade screen on the game client: layout at 1920x1080 @2 and @3, the +10 button raises the amount", BOTH, true);
+
+    // SM-335: profit-taking round trips over three markets with inter-market swaps (pump, swap before the bot reacts, split orders).
+    public static final TestCategory EXPLOIT = new TestCategory("stockmarket", "sm_exploit", "SM-335: round trips over three markets with inter-market swaps (pump then swap, swap before the bot reacts, A-B-A and triangle cycles, split orders); net profit must stay <= 5% of the capital at risk", MASTER_ONLY, true);
+
+    // TK-6: cross-server scenario (TestKit Scenario): runs on every server of a master + slaveA + slaveB setup, skips elsewhere.
+    public static final TestCategory SCENARIO = new TestCategory("stockmarket", "sm_scenario", "TK-6: a seller on slaveA and a buyer on slaveB trade; the master checks the fill and both players' balances; SM-352: two game clients trade through the trade screen", BOTH, true);
 }

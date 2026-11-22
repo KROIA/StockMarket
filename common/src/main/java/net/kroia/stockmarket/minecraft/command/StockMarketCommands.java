@@ -626,6 +626,12 @@ public class StockMarketCommands {
     public static CompletableFuture<Boolean> runAsAdmin(CommandSourceStack source, Runnable action) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
+            // SM-333: every action here is forwarded to the master without a player, and an untrusted slave's
+            // call is refused with a notice to every player on the slave. Tell only the command source instead.
+            if (isSlaveServer() && Boolean.FALSE.equals(SlaveTrustCache.get())) {
+                source.sendFailure(Component.translatable("message.stockmarket.command_slave_untrusted"));
+                return CompletableFuture.completedFuture(false);
+            }
             action.run();
             return CompletableFuture.completedFuture(true);
         }
@@ -869,8 +875,8 @@ public class StockMarketCommands {
      * <p>
      * On the master the async manager returns the {@code ServerMarket} directly; on a slave
      * it returns an {@code AsyncMarket} that forwards {@code SetTradingOverride} to the
-     * master without a player UUID (server-originated call). Untrusted slaves are refused by
-     * the master and get the "failed" message.
+     * master without a player UUID (server-originated call). On a known-untrusted slave
+     * {@link #runAsAdmin} refuses the command before anything is sent (SM-333).
      *
      * @param source    the command source to send success/failure feedback to
      * @param marketArg the market registry name or numeric ItemID entered by the user

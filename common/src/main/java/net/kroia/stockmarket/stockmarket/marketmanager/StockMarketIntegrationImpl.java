@@ -9,6 +9,7 @@ import net.kroia.stockmarket.api.integration.MarketOpenResult;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Supplier;
 
@@ -84,6 +85,11 @@ public final class StockMarketIntegrationImpl implements IStockMarketIntegration
 
     @Override
     public void setMarketOpen(@NotNull ItemID subject, boolean open) {
+        setMarketOpen(subject, open, null);
+    }
+
+    @Override
+    public void setMarketOpen(@NotNull ItemID subject, boolean open, @Nullable String reasonKey) {
         ISyncServerMarketManager mgr = sync();
         if (mgr == null) return;
         IServerMarket market = mgr.getMarket(subject);
@@ -92,7 +98,15 @@ public final class StockMarketIntegrationImpl implements IStockMarketIntegration
         // Sync accessor: the SPI is documented server-thread-only, so the
         // synchronous variant is correct here (no async marshalling needed).
         // Integration "open" ends maintenance, "closed" enables maintenance.
-        market.setMaintenance(!open);
+        market.setMaintenance(!open, reasonKey);
+    }
+
+    @Override
+    public @Nullable String getMarketCloseReason(@NotNull ItemID subject) {
+        ISyncServerMarketManager mgr = sync();
+        if (mgr == null) return null;
+        IServerMarket market = mgr.getMarket(subject);
+        return market != null ? market.getMaintenanceReason() : null;
     }
 
     @Override
