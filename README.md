@@ -226,7 +226,7 @@ Before trading, deposit the items you want to sell into your bank account using 
 See [Bank System Mod](https://github.com/KROIA/BankSystem) to learn how banking works.
 
 #### Opening the Trading Terminal
-Right-click on a **Stock Market Terminal Block** to open the trading interface.
+Right-click on a **Stock Market Block** to open the trading interface.
 
 <div align="center">
     <img src="documentation/images/StockMarketTerminal.gif" >
