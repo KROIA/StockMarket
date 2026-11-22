@@ -99,6 +99,21 @@ if ((findProperty('with_luckperms') ?: 'false').toBoolean()) {
     }
 }
 
+// Opt-in TestKit (dev-only test framework mod) for dev runs (runClient/runServer): -Pwith_testkit=true. Needed by the
+// in-game tests (enable_dev_features=true); without it they stay off. Read from TestKit's build/libs.
+// modLocalRuntime: dev runtime only, never in the mod jar or the published POM/Gradle module metadata.
+repositories {
+    flatDir {
+        dir "../../../MC_TestKit/mc_${minecraft_version}_MC_TestKit/fabric/build/libs"
+    }
+}
+if ((findProperty('with_testkit') ?: 'false').toBoolean()) {
+    dependencies {
+        modLocalRuntime "net.kroia:testkit-fabric:${rootProject.testkit_version}" // mc<=1.21.11
+        //localRuntime "net.kroia:testkit-fabric:${rootProject.testkit_version}" // mc>=26.1
+    }
+}
+
 processResources {
     inputs.property 'version', project.version
     inputs.property 'minecraft_version', rootProject.minecraft_version

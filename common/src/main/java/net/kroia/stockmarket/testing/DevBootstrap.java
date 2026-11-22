@@ -2,8 +2,8 @@ package net.kroia.stockmarket.testing;
 
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
-import net.kroia.modutilities.testing.TestCommandRegistration;
-import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.testkit.TestCommandRegistration;
+import net.kroia.testkit.TestRegistry;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
@@ -27,6 +27,11 @@ public final class DevBootstrap {
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) ->
                 TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", "stockmarket",
                         StockMarketCommands.isSlaveServer()));
+        // TK-3: GUI suites run on the game client only; a dedicated server must never load their client classes.
+        if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT) {
+            TestRegistry.register(new TradeScreenGuiTestSuite());
+            TestRegistry.register(new ScreenTradeClientScenarioSuite()); // SM-352: client part of the two-client trade scenario
+        }
     }
 
     /**

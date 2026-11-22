@@ -69,9 +69,11 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
      *                        Used by the trade screen to clamp its amount boxes.
      * @param tradeCooldownMs T-179: the master's global per-player trade cooldown ({@code TRADE_COOLDOWN_MS}); 0 = off.
      *                        Used by the trade screen to grey out buy/sell after an accepted order.
+     * @param maintenanceReason SM-354: translation key of the maintenance close reason; empty = none
+     *                          (plain maintenance text). Shown in the trade screen's maintenance banner.
      */
     public record TradingStatus(byte state, short clockMinute, boolean clockRealTime, short openMinute, short closeMinute,
-                                long maxOrderVolume, long tradeCooldownMs)
+                                long maxOrderVolume, long tradeCooldownMs, String maintenanceReason)
     {
         // Hand-rolled: StreamCodec.composite supports at most 6 fields. Field order = wire format.
         public static final StreamCodec<RegistryFriendlyByteBuf, TradingStatus> STREAM_CODEC = new StreamCodec<>() {
@@ -84,13 +86,15 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
                 ByteBufCodecs.SHORT.encode(buf, s.closeMinute);
                 ByteBufCodecs.VAR_LONG.encode(buf, s.maxOrderVolume);
                 ByteBufCodecs.VAR_LONG.encode(buf, s.tradeCooldownMs);
+                ByteBufCodecs.STRING_UTF8.encode(buf, s.maintenanceReason);
             }
 
             @Override
             public TradingStatus decode(RegistryFriendlyByteBuf buf) {
                 return new TradingStatus(ByteBufCodecs.BYTE.decode(buf), ByteBufCodecs.SHORT.decode(buf),
                         ByteBufCodecs.BOOL.decode(buf), ByteBufCodecs.SHORT.decode(buf), ByteBufCodecs.SHORT.decode(buf),
-                        ByteBufCodecs.VAR_LONG.decode(buf), ByteBufCodecs.VAR_LONG.decode(buf));
+                        ByteBufCodecs.VAR_LONG.decode(buf), ByteBufCodecs.VAR_LONG.decode(buf),
+                        ByteBufCodecs.STRING_UTF8.decode(buf));
             }
         };
 
@@ -186,7 +190,7 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
      * minute the open/closed decision was made with. This stream always runs on the master
      * (slaves route it there via {@code needsRoutingToMaster()}).
      */
-    private static TradingStatus buildTradingStatus(IServerMarketManager manager, IServerMarket market)
+    public static TradingStatus buildTradingStatus(IServerMarketManager manager, IServerMarket market)
     {
         int clockMinute = 0;
         boolean realTime = false;
@@ -199,7 +203,8 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
         MarketSettings settings = market.getSettings();
         return new TradingStatus((byte) market.getTradingState().ordinal(), (short) clockMinute, realTime,
                 (short) settings.tradingOpenMinute, (short) settings.tradingCloseMinute,
-                settings.maxOrderVolume, tradeCooldownMs);
+                settings.maxOrderVolume, tradeCooldownMs,
+                java.util.Objects.requireNonNullElse(market.getMaintenanceReason(), ""));
     }
 
     @Override

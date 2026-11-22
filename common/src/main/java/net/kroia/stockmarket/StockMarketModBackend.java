@@ -635,10 +635,8 @@ public class StockMarketModBackend implements StockMarketAPI {
                         if (epoch != trustConnectionEpoch.get())
                             return; // answer of an older connection
                         if (ex == null && trusted != null) {
-                            boolean changed = SlaveTrustCache.set(trusted);
-                            if (changed) {
-                                SlaveTrustSyncPacket.broadcast(trusted);
-                            }
+                            if (SlaveTrustCache.set(trusted))
+                                onSlaveTrustChanged(trusted); // client sync + SM-350 held-back joins
                             return;
                         }
                         Throwable cause = ex instanceof java.util.concurrent.CompletionException && ex.getCause() != null ? ex.getCause() : ex;
@@ -901,6 +899,12 @@ public class StockMarketModBackend implements StockMarketAPI {
      * @param args   its arguments
      */
     private static void invokeDevBootstrap(String method, Class<?>[] types, Object... args) {
+        // The dev code uses the dev-only TestKit mod (-Pwith_testkit=true); without it DevBootstrap fails with
+        // NoClassDefFoundError.
+        if (!dev.architectury.platform.Platform.isModLoaded("testkit")) {
+            StockMarketMod.LOGGER.warn("Dev features are enabled but the TestKit mod is not loaded; tests are off");
+            return;
+        }
         try {
             Class.forName(StockMarketMod.DEV_BOOTSTRAP).getMethod(method, types).invoke(null, args);
         } catch (ReflectiveOperationException e) {
@@ -975,8 +979,62 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         if (SERVER_INSTANCES == null) // SM-325: start refused by the data migration, the server is stopping
             return;
-        SERVER_INSTANCES.MARKET_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
+        sendJoinToMaster(player);
         PlayerJoinSyncPacket.send(player);
+    }
+
+    /**
+     * SM-333 / SM-350: whether a player join may be sent to the master as OnPlayerJoin (creates/renames the
+     * master's user record).
+     * <p>
+     * The master refuses OnPlayerJoin from an untrusted slave and, as the call carries no player, BankSystem
+     * broadcasts the refusal to every player on that slave. So a slave sends it only once the master has answered
+     * "trusted"; while the answer is still unknown ({@code null}, before the handshake or after a disconnect) it
+     * waits, and {@link #onSlaveTrustChanged(boolean)} sends the joins of everyone online once trust arrives.
+     * The master always records its own joins ({@link SlaveTrustCache} is never filled there, so it can't be used
+     * to tell master from slave).
+     *
+     * @param isMaster     this server is the master
+     * @param slaveTrusted the slave's {@link SlaveTrustCache} value ({@code null} = not known yet)
+     * @return true if OnPlayerJoin should be sent now
+     */
+    public static boolean shouldSendJoinToMaster(boolean isMaster, @Nullable Boolean slaveTrusted) {
+        return isMaster || Boolean.TRUE.equals(slaveTrusted);
+    }
+
+    /** Sends OnPlayerJoin for this player if {@link #shouldSendJoinToMaster} allows it. Server thread. */
+    private static void sendJoinToMaster(ServerPlayer player) {
+        if (shouldSendJoinToMaster(SERVER_INSTANCES.MARKET_MANAGER.isMaster(), SlaveTrustCache.get()))
+            SERVER_INSTANCES.MARKET_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
+    }
+
+    /**
+     * Slave only: the master's trust answer differs from the cached one (callers pass the {@code true} result of
+     * {@link SlaveTrustCache#set(boolean)}). Tells the clients ({@link SlaveTrustSyncPacket}) and, on a change into
+     * trusted (first answer, reconnect, or an admin trusting the slave later), sends OnPlayerJoin for every player
+     * online: their joins were held back by {@link #shouldSendJoinToMaster} while trust was unknown or false (SM-350).
+     * A TRUE&rarr;TRUE refresh reports no change, so nothing is re-sent. Re-sending a join that already went through
+     * is harmless (the master's onPlayerJoin is idempotent).
+     * <p>
+     * Callers run on a Netty or JDK pool thread, so the re-send hops to the server thread (player list,
+     * same path as a normal join).
+     *
+     * @param trusted the new trust value
+     */
+    public static void onSlaveTrustChanged(boolean trusted) {
+        SlaveTrustSyncPacket.broadcast(trusted);
+        if (!trusted)
+            return;
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (server == null)
+            return;
+        server.execute(() -> {
+            // Trust may have been lost again (disconnect) before this task ran.
+            if (SERVER_INSTANCES == null || !Boolean.TRUE.equals(SlaveTrustCache.get()))
+                return;
+            for (ServerPlayer player : server.getPlayerList().getPlayers())
+                sendJoinToMaster(player);
+        });
     }
 
 

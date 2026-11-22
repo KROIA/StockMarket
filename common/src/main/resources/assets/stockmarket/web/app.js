@@ -8,6 +8,7 @@
 
   const state = { markets: [], sel: null, tf: null, tfs: [], gameTime: false, candleStart: null, lastBar: null, historyAt: 0,
     mode: 'market', have: null, want: null, pairStarts: '', pairAt: 0, pairLast: null, pairOptions: '', startPair: false,
+    gameLabels: new Map(), // candle time (s) -> {gd, gh}: in-game day/hour of game-time candles (SM-349)
     pairStyle: (() => { try { return localStorage.getItem('sm.pairStyle') === 'line' ? 'line' : 'candles'; } catch (e) { return 'candles'; } })() };
 
   // ---- formatting
@@ -42,19 +43,27 @@
   // ---- chart (Lightweight Charts v5 API)
   const chart = LC.createChart($('chart'), {
     autoSize: true,
-    layout: { background: { type: 'solid', color: '#0d1424' }, textColor: '#7d8aa3', attributionLogo: true },
+    layout: { background: { type: 'solid', color: '#0d1424' }, textColor: '#7d8aa3',
+      // no logo inside the chart: the TradingView credit is the footer link in index.html and must stay (license)
+      attributionLogo: false },
     grid: { vertLines: { color: '#152035' }, horzLines: { color: '#152035' } },
     // candles use the top 5-75 %, the volume histogram the bottom 20 %: they never overlap, at any height
     rightPriceScale: { borderColor: '#1c2840', scaleMargins: { top: 0.05, bottom: 0.25 } },
     timeScale: {
       borderColor: '#1c2840', timeVisible: true, secondsVisible: false,
       tickMarkFormatter: (t, type) => {
+        // game-time mode: label like the in-game chart, "Day N" at the day's first hour, else "hh:00"
+        const g = state.gameTime && state.gameLabels.get(t);
+        if (g) return g.gh === '00:00' ? 'Day ' + g.gd : g.gh;
         const d = new Date(t * 1000);
         return type < 3 ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
           : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
       },
     },
-    localization: { timeFormatter: t => new Date(t * 1000).toLocaleString() },
+    localization: { timeFormatter: t => {
+      const g = state.gameTime && state.gameLabels.get(t);
+      return g ? 'Day ' + g.gd + ' ' + g.gh : new Date(t * 1000).toLocaleString();
+    } },
   });
   const candleSeries = chart.addSeries(LC.CandlestickSeries, {
     upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
@@ -226,6 +235,12 @@
     pollTrades();
   }
 
+  /** Remembers the in-game day/hour the server sent for game-time candles (used by the axis formatters). */
+  function rememberGameLabels(...lists) {
+    state.gameLabels.clear();
+    for (const list of lists) for (const c of list) if (c.gd !== undefined) state.gameLabels.set(c.t, c);
+  }
+
   async function loadHistory(fit) {
     const id = state.sel, tf = state.tf;
     if (id === null || !tf) return;
@@ -235,6 +250,7 @@
     try {
       const d = await api(`api/history?market=${id}&tf=${tf}&max=500`);
       if (id !== state.sel || tf !== state.tf) return; // selection changed meanwhile
+      rememberGameLabels(d.candles);
       candleSeries.setData(d.candles.map(c => ({ time: c.t, open: c.o, high: c.h, low: c.l, close: c.c })));
       volumeSeries.setData(d.candles.map(c => ({
         time: c.t, value: c.v, color: c.c >= c.o ? 'rgba(38,166,154,.45)' : 'rgba(239,83,80,.45)',
@@ -335,6 +351,7 @@
       const [hd, wd] = await Promise.all([
         api(`api/history?market=${have}&tf=${tf}&max=500`), api(`api/history?market=${want}&tf=${tf}&max=500`)]);
       if (have !== state.have || want !== state.want || tf !== state.tf || state.mode !== 'pair') return;
+      rememberGameLabels(wd.candles, hd.candles);
       const candles = ratioCandles(hd.candles, wd.candles, tf);
       pairCandles.setData(candles);
       pairSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
