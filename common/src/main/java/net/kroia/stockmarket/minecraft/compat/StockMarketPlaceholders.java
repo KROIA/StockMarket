@@ -251,7 +251,8 @@ public final class StockMarketPlaceholders {
         // 5. 24h window aggregate from the DB, refreshed in the background
         if (backend.MARKET_PRICE_HISTORY_MANAGER != null && now - lastWindowQueryMs >= WINDOW_QUERY_MS) {
             lastWindowQueryMs = now;
-            backend.MARKET_PRICE_HISTORY_MANAGER.getWindowStats(now - WINDOW_MS).thenAccept(result -> {
+            List<Short> marketIds = smm.getAvailableMarketIDs().stream().map(ItemID::getShort).toList();
+            backend.MARKET_PRICE_HISTORY_MANAGER.getWindowStats(marketIds, now - WINDOW_MS).thenAccept(result -> {
                 if (BACKEND == backend)
                     window24h = result;
             });

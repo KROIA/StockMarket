@@ -20,7 +20,7 @@ import java.util.List;
  * SM-325: the data version of StockMarket's world data, upgraded with ModUtilities' {@link DataMigration} at
  * SERVER_BEFORE_START, before anything opens a StockMarket file (master and slave).
  * <ul>
- *   <li>Marker: {@code <world>/data/StockMarket/data_version.json}; the backup zip goes into the same folder.</li>
+ *   <li>Marker: {@code <world>/data/StockMarket/data_version.json}; the backup zip goes into {@link #BACKUP_DIR}.</li>
  *   <li>Data: everything under {@code <world>/data/StockMarket/} (databases, settings.json, NBT chunks, news,
  *       villager trades) plus the villager trade file of releases up to 2.1.x. {@code config/StockMarket/} is
  *       configuration and not versioned.</li>
@@ -33,6 +33,12 @@ import java.util.List;
 public final class StockMarketDataMigration {
     /** Marker file name in {@link DataManager#BASE_PATH}. */
     public static final String MARKER_FILE = "data_version.json";
+
+    /**
+     * SM-355: backup zips go next to data/StockMarket, not into it (same layout as BankSystem's
+     * {@code data/BankSystem_backups}): a backup never sits inside the data it backs up.
+     */
+    public static final Path BACKUP_DIR = Path.of("data", "StockMarket_backups");
 
     /** T-208: marker of the old runtime half-life migration; a save that has it already ran that change. */
     public static final String NET_FLOW_HALF_LIFE_MARKER = "NetFlowHalfLife360.marker";
@@ -61,12 +67,12 @@ public final class StockMarketDataMigration {
         dataPaths.add(smDir);
         dataPaths.addAll(VillagerTradeManager.legacyFiles(worldRoot));
         DataMigration.migrate(StockMarketMod.MOD_ID, StockMarketMod.VERSION, worldRoot, smDir.resolve(MARKER_FILE),
-                null, dataPaths,
+                worldRoot.resolve(BACKUP_DIR), dataPaths,
                 List.of(new DataMigration.Step(1, "2.2.0", () -> step1(worldRoot))));
     }
 
     /**
-     * The backup zips {@link DataMigration} wrote into {@code <world>/data/StockMarket}
+     * The backup zips {@link DataMigration} wrote into {@code <world>/}{@link #BACKUP_DIR}
      * ({@code stockmarket-data-v<N>-backup-<stamp>.zip}). Compare the sets from before and after a failed
      * {@link #migrate} to find the zip that start made; DataMigration names it only in the exception message.
      *
@@ -74,11 +80,11 @@ public final class StockMarketDataMigration {
      * @return the zip files, empty if none or the folder is unreadable
      */
     public static java.util.Set<Path> backupZips(Path worldRoot) {
-        Path smDir = worldRoot.resolve(DataManager.BASE_PATH);
+        Path dir = worldRoot.resolve(BACKUP_DIR);
         java.util.Set<Path> zips = new java.util.HashSet<>();
-        if (!Files.isDirectory(smDir))
+        if (!Files.isDirectory(dir))
             return zips;
-        try (java.util.stream.Stream<Path> files = Files.list(smDir)) {
+        try (java.util.stream.Stream<Path> files = Files.list(dir)) {
             files.filter(p -> {
                 String n = p.getFileName().toString();
                 return n.startsWith(StockMarketMod.MOD_ID + "-data-v") && n.contains("-backup-") && n.endsWith(".zip");

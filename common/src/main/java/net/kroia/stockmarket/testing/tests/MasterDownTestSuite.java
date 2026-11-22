@@ -1,10 +1,10 @@
 package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
-import net.kroia.modutilities.testing.autotest.AutoTest;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
+import net.kroia.testkit.autotest.AutoTest;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.block.custom.StockMarketBlock;
 import net.kroia.stockmarket.minecraft.item.StockMarketItems;

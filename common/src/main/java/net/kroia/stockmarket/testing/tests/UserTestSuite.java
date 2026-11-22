@@ -5,9 +5,9 @@ import net.kroia.modutilities.NbtCompat;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.stockmarket.marketmanager.User;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
@@ -58,6 +58,25 @@ public class UserTestSuite extends TestSuite {
         addTest("duplicate_name_lookup_refuses_ambiguous", this::test_duplicateName_lookupRefusesAmbiguous);
         addTest("duplicate_name_join_marks_old_stale", this::test_duplicateName_joinMarksOldStale);
         addTest("name_lookup_prefers_online_player", this::test_nameLookup_prefersOnlinePlayer);
+        addTest("join_sent_to_master_only_when_trusted", this::test_joinSentToMaster_onlyWhenTrusted);
+    }
+
+    /**
+     * SM-350: a slave sends OnPlayerJoin only once the master has answered "trusted"; while trust is unknown
+     * (null) or false it is held back. The master always sends (its SlaveTrustCache stays null).
+     * Pure decision check: the re-send on the change into trusted needs the live trust cache, which the
+     * other suites of the cell rely on, so it is not simulated here.
+     */
+    private TestResult test_joinSentToMaster_onlyWhenTrusted() {
+        Boolean[] trustValues = {null, Boolean.FALSE, Boolean.TRUE};
+        for (boolean master : new boolean[]{false, true})
+            for (Boolean trusted : trustValues) {
+                TestResult r = assertEquals("master=" + master + " trusted=" + trusted,
+                        master || Boolean.TRUE.equals(trusted),
+                        StockMarketModBackend.shouldSendJoinToMaster(master, trusted));
+                if (!r.passed()) return r;
+            }
+        return pass("ok");
     }
 
     /**

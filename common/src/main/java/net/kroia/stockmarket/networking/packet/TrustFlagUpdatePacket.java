@@ -87,9 +87,8 @@ public class TrustFlagUpdatePacket extends StockMarketNetworkPacket {
      */
     @Override
     protected void handleOnSlave(ForwardPacketContext context) {
-        boolean changed = SlaveTrustCache.set(trusted);
-        if (changed) {
-            SlaveTrustSyncPacket.broadcast(trusted);
-        }
+        // Client sync, plus (SM-350) the joins held back while this slave was untrusted.
+        if (SlaveTrustCache.set(trusted))
+            net.kroia.stockmarket.StockMarketModBackend.onSlaveTrustChanged(trusted);
     }
 }
