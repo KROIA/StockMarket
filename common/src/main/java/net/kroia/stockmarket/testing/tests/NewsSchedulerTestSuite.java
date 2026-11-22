@@ -3,9 +3,9 @@ package net.kroia.stockmarket.testing.tests;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.news.NewsEventDefinition;
 import net.kroia.stockmarket.stockmarket.market.preset.DefaultPresets;
@@ -19,6 +19,7 @@ import net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.TestNewsPlugin;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -791,6 +792,7 @@ public class NewsSchedulerTestSuite extends TestSuite {
                 for (MarketPreset preset : category.getPresets()) {
                     Item item = BuiltInRegistries.ITEM
                             .getOptional(ResourceLocation.tryParse(preset.getItemId())).orElse(null); // mc<=1.21.10
+                            //.getOptional(Identifier.tryParse(preset.getItemId())).orElse(null); // mc>=1.21.11
                     if (item == null || item == Items.AIR) continue;
                     ItemID id = ItemID.of(new ItemStack(item));
                     if (id != null && id.isValid()) ids.add(id);
