@@ -85,8 +85,10 @@ public class DataMigrationTestSuite extends TestSuite {
 
             TestResult r = assertEquals("marker at data version 1", 1, markerVersion(sm));
             if (!r.passed()) return r;
-            List<Path> zips = backups(sm);
+            List<Path> zips = backups(world);
             r = assertEquals("one backup zip", 1, zips.size());
+            if (!r.passed()) return r;
+            r = assertTrue("backup zip is not inside data/StockMarket", !zips.get(0).startsWith(sm));
             if (!r.passed()) return r;
             try (ZipFile zip = new ZipFile(zips.get(0).toFile())) {
                 r = assertTrue("backup holds the database", zip.getEntry("data/StockMarket/Database/stockdata.db") != null);
@@ -104,7 +106,7 @@ public class DataMigrationTestSuite extends TestSuite {
             r = checkConverted(world, sm, db);
             if (!r.passed()) return r;
             StockMarketDataMigration.migrate(world);
-            return assertEquals("migrate at the current version makes no backup", 1, backups(sm).size());
+            return assertEquals("migrate at the current version makes no backup", 1, backups(world).size());
         } catch (Exception e) {
             return fail("Exception: " + e);
         } finally {
@@ -182,7 +184,7 @@ public class DataMigrationTestSuite extends TestSuite {
             Path sm = world.resolve("data/StockMarket");
             TestResult r = assertEquals("marker at data version 1", 1, markerVersion(sm));
             if (!r.passed()) return r;
-            r = assertEquals("no backup", 0, backups(sm).size());
+            r = assertEquals("no backup", 0, backups(world).size());
             if (!r.passed()) return r;
             try (Stream<Path> files = Files.list(sm)) {
                 return assertEquals("only the marker", 1L, files.count());
@@ -212,7 +214,7 @@ public class DataMigrationTestSuite extends TestSuite {
             }
             TestResult r = assertEquals("settings.json untouched", OLD_SETTINGS, Files.readString(sm.resolve("settings.json")));
             if (!r.passed()) return r;
-            return assertEquals("no backup", 0, backups(sm).size());
+            return assertEquals("no backup", 0, backups(world).size());
         } catch (Exception e) {
             return fail("Exception: " + e);
         } finally {
@@ -269,10 +271,12 @@ public class DataMigrationTestSuite extends TestSuite {
                 .getAsJsonObject().get("dataVersion").getAsInt();
     }
 
-    private static List<Path> backups(Path sm) throws Exception {
-        if (!Files.isDirectory(sm))
+    /** SM-355: the backup zips in data/StockMarket_backups (sibling of data/StockMarket, like BankSystem's). */
+    private static List<Path> backups(Path world) throws Exception {
+        Path dir = world.resolve(StockMarketDataMigration.BACKUP_DIR);
+        if (!Files.isDirectory(dir))
             return List.of();
-        try (Stream<Path> files = Files.list(sm)) {
+        try (Stream<Path> files = Files.list(dir)) {
             return files.filter(p -> p.getFileName().toString().startsWith("stockmarket-data-v")
                     && p.getFileName().toString().endsWith(".zip")).toList();
         }
