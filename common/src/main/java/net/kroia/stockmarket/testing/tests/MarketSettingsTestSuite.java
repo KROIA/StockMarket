@@ -100,7 +100,8 @@ public class MarketSettingsTestSuite extends TestSuite {
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
         try {
             MarketPriceStream.TradingStatus s = new MarketPriceStream.TradingStatus(
-                    (byte) 1, (short) 725, true, (short) 480, (short) 1320, 12800L, 500L);
+                    (byte) 1, (short) 725, true, (short) 480, (short) 1320, 12800L, 500L,
+                    "test.market_closed.reason"); // SM-354: maintenance close reason
             MarketPriceStream.TradingStatus.STREAM_CODEC.encode(buf, s);
             MarketPriceStream.TradingStatus d = MarketPriceStream.TradingStatus.STREAM_CODEC.decode(buf);
             TestResult r = assertEquals("status survives", s, d);
