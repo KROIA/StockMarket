@@ -58,8 +58,8 @@ def devFeatures = (rootProject.findProperty('enable_dev_features') ?: 'false').t
 def withTestKit = devFeatures || file("../../../MC_TestKit/mc_${minecraft_version}_MC_TestKit/common/build/libs/testkit-common-${rootProject.testkit_version}.jar").exists()
 if (withTestKit) {
     dependencies {
-        modCompileOnly "net.kroia:testkit-common:${rootProject.testkit_version}" // mc<=1.21.11
-        //compileOnly "net.kroia:testkit-common:${rootProject.testkit_version}:dev" // mc>=26.1 (common jar carries the dev classifier on 26.1)
+        //modCompileOnly "net.kroia:testkit-common:${rootProject.testkit_version}" // mc<=1.21.11
+        compileOnly "net.kroia:testkit-common:${rootProject.testkit_version}:dev" // mc>=26.1 (common jar carries the dev classifier on 26.1)
     }
 } else {
     compileTestJava.enabled = false
