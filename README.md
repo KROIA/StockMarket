@@ -88,7 +88,7 @@ Use a LuckPerms build made for your Minecraft and loader version: a build for an
 |1.3.0    | [![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002691)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002684)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002682)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.3-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002681)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002679)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002676)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004639)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004641)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004643) |
 
 -->
-Supported MC versions (in development): 1.21.1 – 1.21.11, 26.1 (26.1.2), 26.2, 26.3 — Fabric and NeoForge only. The Forge and Quilt columns below refer to legacy 1.3.1 releases; there are no Forge or Quilt builds of 2.x.
+Supported MC versions: 1.21.1 – 1.21.11, 26.1 (26.1.2), 26.2, 26.3 — Fabric and NeoForge only. The Forge and Quilt columns below refer to legacy 1.3.1 releases; there are no Forge or Quilt builds of 2.x.
 
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket)
 | Minecraft | Fabric | Forge | Quilt | Neoforge |
@@ -695,7 +695,7 @@ A dev build of StockMarket needs ModUtilities and BankSystem jars that were also
 
 | Version | Status | Highlights |
 |---|---|---|
-| [v2.2.0](changelog/v2.2.0.md) | In Development | Per-market trading hours, maintenance mode, TAB/PlaceholderAPI placeholders, translation pass, bugfixes |
+| [v2.2.0](changelog/v2.2.0.md) | Released | Per-market trading hours, order limits, maintenance mode, TAB/PlaceholderAPI placeholders, permission nodes, read-only web interface, multi-server hardening, translation pass, bugfixes |
 | [v2.1.2](changelog/v2.1.2.md) | Released | Money-duplication exploit fix, per-fill net flow accounting, best-price matching, world-safe test fixture |
 | [v2.1.1](changelog/v2.1.1.md) | Released | Dependency version alignment — ModUtilities ListView performance improvement |
 | [v2.1.0](changelog/v2.1.0.md) | Released | Company share support, public market-creation/pause API, virtual orderbook toggle, preset inventory picker |
