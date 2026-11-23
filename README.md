@@ -695,6 +695,7 @@ A dev build of StockMarket needs ModUtilities and BankSystem jars that were also
 
 | Version | Status | Highlights |
 |---|---|---|
+| [v2.2.1](changelog/v2.2.1.md) | In Development | Bugfixes |
 | [v2.2.0](changelog/v2.2.0.md) | Released | Per-market trading hours, order limits, maintenance mode, TAB/PlaceholderAPI placeholders, permission nodes, read-only web interface, multi-server hardening, translation pass, bugfixes |
 | [v2.1.2](changelog/v2.1.2.md) | Released | Money-duplication exploit fix, per-fill net flow accounting, best-price matching, world-safe test fixture |
 | [v2.1.1](changelog/v2.1.1.md) | Released | Dependency version alignment — ModUtilities ListView performance improvement |
