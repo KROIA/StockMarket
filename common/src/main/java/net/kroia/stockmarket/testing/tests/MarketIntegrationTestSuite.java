@@ -1,18 +1,31 @@
 package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.api.event.TransactionLoggedEvent;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.api.ledger.TradeLogEntry;
+import net.kroia.banksystem.api.ledger.TradeRowKind;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
+import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public class MarketIntegrationTestSuite extends TestSuite {
 
@@ -51,6 +64,17 @@ public class MarketIntegrationTestSuite extends TestSuite {
         addTest("limit_order_sell_filled_by_virtual", this::limitOrderTest_3);
         addTest("limit_order_sell_partial_by_virtual", this::limitOrderTest_4);
         addTest("mixed_limit_and_market_order", this::mixedOrderTest_1);
+        addTest("create_market_non_admin_refused", this::test_createMarket_nonAdminRefused);
+        addTest("delete_market_non_admin_refused", this::test_deleteMarket_nonAdminRefused);
+        addTest("get_preferences_other_player_refused", this::test_getPreferences_otherPlayerRefused);
+        addTest("update_preferences_other_player_refused", this::test_updatePreferences_otherPlayerRefused);
+        addTest("slave_forwarded_legit_calls_allowed", this::test_slaveForwarded_legitCallsAllowed);
+        addTest("untrusted_slave_market_settings_refused", this::test_untrustedSlave_marketSettingsRefused);
+        addTest("is_admin_query_refused", this::test_isAdminQuery_refused);
+        // SM-269: no player order is dropped without a refund
+        addTest("delete_market_in_maintenance_refunds_resting_order", this::test_deleteMarket_inMaintenance_refundsRestingOrder);
+        addTest("maintenance_buffered_order_never_reaches_book", this::test_maintenance_bufferedOrderNeverReachesBook);
+        addTest("delete_market_refunds_buffered_order", this::test_deleteMarket_refundsBufferedOrder);
     }
 
     @Override
@@ -476,6 +500,289 @@ public class MarketIntegrationTestSuite extends TestSuite {
             return fail("Market order should still be filled after extra updates");
 
         return pass("Mixed limit sell and market buy orders match correctly");
+    }
+
+    // ---- T-238: player rules of the market manager request (a modified client sends these directly) ----
+
+    /**
+     * A market manager whose calls run on this master's request handler as if {@code playerSender} sent them from
+     * a client (null = server-internal call), through the real encode, handler and decode path.
+     */
+    private static AsyncMarketManager managerAs(UUID playerSender) {
+        return managerAs("", playerSender);
+    }
+
+    /** Like {@link #managerAs(UUID)}, but as if slave {@code slaveID} forwarded the client request. */
+    private static AsyncMarketManager managerAs(String slaveID, UUID playerSender) {
+        return AsyncMarketManager.createForTesting(input ->
+                AsyncMarketManager.Request.instance.handleOnMasterServer(input, slaveID, playerSender));
+    }
+
+    /**
+     * Legit callers keep working through a trusted slave, which forwards a client request with the player's UUID:
+     * an admin creates and deletes a market, a player reads and writes their own preferences.
+     */
+    private TestResult test_slaveForwarded_legitCallsAllowed() {
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        ISyncServerBankManager bank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
+        String slaveID = "t238_test_slave";
+        boolean wasTrusted = bank.isSlaveServerTrusted(slaveID);
+        UUID admin = UUID.randomUUID();
+        UUID player = UUID.randomUUID();
+        bank.trustSlaveServer(slaveID);
+        manager.onPlayerJoin(admin, "T238Admin");
+        manager.setStockmarketAdminMode(admin, true);
+        manager.onPlayerJoin(player, "T238Player");
+        try {
+            ItemID id = fixture.createMarket("t238_delete").getItemID(); // fixture deletes it if the test does not
+            TestResult r = assertNotNull("admin create answered", managerAs(slaveID, admin).createMarketAsync(id).join());
+            if (!r.passed()) return r;
+            r = assertEquals("admin delete answered", Boolean.TRUE, managerAs(slaveID, admin).deleteMarketAsync(id).join());
+            if (!r.passed()) return r;
+            r = assertFalse("market deleted", manager.marketExists(id));
+            if (!r.passed()) return r;
+            r = assertNotNull("own preferences read", managerAs(slaveID, player).getPlayerPreferencesAsync(player).join());
+            if (!r.passed()) return r;
+            return assertEquals("own preferences written", Boolean.TRUE,
+                    managerAs(slaveID, player).updatePlayerPreferencesAsync(player, new PlayerPreferences()).join());
+        } finally {
+            manager.removeUser(admin);
+            manager.removeUser(player);
+            if (!wasTrusted)
+                bank.untrustSlaveServer(slaveID);
+        }
+    }
+
+    /** A player without admin mode cannot create a market; a server-internal call still can. */
+    private TestResult test_createMarket_nonAdminRefused() {
+        ItemID id = serverMarket.getItemID(); // exists, so an allowed create changes nothing
+        TestResult r = assertNull("non-admin player is refused", managerAs(UUID.randomUUID()).createMarketAsync(id).join());
+        if (!r.passed()) return r;
+        return assertNotNull("server-internal create still answers", managerAs(null).createMarketAsync(id).join());
+    }
+
+    /** A player without admin mode cannot delete a market; a server-internal call still can. */
+    private TestResult test_deleteMarket_nonAdminRefused() {
+        ItemID id = serverMarket.getItemID();
+        TestResult r = assertNull("non-admin player is refused", managerAs(UUID.randomUUID()).deleteMarketAsync(id).join());
+        if (!r.passed()) return r;
+        r = assertTrue("market still exists", BACKEND_INSTANCES.MARKET_MANAGER.getSync().marketExists(id));
+        if (!r.passed()) return r;
+        // A missing market, so the allowed delete changes nothing.
+        return assertEquals("server-internal delete still answers", Boolean.FALSE,
+                managerAs(null).deleteMarketAsync(ItemID.INVALID_ID).join());
+    }
+
+    /** A player can read only their own preferences. */
+    private TestResult test_getPreferences_otherPlayerRefused() {
+        UUID player = UUID.randomUUID();
+        TestResult r = assertNull("other player's preferences refused", managerAs(player).getPlayerPreferencesAsync(UUID.randomUUID()).join());
+        if (!r.passed()) return r;
+        return assertNotNull("own preferences answered", managerAs(player).getPlayerPreferencesAsync(player).join());
+    }
+
+    /** A player can write only their own preferences (unknown users, so an allowed write changes nothing). */
+    private TestResult test_updatePreferences_otherPlayerRefused() {
+        UUID player = UUID.randomUUID();
+        TestResult r = assertNull("other player's preferences refused",
+                managerAs(player).updatePlayerPreferencesAsync(UUID.randomUUID(), new PlayerPreferences()).join());
+        if (!r.passed()) return r;
+        return assertEquals("own preferences answered", Boolean.FALSE,
+                managerAs(player).updatePlayerPreferencesAsync(player, new PlayerPreferences()).join());
+    }
+
+    // ---- T-239: an untrusted slave sets the forwarded player UUID itself ----
+
+    /**
+     * T-239: an untrusted slave cannot read a market's settings, even when it names an admin; the admin directly on
+     * the master can. Settings are admin data, so GetSettings is no longer allowed for untrusted slaves.
+     */
+    private TestResult test_untrustedSlave_marketSettingsRefused() {
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        String slaveID = "t239_untrusted_slave";
+        UUID admin = UUID.randomUUID();
+        manager.onPlayerJoin(admin, "T239Admin");
+        manager.setStockmarketAdminMode(admin, true);
+        try {
+            TestResult r = assertFalse("test slave is untrusted",
+                    BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().isSlaveServerTrusted(slaveID));
+            if (!r.passed()) return r;
+            r = assertNotNull("admin reads settings on the master", marketAs("", admin).getSettingsAsync().join());
+            if (!r.passed()) return r;
+            return assertNull("settings refused through an untrusted slave", marketAs(slaveID, admin).getSettingsAsync().join());
+        } finally {
+            manager.removeUser(admin);
+        }
+    }
+
+    /**
+     * T-239: a player may ask only whether they themselves are a StockMarket admin, and an untrusted slave gets no
+     * answer. A server-internal call (null sender, like the slave's /stockmarket manage check) still answers through
+     * a trusted slave.
+     */
+    private TestResult test_isAdminQuery_refused() {
+        ISyncServerBankManager bank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
+        String untrustedSlaveID = "t239_untrusted_slave";
+        String trustedSlaveID = "t239_trusted_slave";
+        boolean wasTrusted = bank.isSlaveServerTrusted(trustedSlaveID);
+        UUID player = UUID.randomUUID();
+        bank.trustSlaveServer(trustedSlaveID);
+        try {
+            TestResult r = assertNull("other player's admin flag refused",
+                    managerAs(player).isStockmarketAdminAsync(UUID.randomUUID()).join());
+            if (!r.passed()) return r;
+            r = assertNotNull("own admin flag answered", managerAs(player).isStockmarketAdminAsync(player).join());
+            if (!r.passed()) return r;
+            r = assertFalse("test slave is untrusted", bank.isSlaveServerTrusted(untrustedSlaveID));
+            if (!r.passed()) return r;
+            r = assertNull("untrusted slave gets no answer",
+                    managerAs(untrustedSlaveID, null).isStockmarketAdminAsync(player).join());
+            if (!r.passed()) return r;
+            return assertNotNull("server-internal call through a trusted slave answered",
+                    managerAs(trustedSlaveID, null).isStockmarketAdminAsync(player).join());
+        } finally {
+            if (!wasTrusted)
+                bank.untrustSlaveServer(trustedSlaveID);
+        }
+    }
+
+    /**
+     * A market whose calls run on this master's request handler as if slave {@code slaveID} ("" = master-local)
+     * forwarded them from {@code playerSender}, through the real encode, handler and decode path.
+     */
+    private AsyncMarket marketAs(String slaveID, UUID playerSender) {
+        return AsyncMarket.createForTesting(serverMarket.getItemID(), input ->
+                AsyncMarket.Request.instance.handleOnMasterServer(input, slaveID, playerSender));
+    }
+
+    // ---- SM-269: deleting a market or maintenance never drops a player order without a refund ----
+
+    /**
+     * Scratch market with no virtual liquidity at price 10; account 1 gets an item bank for it and
+     * 1000 money with nothing locked.
+     */
+    private IServerMarket sm269Market(String name) {
+        IServerMarket m = fixture.createMarket(name);
+        m.test_setDefaultVolumeProviderFunction(this::emptyVolumeDistribution);
+        m.test_setCurrentMarketPrice(10);
+        m.test_clearOrderbook();
+        bankAccount1.createBank(m.getItemID(), 0);
+        bankAccount1.getBank(moneyID).setBalance(1000);
+        return m;
+    }
+
+    /** Restores account 1's money: nothing locked, balance 1000. */
+    private void sm269ResetMoney() {
+        long locked = bankAccount1.getBank(moneyID).getLockedBalance();
+        if (locked > 0) bankAccount1.getBank(moneyID).unlockAmount(locked);
+        bankAccount1.getBank(moneyID).setBalance(1000);
+    }
+
+    /** A player limit buy of {@code units} items at 10, with its money locked the way the order request does. */
+    private Order sm269LockedBuy(IServerMarket m, int units) {
+        long cost = units * 10L;
+        bankAccount1.getBank(moneyID).lockAmount(cost);
+        Order buy = new Order(m.getItemID(), Order.Type.LIMIT, (long) units * scaleFactor, 10, 0, UUID.randomUUID(), bankAccountNr1);
+        buy.setOriginalLockedMoney(cost);
+        return buy;
+    }
+
+    /**
+     * A market saved under maintenance still holds a partly filled resting player buy. Deleting it
+     * cancels the order: the locked money is released and a CLOSE ledger row is written.
+     */
+    private TestResult test_deleteMarket_inMaintenance_refundsRestingOrder() {
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        IServerMarket m = sm269Market("sm269_delete_maint");
+        List<TradeLogEntry> rows = new ArrayList<>();
+        OrderLedger.Writer.testSink = rows::add;
+        try {
+            m.putOrder(new Order(m.getItemID(), Order.Type.LIMIT, -scaleFactor, 10, 0)); // bot sell, 1 item
+            m.update();
+            Order buy = sm269LockedBuy(m, 2);
+            TestResult r = assertTrue("buy accepted", m.putOrder(buy));
+            if (!r.passed()) return r;
+            // SM-318: the fill is a TRADE row (OrderLedger), so BankSystem must not add RAW_CHANGE rows for it.
+            // The event fires synchronously on the master when a row is written (never without a ledger DB).
+            List<TransactionLoggedEvent> rawRows = new ArrayList<>();
+            Consumer<TransactionLoggedEvent> rawListener = e -> {
+                if (e.type() == LedgerType.RAW_CHANGE && e.accountNumber() == bankAccountNr1) rawRows.add(e);
+            };
+            BACKEND_INSTANCES.BANK_SYSTEM_API.getEvents().getTransactionLoggedEvent().addListener(rawListener);
+            try {
+                m.update(); // 1 item fills against the bot, 1 rests in the book
+            } finally {
+                BACKEND_INSTANCES.BANK_SYSTEM_API.getEvents().getTransactionLoggedEvent().removeListener(rawListener);
+            }
+            r = assertTrue("fill writes no RAW_CHANGE row", rawRows.isEmpty());
+            if (!r.passed()) return r;
+            r = assertTrue("buy partly filled and resting", buy.getFilledVolume() > 0 && m.getLimitOrders().contains(buy));
+            if (!r.passed()) return r;
+            r = assertEquals("rest still locked", 10L, bankAccount1.getBank(moneyID).getLockedBalance());
+            if (!r.passed()) return r;
+            m.getSettings().maintenance = true; // as loaded from a save: flag only, the order stays
+
+            r = assertTrue("market deleted", manager.deleteMarket(m.getItemID()));
+            if (!r.passed()) return r;
+            r = assertEquals("locked money released", 0L, bankAccount1.getBank(moneyID).getLockedBalance());
+            if (!r.passed()) return r;
+            String ref = OrderLedger.orderRef(buy.getOrderID());
+            r = assertTrue("CLOSE ledger row written", rows.stream()
+                    .anyMatch(e -> e.ref().equals(ref) && e.rowKind() == TradeRowKind.CLOSE));
+            if (!r.passed()) return r;
+            return pass("Deleting a market under maintenance cancels and refunds its resting player order");
+        } finally {
+            OrderLedger.Writer.testSink = null;
+            sm269ResetMoney();
+        }
+    }
+
+    /**
+     * An order buffered while trading is closed, then maintenance is switched on (flag only): when the
+     * market reopens, the buffered order is cancelled and refunded instead of entering the book.
+     */
+    private TestResult test_maintenance_bufferedOrderNeverReachesBook() {
+        IServerMarket m = sm269Market("sm269_maint_buffer");
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        try {
+            Order buy = sm269LockedBuy(m, 1);
+            TestResult r = assertTrue("buy accepted", m.putOrder(buy));
+            if (!r.passed()) return r;
+            m.setTradingOverride(false);
+            m.updateTradingHours(manager.getCurrentTradingMinute()); // closed: the order stays buffered
+            m.update();
+            r = assertEquals("still locked while closed", 10L, bankAccount1.getBank(moneyID).getLockedBalance());
+            if (!r.passed()) return r;
+            m.getSettings().maintenance = true;
+            m.setTradingOverride(true);
+            m.updateTradingHours(manager.getCurrentTradingMinute());
+            m.update();
+            for (Order o : m.getLimitOrders()) {
+                r = assertTrue("no player order in the book", o.isBotOrder());
+                if (!r.passed()) return r;
+            }
+            return assertEquals("locked money released", 0L, bankAccount1.getBank(moneyID).getLockedBalance());
+        } finally {
+            m.getSettings().maintenance = false;
+            m.test_clearOrderbook();
+            m.test_clearIncomingOrderBuffers();
+            sm269ResetMoney();
+        }
+    }
+
+    /** An order put in the same tick as the market is deleted (still buffered) is refunded. */
+    private TestResult test_deleteMarket_refundsBufferedOrder() {
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        IServerMarket m = sm269Market("sm269_delete_buffer");
+        try {
+            TestResult r = assertTrue("buy accepted", m.putOrder(sm269LockedBuy(m, 1)));
+            if (!r.passed()) return r;
+            r = assertTrue("market deleted", manager.deleteMarket(m.getItemID()));
+            if (!r.passed()) return r;
+            return assertEquals("locked money released", 0L, bankAccount1.getBank(moneyID).getLockedBalance());
+        } finally {
+            sm269ResetMoney();
+        }
     }
 
     private float emptyVolumeDistribution(double price) {

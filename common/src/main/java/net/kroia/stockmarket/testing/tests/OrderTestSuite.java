@@ -1,9 +1,9 @@
 package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
@@ -18,6 +18,11 @@ public class OrderTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.ORDER;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -284,6 +289,25 @@ public class OrderTestSuite extends TestSuite {
         r = assertEquals("price (averageExecutionPrice)", 100L, record.price());
         if (!r.passed()) return r;
         r = assertEquals("time", 5000L, record.time());
+        if (!r.passed()) return r;
+        // SM-317 finish fields
+        r = assertNotNull("finishTime set", record.finishTime());
+        if (!r.passed()) return r;
+        r = assertEquals("limitPrice is 0 for a market order", 0L, record.limitPrice());
+        if (!r.passed()) return r;
+        r = assertEquals("targetVolume", 10L, record.targetVolume());
+        if (!r.passed()) return r;
+        r = assertEquals("finalStatus FILLED", OrderRecordStruct.STATUS_FILLED, record.finalStatus());
+        if (!r.passed()) return r;
+        Order cancelled = new Order(DUMMY_ITEM_ID, Order.Type.LIMIT, -10, 250, 5000L, executor, 3);
+        cancelled.edit(-4, 1000);
+        cancelled.markCancelledByPlayer();
+        OrderRecordStruct partial = cancelled.getHistoricalRecord();
+        r = assertEquals("limitPrice of a limit order", 250L, partial.limitPrice());
+        if (!r.passed()) return r;
+        r = assertEquals("targetVolume signed like amount", -10L, partial.targetVolume());
+        if (!r.passed()) return r;
+        r = assertEquals("finalStatus CANCELLED_BY_PLAYER", OrderRecordStruct.STATUS_CANCELLED_BY_PLAYER, partial.finalStatus());
         if (!r.passed()) return r;
         return pass("getHistoricalRecord returns correct OrderRecordStruct fields");
     }

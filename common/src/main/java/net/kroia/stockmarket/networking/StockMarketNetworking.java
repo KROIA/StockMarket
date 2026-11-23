@@ -7,9 +7,11 @@ import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.entity.UpdateDisplayViewportPacket;
 import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPacket;
-import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.networking.packet.NewsPublishedPacket;
+import net.kroia.stockmarket.networking.packet.OpenTradeScreenPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
+import net.kroia.stockmarket.networking.packet.ClientSettingsSyncPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
 import net.kroia.stockmarket.networking.packet.SlaveTrustSyncPacket;
 import net.kroia.stockmarket.networking.packet.TrustFlagUpdatePacket;
@@ -70,6 +72,8 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final PresetUpdateRequest PRESET_UPDATE_REQUEST = (PresetUpdateRequest) AsynchronousRequestResponseSystem.register(new PresetUpdateRequest());
     public final PluginCreateRequest PLUGIN_CREATE_REQUEST = (PluginCreateRequest) AsynchronousRequestResponseSystem.register(new PluginCreateRequest());
     public final PluginDeleteRequest PLUGIN_DELETE_REQUEST = (PluginDeleteRequest) AsynchronousRequestResponseSystem.register(new PluginDeleteRequest());
+    /** SM-329: reads/sets the master's plugin manager logger switch (checkbox on the Plugin management screen). */
+    public final PluginManagerLoggerRequest PLUGIN_MANAGER_LOGGER_REQUEST = (PluginManagerLoggerRequest) AsynchronousRequestResponseSystem.register(new PluginManagerLoggerRequest());
     public final PlaceInterMarketOrderRequest PLACE_INTER_MARKET_ORDER_REQUEST = (PlaceInterMarketOrderRequest) AsynchronousRequestResponseSystem.register(new PlaceInterMarketOrderRequest());
     public final CancelInterMarketOrderRequest CANCEL_INTER_MARKET_ORDER_REQUEST = (CancelInterMarketOrderRequest) AsynchronousRequestResponseSystem.register(new CancelInterMarketOrderRequest());
     public final GetAvailablePairsRequest GET_AVAILABLE_PAIRS_REQUEST = (GetAvailablePairsRequest) AsynchronousRequestResponseSystem.register(new GetAvailablePairsRequest());
@@ -108,12 +112,12 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public void setupClientReceiverPackets() {
         registerS2C(PlayerJoinSyncPacket.TYPE, PlayerJoinSyncPacket.STREAM_CODEC);
         registerS2C(OpenUIPacket.TYPE, OpenUIPacket.STREAM_CODEC);
-        // Market-deleted broadcast. The default registerS2C overload also registers
-        // the packet with the MultiServerPacketRegistry, enabling the master→slave
-        // relay used to reach players connected to slave servers.
-        registerS2C(MarketRemovedPacket.TYPE, MarketRemovedPacket.STREAM_CODEC);
+        // SM-310: market-changed broadcast (added/removed/opened/closed/maintenance). The default
+        // registerS2C overload also registers the packet with the MultiServerPacketRegistry,
+        // enabling the master→slave relay used to reach players connected to slave servers.
+        registerS2C(MarketChangedPacket.TYPE, MarketChangedPacket.STREAM_CODEC);
         // News-published broadcast (T-073). Same registration shape as
-        // MarketRemovedPacket: registerS2C also registers the packet with the
+        // MarketChangedPacket: registerS2C also registers the packet with the
         // MultiServerPacketRegistry, enabling the master→slave relay used to
         // reach players connected to slave servers.
         registerS2C(NewsPublishedPacket.TYPE, NewsPublishedPacket.STREAM_CODEC);
@@ -124,12 +128,17 @@ public class StockMarketNetworking extends NetworkPacketManager {
         // the standard 2-arg registerS2C still registers a no-op forward
         // handler which is harmless.
         registerS2C(SlaveTrustSyncPacket.TYPE, SlaveTrustSyncPacket.STREAM_CODEC);
+        // T-140: master-owned client settings pushed after an admin SET. The default
+        // registerS2C also registers the master→slave relay, so slave players get it too.
+        registerS2C(ClientSettingsSyncPacket.TYPE, ClientSettingsSyncPacket.STREAM_CODEC);
     }
 
     @Override
     public void setupServerReceiverPackets() {
         registerC2S(UpdateStockMarketDisplayConfigPacket.TYPE, UpdateStockMarketDisplayConfigPacket.STREAM_CODEC);
         registerC2S(UpdateDisplayViewportPacket.TYPE, UpdateDisplayViewportPacket.STREAM_CODEC);
+        // SM-313: open the trade screen on a market (StockMarketClientIntegration), handled by the player's own server
+        registerC2S(OpenTradeScreenPacket.TYPE, OpenTradeScreenPacket.STREAM_CODEC);
     }
 
     @Override

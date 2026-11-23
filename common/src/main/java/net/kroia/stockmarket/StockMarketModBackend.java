@@ -2,10 +2,13 @@ package net.kroia.stockmarket;
 
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.client.ClientTickEvent;
+import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.api.IBankSystemEvents;
+import net.kroia.banksystem.api.audit.AuditExport;
+import net.kroia.banksystem.api.event.AccountFreezeChangedEvent;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
@@ -21,9 +24,15 @@ import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommandHandler;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
+import net.kroia.stockmarket.minecraft.compat.StockMarketDiscord;
+import net.kroia.stockmarket.minecraft.compat.StockMarketWebInterface;
 import net.kroia.stockmarket.minecraft.compat.StockMarketPlaceholders;
 import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.data.DatabaseManager;
+import net.kroia.stockmarket.data.OrderOriginLog;
+import net.kroia.stockmarket.data.StockMarketDataMigration;
+import net.kroia.modutilities.persistence.DataMigration;
+import net.kroia.stockmarket.data.filter.EqualityFilter;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
@@ -40,6 +49,9 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.PluginManager;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
+import net.kroia.stockmarket.stockmarket.market.OrderLedger;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -51,6 +63,7 @@ import net.kroia.stockmarket.news.ClientNewsPictureCache;
 import net.kroia.stockmarket.util.*;
 import net.kroia.stockmarket.villagertrading.VillagerTradeManager;
 import net.kroia.stockmarket.villagertrading.VillagerTradeRewriter;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -58,7 +71,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public class StockMarketModBackend implements StockMarketAPI {
@@ -132,6 +150,36 @@ public class StockMarketModBackend implements StockMarketAPI {
         return CLIENT_INSTANCES;
     }
 
+    /**
+     * T-140: read-only accessor for the server-side instances holder.
+     * <p>
+     * Non-null only in a JVM that runs a StockMarket server (dedicated server, or the integrated
+     * server of a single-player / LAN world) between server setup and shutdown. A client connected
+     * to a remote server always sees {@code null}. Callers must null-check and must not cache the
+     * result across server restarts (a new holder is created on every server start).
+     *
+     * @return the current server instances, or {@code null} if no server runs in this JVM
+     */
+    public static @Nullable ServerInstances getServerInstances() {
+        return SERVER_INSTANCES;
+    }
+
+    /**
+     * T-179: current {@code MARKET.MAX_ORDER_VOLUME_FACTOR} of the running (master) server, read live.
+     * Without a running server (remote client, or before setup) the compile-time default is returned —
+     * client-side derivations are never authoritative (markets/presets come from the master with explicit values).
+     *
+     * @return the factor, &ge; 1
+     */
+    public static long getMaxOrderVolumeFactor() {
+        ServerInstances server = SERVER_INSTANCES;
+        if (server == null || server.SERVER_SETTINGS == null)
+            return MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR;
+        Long factor = server.SERVER_SETTINGS.MARKET.MAX_ORDER_VOLUME_FACTOR.get();
+        return factor == null ? MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR
+                : Math.max(1L, factor);
+    }
+
     StockMarketModBackend()
     {
         COMMON_INSTANCES.LOGGER = new StockMarketLogger();
@@ -155,6 +203,9 @@ public class StockMarketModBackend implements StockMarketAPI {
                 net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart::new);
 
         EventRegistration.init();
+        // SM-325: once per JVM (constructor), so it also works on NeoForge where onServerSetup runs without a server.
+        LifecycleEvent.SERVER_BEFORE_START.register(StockMarketModBackend::onServerBeforeStart);
+        // AdminFlagSync.init() (LuckPerms listener) runs at server start, see onBankSystemSetupComplete (T-217).
         if (StockMarketMod.ENABLE_DEV_FEATURES) {
             invokeDevBootstrap("init", new Class<?>[0]);
         }
@@ -176,6 +227,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(StockMarketModBackend::onPlayerJoinClientSide);
         ClientPlayerEvent.CLIENT_PLAYER_RESPAWN.register(StockMarketModBackend::onPlayerRespawnClientSide);
         ClientTickEvent.CLIENT_LEVEL_POST.register(StockMarketModBackend::onClientTickEvent);
+        // SM-325: explanation screen after the data migration refused a singleplayer world (runs without a level).
+        ClientTickEvent.CLIENT_POST.register(net.kroia.stockmarket.client.StartupRefusalClient::onClientTick);
 
         Plugins.clientSetup();
     }
@@ -192,6 +245,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         events.getBanksystemSetupCompleteSignal().addListener(BANK_SETUP_COMPLETE_LISTENER);
         events.getBankDataLoadedFromFileSignal().removeListener(BANK_DATA_LOADED_LISTENER);
         events.getBankDataLoadedFromFileSignal().addListener(BANK_DATA_LOADED_LISTENER);
+        // SM-315: our files in /banksystem backup export (master and slave); registering again replaces the entry.
+        AuditExport.register(StockMarketMod.MOD_ID, DataManager::contributeAuditExport);
 
         Plugins.serverSetup();
     }
@@ -236,8 +291,99 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
 
     }
+    /**
+     * SM-325: why the data migration refused a world.
+     *
+     * @param kind       which screen text the singleplayer client shows
+     * @param logMessage the full explanation for the server log
+     * @param args       arguments of the screen text: TOO_NEW = saved and supported data version;
+     *                   MIGRATION_FAILED = the backup zip path, empty when no backup was made
+     */
+    public record StartupRefusal(Kind kind, String logMessage, List<String> args) {
+        public enum Kind { TOO_NEW, MIGRATION_FAILED }
+    }
+
+    /** SM-325: refusal found at SERVER_BEFORE_START, consumed by {@link #onBankSystemSetupComplete}; null = start normally. */
+    private static volatile @Nullable StartupRefusal pendingMigrationRefusal = null;
+
+    /** SM-325: set on the integrated server's thread when it refuses the world, consumed by the client tick (same JVM). */
+    private static volatile @Nullable StartupRefusal singleplayerRefusal = null;
+
+    /** @return the refusal the singleplayer client still has to show, or {@code null} */
+    public static @Nullable StartupRefusal getSingleplayerRefusal() {
+        return singleplayerRefusal;
+    }
+
+    /** Called by the client once it has shown the refusal screen. */
+    public static void clearSingleplayerRefusal() {
+        singleplayerRefusal = null;
+    }
+
+    /**
+     * SM-325: upgrades older StockMarket world data ({@link StockMarketDataMigration}) once per server start, before
+     * anything opens a StockMarket file; master, slave and singleplayer alike. The server can't be stopped cleanly
+     * this early, so a failure is kept and {@link #onBankSystemSetupComplete} refuses the start before it opens
+     * any file (same approach as BankSystem's BS-274).
+     *
+     * @param server the server that is about to start
+     */
+    private static void onServerBeforeStart(MinecraftServer server) {
+        pendingMigrationRefusal = null;
+        singleplayerRefusal = null;
+        java.nio.file.Path worldRoot = server.getWorldPath(LevelResource.ROOT);
+        Set<java.nio.file.Path> zipsBefore = StockMarketDataMigration.backupZips(worldRoot);
+        try {
+            StockMarketDataMigration.migrate(worldRoot);
+        } catch (DataMigration.DataVersionTooNewException e) {
+            pendingMigrationRefusal = new StartupRefusal(StartupRefusal.Kind.TOO_NEW,
+                    "The saved StockMarket data version " + e.savedVersion + " is newer than this "
+                    + "StockMarket (v" + StockMarketMod.VERSION + ") supports (" + e.supportedVersion + "). This world "
+                    + "was saved by a newer StockMarket: update StockMarket. Nothing was loaded or changed.",
+                    List.of(Integer.toString(e.savedVersion), Integer.toString(e.supportedVersion)));
+        } catch (java.io.IOException | RuntimeException e) {
+            StockMarketMod.LOGGER.error("[StockMarket] Data migration failed", e);
+            // DataMigration does not return the backup path on failure: the zip this start made is the one that is new.
+            java.nio.file.Path zip = StockMarketDataMigration.backupZips(worldRoot).stream()
+                    .filter(p -> !zipsBefore.contains(p)).findFirst().orElse(null);
+            pendingMigrationRefusal = new StartupRefusal(StartupRefusal.Kind.MIGRATION_FAILED,
+                    "Upgrading the StockMarket data of this world failed, so StockMarket does not "
+                    + "start on half-upgraded data. " + e.getMessage()
+                    + (e.getCause() != null ? " Cause: " + e.getCause() : "")
+                    + (zip != null ? " Backup of the StockMarket data from before the upgrade: " + zip.toAbsolutePath()
+                            + ". Fix the cause and restart (the upgrade continues), or restore the backup."
+                            : " Nothing was changed. Fix the cause and restart."),
+                    zip != null ? List.of(zip.toAbsolutePath().normalize().toString()) : List.of());
+        }
+    }
+
+    /**
+     * SM-325: stops the server because the data migration refused the world. Nothing of StockMarket was loaded,
+     * so nothing is saved at the stop.
+     *
+     * In singleplayer the client then shows the reason (see {@code client.StartupRefusalClient}).
+     *
+     * @param server  the starting server
+     * @param refusal the reason
+     */
+    private static void refuseStartup(MinecraftServer server, StartupRefusal refusal) {
+        StockMarketMod.LOGGER.error("[StockMarket] StockMarket refused to load this world. Stopping the server.\n{}", refusal.logMessage());
+        if (server.isDedicatedServer()) {
+            server.halt(false);
+            return;
+        }
+        singleplayerRefusal = refusal;
+        server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc<=1.21.1
+        //server.schedule(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc>=1.21.2
+    }
+
     private static void onBankSystemSetupComplete()
     {
+        StartupRefusal migrationRefusal = pendingMigrationRefusal;
+        if (migrationRefusal != null) { // SM-325: before anything below opens a StockMarket file
+            pendingMigrationRefusal = null;
+            refuseStartup(UtilitiesPlatform.getServer(), migrationRefusal);
+            return;
+        }
         SERVER_INSTANCES =  new ServerInstances();
         SERVER_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
         SERVER_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
@@ -258,6 +404,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         DataManager.setBackend(SERVER_INSTANCES);
         StockMarketLogger.setBackend(SERVER_INSTANCES);
         VillagerTradeRewriter.setBackend(SERVER_INSTANCES);
+        AdminFlagSync.setBackend(SERVER_INSTANCES);
+        net.kroia.stockmarket.util.TradeAlerts.setBackend(SERVER_INSTANCES); // T-192 alert toggle
 
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
         villagerAutosaveTicks = 0;
@@ -267,6 +415,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         if(isMaster) {
             SERVER_INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             SERVER_INSTANCES.DATABASE_MANAGER.connectToDatabase(UtilitiesPlatform.getServer());
+            // T-215: order-origin diagnostics, next to stockdata.db; master only, orders are created here
+            OrderOriginLog.open(UtilitiesPlatform.getServer().getWorldPath(LevelResource.ROOT).resolve(DatabaseManager.DATABASE_PATH));
             SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager(SERVER_INSTANCES.DATABASE_MANAGER);
             SERVER_INSTANCES.ORDER_RECORD_MANAGER = new OrderRecordManager(SERVER_INSTANCES.DATABASE_MANAGER);
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createMaster();
@@ -283,9 +433,20 @@ public class StockMarketModBackend implements StockMarketAPI {
             // merges that happen later (e.g. VolatileItemComponents config edits + admin
             // confirmation via CONFIRM_ITEMID_MERGE).
             BankSystemMod.getAPI().getEvents().getItemIDsMergedEvent().addListener(ITEM_IDS_MERGED_LISTENER);
+            // T-195: master-only; cancel a frozen account's open orders (see onAccountFreezeChanged).
+            BankSystemMod.getAPI().getEvents().getAccountFreezeChangedEvent().addListener(ACCOUNT_FREEZE_LISTENER);
+            // SM-267: master-only; BankSystem fires ITEM_IDS_REMOVED right after this setup-complete
+            // listener returns, so the markets loaded below are in place when it arrives.
+            BankSystemMod.getAPI().getEvents().getItemIDsRemovedEvent().addListener(ITEM_IDS_REMOVED_LISTENER);
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
             preRegisterPresetItemStacks();
+            // T-217: the LuckPerms listener only while Integrations.SYNC_ADMIN_FLAG_WITH_PERMISSION is on (restart-required).
+            if (SERVER_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.SYNC_ADMIN_FLAG_WITH_PERMISSION.get())
+                AdminFlagSync.init();
+            AdminFlagSync.migrateIfNeeded(); // one-time push of admins to LuckPerms (setting on), users are loaded now
+            StockMarketDiscord.register(SERVER_INSTANCES); // T-217: master only; creates config/modutilities/discord/stockmarket.json
+            StockMarketWebInterface.apply(SERVER_INSTANCES); // SM-347: read-only web page, master only, off by default
             registerItemPriceProvider();
 
             // Villager trade repricing: build the initial price table now that
@@ -401,11 +562,18 @@ public class StockMarketModBackend implements StockMarketAPI {
             if (MultiServerUtils.canInteractWithBankSystem()) {
                 onSlaveConnectedRefreshTrustCache();
             }
+
+            // T-217: a slave keeps default settings, so it always listens to LuckPerms and forwards
+            // changes; the master applies them only while its own setting is on.
+            AdminFlagSync.init();
         }
 
         // Placeholders (master + slave): registers player placeholders and the refresh tick.
         // Placed after the master/slave branch so MARKET_MANAGER exists when the tick runs.
-        StockMarketPlaceholders.init(SERVER_INSTANCES);
+        // T-217: Integrations.PLACEHOLDERS_ENABLED is decided on the master (restart-required); a slave keeps
+        // polling, and an off master simply has no values to hand out.
+        if (!isMaster || SERVER_INSTANCES.SERVER_SETTINGS.INTEGRATIONS.PLACEHOLDERS_ENABLED.get())
+            StockMarketPlaceholders.init(SERVER_INSTANCES);
     }
 
     /**
@@ -421,6 +589,33 @@ public class StockMarketModBackend implements StockMarketAPI {
      * event-loop thread. Non-blocking: uses {@code thenAccept} on the future.
      */
     private static void onSlaveConnectedRefreshTrustCache() {
+        refreshTrustCache(trustConnectionEpoch.get(), 1);
+    }
+
+    /** SM-312: bumped on every SLAVE_CONNECTION_LOST, so answers and retries of an old connection are dropped. */
+    private static final java.util.concurrent.atomic.AtomicInteger trustConnectionEpoch = new java.util.concurrent.atomic.AtomicInteger();
+    private static final int TRUST_REFRESH_MAX_TRIES = 5;
+    private static final long TRUST_REFRESH_RETRY_SECONDS = 3;
+    private static final long TRUST_REQUEST_TIMEOUT_SECONDS = 5;
+
+    /**
+     * One trust request to the master for the connection {@code epoch}.
+     * <p>
+     * SM-312: the request can fail (e.g. the link drops while it is in flight), and then nothing asked again, so
+     * {@link SlaveTrustCache} stayed {@code null} for the whole connection. A failed or empty answer now logs one
+     * warning line and retries after {@value #TRUST_REFRESH_RETRY_SECONDS} s, up to {@value #TRUST_REFRESH_MAX_TRIES}
+     * tries, while the same connection is still up. After that the next reconnect refreshes as before.
+     * <p>
+     * A master that never answers (e.g. it hangs) also counts as a failed try after
+     * {@value #TRUST_REQUEST_TIMEOUT_SECONDS} s. BankSystem's request system fails such a request only after 30 s, and
+     * only from a tick-driven sweep that doesn't run while the server thread is blocked, so without our own timeout
+     * the retry never started. The timeout sits on a {@code copy()} of BankSystem's future, so BankSystem's own future
+     * is never completed by us.
+     *
+     * @param epoch   value of {@link #trustConnectionEpoch} when the connection was accepted
+     * @param attempt 1-based try number
+     */
+    private static void refreshTrustCache(int epoch, int attempt) {
         // Guard against the reconnect race that also protects BankSystem's own
         // onSlaveConnectionAccepted: if this JVM is mid-teardown, SERVER_INSTANCES
         // may already be null.
@@ -432,12 +627,24 @@ public class StockMarketModBackend implements StockMarketAPI {
         try {
             BankSystemMod.getAPI().getServerBankManager().getAsync()
                     .isSlaveServerTrustedAsync(slaveID)
-                    .thenAccept(trusted -> {
-                        if (trusted == null) return; // shouldn't happen — BankSystem uses BOOL codec
-                        boolean changed = SlaveTrustCache.set(trusted);
-                        if (changed) {
-                            SlaveTrustSyncPacket.broadcast(trusted);
+                    .copy()
+                    .orTimeout(TRUST_REQUEST_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+                    .whenComplete((trusted, ex) -> {
+                        // ponytail: epoch check-then-set is not atomic with a disconnect landing in between;
+                        // the next accepted handshake overwrites the value anyway.
+                        if (epoch != trustConnectionEpoch.get())
+                            return; // answer of an older connection
+                        if (ex == null && trusted != null) {
+                            if (SlaveTrustCache.set(trusted))
+                                onSlaveTrustChanged(trusted); // client sync + SM-350 held-back joins
+                            return;
                         }
+                        Throwable cause = ex instanceof java.util.concurrent.CompletionException && ex.getCause() != null ? ex.getCause() : ex;
+                        String reason = cause == null ? "empty answer"
+                                : cause instanceof java.util.concurrent.TimeoutException
+                                        ? "no answer within " + TRUST_REQUEST_TIMEOUT_SECONDS + " s"
+                                        : String.valueOf(cause.getMessage());
+                        retryTrustRefresh(epoch, attempt, reason);
                     });
         } catch (Exception e) {
             // BankSystem torn down mid-flight — leave the cache alone. The next
@@ -447,6 +654,34 @@ public class StockMarketModBackend implements StockMarketAPI {
                         "[StockMarketModBackend] Failed to refresh slave trust cache: " + e.getMessage());
             }
         }
+    }
+
+    /**
+     * SM-312: logs the failed trust request and schedules the next try while the same connection is still up.
+     * <p>
+     * The JDK delayer only waits; the next try itself runs on the server thread via {@code server.execute}, so it
+     * doesn't send requests from a JDK pool thread. A blocked server thread that drains its task queue (e.g. {@code managedBlock})
+     * still runs it. If the server is gone, the retry is dropped.
+     */
+    private static void retryTrustRefresh(int epoch, int attempt, String reason) {
+        boolean giveUp = attempt >= TRUST_REFRESH_MAX_TRIES;
+        if (SERVER_INSTANCES != null && SERVER_INSTANCES.LOGGER != null)
+            SERVER_INSTANCES.LOGGER.warn("[StockMarketModBackend] Slave trust request failed (try " + attempt + "/"
+                    + TRUST_REFRESH_MAX_TRIES + "): " + reason + (giveUp ? "; giving up until the next reconnect"
+                    : "; retrying in " + TRUST_REFRESH_RETRY_SECONDS + " s"));
+        if (giveUp)
+            return;
+        // JDK's shared delayer, no own thread pool. The canInteract check matters: without the link,
+        // isSlaveServerTrustedAsync answers a fail-closed false, which is not the master's answer.
+        CompletableFuture.delayedExecutor(TRUST_REFRESH_RETRY_SECONDS, java.util.concurrent.TimeUnit.SECONDS).execute(() -> {
+            MinecraftServer server = UtilitiesPlatform.getServer();
+            if (server == null)
+                return;
+            server.execute(() -> {
+                if (epoch == trustConnectionEpoch.get() && MultiServerUtils.canInteractWithBankSystem())
+                    refreshTrustCache(epoch, attempt + 1);
+            });
+        });
     }
 
     /**
@@ -466,6 +701,7 @@ public class StockMarketModBackend implements StockMarketAPI {
      * a live master-side toggle.
      */
     private static void onSlaveDisconnectedInvalidateTrustCache() {
+        trustConnectionEpoch.incrementAndGet(); // SM-312: drop pending answers/retries of this connection
         SlaveTrustCache.clear();
     }
 
@@ -475,6 +711,84 @@ public class StockMarketModBackend implements StockMarketAPI {
      *
      * @param aliasToCanonical merged alias ItemID mapped to its canonical ItemID
      */
+    /**
+     * T-195: BankSystem froze or unfroze a bank account (master only, fired once per real change on
+     * the caller's thread). A freeze cancels all open orders of the account across all markets
+     * through the normal cancel path, so the locked money and items are released and the CLOSE
+     * ledger rows are written. New orders are refused by the placement checks in
+     * {@code CreateOrderRequest} and {@code PlaceInterMarketOrderRequest}. An unfreeze needs nothing:
+     * those checks simply pass again.
+     *
+     * @param event the account, its new state and the admin who changed it
+     */
+    private static void onAccountFreezeChanged(AccountFreezeChangedEvent event) {
+        if (!event.frozen() || SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
+        var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        if (serverMarketManager != null)
+            serverMarketManager.cancelOrdersOfBankAccount(event.accountNumber());
+    }
+
+    /**
+     * SM-267: BankSystem removed the ItemIDs of missing mods (master only, server thread, once per
+     * start right after BANKSYSTEM_SETUP_COMPLETED, so the markets are already loaded).
+     * <p>
+     * For every removed ID:
+     * <ul>
+     *   <li>the market is deleted through {@link ServerMarketManager#deleteMarket(ItemID)}, the
+     *       same path as {@code /stockmarket <market> remove}. It cancels the player orders and the
+     *       inter-market orders that touch the market, refunds the money locked by buy orders
+     *       (the money bank still exists), unsubscribes all plugins (plugin settings, news targets)
+     *       and broadcasts the removal to clients and slaves. Items locked by sell orders are not
+     *       refunded: BankSystem already dropped those item balances.</li>
+     *   <li>its price history and order history rows are deleted. The short is never reused, so
+     *       nothing could read them again; the BankSystem trade ledger keeps the money trail.</li>
+     * </ul>
+     * Afterwards the villager price table is rebuilt and the BankSystem bank (money unlocks) and
+     * then the StockMarket data are saved right away, because the event does not fire again on the
+     * next start. Presets (keyed by item name) and player preferences are left alone.
+     * Idempotent: a second call with the same IDs only re-runs the (empty) deletes.
+     *
+     * @param removed the removed ItemIDs (unmodifiable, from {@code IBankSystemEvents.getItemIDsRemovedEvent()})
+     * @return completes when the database deletes are done (already-complete when nothing ran)
+     */
+    public static CompletableFuture<Void> onItemIDsRemoved(Set<ItemID> removed) {
+        if (removed == null || removed.isEmpty() || SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null)
+            return CompletableFuture.completedFuture(null);
+        ServerMarketManager smm = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        if (smm == null) return CompletableFuture.completedFuture(null); // slave
+
+        int marketsDeleted = 0;
+        int ordersCancelled = 0;
+        List<CompletableFuture<Void>> deletes = new ArrayList<>();
+        for (ItemID id : removed) {
+            var market = smm.getServerMarket(id);
+            if (market != null) {
+                ordersCancelled += market.cancelAllPlayerOrdersAndBuffers(); // SM-269: book + buffers, real count
+                if (smm.deleteMarket(id)) marketsDeleted++;
+            }
+            Optional<EqualityFilter> byMarket = Optional.of(new EqualityFilter(id.getShort()));
+            if (SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER != null)
+                deletes.add(SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.removeHistory(Optional.empty(), byMarket));
+            if (SERVER_INSTANCES.ORDER_RECORD_MANAGER != null)
+                deletes.add(SERVER_INSTANCES.ORDER_RECORD_MANAGER.removeHistory(Optional.empty(), Optional.empty(), Optional.empty(), byMarket));
+        }
+
+        if (SERVER_INSTANCES.VILLAGER_TRADE_MANAGER != null)
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
+        // BankSystem first: if the server dies between the two saves, a stale StockMarket order
+        // only gets a failing unlock later, instead of money that stays locked forever.
+        if (SERVER_INSTANCES.BANK_SYSTEM_API != null)
+            SERVER_INSTANCES.BANK_SYSTEM_API.getDataHandler().save_bank();
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (server != null)
+            saveDataToFiles(server);
+
+        SERVER_INSTANCES.LOGGER.info("[StockMarketModBackend] Removed items of missing mods: " + removed.size()
+                + " ItemID(s), " + marketsDeleted + " market(s) deleted, " + ordersCancelled
+                + " player order(s) cancelled (locked money refunded, items not refunded), price and order history dropped");
+        return CompletableFuture.allOf(deletes.toArray(new CompletableFuture[0]));
+    }
+
     private static void onItemIDsMerged(Map<ItemID, ItemID> aliasToCanonical) {
         if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
         var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
@@ -585,6 +899,12 @@ public class StockMarketModBackend implements StockMarketAPI {
      * @param args   its arguments
      */
     private static void invokeDevBootstrap(String method, Class<?>[] types, Object... args) {
+        // The dev code uses the dev-only TestKit mod (-Pwith_testkit=true); without it DevBootstrap fails with
+        // NoClassDefFoundError.
+        if (!dev.architectury.platform.Platform.isModLoaded("testkit")) {
+            StockMarketMod.LOGGER.warn("Dev features are enabled but the TestKit mod is not loaded; tests are off");
+            return;
+        }
         try {
             Class.forName(StockMarketMod.DEV_BOOTSTRAP).getMethod(method, types).invoke(null, args);
         } catch (ReflectiveOperationException e) {
@@ -593,9 +913,36 @@ public class StockMarketModBackend implements StockMarketAPI {
         }
     }
 
+    /**
+     * T-191: writes a SHUTDOWN ledger row for every open player order with fills that are not in the
+     * ledger yet. Must run while BankSystem's database is still open, so Fabric calls it from an
+     * earlier SERVER_STOPPING phase (BankSystem's stop handler runs first there) and NeoForge from a
+     * HIGHEST-priority ServerStoppingEvent subscriber (SM-205), ahead of both mods' Architectury
+     * SERVER_STOPPING handlers. {@link #onServerStop} calls it once more. Calling it again is harmless:
+     * the second call finds no unlogged fills. Master only (no-op on a slave).
+     *
+     * @param server the stopping server (unused, keeps the lifecycle-callback signature)
+     */
+    public static void flushLedgerOnShutdown(MinecraftServer server)
+    {
+        if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null)
+            return;
+        ServerMarketManager manager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        if (manager == null)
+            return;
+        try {
+            // SM-269: buffered orders are not saved; cancel and refund them while BankSystem is still up
+            manager.cancelBufferedPlayerOrders();
+            manager.logOpenOrdersToLedger(OrderLedger.SHUTDOWN);
+        } catch (RuntimeException e) {
+            SERVER_INSTANCES.LOGGER.error("[StockMarketModBackend] Failed to write SHUTDOWN ledger rows", e);
+        }
+    }
+
     // Called from the server side
     public static void onServerStop(MinecraftServer server)
     {
+        flushLedgerOnShutdown(server); // T-191: before saveDataToFiles, so the logged state is saved
         if (SERVER_INSTANCES != null && SERVER_INSTANCES.BANK_SYSTEM_API != null) {
             SERVER_INSTANCES.BANK_SYSTEM_API.setItemPriceProvider(null);
         }
@@ -604,23 +951,25 @@ public class StockMarketModBackend implements StockMarketAPI {
         // Listeners added in onServerStart (master or slave branch); removing an absent one is a no-op.
         IBankSystemEvents events = BankSystemMod.getAPI().getEvents();
         events.getItemIDsMergedEvent().removeListener(ITEM_IDS_MERGED_LISTENER);
+        events.getAccountFreezeChangedEvent().removeListener(ACCOUNT_FREEZE_LISTENER);
+        events.getItemIDsRemovedEvent().removeListener(ITEM_IDS_REMOVED_LISTENER);
         events.getMasterServerSlaveConnected().removeListener(SLAVE_CONNECTED_LISTENER);
         events.getTrustChangedSignal().removeListener(TRUST_CHANGED_LISTENER);
         events.getSlaveConnectionAcceptedSignal().removeListener(SLAVE_ACCEPTED_LISTENER);
         events.getSlaveConnectionLostSignal().removeListener(SLAVE_LOST_LISTENER);
         StockMarketPlaceholders.shutdown();
+        StockMarketDiscord.shutdown();
+        StockMarketWebInterface.stop(); // SM-347
         saveDataToFiles(server);
 
         if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATABASE_MANAGER != null) {
             SERVER_INSTANCES.DATABASE_MANAGER.close();
             SERVER_INSTANCES.DATABASE_MANAGER = null;
         }
+        OrderOriginLog.close(); // no-op on slaves
 
-        if(MultiServerManager.instanceExists())
-        {
-            MultiServerManager.stop();
-            MultiServerManager.cleanup();
-        }
+        // SM-249: no MultiServerManager.stop()/cleanup() here. BankSystem owns the MultiServerManager lifecycle
+        // and cleans it up in its own onServerStop, whichever mod's stop handler runs first.
         SERVER_INSTANCES = null;
     }
 
@@ -628,8 +977,64 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
-        SERVER_INSTANCES.MARKET_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
+        if (SERVER_INSTANCES == null) // SM-325: start refused by the data migration, the server is stopping
+            return;
+        sendJoinToMaster(player);
         PlayerJoinSyncPacket.send(player);
+    }
+
+    /**
+     * SM-333 / SM-350: whether a player join may be sent to the master as OnPlayerJoin (creates/renames the
+     * master's user record).
+     * <p>
+     * The master refuses OnPlayerJoin from an untrusted slave and, as the call carries no player, BankSystem
+     * broadcasts the refusal to every player on that slave. So a slave sends it only once the master has answered
+     * "trusted"; while the answer is still unknown ({@code null}, before the handshake or after a disconnect) it
+     * waits, and {@link #onSlaveTrustChanged(boolean)} sends the joins of everyone online once trust arrives.
+     * The master always records its own joins ({@link SlaveTrustCache} is never filled there, so it can't be used
+     * to tell master from slave).
+     *
+     * @param isMaster     this server is the master
+     * @param slaveTrusted the slave's {@link SlaveTrustCache} value ({@code null} = not known yet)
+     * @return true if OnPlayerJoin should be sent now
+     */
+    public static boolean shouldSendJoinToMaster(boolean isMaster, @Nullable Boolean slaveTrusted) {
+        return isMaster || Boolean.TRUE.equals(slaveTrusted);
+    }
+
+    /** Sends OnPlayerJoin for this player if {@link #shouldSendJoinToMaster} allows it. Server thread. */
+    private static void sendJoinToMaster(ServerPlayer player) {
+        if (shouldSendJoinToMaster(SERVER_INSTANCES.MARKET_MANAGER.isMaster(), SlaveTrustCache.get()))
+            SERVER_INSTANCES.MARKET_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
+    }
+
+    /**
+     * Slave only: the master's trust answer differs from the cached one (callers pass the {@code true} result of
+     * {@link SlaveTrustCache#set(boolean)}). Tells the clients ({@link SlaveTrustSyncPacket}) and, on a change into
+     * trusted (first answer, reconnect, or an admin trusting the slave later), sends OnPlayerJoin for every player
+     * online: their joins were held back by {@link #shouldSendJoinToMaster} while trust was unknown or false (SM-350).
+     * A TRUE&rarr;TRUE refresh reports no change, so nothing is re-sent. Re-sending a join that already went through
+     * is harmless (the master's onPlayerJoin is idempotent).
+     * <p>
+     * Callers run on a Netty or JDK pool thread, so the re-send hops to the server thread (player list,
+     * same path as a normal join).
+     *
+     * @param trusted the new trust value
+     */
+    public static void onSlaveTrustChanged(boolean trusted) {
+        SlaveTrustSyncPacket.broadcast(trusted);
+        if (!trusted)
+            return;
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (server == null)
+            return;
+        server.execute(() -> {
+            // Trust may have been lost again (disconnect) before this task ran.
+            if (SERVER_INSTANCES == null || !Boolean.TRUE.equals(SlaveTrustCache.get()))
+                return;
+            for (ServerPlayer player : server.getPlayerList().getPlayers())
+                sendJoinToMaster(player);
+        });
     }
 
 
@@ -754,6 +1159,8 @@ public class StockMarketModBackend implements StockMarketAPI {
     private static final Runnable BANK_SETUP_COMPLETE_LISTENER = StockMarketModBackend::onBankSystemSetupComplete;
     private static final Runnable BANK_DATA_LOADED_LISTENER = StockMarketModBackend::onPostBankSystemDataLoaded;
     private static final Consumer<Map<ItemID, ItemID>> ITEM_IDS_MERGED_LISTENER = StockMarketModBackend::onItemIDsMerged;
+    private static final Consumer<AccountFreezeChangedEvent> ACCOUNT_FREEZE_LISTENER = StockMarketModBackend::onAccountFreezeChanged;
+    private static final Consumer<Set<ItemID>> ITEM_IDS_REMOVED_LISTENER = ids -> onItemIDsRemoved(ids);
     private static final Runnable SLAVE_CONNECTED_LISTENER = () -> {
         if (SERVER_INSTANCES == null || SERVER_INSTANCES.VILLAGER_TRADE_MANAGER == null) return;
         SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.broadcastTable();

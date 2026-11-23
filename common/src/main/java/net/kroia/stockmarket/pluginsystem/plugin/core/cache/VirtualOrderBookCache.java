@@ -83,6 +83,8 @@ public class VirtualOrderBookCache {
 
     private final List<ManipulationData> manipulationData = new ArrayList<ManipulationData>();
     private boolean resetVirtualVolume = false;
+    /** Trend accumulation: pending depth memory side factors, NaN = none pending. */
+    private float pendingBidFactor = Float.NaN, pendingAskFactor = Float.NaN;
 
     public VirtualOrderBookCache()
     {
@@ -104,6 +106,16 @@ public class VirtualOrderBookCache {
         this.resetVirtualVolume = true;
     }
 
+    /**
+     * Queues new depth memory side factors (see {@link Orderbook#setVirtualDepthSideFactors}); the last call
+     * before {@link #apply} wins.
+     */
+    public void setVirtualDepthSideFactors(float bidFactor, float askFactor)
+    {
+        pendingBidFactor = bidFactor;
+        pendingAskFactor = askFactor;
+    }
+
     public void apply(IServerMarket serverMarket)
     {
         Orderbook orderBook = serverMarket.getOrderbook();
@@ -117,5 +129,10 @@ public class VirtualOrderBookCache {
             data.apply(orderBook);
         }
         manipulationData.clear();
+        if(!Float.isNaN(pendingBidFactor))
+        {
+            orderBook.setVirtualDepthSideFactors(pendingBidFactor, pendingAskFactor);
+            pendingBidFactor = pendingAskFactor = Float.NaN;
+        }
     }
 }

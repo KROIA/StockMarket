@@ -1,18 +1,33 @@
 package net.kroia.stockmarket.testing.tests;
 
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.banksystem.data.AuditExporter;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.data.DatabaseManager;
+import net.kroia.stockmarket.data.OrderOriginLog;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 
+import net.minecraft.server.MinecraftServer;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 public class DatabaseTestSuite extends TestSuite {
 
@@ -40,6 +55,7 @@ public class DatabaseTestSuite extends TestSuite {
         addTest("close_waitsForQueuedJob", this::test_close_waitsForQueuedJob);
         addTest("close_rejectsSubmitAfterClose", this::test_close_rejectsSubmitAfterClose);
         addTest("close_fromDbWorker_noDeadlock", this::test_close_fromDbWorker_noDeadlock);
+        addTest("auditExport_copiesBothDatabases", this::test_auditExport_copiesBothDatabases);
     }
 
     @Override
@@ -57,16 +73,82 @@ public class DatabaseTestSuite extends TestSuite {
      * the test thread races in-flight db-worker commits and causes intermittent
      * "cannot commit/rollback - no transaction is active" failures.
      *
+     * <p>
+     * Earlier suites can leave a backlog of writes queued; it is drained first ({@link TestFixture#dbBarrier}) so
+     * the 10 s budget measures the test body, not the backlog.
+     *
      * @param body the test body to execute on the database thread
      * @return the body's result, or a failure on exception/timeout
      */
     private TestResult onDbThread(Callable<TestResult> body) {
         if (backend.DATABASE_MANAGER == null)
             return fail("DATABASE_MANAGER is null");
+        ExecutorService db = backend.DATABASE_MANAGER.getDatabaseThread();
+        Future<?> barrier;
         try {
-            return backend.DATABASE_MANAGER.getDatabaseThread().submit(body).get(10, TimeUnit.SECONDS);
+            barrier = TestFixture.dbBarrier(backend.DATABASE_MANAGER);
+        } catch (RejectedExecutionException e) {
+            return fail("db-worker rejected the drain barrier: " + e);
+        }
+        if (!pumpUntil(barrier::isDone, TestFixture.DB_DRAIN_TIMEOUT_MS))
+            return fail("db-worker queue did not drain within " + TestFixture.DB_DRAIN_TIMEOUT_MS + " ms before the test body could start");
+        try {
+            return db.submit(body).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("Test body failed on db-worker thread: " + e);
+        }
+    }
+
+    /**
+     * SM-315: {@code /banksystem backup export} (BankSystem's {@link AuditExporter}) puts consistent copies of
+     * stockdata.db and stockmarket_diagnostics.db plus settings.json into the package, at the world's data/ paths.
+     */
+    private TestResult test_auditExport_copiesBothDatabases() {
+        MinecraftServer server = getServer();
+        if (server == null || backend.DATABASE_MANAGER == null || OrderOriginLog.live() == null)
+            return fail("live master setup missing");
+        CompletableFuture<AuditExporter.Result> export = AuditExporter.export(server, "sm_autotest");
+        if (!pumpUntil(export::isDone, 120_000))
+            return fail("export did not finish within 120 s");
+        AuditExporter.Result r;
+        try {
+            r = export.join();
+        } catch (Exception e) {
+            return fail("export failed: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
+        }
+        try {
+            for (String db : List.of("data/StockMarket/Database/stockdata.db", "data/StockMarket/Database/stockmarket_diagnostics.db")) {
+                Path file = r.folder().resolve(db);
+                if (!Files.isRegularFile(file))
+                    return fail(db + " is not in the package");
+                try (Connection c = DiagnosticsDatabase.connect(file); Statement st = c.createStatement();
+                     ResultSet rs = st.executeQuery("PRAGMA integrity_check")) {
+                    String ok = rs.next() ? rs.getString(1) : null;
+                    if (!"ok".equals(ok))
+                        return fail(db + " integrity_check: " + ok);
+                }
+            }
+            if (!Files.isRegularFile(r.folder().resolve("data/StockMarket/settings.json")))
+                return fail("settings.json is not in the package");
+            return pass("both StockMarket databases pass integrity_check; settings.json present");
+        } catch (Exception e) {
+            return fail("threw " + e);
+        } finally {
+            deleteTree(r.folder());
+            try {
+                Files.deleteIfExists(r.zip());
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /** Best-effort recursive delete. */
+    private static void deleteTree(Path dir) {
+        if (dir == null || !Files.exists(dir))
+            return;
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+        } catch (Exception ignored) {
         }
     }
 
@@ -80,15 +162,20 @@ public class DatabaseTestSuite extends TestSuite {
             // throws "cannot commit - no transaction is active". Execute a write
             // statement to start a transaction.
             Connection conn = dbManager.getConnection();
-            conn.createStatement().execute("CREATE TABLE IF NOT EXISTS _test_commit (id INTEGER)");
-            conn.createStatement().execute("INSERT INTO _test_commit VALUES (1)");
+            // Statements on the live connection must be closed: an open one makes the SM-315 export's VACUUM INTO fail.
+            try (Statement st = conn.createStatement()) {
+                st.execute("CREATE TABLE IF NOT EXISTS _test_commit (id INTEGER)");
+                st.execute("INSERT INTO _test_commit VALUES (1)");
+            }
 
             boolean result = dbManager.commitTransaction();
             TestResult r = assertTrue("commitTransaction should succeed on valid connection", result);
             if (!r.passed()) return r;
 
             // Clean up the temp table
-            conn.createStatement().execute("DROP TABLE IF EXISTS _test_commit");
+            try (Statement st = conn.createStatement()) {
+                st.execute("DROP TABLE IF EXISTS _test_commit");
+            }
             dbManager.commitTransaction();
 
             return pass("commitTransaction succeeds normally");
@@ -185,15 +272,19 @@ public class DatabaseTestSuite extends TestSuite {
             // SQLite requires an active write transaction before commit — execute a
             // dummy write so the commit has something to commit.
             Connection conn = dbManager.getConnection();
-            conn.createStatement().execute("CREATE TABLE IF NOT EXISTS _test_shutdown (id INTEGER)");
-            conn.createStatement().execute("INSERT INTO _test_shutdown VALUES (1)");
+            try (Statement st = conn.createStatement()) {
+                st.execute("CREATE TABLE IF NOT EXISTS _test_shutdown (id INTEGER)");
+                st.execute("INSERT INTO _test_shutdown VALUES (1)");
+            }
 
             boolean commitResult = dbManager.commitTransaction();
             TestResult r = assertTrue("Commit before close should succeed", commitResult);
             if (!r.passed()) return r;
 
             // Clean up
-            conn.createStatement().execute("DROP TABLE IF EXISTS _test_shutdown");
+            try (Statement st = conn.createStatement()) {
+                st.execute("DROP TABLE IF EXISTS _test_shutdown");
+            }
             dbManager.commitTransaction();
 
             return pass("shutdownDatabase pattern commits before close (verified commit works)");

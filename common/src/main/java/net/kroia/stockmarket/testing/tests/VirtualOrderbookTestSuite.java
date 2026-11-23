@@ -1,8 +1,11 @@
 package net.kroia.stockmarket.testing.tests;
 
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.modutilities.NbtCompat;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
+import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
+import net.kroia.stockmarket.stockmarket.market.core.DepthMemory;
 import net.kroia.stockmarket.stockmarket.market.core.VirtualOrderbook;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.DynamicIndexedArray;
@@ -16,6 +19,11 @@ public class VirtualOrderbookTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.VIRTUAL_ORDERBOOK;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -38,6 +46,31 @@ public class VirtualOrderbookTestSuite extends TestSuite {
         addTest("save_load_round_trip", this::test_save_load_roundTrip);
         addTest("get_capital_sums_products", this::test_getCapital_sumsProducts);
         addTest("duplicate_round_conservative_matches", this::test_duplicateRoundConservative_matchesDynamicIndexedArray);
+        addTest("jump_up_zeroes_swept_range", this::test_jumpUp_zeroesSweptRange);
+        addTest("jump_down_zeroes_swept_range", this::test_jumpDown_zeroesSweptRange);
+        // T-198: depth memory
+        addTest("depth_memory_profile_mean_nonneg_continuous", this::test_depthMemory_profile);
+        addTest("depth_memory_partial_eviction_conserves", this::test_depthMemory_partialEviction);
+        addTest("depth_memory_shift_back_fill_equals_read", this::test_depthMemory_shiftBack);
+        addTest("depth_memory_conservation_flat_and_production", this::test_depthMemory_conservation);
+        addTest("depth_memory_jump_gap_recorded_zero", this::test_depthMemory_jumpGap);
+        addTest("depth_memory_fade_half_life_and_off", this::test_depthMemory_fade);
+        addTest("depth_memory_fade_side_factors", this::test_depthMemory_fadeSideFactors);
+        addTest("array_borders_match_layout", this::test_arrayBorders);
+        addTest("depth_memory_nbt_round_trip", this::test_depthMemory_nbt);
+        addTest("depth_memory_reset_clears", this::test_depthMemory_resetClears);
+        // T-199: real volume
+        addTest("depth_memory_materialises_default_plus_leaving", this::test_depthMemory_materialise);
+        addTest("depth_memory_reentering_slot_sums_to_volume", this::test_depthMemory_reentering);
+        addTest("depth_memory_crossing_keeps_signs", this::test_depthMemory_crossing);
+        // T-211: dense memory
+        addTest("depth_memory_dense_no_jump_on_price_move", this::test_depthMemory_noJumpOnMove);
+        addTest("depth_memory_dense_new_slots_above_ceiling_recover", this::test_depthMemory_newSlotsAboveCeiling);
+        addTest("depth_memory_dense_target_refresh_rule", this::test_depthMemory_targetRefresh);
+        addTest("depth_memory_dense_sparse_save_migrates", this::test_depthMemory_sparseMigration);
+        addTest("side_volume_one_side_only", this::test_sideVolume_oneSideOnly);
+        addTest("side_volume_matches_level_scan_with_memory", this::test_sideVolume_matchesLevelScan);
+        addTest("side_volume_cap_early_exit", this::test_sideVolume_capEarlyExit);
     }
 
     private VirtualOrderbook createOrderbook(long marketPrice) {
@@ -317,5 +350,674 @@ public class VirtualOrderbookTestSuite extends TestSuite {
             }
         }
         return pass("VirtualOrderbook.roundConservative matches DynamicIndexedArray.roundConservative");
+    }
+
+    /**
+     * T-164: a jump past the upper window edge must not mirror the old ask shape as bids.
+     * The provider emulates production, where it still sees the stale price (50): above 50 it
+     * returns the large "ask" magnitude 7, below it the "bid" magnitude 3.
+     * After jumping to 200 the swept slots [150,200) must be 0, slots above 200 sell-side.
+     */
+    private TestResult test_jumpUp_zeroesSweptRange() {
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.setDefaultVolumeProvider((price) -> price > 50 ? 7.0f : 3.0f);
+        vob.setCurrentMarketPrice(50);
+        vob.resetVolumeDistribution();
+
+        vob.setCurrentMarketPrice(200);
+        for (long p = 150; p < 200; p++) {
+            float vol = vob.getVolume(p);
+            if (Math.abs(vol) > EPSILON)
+                return fail("Swept slot " + p + " should be 0 after jump up, got: " + vol);
+        }
+        for (long p = 201; p < 250; p++) {
+            float vol = vob.getVolume(p);
+            if (vol >= 0)
+                return fail("Slot " + p + " above new price should be sell-side (<0), got: " + vol);
+        }
+        return pass("Jump up zeroes swept range, keeps sell side above price");
+    }
+
+    /**
+     * T-164 mirror: a jump past the lower window edge must not mirror the old bid shape as asks.
+     * Window starts centred at 300 (provider stale price 300); jump to 150 → (150,200) must be 0,
+     * slots below 150 buy-side.
+     */
+    private TestResult test_jumpDown_zeroesSweptRange() {
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.setDefaultVolumeProvider((price) -> price < 300 ? 7.0f : 3.0f);
+        vob.setCurrentMarketPrice(300);
+        vob.resetVolumeDistribution();
+
+        vob.setCurrentMarketPrice(150);
+        for (long p = 151; p < 200; p++) {
+            float vol = vob.getVolume(p);
+            if (Math.abs(vol) > EPSILON)
+                return fail("Swept slot " + p + " should be 0 after jump down, got: " + vol);
+        }
+        for (long p = 100; p < 150; p++) {
+            float vol = vob.getVolume(p);
+            if (vol <= 0)
+                return fail("Slot " + p + " below new price should be buy-side (>0), got: " + vol);
+        }
+        return pass("Jump down zeroes swept range, keeps buy side below price");
+    }
+
+    // ── T-198: depth memory ─────────────────────────────────────────────────
+
+    /** Flat default depth used by the memory tests: 10 per raw tick. */
+    private static final float FLAT = 10f;
+
+    /** @return a book with a flat provider, memory on (half-life 30 min), price {@code price} */
+    private VirtualOrderbook memoryBook(long price) {
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.test_setDepthMemoryHalfLifeSeconds(1800.0);
+        vob.setDefaultVolumeProvider(p -> FLAT);
+        vob.setCurrentMarketPrice(price);
+        vob.resetVolumeDistribution();
+        return vob;
+    }
+
+    /** @return sum of |volume| over [from, to] */
+    private static double absSum(VirtualOrderbook vob, long from, long to) {
+        double s = 0;
+        for (long p = from; p <= to; p++) s += Math.abs(vob.getVolume(p));
+        return s;
+    }
+
+    /** Flat default depth for {@link DepthMemory} unit tests: {@link #FLAT} per tick from price 1. */
+    private static final DepthMemory.DefaultDepth FLAT_DEPTH = new DepthMemory.DefaultDepth() {
+        @Override public double at(long price) { return price < 1 ? 0 : FLAT; }
+        @Override public double sum(long lo, long hi) { lo = Math.max(lo, 1); return hi < lo ? 0 : FLAT * (hi - lo + 1); }
+    };
+
+    /**
+     * Profile of a segment (density units): never negative, cells sum to exactly the stored volume,
+     * continuous across slot edges (remembered and missing neighbours) and at the window boundary;
+     * also the shifted-kink case (large boundary edge).
+     */
+    private TestResult test_depthMemory_profile() {
+        DepthMemory dm = new DepthMemory();
+        int k0 = DepthMemory.slotOf(10000);
+        long ws = DepthMemory.slotStart(k0) + 20, we = DepthMemory.slotStart(k0) + 60;
+        double[] rho = { 3, 8, 4.5, 6, 9, 3.5, 7 };     // densities; slot k0 + 4 stays missing (default 10)
+        for (int i = 0; i < rho.length; i++)
+            for (boolean above : new boolean[]{ false, true })
+                dm.setVolume(k0 - 3 + i, above, rho[i] * DepthMemory.outside(k0 - 3 + i, above, ws, we));
+        java.util.function.LongToDoubleFunction bnd = p -> 5;
+        long from = DepthMemory.slotStart(k0 - 3), to = DepthMemory.slotEnd(k0 + 3);
+        double prev = Double.NaN;
+        for (long p = from; p <= to; p++) {
+            if (p >= ws && p <= we) { prev = Double.NaN; continue; }
+            DepthMemory.Segment seg = dm.segmentAt(p, ws, we, bnd, FLAT_DEPTH);
+            double v = seg.stored ? seg.cellValue(p) : FLAT_DEPTH.at(p);
+            if (v < 0) return fail("Negative value " + v + " at " + p);
+            if (!Double.isNaN(prev) && Math.abs(v - prev) > 0.5)
+                return fail("Jump " + prev + " -> " + v + " at " + p);
+            prev = v;
+            if (p == seg.lo && seg.stored) {
+                double sum = 0;
+                for (long q = seg.lo; q <= seg.hi; q++) sum += seg.cellValue(q);
+                double vol = dm.getVolume(seg.k, p > we);
+                if (Math.abs(sum - vol) > 1e-4 * vol)
+                    return fail("Segment " + seg.lo + ".." + seg.hi + " sums to " + sum + " != V " + vol);
+            }
+        }
+        if (Math.abs(dm.segmentAt(ws - 1, ws, we, bnd, FLAT_DEPTH).cellValue(ws - 1) - 5) > 0.5
+                || Math.abs(dm.segmentAt(we + 1, ws, we, bnd, FLAT_DEPTH).cellValue(we + 1) - 5) > 0.5)
+            return fail("Profile not continuous at the window boundary");
+        // Missing neighbour (slot k0 + 4) whose default (2) is thinner than the segment: the edge meets it
+        DepthMemory.DefaultDepth thin = new DepthMemory.DefaultDepth() {
+            @Override public double at(long price) { return 2; }
+            @Override public double sum(long lo, long hi) { return 2.0 * (hi - lo + 1); }
+        };
+        double last = dm.segmentAt(to, ws, we, bnd, thin).cellValue(to);
+        if (Math.abs(last - 2) > 0.5) return fail("Edge next to a missing neighbour reads " + last + ", default 2");
+        // Shifted kink: tiny density next to a thick window boundary
+        dm.setVolume(k0, false, 0.5 * DepthMemory.outside(k0, false, ws, we));
+        DepthMemory.Segment seg = dm.segmentAt(ws - 1, ws, we, p -> 10.0, FLAT_DEPTH);
+        double sum = 0;
+        for (long q = seg.lo; q <= seg.hi; q++) {
+            double v = seg.cellValue(q);
+            if (v < 0) return fail("Negative value with shifted kink at " + q);
+            sum += v;
+        }
+        double vol = dm.getVolume(k0, false);
+        if (Math.abs(sum - vol) > 1e-4 * vol) return fail("Shifted-kink sum " + sum + " != V " + vol);
+        return pass("Profile non-negative, cells sum to V, continuous at slot and window edges");
+    }
+
+    /**
+     * Partial-overlap eviction: a move that evicts part of a slot (the rest is still in the window
+     * or was outside already) keeps the slot's total exactly (flat provider); consumed slots read 0.
+     */
+    private TestResult test_depthMemory_partialEviction() {
+        VirtualOrderbook vob = memoryBook(1000);           // window [950, 1049]
+        for (long p = 1001; p <= 1049; p++) vob.setVolume(p, 0f);
+        long lo = DepthMemory.slotStart(DepthMemory.slotOf(950));
+        double before = absSum(vob, lo, 1029);
+        vob.setCurrentMarketPrice(1080);                   // window [1030, 1129], leaving [950, 1029]
+        double after = absSum(vob, lo, 1029);
+        if (Math.abs(after - before) > 1e-3 * before)
+            return fail("Not conserved: " + before + " -> " + after);
+        int kFirstEmpty = DepthMemory.slotOf(1001) + 1;
+        for (long p = DepthMemory.slotStart(kFirstEmpty); p < DepthMemory.slotStart(DepthMemory.slotOf(1029)); p++)
+            if (Math.abs(vob.getVolume(p)) > EPSILON)
+                return fail("Consumed tick " + p + " outside the window reads " + vob.getVolume(p));
+        return pass("Eviction conserves " + before + " and keeps consumed slots at 0");
+    }
+
+    /** Shifting back fills the entering ticks with exactly what was read there before the shift. */
+    private TestResult test_depthMemory_shiftBack() {
+        VirtualOrderbook vob = memoryBook(1000);
+        for (long p = 1001; p <= 1049; p++) vob.setVolume(p, 0f);
+        for (long p = 960; p <= 990; p += 3) vob.setVolume(p, 4f);
+        vob.setCurrentMarketPrice(1080);                   // window [1030, 1129]
+        float[] read = new float[40];
+        for (int i = 0; i < 40; i++) read[i] = vob.getVolume(990 + i);
+        vob.setCurrentMarketPrice(1040);                   // window [990, 1089], entering [990, 1029]
+        if (vob.getMinEditablePrice() != 990) return fail("Unexpected window start " + vob.getMinEditablePrice());
+        for (int i = 0; i < 40; i++) {
+            float v = vob.getVolume(990 + i);
+            if (Math.abs(Math.abs(v) - Math.abs(read[i])) > EPSILON)
+                return fail("Tick " + (990 + i) + ": read " + read[i] + " before, filled " + v);
+        }
+        return pass("Shift-fill equals the values read before the shift");
+    }
+
+    // ── T-200: one-sided volume to a target ────────────────────────────────
+
+    /** Reference: sum of |rounded volume| of the asked side over every level from..to (no skipping). */
+    private static long scanSide(VirtualOrderbook vob, long from, long to, boolean askSide) {
+        long sum = 0;
+        int step = to >= from ? 1 : -1;
+        for (long p = from; ; p += step) {
+            long v = (long) vob.getVolumeRounded(p);
+            if (askSide ? v < 0 : v > 0) sum += Math.abs(v);
+            if (p == to) return sum;
+        }
+    }
+
+    /** The bid on the price tick is not counted for ask sizing (and vice versa). */
+    private TestResult test_sideVolume_oneSideOnly() {
+        VirtualOrderbook vob = memoryBook(1000);           // price tick 1000 holds a bid (+10)
+        long asks = vob.sideVolume(1000, 1010, true, Long.MAX_VALUE);
+        TestResult r = assertEquals("asks 1001..1010", 100L, asks);
+        if (!r.passed()) return r;
+        vob.setVolume(1000, -4f);                          // price tick turned into an ask
+        long bids = vob.sideVolume(1000, 990, false, Long.MAX_VALUE);
+        r = assertEquals("bids 990..999 only", 100L, bids);
+        if (!r.passed()) return r;
+        return assertEquals("ask on the price tick counted for a buy", 104L, vob.sideVolume(1000, 1010, true, Long.MAX_VALUE));
+    }
+
+    /**
+     * With remembered empty depth outside the window (consumed asks, then the price moved up), the
+     * skipping sum equals a level-by-level scan both ways, and the empty stretch adds nothing.
+     */
+    private TestResult test_sideVolume_matchesLevelScan() {
+        VirtualOrderbook vob = memoryBook(1000);           // window [950, 1049]
+        for (long p = 1001; p <= 1049; p++) vob.setVolume(p, 0f);
+        vob.setCurrentMarketPrice(1080);                   // window [1030, 1129], [1001, 1049] empty bids now
+        for (long[] c : new long[][]{ {1080, 800}, {1080, 1001}, {1080, 1200}, {1080, 3000} }) {
+            boolean ask = c[1] > c[0];
+            long fast = vob.sideVolume(c[0], c[1], ask, Long.MAX_VALUE);
+            long ref = scanSide(vob, c[0], c[1], ask);
+            if (fast != ref) return fail("sideVolume(" + c[0] + ", " + c[1] + ") = " + fast + ", level scan " + ref);
+        }
+        // Same fully consumed slots as depth_memory_partial_eviction_conserves
+        long gapHi = DepthMemory.slotStart(DepthMemory.slotOf(1029)) - 1;
+        long gapLo = DepthMemory.slotStart(DepthMemory.slotOf(1001) + 1);
+        if (gapHi < gapLo) return fail("No fully consumed slot between 1001 and 1029");
+        long gap = vob.sideVolume(gapHi, gapLo, false, Long.MAX_VALUE);
+        return assertEquals("consumed stretch " + gapLo + ".." + gapHi + " holds no bids", 0L, gap);
+    }
+
+    /** The sum stops at the first level that reaches the cap. */
+    private TestResult test_sideVolume_capEarlyExit() {
+        VirtualOrderbook vob = memoryBook(1000);
+        return assertEquals("3 levels of 10 reach cap 25", 30L, vob.sideVolume(1000, 1049, true, 25));
+    }
+
+    /** Runs the step-move conservation scenario; returns {before, after} of the total |volume|. */
+    private double[] conservationRun(java.util.function.Function<Long, Float> provider) {
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.test_setDepthMemoryHalfLifeSeconds(1800.0);
+        vob.setDefaultVolumeProvider(provider);
+        vob.setCurrentMarketPrice(1000);
+        vob.resetVolumeDistribution();
+        for (long p = 1001; p <= 1040; p++) vob.setVolume(p, 0.3f * Math.abs(provider.apply(p)));
+        for (long p = 960; p <= 990; p++) vob.setVolume(p, 0f);
+        long lo = DepthMemory.slotStart(DepthMemory.slotOf(900));
+        long hi = DepthMemory.slotEnd(DepthMemory.slotOf(1800));
+        double before = absSum(vob, lo, hi);
+        for (long price = 1040; price <= 1600; price += 40)   // small steps: no T-164 zeroing
+            vob.setCurrentMarketPrice(price);
+        return new double[]{ before, absSum(vob, lo, hi) };
+    }
+
+    /**
+     * Conservation without fade: total depth over whole slots is unchanged by window moves;
+     * T-199 (real volume): exact for the flat provider and for the production shape.
+     */
+    private TestResult test_depthMemory_conservation() {
+        double[] flat = conservationRun(p -> FLAT);
+        if (Math.abs(flat[1] - flat[0]) > 1e-3 * flat[0])
+            return fail("Flat provider not conserved: " + flat[0] + " -> " + flat[1]);
+        DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc =
+                new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(1000, 50f);
+        double[] prod = conservationRun(p -> calc.getVolume(1000, p));
+        double err = Math.abs(prod[1] - prod[0]) / prod[0];
+        if (err > 1e-3)
+            return fail("Production shape off by " + (100 * err) + "%: " + prod[0] + " -> " + prod[1]);
+        return pass(String.format(java.util.Locale.ROOT, "flat %.1f -> %.1f, production %.1f -> %.1f (%.3f%%)",
+                flat[0], flat[1], prod[0], prod[1], 100 * err));
+    }
+
+    /** A jump records the range between both windows as consumed (0); mirror for a down-jump. */
+    private TestResult test_depthMemory_jumpGap() {
+        VirtualOrderbook up = memoryBook(1000);
+        up.setCurrentMarketPrice(5000);                    // gap [1050, 4949]
+        VirtualOrderbook down = memoryBook(5000);
+        down.setCurrentMarketPrice(1000);                  // gap [1050, 4949]
+        // Only slots fully inside the gap: a slot straddling a window edge also holds the depth that left the window.
+        long gapLo = DepthMemory.slotEnd(DepthMemory.slotOf(1050)) + 1;
+        long gapHi = DepthMemory.slotStart(DepthMemory.slotOf(4949)) - 1;
+        for (long p = gapLo; p <= gapHi; p++) {
+            if (Math.abs(up.getVolume(p)) > EPSILON) return fail("Up-jump gap tick " + p + " reads " + up.getVolume(p));
+            if (Math.abs(down.getVolume(p)) > EPSILON) return fail("Down-jump gap tick " + p + " reads " + down.getVolume(p));
+        }
+        if (Math.abs(up.getVolume(900) - FLAT) > EPSILON || Math.abs(down.getVolume(5200) + FLAT) > EPSILON)
+            return fail("Untouched depth changed: " + up.getVolume(900) + ", " + down.getVolume(5200));
+        return pass("Jump gap recorded as 0 both ways, untouched depth unchanged");
+    }
+
+    /**
+     * T-209: the display borders match the real layout: linear window edges, the log slots straddling them,
+     * log entries off without memory, and the re-centre band edges are exactly where the window starts to move.
+     */
+    private TestResult test_arrayBorders() {
+        long[] b = VirtualOrderbook.arrayBorders(1000, 200, 100_000, true);
+        if (b[VirtualOrderbook.BORDER_LINEAR_LO] != 1000 || b[VirtualOrderbook.BORDER_LINEAR_HI] != 1199)
+            return fail("Linear edges wrong: " + b[VirtualOrderbook.BORDER_LINEAR_LO] + ".." + b[VirtualOrderbook.BORDER_LINEAR_HI]);
+        if (b[VirtualOrderbook.BORDER_RECENTER_LO] != 1050 || b[VirtualOrderbook.BORDER_RECENTER_HI] != 1150)
+            return fail("Re-centre band wrong: " + b[VirtualOrderbook.BORDER_RECENTER_LO] + ".." + b[VirtualOrderbook.BORDER_RECENTER_HI]);
+        long below = b[VirtualOrderbook.BORDER_LOG_SLOT_BELOW], above = b[VirtualOrderbook.BORDER_LOG_SLOT_ABOVE];
+        if (below > 999 || DepthMemory.slotEnd(DepthMemory.slotOf(below)) < 999 || DepthMemory.slotStart(DepthMemory.slotOf(below)) != below)
+            return fail("Log slot below the window wrong: " + below);
+        if (above < 1200 || DepthMemory.slotStart(DepthMemory.slotOf(above)) > 1200 || DepthMemory.slotEnd(DepthMemory.slotOf(above)) != above)
+            return fail("Log slot above the window wrong: " + above);
+        if (b[VirtualOrderbook.BORDER_LOG_FLOOR] != 1 || b[VirtualOrderbook.BORDER_ASK_CEILING] != 100_000)
+            return fail("Outer edges wrong");
+        long[] off = VirtualOrderbook.arrayBorders(1000, 200, 100_000, false);
+        if (off[VirtualOrderbook.BORDER_LOG_FLOOR] != VirtualOrderbook.NO_BORDER || off[VirtualOrderbook.BORDER_LOG_SLOT_ABOVE] != VirtualOrderbook.NO_BORDER)
+            return fail("Log borders must be NO_BORDER without memory");
+
+        // The band edges are the last prices that keep the window in place.
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.setCurrentMarketPrice(1000);
+        long[] w = vob.getArrayBorders();
+        long start = vob.getMinEditablePrice();
+        if (w[VirtualOrderbook.BORDER_LINEAR_LO] != start || w[VirtualOrderbook.BORDER_LINEAR_HI] != vob.getMaxEditablePrice())
+            return fail("Live linear edges do not match the window");
+        vob.setCurrentMarketPrice(w[VirtualOrderbook.BORDER_RECENTER_HI]);
+        vob.setCurrentMarketPrice(w[VirtualOrderbook.BORDER_RECENTER_LO]);
+        if (vob.getMinEditablePrice() != start) return fail("Window moved inside the re-centre band");
+        vob.setCurrentMarketPrice(w[VirtualOrderbook.BORDER_RECENTER_HI] + 1);
+        if (vob.getMinEditablePrice() == start) return fail("Window did not move above the re-centre band");
+        return pass("Borders match the layout");
+    }
+
+    /**
+     * One half-life halves |V - D|; the target D follows the current default (here: the provider doubles);
+     * time below 1 s is accumulated; half-life 0 is memory off (nothing recorded, existing memory wiped).
+     */
+    private TestResult test_depthMemory_fade() {
+        float[] scale = { 1f };
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.test_setDepthMemoryHalfLifeSeconds(60.0);
+        vob.setDefaultVolumeProvider(p -> FLAT * scale[0]);
+        vob.setCurrentMarketPrice(1000);
+        vob.resetVolumeDistribution();
+        vob.setCurrentMarketPrice(5000);
+        int k = DepthMemory.slotOf(2000);
+        double s = DepthMemory.slotEnd(k) - DepthMemory.slotStart(k) + 1;   // whole slot below the window
+        DepthMemory dm = vob.getDepthMemory();
+        if (dm.getVolume(k, false) != 0) return fail("Gap slot should start at 0, is " + dm.getVolume(k, false));
+        vob.fadeDepthMemory(0.5);
+        if (dm.getVolume(k, false) != 0) return fail("Half a second must not fade yet");
+        vob.fadeDepthMemory(59.5);
+        double v = dm.getVolume(k, false);
+        if (Math.abs(v - 0.5 * FLAT * s) > 1e-3 * FLAT * s) return fail("After one half-life V should be " + 0.5 * FLAT * s + ", is " + v);
+        scale[0] = 2f;                                     // default doubles: V moves halfway toward 2D
+        vob.fadeDepthMemory(60.0);
+        v = dm.getVolume(k, false);
+        double want = 2 * FLAT * s + (0.5 * FLAT * s - 2 * FLAT * s) / 2;
+        if (Math.abs(v - want) > 1e-3 * want) return fail("Target should follow the default: V " + v + ", want " + want);
+        vob.test_setDepthMemoryHalfLifeSeconds(0.0);
+        vob.fadeDepthMemory(0.05);
+        if (!vob.getDepthMemory().isEmpty()) return fail("Half-life 0 must wipe the memory");
+
+        VirtualOrderbook off = new VirtualOrderbook(ARRAY_SIZE);
+        off.test_setDepthMemoryHalfLifeSeconds(0.0);
+        off.setDefaultVolumeProvider(p -> FLAT);
+        off.setCurrentMarketPrice(1000);
+        off.resetVolumeDistribution();
+        off.setCurrentMarketPrice(5000);
+        if (!off.getDepthMemory().isEmpty()) return fail("Memory off must record nothing");
+        if (Math.abs(Math.abs(off.getVolume(2000)) - FLAT) > EPSILON) return fail("Memory off: gap must read the default");
+        return pass("|V - D| halves per half-life toward the current default; half-life 0 = off");
+    }
+
+    /**
+     * Trend accumulation: a side factor f divides that side's refill half-life by f and multiplies its excess
+     * decay half-life by f; the other side keeps the plain half-life; factors 1 match the plain fade.
+     */
+    private TestResult test_depthMemory_fadeSideFactors() {
+        // {bid?, bidFactor, askFactor, refill seconds that should halve the gap}
+        double[][] cases = { {1, 2, 1, 30}, {1, 0.5, 1, 120}, {1, 1, 4, 60}, {0, 1, 2, 30}, {0, 4, 1, 60}, {1, 1, 1, 60} };
+        for (double[] c : cases) {
+            boolean bid = c[0] == 1;
+            float[] scale = { 1f };
+            VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+            vob.test_setDepthMemoryHalfLifeSeconds(60.0);
+            vob.setDefaultVolumeProvider(p -> FLAT * scale[0]);
+            long from = bid ? 1000 : 5000, to = bid ? 5000 : 1000;
+            vob.setCurrentMarketPrice(from);
+            vob.resetVolumeDistribution();
+            vob.setCurrentMarketPrice(to);
+            vob.setDepthSideFactors((float) c[1], (float) c[2]);
+            int k = DepthMemory.slotOf(bid ? 2000 : 3000);
+            double sz = DepthMemory.slotEnd(k) - DepthMemory.slotStart(k) + 1;
+            DepthMemory dm = vob.getDepthMemory();
+            String tag = (bid ? "bid" : "ask") + " factors " + c[1] + "/" + c[2] + ": ";
+            if (dm.getVolume(k, !bid) != 0) return fail(tag + "gap slot should start at 0");
+            vob.fadeDepthMemory(c[3]);
+            double v = dm.getVolume(k, !bid);
+            if (Math.abs(v - 0.5 * FLAT * sz) > 1e-3 * FLAT * sz) return fail(tag + "refill after " + c[3] + " s should halve the gap, V " + v);
+            // excess: the default drops to 1/8, V (= D/2) sits above it; f on this side stretches the half-life x f
+            double f = bid ? c[1] : c[2];
+            scale[0] = 0.125f;
+            double excessSeconds = 60 * f;
+            vob.fadeDepthMemory(excessSeconds);
+            double dNew = 0.125 * FLAT * sz;
+            double want = dNew + (0.5 * FLAT * sz - dNew) / 2;
+            v = dm.getVolume(k, !bid);
+            if (Math.abs(v - want) > 1e-3 * want) return fail(tag + "excess after " + excessSeconds + " s should halve, V " + v + ", want " + want);
+        }
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.setDepthSideFactors(Float.NaN, -2f);
+        if (vob.getBidSideFactor() != 1f || vob.getAskSideFactor() != 1f) return fail("NaN / negative factors must count as 1");
+        vob.setDepthSideFactors(3f, 0.5f);
+        vob.setDepthReady(false);
+        if (vob.getBidSideFactor() != 1f || vob.getAskSideFactor() != 1f) return fail("Losing the provider must reset the factors");
+        return pass("refill half-life / f, excess half-life x f, per side; other side and f = 1 unchanged");
+    }
+
+    /** NBT round trip keeps the slots; a save without "lowRes" or in the T-198 ratio format loads empty. */
+    private TestResult test_depthMemory_nbt() {
+        VirtualOrderbook vob = memoryBook(1000);
+        for (long p = 1001; p <= 1049; p++) vob.setVolume(p, 2f);
+        vob.setCurrentMarketPrice(5000);
+        CompoundTag tag = new CompoundTag();
+        vob.save(tag);
+        VirtualOrderbook loaded = memoryBook(5000);
+        loaded.load(tag);
+        DepthMemory a = vob.getDepthMemory(), b = loaded.getDepthMemory();
+        if (a.isEmpty() || a.size() != b.size()) return fail("Slot count " + a.size() + " -> " + b.size());
+        if (!b.isInitialised()) return fail("Dense round trip lost the init flag");
+        for (int k = DepthMemory.slotOf(900); k <= DepthMemory.slotOf(5000); k++)
+            for (boolean above : new boolean[]{ false, true })
+                if (Double.compare(a.getVolume(k, above), b.getVolume(k, above)) != 0)
+                    return fail("Slot " + k + "/" + above + ": " + a.getVolume(k, above) + " -> " + b.getVolume(k, above));
+        // T-210: a save from the 1% grid (no "g", or "g" = 1.01) is dropped, empty memory
+        CompoundTag mem = NbtCompat.getCompound(tag, "lowRes");
+        if (!(NbtCompat.getDouble(mem, "g") == DepthMemory.SLOT_GROWTH)) return fail("Save must store the grid growth");
+        for (boolean withOldG : new boolean[]{ false, true }) {
+            CompoundTag legacy = tag.copy();
+            CompoundTag legacyMem = NbtCompat.getCompound(legacy, "lowRes");
+            if (withOldG) legacyMem.putDouble("g", 1.01); else legacyMem.remove("g");
+            loaded.load(legacy);
+            if (!loaded.getDepthMemory().isEmpty())
+                return fail("1% grid save (" + (withOldG ? "g = 1.01" : "no g") + ") must load with empty memory");
+        }
+        // T-198 ratio format: "k" + "r" -> dropped, empty memory
+        CompoundTag old = new CompoundTag();
+        old.putIntArray("k", new int[]{ 2 * DepthMemory.slotOf(2000) });
+        old.putIntArray("r", new int[]{ Float.floatToIntBits(0.3f) });
+        tag.put("lowRes", old);
+        loaded.load(tag);
+        if (!loaded.getDepthMemory().isEmpty()) return fail("Ratio-format save must load with empty memory");
+        tag.remove("lowRes");
+        loaded.load(memoryTag(vob));
+        loaded.load(tag);
+        if (!loaded.getDepthMemory().isEmpty()) return fail("Old save must load with empty memory");
+        loaded.fadeDepthMemory(0.05);                      // T-211: the dropped memory is initialised once
+        int kg = DepthMemory.slotOf(2000);
+        double sg = DepthMemory.slotEnd(kg) - DepthMemory.slotStart(kg) + 1;
+        if (!loaded.getDepthMemory().isInitialised() || Math.abs(loaded.getDepthMemory().getVolume(kg, false) - FLAT * sg) > 1e-3 * FLAT * sg)
+            return fail("Dropped save must initialise from the default at the next step, slot reads " + loaded.getDepthMemory().getVolume(kg, false));
+        return pass("NBT round trip of " + a.size() + " slots");
+    }
+
+    /** @return a fresh save of {@code vob} */
+    private static CompoundTag memoryTag(VirtualOrderbook vob) {
+        CompoundTag t = new CompoundTag();
+        vob.save(t);
+        return t;
+    }
+
+    /** T-211: a reset refills the memory with the full default; clear and a provider swap wipe it. */
+    private TestResult test_depthMemory_resetClears() {
+        VirtualOrderbook vob = memoryBook(1000);
+        vob.setCurrentMarketPrice(5000);
+        int kg = DepthMemory.slotOf(2000);
+        if (vob.getDepthMemory().getVolume(kg, false) != 0) return fail("Jump should have recorded the gap as 0");
+        vob.resetVolumeDistribution();
+        double sg = DepthMemory.slotEnd(kg) - DepthMemory.slotStart(kg) + 1;
+        if (!vob.getDepthMemory().isInitialised() || Math.abs(vob.getDepthMemory().getVolume(kg, false) - FLAT * sg) > 1e-3 * FLAT * sg)
+            return fail("Reset must refill the memory with the default, gap slot reads " + vob.getDepthMemory().getVolume(kg, false));
+        vob.setCurrentMarketPrice(1000);
+        vob.clearVolume();
+        if (!vob.getDepthMemory().isEmpty()) return fail("Clear must wipe the memory");
+        VirtualOrderbook swap = memoryBook(1000);
+        swap.setCurrentMarketPrice(5000);
+        swap.setDefaultVolumeProvider(p -> 2f);
+        if (!swap.getDepthMemory().isEmpty()) return fail("A new provider must wipe the memory");
+        swap.fadeDepthMemory(0.05);
+        if (!swap.getDepthMemory().isInitialised()) return fail("The new provider must initialise the memory at the next step");
+        return pass("Reset refills, clear and a provider swap wipe the memory");
+    }
+
+    // ── T-199: real volume ──────────────────────────────────────────────────
+
+    /**
+     * A slot side without memory that ticks leave into materialises as its old default sum plus the real
+     * leaving volume (within 0.1%; wide slots at price 10,000, so the Simpson default sum is exercised).
+     */
+    private TestResult test_depthMemory_materialise() {
+        DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc =
+                new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(10000, 50f);
+        java.util.function.Function<Long, Float> prov = p -> calc.getVolume(10000, p);
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.test_setDepthMemoryHalfLifeSeconds(1800.0);
+        vob.setDefaultVolumeProvider(prov);
+        vob.setCurrentMarketPrice(10000);                  // window [9950, 10049]
+        vob.resetVolumeDistribution();
+        for (long p = 9950; p < 10000; p++) vob.setVolume(p, 0.25f * Math.abs(prov.apply(p)));
+        int k = DepthMemory.slotOf(9950);
+        long s = DepthMemory.slotStart(k), e = Math.min(DepthMemory.slotEnd(k), 10019);
+        if (s >= 9950) return fail("Slot " + k + " starts inside the window, pick another price");
+        double want = 0;
+        for (long p = s; p < 9950; p++) want += Math.abs(prov.apply(p));                   // D(G_old), exact
+        for (long p = 9950; p <= e; p++) want += Math.abs(vob.getVolume(p));               // L, real leaving volume
+        vob.setCurrentMarketPrice(10070);                  // window [10020, 10119], leaving [9950, 10019]
+        double v = vob.getDepthMemory().getVolume(k, false);
+        if (Double.isNaN(v)) return fail("Slot " + k + " did not materialise");
+        if (Math.abs(v - want) > 1e-3 * want) return fail("Materialised V " + v + ", want D(G_old) + L = " + want);
+        return pass(String.format(java.util.Locale.ROOT, "V %.2f vs %.2f", v, want));
+    }
+
+    /**
+     * After a stored slot partly re-enters the window, the cells of its remaining segment sum to the stored
+     * volume, are non-negative (bids below the price) and continuous.
+     */
+    private TestResult test_depthMemory_reentering() {
+        VirtualOrderbook vob = memoryBook(1000);
+        for (long p = 960; p <= 999; p++) vob.setVolume(p, (p % 7) + 1f);
+        vob.setCurrentMarketPrice(1200);                   // window [1150, 1249], everything below remembered
+        vob.setCurrentMarketPrice(1040);                   // window [990, 1089], [990, 1149] re-entered
+        long ws = vob.getMinEditablePrice();
+        DepthMemory dm = vob.getDepthMemory();
+        for (int k = DepthMemory.slotOf(900); k <= DepthMemory.slotOf(ws - 1); k++) {
+            double vol = dm.getVolume(k, false);
+            if (Double.isNaN(vol)) continue;
+            long lo = DepthMemory.slotStart(k), hi = Math.min(DepthMemory.slotEnd(k), ws - 1);
+            double sum = 0, prev = Double.NaN;
+            for (long p = lo; p <= hi; p++) {
+                float v = vob.getVolume(p);
+                if (v < -EPSILON) return fail("Negative bid " + v + " at " + p);
+                if (!Double.isNaN(prev) && Math.abs(v - prev) > 2) return fail("Jump " + prev + " -> " + v + " at " + p);
+                prev = v;
+                sum += v;
+            }
+            if (Math.abs(sum - vol) > 1e-3 * Math.max(vol, 1))
+                return fail("Slot " + k + " cells sum to " + sum + ", V " + vol);
+        }
+        return pass("Re-entered slots: cells sum to V, non-negative, continuous");
+    }
+
+    /**
+     * Price crossing remembered depth down and up again never reads flipped or negative volume outside the
+     * window (memory values are signed by the current price; inside the window the array is the truth).
+     */
+    private TestResult test_depthMemory_crossing() {
+        VirtualOrderbook vob = memoryBook(1000);
+        for (long p = 1001; p <= 1049; p++) vob.setVolume(p, 0f);   // asks consumed by a buy
+        for (long p = 960; p <= 990; p++) vob.setVolume(p, 2f);     // thin bids
+        for (long price : new long[]{ 1080, 900, 700, 1100, 1300, 1000 }) {
+            vob.setCurrentMarketPrice(price);
+            for (long p = 600; p <= 1400; p++) {
+                if (p >= vob.getMinEditablePrice() && p <= vob.getMaxEditablePrice()) continue;
+                float v = vob.getVolume(p);
+                if (p > price && v > EPSILON) return fail("Price " + price + ": bid " + v + " above at " + p);
+                if (p < price && v < -EPSILON) return fail("Price " + price + ": ask " + v + " below at " + p);
+                if (Float.isNaN(v)) return fail("NaN at " + p);
+            }
+        }
+        return pass("Signs follow the current price through down and up crossings");
+    }
+
+    // ── T-211: dense memory ─────────────────────────────────────────────────
+
+    /**
+     * A price move inside the band (no window move) and a small window move do not change what the far-out
+     * levels read, even though the default at the new centre is twice as thick: the memory is the truth,
+     * the default is only the recovery target.
+     */
+    private TestResult test_depthMemory_noJumpOnMove() {
+        float[] scale = { 1f };
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.test_setDepthMemoryHalfLifeSeconds(1800.0);
+        vob.setDefaultVolumeProvider(p -> FLAT * scale[0]);
+        vob.setCurrentMarketPrice(1000);
+        vob.resetVolumeDistribution();
+        long[][] ranges = { { 300, 600 }, { 2000, 2400 }, { 50_000, 50_400 } };
+        float[][] before = new float[ranges.length][];
+        for (int r = 0; r < ranges.length; r++) {
+            before[r] = new float[(int) (ranges[r][1] - ranges[r][0] + 1)];
+            for (long p = ranges[r][0]; p <= ranges[r][1]; p++) before[r][(int) (p - ranges[r][0])] = vob.getVolume(p);
+        }
+        scale[0] = 2f;                                     // the default at the new centre is twice as thick
+        for (long price : new long[]{ 1020, 1090 }) {      // first inside the band, then a window move
+            vob.setCurrentMarketPrice(price);
+            for (int r = 0; r < ranges.length; r++)
+                for (long p = ranges[r][0]; p <= ranges[r][1]; p++) {
+                    float v = vob.getVolume(p), w = before[r][(int) (p - ranges[r][0])];
+                    if (Math.abs(v - w) > 1e-3f * Math.max(1f, Math.abs(w)))
+                        return fail("Price " + price + ": far level " + p + " jumped " + w + " -> " + v);
+                }
+        }
+        return pass("Far-out levels unchanged by price and window moves");
+    }
+
+    /**
+     * Slots above the ceiling at init start at 0 when the ceiling rises (an up-jump), then recover toward the
+     * default: half way after one half-life.
+     */
+    private TestResult test_depthMemory_newSlotsAboveCeiling() {
+        VirtualOrderbook vob = memoryBook(1000);           // ceiling 100 x 1000
+        vob.test_setDepthMemoryHalfLifeSeconds(60.0);
+        long oldCeiling = vob.getAskCeiling();
+        vob.setCurrentMarketPrice(2000);                   // ceiling 200,000
+        int k = DepthMemory.slotOf(oldCeiling) + 20;
+        if (DepthMemory.slotEnd(k) > vob.getAskCeiling()) return fail("Slot " + k + " is above the new ceiling");
+        double s = DepthMemory.slotEnd(k) - DepthMemory.slotStart(k) + 1;
+        long mid = (DepthMemory.slotStart(k) + DepthMemory.slotEnd(k)) / 2;
+        if (vob.getDepthMemory().getVolume(k, true) != 0 || vob.getVolume(mid) != 0)
+            return fail("New slot above the old ceiling must start at 0, reads " + vob.getDepthMemory().getVolume(k, true) + " / " + vob.getVolume(mid));
+        vob.fadeDepthMemory(60.0);
+        double v = vob.getDepthMemory().getVolume(k, true);
+        if (Math.abs(v - 0.5 * FLAT * s) > 1e-3 * FLAT * s) return fail("After one half-life V should be " + 0.5 * FLAT * s + ", is " + v);
+        return pass("New slot starts at 0 and is half way to " + FLAT * s + " after one half-life");
+    }
+
+    /**
+     * The recovery targets are rebuilt only when the centre moved more than 0.5 % or every 10 s: a default
+     * change alone is not picked up by the next 1 s step, but by a 0.6 % move or after 10 s.
+     */
+    private TestResult test_depthMemory_targetRefresh() {
+        int k = DepthMemory.slotOf(3000);
+        double s = DepthMemory.slotEnd(k) - DepthMemory.slotStart(k) + 1;
+        for (int trigger = 0; trigger < 2; trigger++) {
+            float[] scale = { 1f };
+            VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+            vob.test_setDepthMemoryHalfLifeSeconds(60.0);
+            vob.setDefaultVolumeProvider(p -> FLAT * scale[0]);
+            vob.setCurrentMarketPrice(1000);
+            vob.resetVolumeDistribution();
+            vob.fadeDepthMemory(1.0);                      // builds the targets at centre 1000
+            scale[0] = 2f;
+            vob.fadeDepthMemory(1.0);
+            double v = vob.getDepthMemory().getVolume(k, true);
+            if (Math.abs(v - FLAT * s) > 1e-3 * FLAT * s) return fail("Stale target must hold V at " + FLAT * s + ", is " + v);
+            if (trigger == 0) {
+                vob.setCurrentMarketPrice(1006);           // 0.6 %: refresh at the next step
+                vob.fadeDepthMemory(1.0);
+            } else {
+                vob.fadeDepthMemory(8.0);                  // age 9 s: still stale
+                if (Math.abs(vob.getDepthMemory().getVolume(k, true) - FLAT * s) > 1e-3 * FLAT * s)
+                    return fail("Target refreshed before 10 s");
+                vob.fadeDepthMemory(1.0);                  // age 10 s
+            }
+            if (!(vob.getDepthMemory().getVolume(k, true) > FLAT * s * 1.001))
+                return fail((trigger == 0 ? "A 0.6 % move" : "10 s") + " must refresh the target, V " + vob.getDepthMemory().getVolume(k, true));
+        }
+        return pass("Targets refresh on a > 0.5 % move or after 10 s only");
+    }
+
+    /**
+     * A sparse save (T-210 format, same grid) keeps its stored slot sides; every other side is pending (reads
+     * the provider) until the next step initialises it once with the default.
+     */
+    private TestResult test_depthMemory_sparseMigration() {
+        int k = DepthMemory.slotOf(2000), kp = DepthMemory.slotOf(400);
+        double s = DepthMemory.slotEnd(kp) - DepthMemory.slotStart(kp) + 1;
+        CompoundTag mem = new CompoundTag();
+        mem.putIntArray("k", new int[]{ 2 * k });
+        mem.putIntArray("v", new int[]{ Float.floatToIntBits(123f) });
+        mem.putDouble("g", DepthMemory.SLOT_GROWTH);
+        CompoundTag tag = memoryTag(memoryBook(5000));
+        tag.put("lowRes", mem);
+        VirtualOrderbook loaded = memoryBook(5000);
+        loaded.load(tag);
+        DepthMemory dm = loaded.getDepthMemory();
+        if (dm.isInitialised() || dm.getVolume(k, false) != 123f || !Double.isNaN(dm.getVolume(kp, false)))
+            return fail("Sparse load: init " + dm.isInitialised() + ", stored " + dm.getVolume(k, false) + ", pending " + dm.getVolume(kp, false));
+        if (Math.abs(loaded.getVolume(DepthMemory.slotStart(kp)) - FLAT) > EPSILON) return fail("Pending slot must read the provider");
+        loaded.fadeDepthMemory(0.05);
+        if (!dm.isInitialised() || dm.getVolume(k, false) != 123f || Math.abs(dm.getVolume(kp, false) - FLAT * s) > 1e-3 * FLAT * s)
+            return fail("After init: stored " + dm.getVolume(k, false) + ", pending slot " + dm.getVolume(kp, false) + " (want " + FLAT * s + ")");
+        return pass("Stored side kept, pending sides initialised once");
     }
 }

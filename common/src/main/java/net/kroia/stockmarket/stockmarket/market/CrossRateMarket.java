@@ -44,7 +44,7 @@ public class CrossRateMarket implements IPriceDataProvider {
     private final Map<Long, CachedCrossRateData> cacheByTimeDelta = new HashMap<>();
 
     /** The candle time delta currently being displayed (set by getPriceHistoryData). */
-    private long activeTimeDelta = ClientMarket.CANDLE_TIME_1_MIN;
+    private long activeTimeDelta = ClientMarket.getAvailableCandleTimeDeltas()[0];
 
     /**
      * Cache state for a single candle time delta.
@@ -337,7 +337,7 @@ public class CrossRateMarket implements IPriceDataProvider {
                     long rawHigh = (long)(rateHigh * CROSS_RATE_SCALE);
                     long rawLow = (long)(rateLow * CROSS_RATE_SCALE);
                     syntheticCandles.add(new PriceHistoryData.Candle(
-                            hc.openTimestamp, rawOpen, rawHigh, rawLow, 0f));
+                            hc.openTimestamp, rawOpen, rawHigh, rawLow, 0f, hc.gameTime)); // T-218: keep the game-day labels
                 }
                 hi++;
                 wi++;

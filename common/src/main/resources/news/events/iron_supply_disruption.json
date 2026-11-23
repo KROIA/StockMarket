@@ -1,0 +1,28 @@
+{
+  "id": "iron_supply_disruption",
+  "picture": "iron_supply_disruption.png",
+  "headline": {
+    "en_us": "Mine collapse halts iron production!",
+    "zh_cn": "矿井塌方，铁矿石生产停滞！",
+    "de_de": "Minenunglück stoppt die Eisenproduktion!"
+  },
+  "text": {
+    "en_us": "A major mine collapse has cut off several iron shafts. Smelteries warn of delivery delays and traders are stockpiling ingots while repairs are underway.",
+    "zh_cn": "一座大型矿井发生塌方，数条铁矿竖井被切断。冶炼厂警告交货将延迟，商人们则在抢修期间囤积铁锭。",
+    "de_de": "Ein schwerer Mineneinsturz hat mehrere Eisenschächte abgeschnitten. Hütten warnen vor Lieferverzögerungen und Händler horten Barren, während die Reparaturen laufen."
+  },
+  "category": "commodities",
+  "weight": 12,
+  "cooldownSeconds": 5400,
+  "impact": {
+    "type": "shock",
+    "peakFactor": 0.45,
+    "durationSeconds": 1200,
+    "reversalSeconds": 2100
+  },
+  "markets": [
+    { "item": "minecraft:iron_ingot", "weightFactor": 1.0 },
+    { "item": "minecraft:iron_block", "weightFactor": 1.0 },
+    { "item": "minecraft:raw_iron",   "weightFactor": 0.8 }
+  ]
+}

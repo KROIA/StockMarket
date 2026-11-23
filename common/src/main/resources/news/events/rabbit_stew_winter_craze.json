@@ -1,0 +1,44 @@
+{
+  "id": "rabbit_stew_winter_craze",
+  "picture": "rabbit_stew_winter_craze.png",
+  "headline": {
+    "en_us": "Winter craze for rabbit stew empties the warrens",
+    "zh_cn": "冬季兔肉煲热潮掏空兔穴",
+    "de_de": "Winterrausch um Kanincheneintopf leert die Bauten"
+  },
+  "text": {
+    "en_us": "A hard frost and a fashion for hot rabbit stew have set every inn and household clamouring for coneys, and the warrens can scarcely keep up. Rabbit, cooked meat and even hides for winter linings are all fetching more by the week. Mutton sellers complain that the stewpots have stolen their custom for the season.",
+    "zh_cn": "严霜加上热兔肉煲的风尚，让每家旅店与农户都嚷着要兔子，兔穴几乎供不上。兔肉、熟兔肉乃至做冬衣衬里的兔皮，价格每周都在上涨。羊贩抱怨炖锅在这个季节抢走了他们的生意。",
+    "de_de": "Ein strenger Frost und die Mode für heißen Kanincheneintopf haben jedes Wirtshaus und jeden Haushalt nach Karnickeln lärmen lassen, und die Bauten kommen kaum nach. Kaninchen, gebratenes Fleisch und selbst Felle für Winterfütterungen erzielen Woche für Woche mehr. Hammelverkäufer beklagen, dass ihnen die Eintopftöpfe für diese Saison die Kundschaft gestohlen haben."
+  },
+  "category": "cultural",
+  "weight": 4,
+  "cooldownSeconds": 43200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.3,
+    "rampUpSeconds": 1050,
+    "durationSeconds": 2700,
+    "reversal": "ramp",
+    "reversalSeconds": 2400,
+    "noise": 0.04
+  },
+  "markets": [
+    {
+      "item": "minecraft:rabbit",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:cooked_rabbit",
+      "weightFactor": 0.7
+    },
+    {
+      "item": "minecraft:rabbit_hide",
+      "weightFactor": 0.4
+    },
+    {
+      "item": "minecraft:mutton",
+      "weightFactor": -0.25
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.screen.custom.BankAccountSelectionScreen;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
@@ -117,6 +118,8 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final java.util.Map<ItemID, Boolean> maintenanceFallback = new java.util.HashMap<>();
     /** T-158: last trading state applied to the panels / banner; UI is only touched on change. */
     private @Nullable MarketSettings.TradingState appliedTradingState = null;
+    /** SM-354: maintenance close reason (translation key, "" = none) last applied to the banner. */
+    private String appliedMaintenanceReason = "";
     /**
      * T-123 / T-125 (untrusted slave gate): banner shown across the top of the
      * trading area when the client is connected to a slave that the master
@@ -194,6 +197,12 @@ public class TradeScreen extends StockMarketGuiScreen {
     private @Nullable ItemID pairWantMarketID = null;
 
     /**
+     * SM-304: market count the market lists were last built from. tick() refreshes the lists when the
+     * cache size differs, for adds this screen was not told about (e.g. while a popup covered it).
+     */
+    private int knownMarketCount = 0;
+
+    /**
      * Issue #81: markets whose (ref-counted) price stream THIS screen currently holds one
      * subscription on. Never call subscribe/unsubscribe directly — use
      * {@link #syncPriceSubscriptions()} so each market is held at most once.
@@ -209,7 +218,11 @@ public class TradeScreen extends StockMarketGuiScreen {
     private long lastPriceRefreshMs = 0;
     private static final long PRICE_REFRESH_INTERVAL_MS = 500;
 
-    public TradeScreen()
+    /**
+     * @param preselect market to open on (SM-313, e.g. from BankSystem's company screen), or null for the
+     *                  last used market. Ignored if it is not in the market list.
+     */
+    public TradeScreen(@Nullable ItemID preselect)
     {
         super(Texts.TITLE);
 
@@ -418,9 +431,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         List<ItemID> markets = getAvailableMarkets();
         PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
 
-        ItemID initialMarket = prefs.getLastMarketID();
-        if (initialMarket == null || !markets.contains(initialMarket)) {
-            initialMarket = markets.isEmpty() ? null : markets.getFirst();
+        ItemID initialMarket = pickInitialMarket(preselect, prefs.getLastMarketID(), markets);
+        // SM-313: a preselected market opens in its own group tab (applied to the selectors below),
+        // so the favorites bar shows it. Set here, not by a switchMarket after init (double subscription).
+        if (initialMarket != null && initialMarket.equals(preselect)) {
+            activeMarketGroup = ShareVisualHelpers.isCompanyShare(initialMarket)
+                    ? PairSelectorWidget.Tab.COMPANIES : PairSelectorWidget.Tab.COMMODITIES;
         }
 
         if (initialMarket != null) {
@@ -440,18 +456,20 @@ public class TradeScreen extends StockMarketGuiScreen {
             StockMarketGuiElement.updatePlayerPreferences(prefs);
         }
 
-        // Restore pair selections from preferences
-        if (prefs.getLastPairHaveMarketID() != null) {
+        // Restore pair selections from preferences; like the last market, only legs that are still
+        // available (T-237: a slave lists no market for an item it cannot resolve)
+        if (prefs.getLastPairHaveMarketID() != null && markets.contains(prefs.getLastPairHaveMarketID())) {
             pairHaveMarketID = prefs.getLastPairHaveMarketID();
             pairSelectorWidget.setHaveMarketID(pairHaveMarketID);
         }
-        if (prefs.getLastPairWantMarketID() != null) {
+        if (prefs.getLastPairWantMarketID() != null && markets.contains(prefs.getLastPairWantMarketID())) {
             pairWantMarketID = prefs.getLastPairWantMarketID();
             pairSelectorWidget.setWantMarketID(pairWantMarketID);
         }
 
         // Build favorites bar with all markets and current selection
         favoritesBar.rebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
+        knownMarketCount = markets.size();
 
         // T-155: apply the shared market group to both selectors and highlight the
         // active segmented-control button (with per-group counts).
@@ -516,8 +534,33 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     public static void openScreen()
     {
-        TradeScreen screen = new TradeScreen();
+        openScreen(null);
+    }
+
+    /**
+     * Opens the trade screen on a market (SM-313).
+     *
+     * @param preselect the market to show, or null (or an unlisted market) for the last used one
+     */
+    public static void openScreen(@Nullable ItemID preselect)
+    {
+        TradeScreen screen = new TradeScreen(preselect);
         net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
+    }
+
+    /**
+     * Picks the market the screen opens on (SM-313).
+     *
+     * @param preselect  the requested market, or null
+     * @param lastMarket the player's last used market, or null
+     * @param markets    the markets the screen lists
+     * @return {@code preselect} if listed, else {@code lastMarket} if listed, else the first market, else null
+     */
+    public static @Nullable ItemID pickInitialMarket(@Nullable ItemID preselect, @Nullable ItemID lastMarket, List<ItemID> markets)
+    {
+        if (preselect != null && markets.contains(preselect)) return preselect;
+        if (lastMarket != null && markets.contains(lastMarket)) return lastMarket;
+        return markets.isEmpty() ? null : markets.getFirst();
     }
 
     @Override
@@ -535,7 +578,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                 } else {
                     // Safety net: the market vanished from the client cache (deleted on
                     // the server) but this screen was not notified directly — e.g. the
-                    // MarketRemovedPacket arrived while a popup covered this screen.
+                    // MarketChangedPacket REMOVED arrived while a popup covered this screen.
                     // Re-validate and fall back gracefully.
                     handleMarketRemoved(currentMarketID);
                 }
@@ -547,10 +590,16 @@ public class TradeScreen extends StockMarketGuiScreen {
             if (pairWantMarketID != null && getMarket(pairWantMarketID) == null) {
                 handleMarketRemoved(pairWantMarketID);
             }
+            // SM-304 safety net: markets added while this screen was not notified directly
+            if (getAvailableMarkets().size() != knownMarketCount) {
+                refreshMarketLists();
+            }
         }
 
         // T-158: trading state + hours/clock line (cheap; only touches widgets on change)
         updateTradingStatusUI();
+        // T-179: amount-box limits + trade cooldown on the buy/sell buttons
+        updateOrderLimitsUI();
 
         // Periodically refresh balances for the trading panel (~2s)
         if (now - lastBalanceRefreshMs > BALANCE_REFRESH_INTERVAL_MS) {
@@ -628,20 +677,25 @@ public class TradeScreen extends StockMarketGuiScreen {
             state = getEffectiveTradingState(currentMarketID);
         }
 
-        if (state != appliedTradingState) {
+        ClientMarket displayMarket = displayID != null ? getMarket(displayID) : null;
+        MarketPriceStream.TradingStatus status = displayMarket != null ? displayMarket.getTradingStatus() : null;
+        // SM-354: a maintenance close reason (translation key) replaces the plain maintenance text.
+        String reason = state == MarketSettings.TradingState.MAINTENANCE && status != null ? status.maintenanceReason() : "";
+
+        if (state != appliedTradingState || !reason.equals(appliedMaintenanceReason)) {
             appliedTradingState = state;
+            appliedMaintenanceReason = reason;
             boolean open = state == MarketSettings.TradingState.OPEN;
             // Only gates the buy/sell buttons; cancelling pending orders (orders panel / chart) stays usable.
             tradingPanel.setMarketOpen(open);
             interMarketTradingPanel.setMarketOpen(open);
-            marketClosedLabel.setText((state == MarketSettings.TradingState.MAINTENANCE
-                    ? Texts.MAINTENANCE : Texts.MARKET_CLOSED).getString());
+            Component bannerText = !reason.isEmpty() ? Component.translatable(reason)
+                    : state == MarketSettings.TradingState.MAINTENANCE ? Texts.MAINTENANCE : Texts.MARKET_CLOSED;
+            marketClosedLabel.setText(bannerText.getString());
             marketClosedLabel.setEnabled(!open);
         }
 
         String hoursText = "";
-        ClientMarket displayMarket = displayID != null ? getMarket(displayID) : null;
-        MarketPriceStream.TradingStatus status = displayMarket != null ? displayMarket.getTradingStatus() : null;
         if (status != null) {
             String hours = status.isAlwaysOpen()
                     ? Component.translatable(Texts.TRADING_HOURS_ALWAYS).getString()
@@ -655,6 +709,92 @@ public class TradeScreen extends StockMarketGuiScreen {
         // setText re-runs the label layout, so only call it when the text actually changed.
         if (!hoursText.equals(tradingHoursLabel.getText()))
             tradingHoursLabel.setText(hoursText);
+    }
+
+    /**
+     * T-179: client-side end time ({@link System#currentTimeMillis()}) of the player's global trade
+     * cooldown. Static so it survives market switches and re-opening the screen (the server rule is
+     * global per player). Set from response callbacks (any thread), read every tick.
+     */
+    private static volatile long tradeCooldownUntilMs = 0;
+
+    /**
+     * T-179: pushes the order limits to both trading panels every tick.
+     * <ul>
+     *   <li>Max order size from the market price stream ({@link MarketPriceStream.TradingStatus#maxOrderVolume()},
+     *       updated within ~100 ms of an admin change); unknown (no stream data yet) = unlimited, the server still checks.
+     *       Pair mode: the want-item amount is limited by the want market and, via the current rate,
+     *       by the have market (the server checks both legs).</li>
+     *   <li>Remaining cooldown from {@link #tradeCooldownUntilMs}.</li>
+     * </ul>
+     * Widgets are only touched when a value changes.
+     */
+    private void updateOrderLimitsUI() {
+        long remaining = tradeCooldownUntilMs - System.currentTimeMillis();
+        tradingPanel.setTradeCooldown(remaining);
+        interMarketTradingPanel.setTradeCooldown(remaining);
+        tradingPanel.setMaxQuantity(getMaxOrderVolume(currentMarketID));
+
+        double pairLimit = getMaxOrderVolume(pairWantMarketID);
+        long haveLimit = getMaxOrderVolume(pairHaveMarketID);
+        ClientMarket haveM = pairHaveMarketID != null ? getMarket(pairHaveMarketID) : null;
+        ClientMarket wantM = pairWantMarketID != null ? getMarket(pairWantMarketID) : null;
+        if (haveLimit > 0 && haveM != null && wantM != null && haveM.getCurrentMarketRealPrice() > 0) {
+            double rate = wantM.getCurrentMarketRealPrice() / haveM.getCurrentMarketRealPrice(); // have items per want item
+            if (rate > 0) {
+                // Whole items so the box does not jitter with every small rate change.
+                double haveSideLimit = Math.max(1, Math.floor(haveLimit / rate));
+                pairLimit = pairLimit > 0 ? Math.min(pairLimit, haveSideLimit) : haveSideLimit;
+            }
+        }
+        interMarketTradingPanel.setMaxQuantity(pairLimit);
+    }
+
+    /**
+     * T-179: max order volume of a market as last pushed by its price stream.
+     * @param marketID the market, may be null
+     * @return the limit in real items; 0 = unlimited or unknown
+     */
+    private long getMaxOrderVolume(@Nullable ItemID marketID) {
+        ClientMarket market = marketID != null ? getMarket(marketID) : null;
+        MarketPriceStream.TradingStatus status = market != null ? market.getTradingStatus() : null;
+        return status != null ? status.maxOrderVolume() : 0;
+    }
+
+    /**
+     * T-179: starts the local cooldown display after an ACCEPTED order placed with the buy/sell
+     * buttons. Not called for chart moves/restores — the server exempts them via the move credit.
+     * Starts when the response arrives, i.e. slightly after the server's timestamp, so the buttons
+     * are never re-enabled before the server would accept the next order.
+     *
+     * @param marketID a market of the order (its price stream carries the global cooldown ms)
+     */
+    private void startTradeCooldown(@Nullable ItemID marketID) {
+        long startMs = System.currentTimeMillis();
+        Minecraft.getInstance().execute(() -> {
+            ClientMarket market = marketID != null ? getMarket(marketID) : null;
+            MarketPriceStream.TradingStatus status = market != null ? market.getTradingStatus() : null;
+            if (status != null && status.tradeCooldownMs() > 0)
+                tradeCooldownUntilMs = Math.max(tradeCooldownUntilMs, startMs + status.tradeCooldownMs());
+        });
+    }
+
+    /**
+     * T-179: logs the result of a button-placed order and starts the trade cooldown if it was accepted.
+     * T-227: if the request failed (no answer in time, connection lost) the order may still have been
+     * placed, so the player is told to check their orders. Nothing is resent.
+     * @param marketID the order's market
+     * @param result   the server response, null if there is none
+     * @param error    the request failure, null on an answer
+     */
+    private void onButtonOrderResult(ItemID marketID, @Nullable CreateOrderRequest.OutputData result, @Nullable Throwable error) {
+        if (error != null || result == null) {
+            showOrderOutcomeUnknown();
+            return;
+        }
+        logOrderResult(result);
+        if (result.status == CreateOrderRequest.Status.CREATED)
+            startTradeCooldown(marketID);
     }
 
     /**
@@ -790,6 +930,10 @@ public class TradeScreen extends StockMarketGuiScreen {
         List<Order> orders = filterOrdersBySelectedAccount(lastStreamedOrders);
         List<InterMarketOrder> interMarketOrders =
                 filterInterMarketOrdersBySelectedAccount(lastStreamedInterMarketOrders);
+        // T-237: a slave hides the player's orders on markets for items it cannot resolve (items only the master has)
+        orders.removeIf(order -> !StockMarketGuiElement.isMarketVisible(order.getItemID()));
+        interMarketOrders.removeIf(order -> !StockMarketGuiElement.isMarketVisible(order.getBuyItemID())
+                || !StockMarketGuiElement.isMarketVisible(order.getSellItemID()));
         pendingOrdersPanel.updateOrders(orders);
         pendingOrdersPanel.updateInterMarketOrders(interMarketOrders);
         orderMarkerOverlay.updateOrders(orders);
@@ -940,6 +1084,40 @@ public class TradeScreen extends StockMarketGuiScreen {
     @Override
     public void onMarketRemoved(ItemID marketID) {
         handleMarketRemoved(marketID);
+    }
+
+    /**
+     * {@inheritDoc}
+     * SM-304: a market was created on the server, or this screen's constructor-started
+     * {@code requestMarkets()} answered with markets the cache did not have yet: rebuild the lists.
+     * SM-310: open/closed/maintenance changes need nothing here; the displayed markets' price
+     * streams carry their trading state and {@link #tick()} applies it.
+     */
+    @Override
+    public void onMarketsChanged(MarketChangedPacket.Kind kind, @Nullable ItemID marketID) {
+        if (kind == MarketChangedPacket.Kind.ADDED)
+            refreshMarketLists();
+    }
+
+    /**
+     * SM-304: rebuilds the market lists from the current client cache without touching the
+     * selection, pair legs or favorites. If nothing is selected in money mode (the cache was
+     * empty when the screen opened), selects the last used market or the first one, like the
+     * constructor. An open pair-selector dropdown is re-filled too (SM-310); a closed one reads the
+     * cache when it opens.
+     */
+    private void refreshMarketLists() {
+        List<ItemID> markets = getAvailableMarkets();
+        knownMarketCount = markets.size();
+        PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+        if (currentMarketID == null && !isPairMode && !markets.isEmpty()) {
+            ItemID last = prefs.getLastMarketID();
+            switchMarket(last != null && markets.contains(last) ? last : markets.getFirst()); // also rebuilds the favorites bar
+        } else {
+            favoritesBar.scheduleRebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
+        }
+        refreshMarketGroupButtons();
+        pairSelectorWidget.refreshDropdown();
     }
 
     /**
@@ -1112,7 +1290,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         int bannerLineHeight = 12; // matches textFontScale=0.7f visible height
         int bannerX = tradingPanel.getLeft();
         int bannerW = tradingPanel.getWidth();
-        int bannerY = tradingPanel.getTop() + spacing;
+        // MU-167: start below the market-closed/maintenance label so the two never overlap
+        // (that label can show in any state; the banner still ends well inside the panel).
+        int bannerY = marketClosedLabel.getBottom() + spacing;
         untrustedSlaveBanner1.setBounds(bannerX, bannerY, bannerW, bannerLineHeight);
         untrustedSlaveBanner2.setBounds(bannerX, bannerY + bannerLineHeight, bannerW, bannerLineHeight);
         untrustedSlaveBanner3.setBounds(bannerX, bannerY + 2 * bannerLineHeight, bannerW, bannerLineHeight);
@@ -1373,20 +1553,73 @@ public class TradeScreen extends StockMarketGuiScreen {
      * @param result the server response for the create-order request
      */
     private void logOrderResult(CreateOrderRequest.OutputData result) {
-        if (result.status == CreateOrderRequest.Status.CREATED) {
-            info("Order created");
-        } else {
+        if (result.status != CreateOrderRequest.Status.CREATED) {
             warn("Order rejected: " + result.status);
             // Tell the player why: the market is outside its trading hours.
             if (result.status == CreateOrderRequest.Status.MARKET_CLOSED)
                 Minecraft.getInstance().execute(this::showMarketClosedMessage);
+            else if (result.status == CreateOrderRequest.Status.ORDER_TOO_LARGE)
+                showActionBar(Component.translatable("message.stockmarket.order_status.order_too_large", result.detail));
+            else if (result.status == CreateOrderRequest.Status.TRADING_TOO_FAST)
+                showActionBar(tradingTooFastMessage(result.detail));
+            else if (result.status == CreateOrderRequest.Status.ACCOUNT_FROZEN)
+                showActionBar(Component.translatable("message.stockmarket.order_status.account_frozen"));
         }
+    }
+
+    /**
+     * T-166: shows a translated message for the inter-market order error codes that carry a
+     * number after a colon ("ORDER_TOO_LARGE:&lt;limit&gt;", "TRADING_TOO_FAST:&lt;remaining ms&gt;"),
+     * and for "ACCOUNT_FROZEN" (T-195). Other codes are only logged.
+     * @param errorMessage the error code from {@link PlaceInterMarketOrderRequest.OutputData#errorMessage}, may be null
+     */
+    private static void showInterMarketError(@Nullable String errorMessage) {
+        if (errorMessage == null) return;
+        if (errorMessage.equals("ACCOUNT_FROZEN")) { // T-195
+            showActionBar(Component.translatable("message.stockmarket.order_status.account_frozen"));
+            return;
+        }
+        int colon = errorMessage.indexOf(':');
+        if (colon < 0) return;
+        long value;
+        try {
+            value = Long.parseLong(errorMessage.substring(colon + 1));
+        } catch (NumberFormatException e) {
+            return;
+        }
+        String code = errorMessage.substring(0, colon);
+        if (code.equals("ORDER_TOO_LARGE"))
+            showActionBar(Component.translatable("message.stockmarket.order_status.order_too_large", value));
+        else if (code.equals("TRADING_TOO_FAST"))
+            showActionBar(tradingTooFastMessage(value));
+    }
+
+    /** @param remainingMs remaining cooldown; shown as seconds with one decimal (e.g. "0.3") */
+    private static Component tradingTooFastMessage(long remainingMs) {
+        return Component.translatable("message.stockmarket.order_status.trading_too_fast",
+                String.format(java.util.Locale.ROOT, "%.1f", Math.max(0.1, remainingMs / 1000.0)));
+    }
+
+    /** Shows an action-bar message to the local player. Safe to call from any thread. */
+    private static void showActionBar(Component message) {
+        Minecraft.getInstance().execute(() -> {
+            if (Minecraft.getInstance().player != null)
+                net.kroia.modutilities.PlayerCompat.sendMessage(Minecraft.getInstance().player, message, true);
+        });
+    }
+
+    /**
+     * T-227: action-bar message for an order request that got no answer: it may have been placed, so the
+     * player should check their orders before trying again. Safe to call from any thread.
+     */
+    private static void showOrderOutcomeUnknown() {
+        showActionBar(Component.translatable("message.stockmarket.order_status.outcome_unknown"));
     }
 
     /** T-158: action-bar message telling the player the market is closed. Main thread only. */
     private void showMarketClosedMessage() {
         if (Minecraft.getInstance().player != null)
-            Minecraft.getInstance().player.displayClientMessage(
+            net.kroia.modutilities.PlayerCompat.sendMessage(Minecraft.getInstance().player,
                     Component.translatable("message.stockmarket.order_status.market_closed"), true);
     }
 
@@ -1394,25 +1627,25 @@ public class TradeScreen extends StockMarketGuiScreen {
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createMarketOrder(selectedBankAccountNr, quantity).thenAccept(this::logOrderResult);
+        market.createMarketOrder(selectedBankAccountNr, quantity).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
     private void onSellMarket(double quantity)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createMarketOrder(selectedBankAccountNr, -quantity).thenAccept(this::logOrderResult);
+        market.createMarketOrder(selectedBankAccountNr, -quantity).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
     private void onBuyLimit(double quantity, double price)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createLimitOrder(selectedBankAccountNr, quantity, price).thenAccept(this::logOrderResult);
+        market.createLimitOrder(selectedBankAccountNr, quantity, price).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
     private void onSellLimit(double quantity, double price)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createLimitOrder(selectedBankAccountNr, -quantity, price).thenAccept(this::logOrderResult);
+        market.createLimitOrder(selectedBankAccountNr, -quantity, price).whenComplete((result, error) -> onButtonOrderResult(market.getItemID(), result, error));
     }
 
     /**
@@ -1433,7 +1666,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, 0L, targetBuyRaw);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> info("Inter-market buy: " + (result.success ? "OK" : result.errorMessage)));
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
+                    if (!result.success) showInterMarketError(result.errorMessage);
+                    else startTradeCooldown(input.haveItemID()); // T-179
+                });
     }
 
     /**
@@ -1447,7 +1684,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, 0L, 0L);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> info("Inter-market sell: " + (result.success ? "OK" : result.errorMessage)));
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
+                    if (!result.success) showInterMarketError(result.errorMessage);
+                    else startTradeCooldown(input.haveItemID()); // T-179
+                });
     }
 
     /**
@@ -1465,7 +1706,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit, targetBuyRaw);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> info("Inter-market buy limit: " + (result.success ? "OK" : result.errorMessage)));
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
+                    if (!result.success) showInterMarketError(result.errorMessage);
+                    else startTradeCooldown(input.haveItemID()); // T-179
+                });
     }
 
     /**
@@ -1481,7 +1726,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                 pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, rawRateLimit, 0L);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> info("Inter-market sell limit: " + (result.success ? "OK" : result.errorMessage)));
+                .whenComplete((result, error) -> {
+                    if (error != null || result == null) { showOrderOutcomeUnknown(); return; } // T-227, not resent
+                    if (!result.success) showInterMarketError(result.errorMessage);
+                    else startTradeCooldown(input.haveItemID()); // T-179
+                });
     }
 
     private long getItemFractionScaleFactor() {
@@ -1563,9 +1812,12 @@ public class TradeScreen extends StockMarketGuiScreen {
                                 .thenAccept(result -> {
                                     if (!result.success) {
                                         warn("Move inter-market order failed (" + result.errorMessage + "), restoring original");
+                                        showInterMarketError(result.errorMessage);
                                         PlaceInterMarketOrderRequest.InputData fallback = new PlaceInterMarketOrderRequest.InputData(
                                                 order.getSellItemID(), order.getBuyItemID(), selectedBankAccountNr,
                                                 fallbackHaveVolume, fallbackRateLimit, fallbackTargetBuy);
+                                        // T-166: the restore is covered by the server-side move credit from the
+                                        // cancel above, so max order size / cooldown cannot reject it.
                                         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(fallback)
                                                 .thenAccept(fb -> {
                                                     if (!fb.success) {
@@ -1613,6 +1865,9 @@ public class TradeScreen extends StockMarketGuiScreen {
                             .thenAccept(result -> {
                                 if (result.status != CreateOrderRequest.Status.CREATED) {
                                     warn("Move order failed (" + result.status + "), restoring at original price");
+                                    logOrderResult(result);
+                                    // T-166: the move and this restore are covered by the server-side move
+                                    // credit from the cancel above, so max order size / cooldown cannot reject them.
                                     market.createLimitOrder(selectedBankAccountNr, remainingVolume, originalPrice)
                                             .thenAccept(fallback -> {
                                                 if (fallback.status != CreateOrderRequest.Status.CREATED) {

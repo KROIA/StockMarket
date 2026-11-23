@@ -1,10 +1,11 @@
 package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.PriceHistoryData.Candle;
@@ -23,6 +24,11 @@ public class PriceHistoryTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Candle Operations
         addTest("candle_merge_single", this::test_candle_merge_singleCandle);
@@ -38,6 +44,9 @@ public class PriceHistoryTestSuite extends TestSuite {
         addTest("load_from_empty_source", this::test_loadFrom_emptySource);
         addTest("load_from_time_gap_filling", this::test_loadFrom_timeGapFilling);
         addTest("load_from_no_time_gap_filling", this::test_loadFrom_noTimeGapFilling);
+        addTest("load_from_offline_gaps_own_bucket", this::test_loadFrom_offlineGaps_ownBucket);
+        addTest("load_from_offline_gaps_fill", this::test_loadFrom_offlineGaps_fill);
+        addTest("load_from_offline_gaps_second_pass", this::test_loadFrom_offlineGaps_secondPass);
         // Range Queries
         addTest("get_min_price_normal", this::test_getMinPrice_normalRange);
         addTest("get_max_price_normal", this::test_getMaxPrice_normalRange);
@@ -49,6 +58,13 @@ public class PriceHistoryTestSuite extends TestSuite {
         addTest("floor_time_rounds_down", this::test_floorTime_roundsDown);
         addTest("floor_time_exact", this::test_floorTime_exact);
         addTest("from_sql_data_empty_list", this::test_fromSqlData_emptyList);
+        // Game-time candles (T-218)
+        addTest("gameCandle_rotation", this::test_gameCandle_rotation);
+        addTest("gameAggregate_alignsToMidnight", this::test_gameAggregate_alignsToMidnight);
+        addTest("gameAggregate_timeSetBackwards", this::test_gameAggregate_timeSetBackwards);
+        addTest("gameAggregate_frozenDaylightCap", this::test_gameAggregate_frozenDaylightCap);
+        addTest("gameAggregate_legacyRows", this::test_gameAggregate_legacyRows);
+        addTest("gameLabels_dayAndHour", this::test_gameLabels_dayAndHour);
     }
 
     // --- Candle Operations ---
@@ -254,6 +270,138 @@ public class PriceHistoryTestSuite extends TestSuite {
                 target.getCandles().size() <= 5);
     }
 
+    // --- SM-331: candles after offline time (1h candles, multi-day gaps) ---
+
+    private static final long HOUR = 3_600_000L;
+    /** 2026-11-03 00:00 UTC; hour boundaries are the same in CET. */
+    private static final long DAY0 = 1_793_664_000_000L;
+    /** "Now" for the runs: day 12, 18:10, one hour after the last stored row. */
+    private static final long NOW = at(12, 18, 10);
+    /** Price the source reports as current; seeds the live / trailing candle. */
+    private static final long LIVE_PRICE = 500L;
+
+    private static long at(int day, int hour, int minute) {
+        return DAY0 + day * 24L * HOUR + hour * HOUR + minute * 60_000L;
+    }
+
+    /**
+     * Stored rows modeled on the user's data (row i opens at 100 + i, high +2, low -1, volume 1):
+     * A = day 0 00:43 (1 row), B = day 4 14:58 + 14:59, C = day 9 12:12..12:24 (13 rows),
+     * D = day 12 16:04/16:30/16:59, E = day 12 17:00 (exactly on the boundary) + 17:05.
+     */
+    private static PriceHistoryData offlineGapRows() {
+        List<Long> times = new ArrayList<>();
+        times.add(at(0, 0, 43));
+        times.add(at(4, 14, 58));
+        times.add(at(4, 14, 59));
+        for (int m = 12; m <= 24; m++)
+            times.add(at(9, 12, m));
+        times.add(at(12, 16, 4));
+        times.add(at(12, 16, 30));
+        times.add(at(12, 16, 59));
+        times.add(at(12, 17, 0));
+        times.add(at(12, 17, 5));
+        List<Candle> rows = new ArrayList<>();
+        for (int i = 0; i < times.size(); i++)
+            rows.add(new Candle(times.get(i), 100 + i, 102 + i, 99 + i, 1f));
+        return new PriceHistoryData(DUMMY_ITEM, SCALE_FACTOR, rows, LIVE_PRICE);
+    }
+
+    /** Expected real candles: bucket start, first row index, row count. */
+    private static final long[][] OFFLINE_BUCKETS = {
+            {at(0, 0, 0), 0, 1},
+            {at(4, 14, 0), 1, 2},
+            {at(9, 12, 0), 3, 13},
+            {at(12, 16, 0), 16, 3},
+            {at(12, 17, 0), 19, 2},
+    };
+
+    /** Checks one real candle: its own bucket, open of its first row, high/low/volume of its rows only. */
+    private TestResult checkRealCandle(Candle c, long[] bucket) {
+        long first = 100 + bucket[1], last = first + bucket[2] - 1;
+        TestResult r = assertEquals("candle at its own bucket " + Candle.dateTimeFormat.format(bucket[0]), bucket[0], c.openTimestamp);
+        if (!r.passed()) return r;
+        r = assertEquals("open = first row's open", first, c.open);
+        if (!r.passed()) return r;
+        r = assertEquals("high = highest row high", last + 2, c.high);
+        if (!r.passed()) return r;
+        r = assertEquals("low = lowest row low", first - 1, c.low);
+        if (!r.passed()) return r;
+        return assertEquals("volume = own rows only", (float) bucket[2], c.tradedVolume);
+    }
+
+    /**
+     * Fill-on result: one candle per hour from day 0 00:00 to day 12 18:00 (strictly increasing,
+     * no duplicates), the real buckets carry their rows, every other bucket is a flat fill candle.
+     */
+    private TestResult checkHourlyFilled(PriceHistoryData out) {
+        List<Candle> c = out.getCandles();
+        long start = at(0, 0, 0);
+        int expected = (int) ((at(12, 18, 0) - start) / HOUR) + 1;
+        TestResult r = assertEquals("one candle per hour up to the live bucket", expected, c.size());
+        if (!r.passed()) return r;
+        int nextReal = 0;
+        for (int k = 0; k < c.size(); k++) {
+            Candle candle = c.get(k);
+            long bucket = start + k * HOUR;
+            if (nextReal < OFFLINE_BUCKETS.length && OFFLINE_BUCKETS[nextReal][0] == bucket) {
+                r = checkRealCandle(candle, OFFLINE_BUCKETS[nextReal++]);
+                if (!r.passed()) return r;
+                continue;
+            }
+            r = assertEquals("candle " + k + " at its own hour", bucket, candle.openTimestamp);
+            if (!r.passed()) return r;
+            r = assertTrue("candle " + k + " is a flat fill", candle.open == candle.high && candle.open == candle.low && candle.tradedVolume == 0f);
+            if (!r.passed()) return r;
+            // Gap fills take the next real candle's open (unchanged behaviour); the tail is the live price.
+            long fillPrice = nextReal < OFFLINE_BUCKETS.length ? 100 + OFFLINE_BUCKETS[nextReal][1] : LIVE_PRICE;
+            r = assertEquals("candle " + k + " fill price", fillPrice, candle.open);
+            if (!r.passed()) return r;
+        }
+        return assertEquals("all real candles found", OFFLINE_BUCKETS.length, nextReal);
+    }
+
+    /**
+     * SM-331, fill off (the server's aggregation): each real candle sits in its own floored bucket
+     * holding only its own rows, followed by exactly one live candle at "now".
+     */
+    private TestResult test_loadFrom_offlineGaps_ownBucket() {
+        PriceHistoryData out = offlineGapRows().createFromDifferentCandleDeltaTime(NOW, HOUR, LIVE_PRICE, false);
+        List<Candle> c = out.getCandles();
+        TestResult r = assertEquals("5 real candles + 1 live", OFFLINE_BUCKETS.length + 1, c.size());
+        if (!r.passed()) return r;
+        for (int k = 0; k < OFFLINE_BUCKETS.length; k++) {
+            r = checkRealCandle(c.get(k), OFFLINE_BUCKETS[k]);
+            if (!r.passed()) return r;
+        }
+        Candle live = c.getLast();
+        r = assertEquals("live candle opens at now", NOW, live.openTimestamp);
+        if (!r.passed()) return r;
+        return assertTrue("live candle is flat at the current price",
+                live.open == LIVE_PRICE && live.high == LIVE_PRICE && live.low == LIVE_PRICE);
+    }
+
+    /**
+     * SM-331, fill on straight from the stored rows: fill candles only in the empty hours between
+     * the real candles, and every real candle in its own hour.
+     */
+    private TestResult test_loadFrom_offlineGaps_fill() {
+        PriceHistoryData out = new PriceHistoryData(DUMMY_ITEM, SCALE_FACTOR, new ArrayList<>(), 0);
+        out.loadFrom(offlineGapRows(), HOUR, NOW, LIVE_PRICE, true);
+        return checkHourlyFilled(out);
+    }
+
+    /**
+     * SM-331, the client's second pass: fill on over the server's fill-off output (already floored
+     * candles + live candle). Candles on a bucket start must not fold into the previous bucket.
+     */
+    private TestResult test_loadFrom_offlineGaps_secondPass() {
+        PriceHistoryData server = offlineGapRows().createFromDifferentCandleDeltaTime(NOW, HOUR, LIVE_PRICE, false);
+        PriceHistoryData client = new PriceHistoryData(DUMMY_ITEM, SCALE_FACTOR, new ArrayList<>(), 0);
+        client.loadFrom(server, HOUR, NOW, LIVE_PRICE, true);
+        return checkHourlyFilled(client);
+    }
+
     // --- Range Queries ---
 
     /**
@@ -362,5 +510,139 @@ public class PriceHistoryTestSuite extends TestSuite {
     private TestResult test_fromSqlData_emptyList() {
         PriceHistoryData result = PriceHistoryData.fromSqlData(new ArrayList<>(), 100, SCALE_FACTOR);
         return assertNull("fromSqlData with empty list should return null", result);
+    }
+
+    // --- Game-time candles (T-218) ---
+
+    /**
+     * ServerMarketManager.shouldRotateGameCandle: rotates on an in-game hour change (also
+     * backwards after /time set) and after 1000 ticks when the daylight cycle is frozen.
+     */
+    private TestResult test_gameCandle_rotation() {
+        TestResult r = assertFalse("same hour, 500 ticks: no rotation",
+                ServerMarketManager.shouldRotateGameCandle(1000L, 1500L, 500L));
+        if (!r.passed()) return r;
+        r = assertTrue("hour 1 -> 2 rotates", ServerMarketManager.shouldRotateGameCandle(1500L, 2000L, 500L));
+        if (!r.passed()) return r;
+        r = assertTrue("/time set backwards rotates", ServerMarketManager.shouldRotateGameCandle(5500L, 1200L, 3L));
+        if (!r.passed()) return r;
+        r = assertFalse("frozen daylight, 999 ticks: no rotation",
+                ServerMarketManager.shouldRotateGameCandle(6000L, 6000L, 999L));
+        if (!r.passed()) return r;
+        r = assertTrue("frozen daylight, 1000 ticks rotates",
+                ServerMarketManager.shouldRotateGameCandle(6000L, 6000L, 1000L));
+        if (!r.passed()) return r;
+        r = assertTrue("no overworld (-1), 1000 ticks rotates",
+                ServerMarketManager.shouldRotateGameCandle(-1L, -1L, 1000L));
+        if (!r.passed()) return r;
+        return pass("game candle rotation rules hold");
+    }
+
+    /** Raw game-time candle: wall time, in-game day time, price; high/low = price +-1, volume 1. */
+    private static Candle gameRow(long wallMs, long gameTime, long price) {
+        return new Candle(wallMs, price, price + 1, price - 1, 1f, gameTime);
+    }
+
+    /**
+     * 4h buckets start at 00:00 (day time 0 = 06:00): 06:00+07:00 | 08:00..11:00 | 12:00.
+     */
+    private TestResult test_gameAggregate_alignsToMidnight() {
+        List<Candle> raw = new ArrayList<>();
+        for (int h = 0; h <= 6; h++)
+            raw.add(gameRow(1000L * h, 1000L * h, 100 + h));
+        List<Candle> out = PriceHistoryData.aggregateGameHours(raw, 4);
+        TestResult r = assertEquals("3 candles", 3, out.size());
+        if (!r.passed()) return r;
+        Candle mid = out.get(1);
+        r = assertEquals("2nd candle starts at 08:00 (game 2000)", 2000L, mid.gameTime);
+        if (!r.passed()) return r;
+        r = assertEquals("2nd candle keeps the wall time of its first row", 2000L, mid.openTimestamp);
+        if (!r.passed()) return r;
+        r = assertEquals("2nd candle open = first row open", 102L, mid.open);
+        if (!r.passed()) return r;
+        r = assertEquals("2nd candle high = max high", 106L, mid.high);
+        if (!r.passed()) return r;
+        r = assertEquals("2nd candle low = min low", 101L, mid.low);
+        if (!r.passed()) return r;
+        r = assertEquals("2nd candle volume = 4 rows", 4f, mid.tradedVolume);
+        if (!r.passed()) return r;
+        return assertEquals("last candle starts at 12:00 (game 6000)", 6000L, out.get(2).gameTime);
+    }
+
+    /**
+     * /time set backwards inside a day bucket must split the candle (keys differ).
+     */
+    private TestResult test_gameAggregate_timeSetBackwards() {
+        List<Candle> raw = new ArrayList<>();
+        raw.add(gameRow(1000L, 30000L, 100));
+        raw.add(gameRow(2000L, 31000L, 101));
+        raw.add(gameRow(3000L, 1000L, 102)); // /time set back to day 0
+        raw.add(gameRow(4000L, 2000L, 103));
+        List<Candle> out = PriceHistoryData.aggregateGameHours(raw, 24);
+        TestResult r = assertEquals("2 day candles", 2, out.size());
+        if (!r.passed()) return r;
+        r = assertEquals("1st candle = day 1 rows", 30000L, out.get(0).gameTime);
+        if (!r.passed()) return r;
+        return assertEquals("2nd candle = day 0 rows after the jump", 1000L, out.get(1).gameTime);
+    }
+
+    /**
+     * Frozen daylight cycle: identical game times, capped at {@code hours} raw rows per candle.
+     */
+    private TestResult test_gameAggregate_frozenDaylightCap() {
+        List<Candle> raw = new ArrayList<>();
+        for (int i = 0; i < 9; i++)
+            raw.add(gameRow(1000L * i, 6000L, 100));
+        List<Candle> out = PriceHistoryData.aggregateGameHours(raw, 4);
+        TestResult r = assertEquals("9 rows / 4h -> 3 candles", 3, out.size());
+        if (!r.passed()) return r;
+        r = assertEquals("full candle = 4 rows", 4f, out.get(0).tradedVolume);
+        if (!r.passed()) return r;
+        return assertEquals("rest = 1 row", 1f, out.get(2).tradedVolume);
+    }
+
+    /**
+     * Legacy rows (game time -1) use nominal wall buckets of hours * 50 s and never merge with
+     * game-stamped rows.
+     */
+    private TestResult test_gameAggregate_legacyRows() {
+        List<Candle> raw = new ArrayList<>();
+        raw.add(new Candle(0L, 100, 101, 99, 1f));           // legacy, wall key 0 (4h = 200 000 ms)
+        raw.add(new Candle(50_000L, 100, 101, 99, 1f));      // legacy, key 0
+        raw.add(new Candle(100_000L, 100, 101, 99, 1f));     // legacy, key 0
+        raw.add(new Candle(250_000L, 100, 101, 99, 1f));     // legacy, key 1
+        raw.add(gameRow(300_000L, 2000L, 100));                       // game, key 2
+        raw.add(gameRow(350_000L, 3000L, 100));                       // game, key 2
+        List<Candle> out = PriceHistoryData.aggregateGameHours(raw, 4);
+        TestResult r = assertEquals("3 candles", 3, out.size());
+        if (!r.passed()) return r;
+        r = assertEquals("legacy candle keeps game time -1", MarketPriceStruct.NO_GAME_TIME, out.get(0).gameTime);
+        if (!r.passed()) return r;
+        r = assertEquals("3 legacy rows merged", 3f, out.get(0).tradedVolume);
+        if (!r.passed()) return r;
+        r = assertEquals("game rows start a new candle", 2000L, out.get(2).gameTime);
+        if (!r.passed()) return r;
+        return assertEquals("2 game rows merged", 2f, out.get(2).tradedVolume);
+    }
+
+    /**
+     * Chart labels: day 0-based, rolling at 00:00 (day time 18000); tick 0 = 06:00.
+     */
+    private TestResult test_gameLabels_dayAndHour() {
+        TestResult r = assertEquals("tick 0 is day 0", 0L, PriceHistoryData.gameDay(0L));
+        if (!r.passed()) return r;
+        r = assertEquals("23:59 is still day 0", 0L, PriceHistoryData.gameDay(17_999L));
+        if (!r.passed()) return r;
+        r = assertEquals("00:00 starts day 1", 1L, PriceHistoryData.gameDay(18_000L));
+        if (!r.passed()) return r;
+        r = assertEquals("day 2", 2L, PriceHistoryData.gameDay(42_000L));
+        if (!r.passed()) return r;
+        r = assertEquals("tick 0 = 06:00", "06:00", PriceHistoryData.gameHourLabel(0L));
+        if (!r.passed()) return r;
+        r = assertEquals("tick 18000 = 00:00", "00:00", PriceHistoryData.gameHourLabel(18_000L));
+        if (!r.passed()) return r;
+        r = assertEquals("tick 23999 = 05:00", "05:00", PriceHistoryData.gameHourLabel(23_999L));
+        if (!r.passed()) return r;
+        return assertEquals("tick 30500 = 12:00", "12:00", PriceHistoryData.gameHourLabel(30_500L));
     }
 }

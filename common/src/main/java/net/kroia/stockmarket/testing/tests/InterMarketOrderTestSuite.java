@@ -3,9 +3,9 @@ package net.kroia.stockmarket.testing.tests;
 import net.kroia.modutilities.NbtCompat;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
@@ -22,6 +22,11 @@ public class InterMarketOrderTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.INTER_MARKET_ORDER;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override

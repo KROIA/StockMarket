@@ -1,0 +1,34 @@
+{
+  "id": "deepslate_quarry_expansion",
+  "picture": "deepslate_quarry_expansion.png",
+  "headline": {
+    "en_us": "Deep quarry opens - deepslate cheap for good",
+    "zh_cn": "深部采石场开工——深板岩永久廉价",
+    "de_de": "Tiefer Steinbruch erschlossen - Tiefengestein dauerhaft billig"
+  },
+  "text": {
+    "en_us": "The trade council has bankrolled a vast quarry sunk to the deep stone layers, and cobbled deepslate now arrives in quantities the market has never seen. Analysts call it a structural shift, not a passing surplus - with the quarry running for years to come, cheap deepslate is simply the new normal.",
+    "zh_cn": "贸易议会出资开凿了一座直抵深层岩的巨大采石场，深板岩圆石正以市场前所未见的规模流入。分析师称之为结构性转变而非一时过剩——采石场将运转多年，廉价深板岩就是新的常态。",
+    "de_de": "Der Handelsrat hat einen gewaltigen Steinbruch bis in die tiefen Gesteinsschichten finanziert, und Bruch-Tiefengestein trifft nun in nie gekannten Mengen ein. Analysten sprechen von einem strukturellen Wandel, nicht von einem vorübergehenden Überschuss - da der Steinbruch noch jahrelang läuft, ist billiges Tiefengestein schlicht der neue Normalzustand."
+  },
+  "category": "economy",
+  "weight": 5,
+  "cooldownSeconds": 43200,
+  "impact": {
+    "type": "trend",
+    "peakFactor": -0.2,
+    "rampUpSeconds": 1200,
+    "durationSeconds": 3000,
+    "reversal": "none"
+  },
+  "markets": [
+    {
+      "item": "minecraft:cobbled_deepslate",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:deepslate",
+      "weightFactor": 0.8
+    }
+  ]
+}

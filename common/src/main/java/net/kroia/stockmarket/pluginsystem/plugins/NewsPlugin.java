@@ -1661,13 +1661,18 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
 
         // 2. Roll every step's concrete duration (fixed durations consume no RNG value)
         //    and resolve every step's market map. Both are frozen into the event below.
+        //    SM-338: the scheduler config's global multipliers stretch every rolled duration
+        //    and scale every step target (1.0 / 1.0 = as authored, no extra RNG use).
+        NewsEventLibrary.SchedulerConfig scheduler = library.getSchedulerConfig();
+        double durationMultiplier = scheduler.getImpactDurationMultiplier();
         List<NewsEventDefinition.StepDefinition> steps = sequenceDefinition.getSteps();
         long[] rolledDurationsMs = new long[steps.size()];
         List<Map<ItemID, Float>> stepMarkets = new ArrayList<>(steps.size());
         boolean anyMarket = false;
         for (int i = 0; i < steps.size(); i++) {
             NewsEventDefinition.StepDefinition step = steps.get(i);
-            rolledDurationsMs[i] = sampleUniformMs(step.getDurationMinMs(), step.getDurationMaxMs());
+            rolledDurationsMs[i] = Math.round(
+                    sampleUniformMs(step.getDurationMinMs(), step.getDurationMaxMs()) * durationMultiplier);
             Map<ItemID, Float> stepMap =
                     resolveStepMarkets(definition, step, resolvedMarkets, stepCandidates);
             stepMarkets.add(stepMap);
@@ -1678,7 +1683,8 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
                     + "': no step resolves any market");
             return null;
         }
-        NewsSequence sequence = sequenceDefinition.createSequence(rolledDurationsMs);
+        NewsSequence sequence = sequenceDefinition.createSequence(rolledDurationsMs,
+                scheduler.getImpactStrengthMultiplier());
 
         // 3. Announce delay + freeze. The legacy envelope (null for sequence-authored
         //    events) rides along as a record/phase-name descriptor snapshot.
@@ -1884,7 +1890,9 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         if (envelope != null) {
             // Legacy impact event: byte-identical record fields to pre-T-095.
             impactType = envelope.getType().jsonName();
-            peakFactor = (float) envelope.getPeakFactor();
+            // SM-338: the peak the event really applies (strength multiplier included);
+            // equals envelope.getPeakFactor() at multiplier 1.
+            peakFactor = (float) peakSequenceValue(event.getSequence());
             reversal = envelope.getReversal().jsonName();
         } else {
             NewsSequence sequence = event.getSequence();
@@ -2283,22 +2291,51 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
      * later tick (or dropped by unsubscription). The bake factor is
      * {@code 1 + finalValue * weight * sensitivity} — for legacy events {@code finalValue
      * == peakFactor}, byte-identical to the pre-T-095 bake.
+     * <p>
+     * SM-341: every bake stores its absolute default-price change in the world registry
+     * ({@link NewsWorldRegistry#addBakeDelta}). An event with {@code "undoes"} does not
+     * apply its own factor: it adds back the stored change of the undone event per market
+     * and clears it; a market without a stored change is left as it is.
      */
     private void bakePermanentShift(ActiveNewsEvent event, List<MarketInterface> markets) {
         double finalValue = event.getSequence().finalValue();
+        NewsWorldRegistry registry = getNewsWorldRegistry();
+        NewsEventDefinition definition = library.getDefinition(event.getDefinitionId());
+        String undoes = definition != null ? definition.getUndoesEventId() : null;
         for (MarketInterface marketInterface : markets) {
             ItemID marketID = marketInterface.market.getMarketID();
             Float weightFactor = event.getPendingBakeWeights().get(marketID);
             if (weightFactor == null) continue;
+
+            if (undoes != null) {
+                Double delta = registry != null ? registry.takeBakeDelta(undoes, marketID) : null;
+                if (delta != null) {
+                    double restored = marketInterface.market.getDefaultRealPrice() - delta;
+                    if (restored > 0 && Double.isFinite(restored)) {
+                        marketInterface.market.setDefaultRealPrice(restored);
+                    }
+                    info("Undid the permanent news shift of event '" + undoes + "' on market "
+                            + marketID + " (default price change " + (-delta) + ")");
+                }
+                event.markBaked(marketID);
+                continue;
+            }
 
             float sensitivity = settingsFor(marketID).sensitivity();
             // Same clamp band as the live influence, so the permanent shift can never
             // exceed what the event was allowed to do while running.
             double bakeFactor = clampCombinedFactor(
                     sequenceFactorTerm(finalValue, weightFactor, sensitivity, 0));
-            double newDefault = marketInterface.market.getDefaultRealPrice() * bakeFactor;
+            double oldDefault = marketInterface.market.getDefaultRealPrice();
+            double newDefault = oldDefault * bakeFactor;
             if (newDefault > 0 && Double.isFinite(newDefault)) {
                 marketInterface.market.setDefaultRealPrice(newDefault);
+                if (registry != null) {
+                    // Read back: the market rounds to its raw price units, so the stored
+                    // change is what really happened and the undo lands on the old value.
+                    registry.addBakeDelta(event.getDefinitionId(), marketID,
+                            marketInterface.market.getDefaultRealPrice() - oldDefault);
+                }
             }
             event.markBaked(marketID);
             info("Baked permanent news shift of event '" + event.getDefinitionId()

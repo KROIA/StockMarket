@@ -72,6 +72,51 @@ public interface IPluginOrderBook {
         return 0;
     }
 
+    /**
+     * Exact virtual volume a market order must consume to move the price from the current market
+     * price to {@code targetRealPrice}, read level by level the way the matching engine walks the
+     * book (including the depth memory outside the orderbook window). Only the side the order eats
+     * is counted: asks for a target above the price, bids for a target below. Resting limit orders
+     * are not counted (the walk would fill them too, so the real move is never larger).
+     * <p>
+     * A market order of exactly this size ends at or before the target; use it to size orders that
+     * must not overshoot.
+     * <p>
+     * Default: {@code 0} ("no depth information"), which keeps order sizing callers inert.
+     *
+     * @param targetRealPrice the real price the order should move the market to
+     * @param capReal         stop counting once this many real items are reached (the caller's order
+     *                        limit); {@link Double#POSITIVE_INFINITY} = no cap
+     * @return signed real volume: negative = ask volume a buy consumes (target above the price),
+     *         positive = bid volume a sell consumes (target below), 0 if the target is the current
+     *         price or there is no volume in between
+     */
+    default float getRealVirtualVolumeToPrice(double targetRealPrice, double capReal)
+    {
+        return 0;
+    }
+
+    /**
+     * SM-334: the virtual volume "available" to a market order towards {@code targetRealPrice}: starting at the
+     * current market price, walk one price level at a time in that direction (asks for a target above the price,
+     * bids for one below), skip empty levels up to the first level that holds volume, however deep, and sum that
+     * level and the next {@code levels - 1} levels. Read the way the matching walk reads the book (incl. the depth
+     * memory), like {@link #getRealVirtualVolumeToPrice}; the search and the sum stop at the target. Resting limit
+     * orders are not counted.
+     * <p>
+     * Default: {@code 0} ("no depth information"), which keeps order sizing callers inert.
+     *
+     * @param targetRealPrice the real price an order would move the market towards (direction and search limit)
+     * @param levels          number of price levels to sum, counted from the first level with volume
+     * @param capReal         stop counting once this many real items are reached; {@link Double#POSITIVE_INFINITY} = no cap
+     * @return signed real volume like {@link #getRealVirtualVolumeToPrice}: negative = asks (target above),
+     *         positive = bids (target below), 0 if there is no volume up to the target
+     */
+    default float getRealVirtualAvailableVolume(double targetRealPrice, int levels, double capReal)
+    {
+        return 0;
+    }
+
     long getRawVolume(long backendPrice);
 
     float getRawVirtualVolume(long backendPrice);
@@ -136,6 +181,17 @@ public interface IPluginOrderBook {
 
     void resetVirtualVolume();
 
+    /**
+     * Sets how fast the remembered virtual depth outside the editable range recovers, per side. A factor
+     * f &gt; 1 refills that side's missing volume f times faster and removes its excess f times slower;
+     * f &lt; 1 the other way round; 1 = the configured recovery half-life. Applied with the other cached
+     * manipulations; values stay until set again (or the volume distribution plugin is removed). Default: no-op.
+     *
+     * @param bidFactor multiplier for the buy side (prices below the editable range)
+     * @param askFactor multiplier for the sell side (prices above the editable range)
+     */
+    default void setVirtualDepthSideFactors(float bidFactor, float askFactor) {}
+
 
 
     /**
@@ -156,19 +212,44 @@ public interface IPluginOrderBook {
     /**
      * Gets the volume at the given price
      * The value is based on the IVolumeDistributionCalculator objects
+     * <p>
+     * #96: the calculators are evaluated centred on the market's fair price
+     * ({@link IPluginMarket#getEquilibriumPrice()}: the flow equilibrium, else the default price), not on the
+     * current price, so the default depth does not follow a dumped or pumped price. The bid/ask split stays at
+     * the current market price.
      *
      * @param pickPrice the real value price at which the volume gets measured
-     * @return positive volume for buy orders, negative volume for sell orders.
-     *         The real volume at the given price
+     * @return positive volume for buy orders (below the current price), negative volume for sell orders
+     *         (at or above it). The real volume at the given price
      */
     float getDefaultRealVolume(double pickPrice);
+
+    /**
+     * Like {@link #getDefaultRealVolume(double)}, but evaluates the volume distribution calculators centred on
+     * {@code centerPrice} and splits bid/ask there, instead of the fair price and the current price. Used to
+     * read the <i>default</i> book around the market's default price, whatever the price is now (T-208
+     * permanent impact capacity). SM-340: only the calculators' static profile
+     * ({@link IVolumeDistributionCalculator#getStaticVolume}), so the slow-average wall does not count.
+     * <p>
+     * Default: falls back to {@link #getDefaultRealVolume(double)}, for implementations that cannot re-centre.
+     *
+     * @param centerPrice the real market price the distribution is centred on
+     * @param pickPrice   the real price at which the volume is measured
+     * @return positive volume for buy orders (below {@code centerPrice}), negative for sell orders
+     *         (at or above it); real units, per backend price level
+     */
+    default float getDefaultRealVolumeAround(double centerPrice, double pickPrice)
+    {
+        return getDefaultRealVolume(pickPrice);
+    }
+
     float getDefaultRawVolume(double pickPrice);
 
     /**
      * Batch variant of {@link #getDefaultRawVolume(double)}.
      * Computes the default raw volume for {@code count} consecutive backend price levels,
      * starting at {@code backendStartPrice}.
-     * Loop-invariant values (current market price, item fraction scale factor) are fetched
+     * Loop-invariant values (current market price, fair price, item fraction scale factor) are fetched
      * only once for the whole range, which makes this considerably cheaper than calling
      * {@link #getDefaultRawVolume(double)} once per price level.
      *

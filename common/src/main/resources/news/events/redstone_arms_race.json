@@ -1,0 +1,40 @@
+{
+  "id": "redstone_arms_race",
+  "picture": "redstone_arms_race.png",
+  "headline": {
+    "en_us": "Kingdoms race to build redstone defenses",
+    "zh_cn": "各王国竞相修建红石防御工事",
+    "de_de": "Königreiche wetteifern um Redstone-Verteidigungsanlagen"
+  },
+  "text": {
+    "en_us": "Rival kingdoms are pouring resources into automated defenses, and their engineers are buying up every scrap of redstone and iron they can find. Speculators are jumping in behind them - traders warn the rally can just as easily fizzle out if a ceasefire is announced.",
+    "zh_cn": "对立的王国正将资源倾注于自动化防御，工程师们搜购一切能找到的红石与铁。投机者紧随其后入场——商人警告，一旦宣布停火，这轮涨势同样可能迅速熄灭。",
+    "de_de": "Rivalisierende Königreiche stecken massiv Mittel in automatisierte Verteidigungsanlagen, und ihre Ingenieure kaufen jeden erreichbaren Krumen Redstone und Eisen auf. Spekulanten springen hinterher - Händler warnen, dass die Rally ebenso schnell verpuffen kann, sobald ein Waffenstillstand verkündet wird."
+  },
+  "category": "conflict",
+  "weight": 3,
+  "cooldownSeconds": 10800,
+  "sequences": [
+    {
+      "name": "escalation",
+      "weight": 2,
+      "steps": [
+        { "name": "arms_buildup", "durationSeconds": { "min": 900, "max": 1800 }, "targetFactor": 0.30, "curve": "linear",      "noise": 0.04 },
+        { "name": "peak_tension", "durationSeconds": { "min": 600, "max": 1200 },                        "curve": "hold",        "noise": 0.05 },
+        { "name": "ceasefire",    "durationSeconds": { "min": 900, "max": 1500 }, "targetFactor": 0.0,  "curve": "exponential", "noise": 0.03 }
+      ]
+    },
+    {
+      "name": "brief_scare",
+      "weight": 1,
+      "steps": [
+        { "name": "alarm",  "durationSeconds": { "min": 300, "max": 600 }, "targetFactor": 0.20, "curve": "linear", "noise": 0.04 },
+        { "name": "denial", "durationSeconds": { "min": 300, "max": 600 }, "targetFactor": 0.0,  "curve": "exponential" }
+      ]
+    }
+  ],
+  "markets": [
+    { "item": "minecraft:redstone",   "weightFactor": 1.0 },
+    { "item": "minecraft:iron_ingot", "weightFactor": 0.5 }
+  ]
+}

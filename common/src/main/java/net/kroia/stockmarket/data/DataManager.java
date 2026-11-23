@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.data;
 
 import dev.architectury.platform.Platform;
+import net.kroia.banksystem.api.audit.AuditExport;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
@@ -15,17 +17,17 @@ import net.kroia.stockmarket.news.NewsPictureLibrary;
 import net.kroia.stockmarket.news.NewsPictureStore;
 import net.kroia.stockmarket.news.NewsWorldRegistry;
 import net.kroia.stockmarket.news.ValidationReport;
+import net.kroia.stockmarket.villagertrading.VillagerTradeManager;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
-import com.google.gson.reflect.TypeToken;
-
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -46,27 +48,23 @@ public class DataManager extends DataPersistence {
 
     private static final String MARKET_MANAGER_FOLDER = "MarketManager";
     private static final String PLUGIN_MANAGER_FOLDER = "PluginManager";
-    private static final String NEWS_FOLDER = "News";
+    static final String NEWS_FOLDER = "News";
     /**
-     * Pre-T-110 single-file news history location (kept as a constant so the T-110
-     * migration in {@link net.kroia.stockmarket.news.NewsHistoryChunkStore} can find
-     * and consume it). New installs never (re-)create this file.
+     * Pre-T-110 single-file news history location, converted to chunks by save-data
+     * step 1 ({@link StockMarketDataMigration}). New installs never (re-)create this file.
      */
-    private static final String NEWS_HISTORY_LEGACY_FILE = "history.nbt";
+    static final String NEWS_HISTORY_LEGACY_FILE = "history.nbt";
     /** T-110 chunked history subfolder ({@code News/history/NNN.nbt} + sidecars). */
-    private static final String NEWS_HISTORY_FOLDER = "history";
+    static final String NEWS_HISTORY_FOLDER = "history";
     private static final String NEWS_REGISTRY_FILE = "registry.nbt";
     private static final String NEWS_PICTURES_FOLDER = "pictures";
-    private static final String SETTINGS_FILE = "settings.json";
-    private static final String STARTER_KIT_FILE = "starterkit_claims.json";
+    static final String SETTINGS_FILE = "settings.json";
     private static final String PRESET_DIR = "StockMarket/market_presets";
 
     public static Path getPresetPath() {
         return Platform.getConfigFolder().resolve(PRESET_DIR);
     }
 
-
-    private StarterKitData starterKitData = new StarterKitData();
 
     /**
      * Master-side news history (T-072). The DataManager only exists on the master
@@ -105,10 +103,6 @@ public class DataManager extends DataPersistence {
         setLogger(this::error, this::error, this::info, this::warn);
     }
 
-    public StarterKitData getStarterKitData() {
-        return starterKitData;
-    }
-
     /** @return the master-side news history store (see {@link #newsHistory}) */
     public NewsHistory getNewsHistory() {
         return newsHistory;
@@ -142,7 +136,6 @@ public class DataManager extends DataPersistence {
         success &= saveMarketManager();
         success &= savePluginManager();
         success &= savePresets();
-        success &= saveStarterKit();
         success &= saveNews();
 
         if(!success)
@@ -156,11 +149,10 @@ public class DataManager extends DataPersistence {
         setLevelSavePath(server.getWorldPath(LevelResource.ROOT));
 
         boolean success = true;
-        success &= loadSettings();
+        success &= loadSettings(); // older settings.json files were converted by save-data step 1 (SM-325)
         success &= loadMarketManager();
         success &= loadPluginManager();
         success &= loadPresets();
-        success &= loadStarterKit();
         success &= loadNews();
 
         if(!success)
@@ -208,6 +200,11 @@ public class DataManager extends DataPersistence {
             return false;
         }
         Path absPath = getAbsoluteSavePath(MARKET_MANAGER_FOLDER);
+        // SM-332: a new world has no save folder yet; that is not an error, start with no markets
+        if(!folderExists(absPath)) {
+            info("No saved StockMarket data yet, starting fresh.");
+            return true;
+        }
         Map<String, ListTag> dataListMap = readDataCompoundListMap(absPath);
         return marketManager.load(dataListMap);
     }
@@ -249,6 +246,10 @@ public class DataManager extends DataPersistence {
             return false;
         }
         Path absPath = getAbsoluteSavePath(PLUGIN_MANAGER_FOLDER);
+        // SM-332: no save folder yet -> skip the read (it would log a false ERROR), but still call
+        // load with an empty map, because that is what creates the default plugins (loadDefaults)
+        if(!folderExists(absPath))
+            return pluginManager.load(new HashMap<>());
         Map<String, ListTag> dataListMap = readDataCompoundListMap(absPath);
         return pluginManager.load(dataListMap);
     }
@@ -324,40 +325,8 @@ public class DataManager extends DataPersistence {
         return true;
     }
 
-    // Starter kit claim persistence
-    public boolean saveStarterKit()
-    {
-        Path path = getAbsoluteSavePath(STARTER_KIT_FILE);
-        if(!saveAsJson(starterKitData.getClaimedPlayerUUIDs(), path))
-        {
-            error("saveStarterKit(): Failed to save starter kit claims to Json file");
-            return false;
-        }
-        return true;
-    }
-    private boolean loadStarterKit()
-    {
-        Path path = getAbsoluteSavePath(STARTER_KIT_FILE);
-        if(!Files.exists(path))
-        {
-            // First run — no claims file yet, keep the empty set
-            return true;
-        }
-        HashSet<String> claimed = loadFromJson(path, new TypeToken<HashSet<String>>(){}.getType());
-        if(claimed != null)
-        {
-            starterKitData.setClaimedPlayerUUIDs(claimed);
-        }
-        else
-        {
-            error("loadStarterKit(): Failed to load starter kit claims from Json file");
-            return false;
-        }
-        return true;
-    }
-
     /**
-     * News persistence (T-072/T-096/T-110, pattern: {@link #saveStarterKit}).
+     * News persistence (T-072/T-096/T-110).
      * Writes the world-event registry to
      * {@code world/data/StockMarket/News/registry.nbt}. Since T-110 the history is
      * stored as append-persisted chunk files under
@@ -384,9 +353,7 @@ public class DataManager extends DataPersistence {
         // History (T-110): chunks are persisted on every append; nothing to flush
         // here. We still (re)wire the directory to keep the chunk store aligned
         // with the current world save in case the save path shifted.
-        newsHistory.setDirectory(
-                folderPath.resolve(NEWS_HISTORY_FOLDER),
-                folderPath.resolve(NEWS_HISTORY_LEGACY_FILE));
+        newsHistory.setDirectory(folderPath.resolve(NEWS_HISTORY_FOLDER), null);
         boolean success = true;
         CompoundTag registryTag = new CompoundTag();
         newsWorldRegistry.save(registryTag);
@@ -400,9 +367,8 @@ public class DataManager extends DataPersistence {
 
     /**
      * Restores the news history from {@code world/data/StockMarket/News/history/}
-     * (T-110). Migrates the pre-T-110 single-file {@code history.nbt} into chunks
-     * on first load — see {@link net.kroia.stockmarket.news.NewsHistoryChunkStore}
-     * for the migration contract (safe conservative branch when both layouts exist).
+     * (T-110). The pre-T-110 single-file {@code history.nbt} was converted into chunks
+     * by save-data step 1 ({@link StockMarketDataMigration}).
      * An empty directory is not an error (first run / pre-news world) — the empty
      * history is kept. The entry cap is applied lazily on the next append (see
      * {@link NewsHistory#setMaxEntries}).
@@ -422,14 +388,10 @@ public class DataManager extends DataPersistence {
         // simply starts empty (requirements re-evaluate against a blank memory).
         loadNewsRegistry(newsFolder);
 
-        // Chunked history load (T-110). The chunk store handles: fresh worlds
-        // (empty history/), pre-T-110 migration (legacy history.nbt present, no
-        // history/ chunks), interrupted-migration recovery (both present → safe
-        // conservative branch, keep old file, use chunks), and per-chunk sidecar
-        // rebuild on corruption. See NewsHistoryChunkStore Javadoc for details.
-        newsHistory.setDirectory(
-                newsFolder.resolve(NEWS_HISTORY_FOLDER),
-                newsFolder.resolve(NEWS_HISTORY_LEGACY_FILE));
+        // Chunked history load (T-110). The chunk store handles fresh worlds (empty
+        // history/) and per-chunk sidecar rebuild on corruption. The pre-T-110
+        // history.nbt was converted by save-data step 1 (SM-325), so no legacy file here.
+        newsHistory.setDirectory(newsFolder.resolve(NEWS_HISTORY_FOLDER), null);
 
         // T-112 self-heal: before the load-time GC drops "orphan" store files,
         // rebuild any hash the history references but the store no longer holds
@@ -555,6 +517,81 @@ public class DataManager extends DataPersistence {
             result.complete(true);
         });
         return result;
+    }
+
+
+    /**
+     * SM-315: StockMarket's part of BankSystem's audit export ({@code /banksystem backup export [name]}), registered
+     * at mod init on master and slave ({@link AuditExport#register}). Runs on the server thread. Saves the StockMarket
+     * files first, so they match memory, then adds them at the same paths as in the world folder
+     * ({@code data/StockMarket/...}):
+     * <ul>
+     *   <li>{@code Database/stockdata.db} and {@code Database/stockmarket_diagnostics.db}: consistent copies,
+     *       {@code VACUUM INTO} on the db-worker and on the diagnostics writer thread ({@code stockmarket-diag-db}).
+     *       A diagnostics file with no open writer is copied as a plain file.</li>
+     *   <li>the {@code MarketManager}, {@code News} and {@code PluginManager} folders</li>
+     *   <li>{@code settings.json}, {@code villager_trades.nbt} and every {@code *.marker} file</li>
+     * </ul>
+     * On a slave (no databases, no market folders) only what exists is added; on the master a missing file is
+     * listed as missing in the manifest.
+     *
+     * @param ctx the export context, valid only during this call
+     */
+    public static void contributeAuditExport(AuditExport.Context ctx) {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (BACKEND_INSTANCES == null || server == null)
+            return;
+        StockMarketModBackend.saveDataToFiles(server);
+        Path world = server.getWorldPath(LevelResource.ROOT);
+        Path base = world.resolve(BASE_PATH);
+
+        DatabaseManager db = BACKEND_INSTANCES.DATABASE_MANAGER;
+        if (db != null)
+            ctx.addDatabase(relPath(DatabaseManager.DATABASE_PATH.resolve(DatabaseManager.FILE_NAME)), db::snapshotTo);
+        Path diagRel = SQL_DATABASE.resolve(OrderOriginLog.FILE_NAME);
+        DiagnosticsDatabase diag = OrderOriginLog.live();
+        if (diag != null && !diag.isDisabled())
+            ctx.addDatabase(relPath(diagRel), diag::snapshotTo);
+        else
+            auditCopy(ctx, world, diagRel, false); // no writer: a plain copy cannot race one
+
+        auditCopy(ctx, world, BASE_PATH.resolve(MARKET_MANAGER_FOLDER), true);
+        auditCopy(ctx, world, BASE_PATH.resolve(NEWS_FOLDER), true);
+        auditCopy(ctx, world, BASE_PATH.resolve(PLUGIN_MANAGER_FOLDER), true);
+        auditCopy(ctx, world, BASE_PATH.resolve(SETTINGS_FILE), false);
+        auditCopy(ctx, world, BASE_PATH.resolve(VillagerTradeManager.DATA_FILE), false);
+        if (Files.isDirectory(base)) {
+            try (DirectoryStream<Path> markers = Files.newDirectoryStream(base, "*.marker")) {
+                for (Path marker : markers)
+                    auditCopy(ctx, world, BASE_PATH.resolve(marker.getFileName().toString()), false);
+            } catch (IOException e) {
+                BACKEND_INSTANCES.LOGGER.warn("[DataManager] audit export: listing the marker files failed: " + e);
+            }
+        }
+    }
+
+    /**
+     * Adds one file or folder of the world to the audit export at the same relative path. On a slave a missing
+     * source is left out instead of being listed as missing.
+     *
+     * @param ctx   the export context
+     * @param world the world folder
+     * @param rel   path relative to the world folder, also the path in the package
+     * @param dir   true for a folder (copied recursively)
+     */
+    private static void auditCopy(AuditExport.Context ctx, Path world, Path rel, boolean dir) {
+        Path src = world.resolve(rel);
+        if (ctx.isSlave() && !Files.exists(src))
+            return;
+        if (dir)
+            ctx.copyDir(src, relPath(rel));
+        else
+            ctx.copyFile(src, relPath(rel));
+    }
+
+    /** @return {@code rel} with {@code /} separators, as the audit package paths are written */
+    private static String relPath(Path rel) {
+        return rel.toString().replace('\\', '/');
     }
 
 

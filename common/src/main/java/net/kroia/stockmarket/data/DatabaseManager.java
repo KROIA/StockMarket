@@ -12,6 +12,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -57,16 +59,76 @@ public class DatabaseManager {
                         "db-worker is shut down, rejected job " + job);
                 StockMarketMod.LOGGER.error("[StockMarket] Database job submitted after close() was rejected: {}", job, e);
                 throw e;
-            });
+            }) {
+        /** SM-307: every job enters here (submit, CompletableFuture.*Async, execute), so it is timed once. */
+        @Override
+        public void execute(Runnable job) {
+            super.execute(new TimedJob(job, SUBMITTER.walk(frames -> frames.skip(1)
+                    .filter(f -> !f.getClassName().startsWith("java."))
+                    .findFirst().orElse(null))));
+        }
+    };
+
+    /** Captures the first non-JDK frame that submitted a db-worker job (the job's origin for the slow-job WARN). */
+    private static final StackWalker SUBMITTER = StackWalker.getInstance();
+
+    /** db-worker jobs running at least this long log one WARN line. */
+    public static final long SLOW_JOB_NANOS = TimeUnit.SECONDS.toNanos(1);
+
+    /**
+     * SM-307: wraps a db-worker job, times it with {@link System#nanoTime()} and logs one WARN line when it runs
+     * longer than {@link #SLOW_JOB_NANOS}. Always on; costs one stack walk per submit and one clock read per run.
+     *
+     * @param job    the queued job (a FutureTask, CompletableFuture task or plain lambda)
+     * @param origin the frame that submitted it, or {@code null} if none was found
+     */
+    /** SM-307: a db-worker job that logs its own, more detailed slow-run WARN, so {@link TimedJob} skips its generic one. */
+    public interface SelfTimedJob extends Runnable {}
+
+    private record TimedJob(Runnable job, StackWalker.StackFrame origin) implements Runnable {
+        @Override
+        public void run() {
+            long start = System.nanoTime();
+            try {
+                job.run();
+            } finally {
+                long took = System.nanoTime() - start;
+                // The backup pause parks the worker on purpose (BS backup tests hit it in every cell): not a slow job.
+                if (took > SLOW_JOB_NANOS && !isBackupPause() && !(job instanceof SelfTimedJob))
+                    StockMarketMod.LOGGER.warn("[StockMarket] slow db-worker job: {} ms, submitted at {}",
+                            TimeUnit.NANOSECONDS.toMillis(took), origin != null ? origin : job);
+            }
+        }
+
+        /** @return true if this job was submitted by {@link DatabaseManager#pauseForBackup(long)} */
+        private boolean isBackupPause() {
+            return origin != null && origin.getMethodName().equals("pauseForBackup")
+                    && origin.getClassName().equals(DatabaseManager.class.getName());
+        }
+
+        @Override
+        public String toString() {
+            return job + " submitted at " + origin;
+        }
+    }
 
     /**
      * How long {@link #close()} waits for queued db-worker jobs to finish before forcing
-     * the executor down.
+     * the executor down. SM-323: generous, because a slow disk or antivirus can make each
+     * commit take seconds and every queued job is a write that would be lost.
      */
-    private static final long CLOSE_DRAIN_TIMEOUT_SECONDS = 10;
+    private static final long CLOSE_DRAIN_TIMEOUT_SECONDS = 60;
+
+    /**
+     * SM-307: how long a statement waits for a lock held by another connection (an external
+     * SQLite browser or backup tool) before failing with SQLITE_BUSY.
+     */
+    private static final int BUSY_TIMEOUT_MS = 5_000;
 
 
     public static final Path DATABASE_PATH = DataManager.SQL_DATABASE;
+    /** File name of the market database in {@link #DATABASE_PATH}. */
+    public static final String FILE_NAME = "stockdata.db";
 
     /**
      * Default safety timeout for {@link #pauseForBackup(long)} — 120 seconds.
@@ -114,8 +176,7 @@ public class DatabaseManager {
         try {
             executeSqlFile("/sql/MarketPrice.sql");
             executeSqlFile("/sql/OrderHistory.sql");
-            connection.commit();
-            migrateSchema();
+            connection.commit(); // SM-325: the SQL files hold every column; older databases are migrated by data step 1
             return true;
         }
         catch(SQLException | IOException e){
@@ -124,29 +185,107 @@ public class DatabaseManager {
         }
     }
 
-    // Adds columns introduced after the initial schema. Silently ignores if they already exist.
-    private void migrateSchema() {
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("ALTER TABLE MarketPrice ADD COLUMN traded_volume REAL NOT NULL DEFAULT 0");
-            connection.commit();
-        } catch (SQLException ignored) {
-            // Column already exists — expected for new databases
-            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
-        }
+    /**
+     * SM-325: adds the columns that older releases' databases lack. Part of save-data step 1
+     * ({@link StockMarketDataMigration}), no longer run on every open: a database created by
+     * {@link #createDatabase} already has every column (resources/sql/*.sql). Idempotent: each column
+     * is added only when {@code PRAGMA table_info} does not list it, and a missing table is skipped
+     * (the next open creates it with the full schema).
+     * <p>
+     * Public and static so tests can migrate an isolated (in-memory) legacy database.
+     *
+     * @param connection an open connection with auto-commit disabled; committed at the end
+     * @throws SQLException if a column cannot be added
+     */
+    public static void migrateSchema(Connection connection) throws SQLException {
+        addColumnIfMissing(connection, "MarketPrice", "traded_volume", "REAL NOT NULL DEFAULT 0");
+        // T-218: in-game time (overworld day time) at candle start; existing rows get -1 (no game time)
+        addColumnIfMissing(connection, "MarketPrice", "game_time", "INTEGER NOT NULL DEFAULT -1");
+        // inter-market group UUID columns for linking cross-market trade records
+        addColumnIfMissing(connection, "OrderHistory", "intermarket_group_one", "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(connection, "OrderHistory", "intermarket_group_two", "INTEGER NOT NULL DEFAULT 0");
+        // T-191: persisted order ID (ledger ref sm:order:<id>); NULL for older rows and inter-market legs
+        addColumnIfMissing(connection, "OrderHistory", "order_id", "INTEGER");
+        // SM-317: finish time, limit price, wanted volume and final status of the order; NULL for older rows
+        for (String column : new String[]{"finish_time", "limit_price", "target_volume", "final_status"})
+            addColumnIfMissing(connection, "OrderHistory", column, "INTEGER");
+        connection.commit();
+    }
 
-        // Inter-market group UUID columns for linking cross-market trade records
+    /**
+     * SM-325: {@code ALTER TABLE <table> ADD COLUMN <column> <type>} unless the column exists or the table is missing.
+     *
+     * @param connection the open connection
+     * @param table      the table name
+     * @param column     the column name
+     * @param type       the column type and constraints
+     * @throws SQLException if the table cannot be read or the column cannot be added
+     */
+    private static void addColumnIfMissing(Connection connection, String table, String column, String type) throws SQLException {
         try (Statement stmt = connection.createStatement()) {
-            stmt.execute("ALTER TABLE OrderHistory ADD COLUMN intermarket_group_one INTEGER NOT NULL DEFAULT 0");
-            connection.commit();
-        } catch (SQLException ignored) {
-            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
+            boolean tableExists = false;
+            try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + table + ")")) {
+                while (rs.next()) {
+                    tableExists = true;
+                    if (column.equalsIgnoreCase(rs.getString("name")))
+                        return;
+                }
+            }
+            if (tableExists)
+                stmt.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
         }
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("ALTER TABLE OrderHistory ADD COLUMN intermarket_group_two INTEGER NOT NULL DEFAULT 0");
-            connection.commit();
-        } catch (SQLException ignored) {
-            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
+    }
+
+    /**
+     * SM-325: runs {@link #migrateSchema(Connection)} on a database file that is not open, for save-data step 1.
+     * Does nothing when the file does not exist.
+     *
+     * @param dbFile the database file, e.g. {@code <world>/data/StockMarket/Database/stockdata.db}
+     * @throws SQLException if the driver is missing or the migration fails
+     */
+    public static void migrateSchema(Path dbFile) throws SQLException {
+        if (!Files.isRegularFile(dbFile))
+            return;
+        if (!registerDriver())
+            throw new SQLException("SQLite JDBC driver not available");
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + dbFile.toAbsolutePath())) {
+            connection.setAutoCommit(false);
+            migrateSchema(connection);
         }
+    }
+
+    /** True once the SQLite driver is registered with {@link DriverManager} (once per JVM). */
+    private static boolean driverRegistered = false;
+
+    /**
+     * Registers the SQLite JDBC driver with {@link DriverManager} through a {@link DriverShim}, once per JVM.
+     * Mod class loaders are not visible to DriverManager, hence the shim.
+     *
+     * @return true if the driver is registered
+     */
+    public static synchronized boolean registerDriver() {
+        if (driverRegistered)
+            return true;
+        Class<?> driverClass;
+        try {
+            driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
+        } catch (ClassNotFoundException e) {
+            try {
+                driverClass = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
+            } catch (ClassNotFoundException e2) {
+                StockMarketMod.LOGGER.error("Failed to register JDBC driver", e2);
+                return false;
+            }
+        }
+        try {
+            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
+            DriverManager.registerDriver(new DriverShim(driver));
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.error("Failed to register JDBC driver", e);
+            return false;
+        }
+        driverRegistered = true;
+        return true;
     }
 
 
@@ -168,37 +307,31 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Opens {@value #FILE_NAME} in the world's database folder and creates missing tables (older databases
+     * get their new columns from save-data step 1, SM-325).
+     * <p>
+     * SM-307: the connection uses WAL journal mode, {@code synchronous=NORMAL} and a
+     * {@link #BUSY_TIMEOUT_MS} busy timeout (same settings as BankSystem's DiagnosticsDatabase).
+     * The SQLite default (rollback journal DELETE + synchronous FULL) creates and deletes
+     * {@code stockdata.db-journal} and fsyncs several times on every commit, which made commits
+     * take seconds on machines whose antivirus scans each new file. WAL appends to one
+     * long-lived {@code -wal} file instead. The database is then three files on disk
+     * ({@code .db}, {@code -wal}, {@code -shm}); {@link #close()} and
+     * {@link #pauseForBackup(long)} checkpoint the WAL so the {@code .db} alone is complete.
+     * The PRAGMAs are passed as connection properties, which sqlite-jdbc applies at open,
+     * before {@code setAutoCommit(false)} starts a transaction (journal_mode cannot change
+     * inside one). The resulting journal mode is logged once at INFO.
+     *
+     * @param server the running server, used to resolve the world folder
+     */
     public void connectToDatabase(MinecraftServer server){
 
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         Path dbPath = worldPath.resolve(DATABASE_PATH);
-        String url = "jdbc:sqlite:" + Path.of(String.valueOf(dbPath.toAbsolutePath()), "stockdata.db");
-        Class<?> driverClass = null;
-        Exception exception = null;
-        try{
-            driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-        }catch(ClassNotFoundException e)
-        {
-            exception = e;
-        }
-        if(exception != null)
-        {
-            try{
-                driverClass = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            }catch(ClassNotFoundException e)
-            {
-                StockMarketMod.LOGGER.error("Failed to register JDBC driver", e);
-                return;
-            }
-        }
-        try {
-            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
-            DriverManager.registerDriver(new DriverShim(driver));
-        } catch (Exception e) {
-            StockMarketMod.LOGGER.error("Failed to register JDBC driver", e);
+        String url = "jdbc:sqlite:" + Path.of(String.valueOf(dbPath.toAbsolutePath()), FILE_NAME);
+        if (!registerDriver())
             return;
-        }
-
         try {
 
             StockMarketMod.LOGGER.info("Database path: {}", dbPath.toAbsolutePath());
@@ -206,7 +339,16 @@ public class DatabaseManager {
             if(!Files.exists(dbPath.toAbsolutePath())){
                 Files.createDirectories(dbPath.toAbsolutePath());
             }
-            connection = DriverManager.getConnection(url);
+            java.util.Properties props = new java.util.Properties(); // sqlite-jdbc SQLiteConfig keys, applied at open
+            props.setProperty("journal_mode", "WAL");
+            props.setProperty("synchronous", "NORMAL");
+            props.setProperty("busy_timeout", Integer.toString(BUSY_TIMEOUT_MS));
+            connection = DriverManager.getConnection(url, props);
+            // Still in auto-commit here: read back the mode SQLite actually uses (it keeps the old
+            // one, e.g. on a file system without shared-memory support).
+            try (Statement st = connection.createStatement(); ResultSet rs = st.executeQuery("PRAGMA journal_mode")) {
+                StockMarketMod.LOGGER.info("[StockMarket] {} journal_mode={}", FILE_NAME, rs.next() ? rs.getString(1) : "unknown");
+            }
             connection.setAutoCommit(false);
         } catch (SQLException e) {
             StockMarketMod.LOGGER.error("Failed to connect to database {}", e.getMessage());
@@ -233,39 +375,51 @@ public class DatabaseManager {
      *   <li>A parked {@link #pauseForBackup(long) backup pause} is released, otherwise
      *       the drain would hang until the pause safety timeout.</li>
      *   <li>{@code shutdown()} stops accepting new jobs; later submits are rejected.</li>
-     *   <li>Queued jobs are awaited for {@link #CLOSE_DRAIN_TIMEOUT_SECONDS}. When called
+     *   <li>SM-323: the queue is drained until it is empty, capped at
+     *       {@link #CLOSE_DRAIN_TIMEOUT_SECONDS}. Only if that cap is hit is the executor
+     *       forced down, with a WARN naming how many queued jobs were dropped. When called
      *       from the db-worker itself, awaiting would wait on our own thread, so the
      *       remaining queue is run inline instead.</li>
-     *   <li>The connection is committed and closed.</li>
+     *   <li>The connection is committed, the WAL is checkpointed into {@value #FILE_NAME}
+     *       with {@code TRUNCATE} (so the {@code .db} alone is complete for anyone copying
+     *       the world after the stop), and the connection is closed. The checkpoint runs only
+     *       once no db-worker job can still be running.</li>
      * </ol>
      */
     public void close(){
         resumeFromBackup();
         executor.shutdown();
 
+        boolean workerDone; // true once no db-worker job can run concurrently with the checkpoint below
         if (Thread.currentThread() == workerThread) {
             // Called from inside a db-worker job: run what is still queued inline so it
             // executes before the connection closes, without waiting on ourselves.
             List<Runnable> remaining = new ArrayList<>();
             executor.getQueue().drainTo(remaining);
             remaining.forEach(Runnable::run);
+            workerDone = true; // we are the worker
         } else {
             try {
                 if (!executor.awaitTermination(CLOSE_DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    StockMarketMod.LOGGER.error("[StockMarket] db-worker did not finish its queued jobs within {}s, forcing shutdown; pending database writes may be lost",
-                            CLOSE_DRAIN_TIMEOUT_SECONDS);
-                    executor.shutdownNow();
+                    List<Runnable> dropped = executor.shutdownNow();
+                    StockMarketMod.LOGGER.warn("[StockMarket] db-worker did not finish its queued jobs within {}s, forcing shutdown; {} queued database job(s) dropped, the running one interrupted",
+                            CLOSE_DRAIN_TIMEOUT_SECONDS, dropped.size());
                     executor.awaitTermination(1, TimeUnit.SECONDS);
                 }
             } catch (InterruptedException e) {
-                executor.shutdownNow();
+                List<Runnable> dropped = executor.shutdownNow();
+                StockMarketMod.LOGGER.warn("[StockMarket] close() interrupted while draining the db-worker; {} queued database job(s) dropped",
+                        dropped.size());
                 Thread.currentThread().interrupt();
             }
+            workerDone = executor.isTerminated();
         }
 
         try{
             if(connection != null && !connection.isClosed()) {
                 connection.commit();
+                if (workerDone)
+                    checkpointWal("at close");
                 connection.close();
                 StockMarketMod.LOGGER.info("Successfully closed database connection");
             }
@@ -275,6 +429,66 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * SM-307: copies every committed page from {@code stockdata.db-wal} back into
+     * {@value #FILE_NAME} and truncates the {@code -wal} file to 0 bytes, so the {@code .db}
+     * file alone is a complete database (file-level backups, copies of a stopped world).
+     * <p>
+     * Must run on the db-worker or after it has terminated, never concurrently with it.
+     * The checkpoint must run outside a transaction, so pending work is committed and
+     * auto-commit is switched on for it, then off again (same as BankSystem's
+     * DiagnosticsDatabase close). Failures and an incomplete checkpoint (another connection,
+     * e.g. an SQLite browser, still reading) are logged at WARN, never thrown.
+     *
+     * @param when short context for the log line, e.g. "at close"
+     */
+    private void checkpointWal(String when) {
+        Connection c = connection;
+        try {
+            if (c == null || c.isClosed())
+                return;
+            boolean wasInTransaction = !c.getAutoCommit();
+            if (wasInTransaction) {
+                c.commit();
+                c.setAutoCommit(true);
+            }
+            try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery("PRAGMA wal_checkpoint(TRUNCATE)")) {
+                // Columns: busy (1 = could not finish), WAL frames, frames checkpointed.
+                if (rs.next() && rs.getInt(1) != 0)
+                    StockMarketMod.LOGGER.warn("[StockMarket] WAL checkpoint of {} {} incomplete: another connection still uses the file",
+                            FILE_NAME, when);
+            } finally {
+                if (wasInTransaction)
+                    c.setAutoCommit(false);
+            }
+        } catch (SQLException e) {
+            StockMarketMod.LOGGER.warn("[StockMarket] WAL checkpoint of {} {} failed: {}", FILE_NAME, when, e.getMessage());
+        }
+    }
+
+
+    /**
+     * SM-315: writes a consistent copy of {@value #FILE_NAME} to {@code target} with {@code VACUUM INTO}, as a job on
+     * the {@code db-worker}, so it is serialized against every write. Jobs queued before it (an open order-record
+     * batch already has its job queued) run first, and their pending transaction is committed before the copy.
+     * During a {@link #pauseForBackup(long) backup pause} the job waits until the worker resumes.
+     *
+     * @param target the copy to write; must not exist yet
+     * @return completes when the file is written; fails on an SQL error or when the database is not open
+     * @throws java.util.concurrent.RejectedExecutionException if the db-worker is already shut down
+     */
+    public CompletableFuture<Void> snapshotTo(Path target) {
+        return CompletableFuture.runAsync(() -> {
+            if (connection == null)
+                throw new IllegalStateException(FILE_NAME + " is not open");
+            try {
+                // BankSystem's helper: commits pending work, leaves transaction mode for the VACUUM, then restores it.
+                net.kroia.banksystem.data.DatabaseManager.vacuumInto(connection, target);
+            } catch (SQLException e) {
+                throw new CompletionException(e);
+            }
+        }, executor);
+    }
 
     public ExecutorService getDatabaseThread(){
         return executor;
@@ -285,9 +499,11 @@ public class DatabaseManager {
     }
 
     /**
-     * Submits a "commit + park" job to the single-thread {@code db-worker} executor so an
+     * Submits a "commit + checkpoint + park" job to the single-thread {@code db-worker} executor so an
      * external filesystem backup (e.g. {@code tar} of the world directory) can capture a
      * consistent snapshot of the SQLite files without racing an in-flight commit.
+     * SM-307: before the ack the job runs a {@code TRUNCATE} WAL checkpoint, so during the
+     * pause {@value #FILE_NAME} alone holds every committed write and the {@code -wal} file is empty.
      * <p>
      * Because the worker is single-threaded, any writes queued before this call complete
      * first — the worker drains them. Only once the pause job becomes the currently-running
@@ -329,6 +545,9 @@ public class DatabaseManager {
                 } catch (SQLException e) {
                     StockMarketMod.LOGGER.error("[StockMarket] db-worker pause commit failed: {}", e.getMessage());
                 }
+                // SM-307: in WAL mode committed pages may still sit in stockdata.db-wal; move them
+                // into the .db before the ack, so a backup that copies only stockdata.db is complete.
+                checkpointWal("before backup pause");
                 // Distinctive ack line — backup scripts grep for this exact string.
                 StockMarketMod.LOGGER.info("[StockMarket] db-worker paused for backup");
                 boolean released;

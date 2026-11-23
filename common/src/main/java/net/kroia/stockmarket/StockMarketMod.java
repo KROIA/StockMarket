@@ -7,7 +7,7 @@ import org.slf4j.Logger;
 
 public final class StockMarketMod {
     public static final String MOD_ID = "stockmarket";
-    public static final String VERSION = "2.2.0";
+    public static final String VERSION = "2.2.1";
     public static final Logger LOGGER = LogUtils.getLogger();
 
     // Dev-only code (unit tests, test commands, dev test screen) is switched by enable_dev_features in
@@ -28,9 +28,15 @@ public final class StockMarketMod {
         }
     }
 
+    /** Set by NeoForgeSetup's mod-bus handlers when they run (SM-288 port smoke test). Unused on Fabric/Quilt. */
+    public static volatile boolean neoForgeCommonSetupFired = false;
+    public static volatile boolean neoForgeClientSetupFired = false;
+
     private static StockMarketModBackend backend;
 
     public static void init() {
+        // Unconditional (idempotent): getAPI() may already have created the backend before init().
+        net.kroia.stockmarket.util.StockMarketPermissions.register();
         if(backend == null)
             backend = new StockMarketModBackend();
     }

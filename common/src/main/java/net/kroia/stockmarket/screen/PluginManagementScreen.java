@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.InputConstants;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
@@ -44,15 +45,39 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         public static final Component ENABLED = Component.translatable(PREFIX + "enabled");
         public static final Component OPEN_PLUGIN_SCREEN = Component.translatable(PREFIX + "open_plugin_screen");
         public static final Component AUTO_SUBSCRIBE = Component.translatable(PREFIX + "auto_subscribe");
-        public static final Component SUBSCRIPTION_ORDER = Component.translatable(PREFIX + "subscription_order");
         public static final Component ADD_PLUGIN = Component.translatable(PREFIX + "add_plugin");
         public static final Component ADD_PLUGIN_TITLE = Component.translatable(PREFIX + "add_plugin_title");
         public static final Component DELETE_PLUGIN = Component.translatable(PREFIX + "delete_plugin");
         public static final Component CLOSE = Component.translatable(PREFIX + "subscribe_close");
+        // Hover tooltips of the generic plugin controls
+        public static final Component ENABLED_TOOLTIP = Component.translatable(PREFIX + "enabled.tooltip");
+        public static final Component OPEN_PLUGIN_SCREEN_TOOLTIP = Component.translatable(PREFIX + "open_plugin_screen.tooltip");
+        public static final Component AUTO_SUBSCRIBE_TOOLTIP = Component.translatable(PREFIX + "auto_subscribe.tooltip");
+        public static final Component LOGGER_TOOLTIP = Component.translatable(PREFIX + "logger.tooltip");
+        public static final Component ADD_PLUGIN_TOOLTIP = Component.translatable(PREFIX + "add_plugin.tooltip");
+        public static final Component DEBUG_MARKERS = Component.translatable(PREFIX + "debug_markers");
+        public static final Component DEBUG_MARKERS_TOOLTIP = Component.translatable(PREFIX + "debug_markers.tooltip");
+        public static final Component DELETE_PLUGIN_TOOLTIP = Component.translatable(PREFIX + "delete_plugin.tooltip");
+        public static final Component MOVE_UP_TOOLTIP = Component.translatable(PREFIX + "move_up.tooltip");
+        public static final Component MOVE_DOWN_TOOLTIP = Component.translatable(PREFIX + "move_down.tooltip");
+        public static final Component SUBSCRIBE_MARKET_TOOLTIP = Component.translatable(PREFIX + "subscribe_market.tooltip");
+        public static final Component MARKET_BUTTON_TOOLTIP = Component.translatable(PREFIX + "market_button.tooltip");
+        public static final Component SUBSCRIBE_TOGGLE_TOOLTIP = Component.translatable(PREFIX + "subscribe_toggle.tooltip");
+        public static final Component MANAGER_LOGGER = Component.translatable(PREFIX + "manager_logger");
+        public static final Component MANAGER_LOGGER_TOOLTIP = Component.translatable(PREFIX + "manager_logger.tooltip");
     }
 
     private final Label titleLabel;
     private final Button addPluginButton;
+    /** Turns the T-209 virtual order book debug markers in the volume display on or off. */
+    private final CheckBox debugMarkersCheckBox;
+    /** State of {@link #debugMarkersCheckBox}, kept for the game session only (no setting). */
+    private static boolean showDebugMarkers = true;
+    /**
+     * SM-329: the master's plugin manager logger switch. Read from the master when the screen opens; until that
+     * answer arrives it has no callback, so a click sends nothing. Each change is sent at once.
+     */
+    private final CheckBox managerLoggerCheckBox;
     /**
      * T-123 / T-125 (untrusted slave gate): red info banner shown across the
      * top of the plugin management screen on an untrusted slave. Every
@@ -79,6 +104,11 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
     private final ListView listView;
     private final List<PluginEntryWidget> entryWidgets = new ArrayList<>();
     private List<PluginSyncData> allPlugins = new ArrayList<>();
+    /**
+     * Instance ID of the selected plugin entry (target of the Left/Right market
+     * navigation), or null. Stored by UUID so the selection survives list rebuilds.
+     */
+    private @Nullable UUID selectedPluginID = null;
 
     /**
      * Creates the plugin management screen.
@@ -95,6 +125,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         titleLabel.setAlignment(Label.Alignment.CENTER);
 
         addPluginButton = new Button(Texts.ADD_PLUGIN.getString(), this::onAddPluginClicked);
+        PluginGuiElement.setSettingTooltip(Texts.ADD_PLUGIN_TOOLTIP, addPluginButton);
         // T-123: hide the "Add plugin" entry point on an untrusted slave.
         if (isUntrustedSlave()) {
             addPluginButton.setEnabled(false);
@@ -125,7 +156,27 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         candlestickChart = new CandlestickChart();
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
+        orderbookVolumeHistogram.setShowArrayBorders(showDebugMarkers); // T-209: virtual depth layout markers
+        debugMarkersCheckBox = new CheckBox(Texts.DEBUG_MARKERS.getString());
+        debugMarkersCheckBox.setChecked(showDebugMarkers);
+        debugMarkersCheckBox.setOnStateChanged(checked -> {
+            showDebugMarkers = checked;
+            orderbookVolumeHistogram.setShowArrayBorders(checked);
+        });
+        PluginGuiElement.setSettingTooltip(Texts.DEBUG_MARKERS_TOOLTIP, debugMarkersCheckBox);
+        // setSettingTooltip anchors the tooltip's top-right corner at the mouse (opens left, for the
+        // right-hand settings panels); this checkbox sits at the left screen edge, so open it to the right.
+        debugMarkersCheckBox.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_LEFT);
         performanceBar = new PluginPerformanceBar();
+
+        managerLoggerCheckBox = new CheckBox(Texts.MANAGER_LOGGER.getString());
+        PluginGuiElement.setSettingTooltip(Texts.MANAGER_LOGGER_TOOLTIP, managerLoggerCheckBox);
+        // Same untrusted-slave gate as the Add Plugin button
+        if (isUntrustedSlave()) {
+            managerLoggerCheckBox.setEnabled(false);
+        } else {
+            getPluginManager().requestPluginManagerLogger(null).thenAccept(this::showManagerLoggerState);
+        }
 
         listView = new VerticalListView();
         LayoutVertical layout = new LayoutVertical();
@@ -135,6 +186,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         addElement(titleLabel);
         addElement(addPluginButton);
+        addElement(debugMarkersCheckBox);
+        addElement(managerLoggerCheckBox);
         addElement(untrustedSlaveBanner1);
         addElement(untrustedSlaveBanner2);
         addElement(untrustedSlaveBanner3);
@@ -151,6 +204,22 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         // updateLayout() when the screen is re-initialised after returning
         // from a child (PluginDetailScreen etc.).
         startTimingStream();
+    }
+
+    /**
+     * SM-329: shows the master's logger state in {@link #managerLoggerCheckBox} without sending it back, then
+     * (re)attaches the change callback. Ignores a refused request (null).
+     *
+     * @param state the master's state, or null if the request was refused
+     */
+    private void showManagerLoggerState(@Nullable Boolean state) {
+        if (state == null) return;
+        net.minecraft.client.Minecraft.getInstance().execute(() -> {
+            managerLoggerCheckBox.setOnStateChanged(null);
+            managerLoggerCheckBox.setChecked(state);
+            managerLoggerCheckBox.setOnStateChanged(enabled ->
+                    getPluginManager().requestPluginManagerLogger(enabled).thenAccept(this::showManagerLoggerState));
+        });
     }
 
     /**
@@ -179,6 +248,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         for (PluginEntryWidget entry : entryWidgets) {
             entry.cleanupPluginGuiElement();
         }
+        // T-220: store the viewport of the market shown last, so reopening the
+        // screen restores it (switching markets already stores the previous one).
+        candlestickChart.setMarket(null);
         if (currentChartMarket != null) {
             currentChartMarket.unsubscribeFromMarketPriceUpdate();
             currentChartMarket = null;
@@ -199,8 +271,16 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         // Title label takes most of the width, add plugin button on the right
         int addBtnWidth = 80;
-        titleLabel.setBounds(padding, padding, width - addBtnWidth - spacing, eh);
-        addPluginButton.setBounds(titleLabel.getRight() + spacing, padding, addBtnWidth, eh);
+        // Debug markers checkbox sits in the title row above the chart / volume display
+        // Width from the label's font width in the active language: CheckBox gives its label
+        // width - box (eh - 4) - 5 px, plus a few px for the label's own padding.
+        int debugW = Math.min(debugMarkersCheckBox.getTextWidth(Texts.DEBUG_MARKERS.getString()) + (eh - 4) + 5 + 8, width / 2);
+        debugMarkersCheckBox.setBounds(padding, padding, debugW, eh);
+        // SM-329: plugin manager logger checkbox between the title and the Add Plugin button, same width rule
+        int loggerW = Math.min(managerLoggerCheckBox.getTextWidth(Texts.MANAGER_LOGGER.getString()) + (eh - 4) + 5 + 8, width / 4);
+        titleLabel.setBounds(debugMarkersCheckBox.getRight() + spacing, padding, width - debugW - loggerW - addBtnWidth - 3 * spacing, eh);
+        managerLoggerCheckBox.setBounds(titleLabel.getRight() + spacing, padding, loggerW, eh);
+        addPluginButton.setBounds(managerLoggerCheckBox.getRight() + spacing, padding, addBtnWidth, eh);
 
         // T-123 / T-125 banner: three stacked lines sitting under the title
         // bar, above the chart+list area. Each line is a single Label because
@@ -278,6 +358,11 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             entryWidgets.add(entry);
             listView.addChild(entry);
         }
+        // Re-select by instance ID; clears the selection if the plugin no longer exists
+        if (findEntry(selectedPluginID) == null) {
+            selectedPluginID = null;
+        }
+        updatePluginSelection();
         updateMarketButtonSelection();
 
         // Restore scroll position after rebuilding the list
@@ -326,6 +411,56 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         setScreen(new PluginCreatePopup(this));
     }
 
+    /**
+     * Marks the given entry as the selected plugin (darker background).
+     * Called on any click inside an entry widget.
+     *
+     * @param entry the entry that was clicked
+     */
+    void selectPlugin(PluginEntryWidget entry) {
+        selectedPluginID = entry.pluginData.getInstanceID();
+        updatePluginSelection();
+    }
+
+    /** Applies the selected/unselected background to every entry widget. */
+    private void updatePluginSelection() {
+        for (PluginEntryWidget entry : entryWidgets) {
+            entry.setSelected(selectedPluginID != null && selectedPluginID.equals(entry.pluginData.getInstanceID()));
+        }
+    }
+
+    /**
+     * @param instanceID the plugin instance ID, may be null
+     * @return the entry widget of that plugin instance, or null if not shown
+     */
+    private @Nullable PluginEntryWidget findEntry(@Nullable UUID instanceID) {
+        if (instanceID == null) return null;
+        for (PluginEntryWidget entry : entryWidgets) {
+            if (instanceID.equals(entry.pluginData.getInstanceID())) return entry;
+        }
+        return null;
+    }
+
+    /**
+     * Left/Right arrow: steps the selected market through the selected plugin's
+     * subscribed-market list (wrapping around), exactly like clicking the icon.
+     * Arrows are left alone while a text input has focus so cursor movement keeps
+     * working; when handled, the key is consumed so no other widget reacts to it.
+     */
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == InputConstants.KEY_LEFT || keyCode == InputConstants.KEY_RIGHT) {
+            GuiElement focused = getFocusedElement();
+            boolean textInputFocused = focused instanceof TextBox || focused instanceof MultiLineTextBox;
+            PluginEntryWidget entry = findEntry(selectedPluginID);
+            if (!textInputFocused && entry != null && !entry.marketItemViews.isEmpty()) {
+                entry.stepMarket(keyCode == InputConstants.KEY_RIGHT ? 1 : -1, selectedChartMarket);
+                return true;
+            }
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
     private void updateMarketButtonSelection() {
         for (PluginEntryWidget entry : entryWidgets) {
             for (MarketItemButton btn : entry.marketItemViews) {
@@ -358,8 +493,6 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         private final Button moveDownButton;
         private final CheckBox autoSubscribeCheckBox;
         private final CheckBox loggerCheckBox;
-        private final Label subscriptionOrderLabel;
-        private final TextBox subscriptionOrderTextBox;
         @SuppressWarnings("rawtypes")
         private final PluginGuiElement pluginGuiElement;  // may be null if registry lookup fails
         private final Button openPluginScreenButton;      // only used if needsCustomScreen() is true
@@ -395,12 +528,20 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             // Item icons for subscribed markets (each button has a built-in close area in the top-right corner)
             for (ItemID marketID : data.getSubscribedMarkets()) {
                 ItemStack stack = marketID.getStack();
-                if (stack != null) {
+                // T-237: no icon for a market a slave cannot resolve (an item only the master has)
+                if (stack != null && StockMarketGuiElement.isMarketVisible(marketID)) {
                     ItemID currentMarketID = marketID;
                     MarketItemButton itemBtn = new MarketItemButton(stack, marketID,
                             id -> parentScreen.selectMarketForChart(id),
                             () -> onUnsubscribeClicked(currentMarketID));
                     itemBtn.setSize(16, 16);
+                    // Replace the plain item tooltip with item name + click/close hints
+                    itemBtn.setShowTooltip(false);
+                    String itemTooltip = stack.getHoverName().getString() + "\n"
+                            + Texts.MARKET_BUTTON_TOOLTIP.getString();
+                    itemBtn.setHoverTooltipSupplier(() -> itemTooltip);
+                    itemBtn.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+                    itemBtn.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
                     marketItemViews.add(itemBtn);
                 }
             }
@@ -442,13 +583,15 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             loggerCheckBox.setChecked(data.isLoggerEnabled());
             loggerCheckBox.setOnStateChanged(this::onLoggerChanged);
 
-            // Subscription order label + text box
-            subscriptionOrderLabel = new Label(Texts.SUBSCRIPTION_ORDER.getString());
-            subscriptionOrderLabel.setAlignment(Label.Alignment.RIGHT);
-            subscriptionOrderTextBox = new TextBox();
-            subscriptionOrderTextBox.setText(String.valueOf(data.getGenericData().getSubscriptionOrder()));
-            subscriptionOrderTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 4, 0));
-            subscriptionOrderTextBox.setOnTextChanged(this::onSubscriptionOrderChanged);
+            // Hover tooltips explaining every generic control (right-anchored: the
+            // plugin list sits at the right side of the screen)
+            PluginGuiElement.setSettingTooltip(Texts.SUBSCRIBE_MARKET_TOOLTIP, subscribeButton);
+            PluginGuiElement.setSettingTooltip(Texts.ENABLED_TOOLTIP, enabledCheckBox);
+            PluginGuiElement.setSettingTooltip(Texts.DELETE_PLUGIN_TOOLTIP, deleteButton);
+            PluginGuiElement.setSettingTooltip(Texts.MOVE_UP_TOOLTIP, moveUpButton);
+            PluginGuiElement.setSettingTooltip(Texts.MOVE_DOWN_TOOLTIP, moveDownButton);
+            PluginGuiElement.setSettingTooltip(Texts.AUTO_SUBSCRIBE_TOOLTIP, autoSubscribeCheckBox);
+            PluginGuiElement.setSettingTooltip(Texts.LOGGER_TOOLTIP, loggerCheckBox);
 
             // Add children
             this.addChild(nameLabel);
@@ -461,8 +604,6 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             this.addChild(moveDownButton);
             this.addChild(autoSubscribeCheckBox);
             this.addChild(loggerCheckBox);
-            this.addChild(subscriptionOrderLabel);
-            this.addChild(subscriptionOrderTextBox);
 
             // T-123 (untrusted slave gate): every per-entry mutating input is
             // disabled on an untrusted slave. Also grays out the per-market
@@ -475,7 +616,6 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 moveDownButton.setEnabled(false);
                 autoSubscribeCheckBox.setEnabled(false);
                 loggerCheckBox.setEnabled(false);
-                subscriptionOrderTextBox.setEnabled(false);
                 for (MarketItemButton iv : marketItemViews) {
                     iv.setEnabled(false);
                 }
@@ -494,6 +634,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             if (pluginGuiElement != null && pluginGuiElement.needsCustomScreen()) {
                 // Show button to open dedicated screen
                 openPluginScreenButton = new Button(Texts.OPEN_PLUGIN_SCREEN.getString(), this::onOpenPluginScreen);
+                PluginGuiElement.setSettingTooltip(Texts.OPEN_PLUGIN_SCREEN_TOOLTIP, openPluginScreenButton);
                 this.addChild(openPluginScreenButton);
                 missingPluginLabel = null;
             } else if (pluginGuiElement != null) {
@@ -528,6 +669,79 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
             // Enable background for visual separation
             this.setEnableBackground(true);
+            unselectedBackgroundColor = getBackgroundColor();
+        }
+
+        /** Background color while not selected (the default entry background). */
+        private final int unselectedBackgroundColor;
+
+        /**
+         * Switches between the default and a darker background for the selected plugin.
+         *
+         * @param selected true if this entry is the selected plugin
+         */
+        void setSelected(boolean selected) {
+            setBackgroundColor(selected ? darken(unselectedBackgroundColor) : unselectedBackgroundColor);
+        }
+
+        /** Halves the RGB channels of an ARGB color, keeping alpha (opaque enough to read as "darker"). */
+        private static int darken(int argb) {
+            int a = Math.max((argb >>> 24) & 0xFF, 0xCC);
+            int r = ((argb >> 16) & 0xFF) / 2;
+            int g = ((argb >> 8) & 0xFF) / 2;
+            int b = (argb & 0xFF) / 2;
+            return (a << 24) | (r << 16) | (g << 8) | b;
+        }
+
+        /**
+         * Any click inside this entry (on a child or on empty space) selects the plugin.
+         * Hooked at the internal dispatch level so children need no extra wiring;
+         * {@code isOverParent} excludes clicks on parts scrolled out of the list view.
+         */
+        @Override
+        public boolean mouseClickedInternal(int button, boolean isOverParent) {
+            boolean consumed = super.mouseClickedInternal(button, isOverParent);
+            if (isEnabled() && isOverParent && isMouseOver()) {
+                parentScreen.selectPlugin(this);
+            }
+            return consumed;
+        }
+
+        /**
+         * Selects the previous/next subscribed market (wrapping), through the same
+         * code path as clicking its icon. If the current market is not in this
+         * plugin's list, Right selects the first and Left the last market.
+         *
+         * @param direction     +1 = next, -1 = previous
+         * @param currentMarket the currently selected chart market, may be null
+         */
+        void stepMarket(int direction, @Nullable ItemID currentMarket) {
+            int n = marketItemViews.size();
+            if (n == 0) return;
+            int index = -1;
+            for (int i = 0; i < n; i++) {
+                if (marketItemViews.get(i).getMarketID().equals(currentMarket)) {
+                    index = i;
+                    break;
+                }
+            }
+            int next = index < 0 ? (direction > 0 ? 0 : n - 1) : Math.floorMod(index + direction, n);
+            MarketItemButton target = marketItemViews.get(next);
+            // Re-clicking the current market would toggle it off (single-market list) — skip
+            if (target.getMarketID().equals(currentMarket)) return;
+            parentScreen.selectMarketForChart(target.getMarketID());
+            scrollIntoView(target);
+        }
+
+        /** Scrolls the market icon list so the given icon is fully visible. */
+        private void scrollIntoView(MarketItemButton button) {
+            int offset = marketItemListView.getScrollOffset();
+            int viewH = marketItemListView.getHeight();
+            if (button.getTop() < offset) {
+                marketItemListView.setScrollOffset(button.getTop());
+            } else if (button.getBottom() > offset + viewH) {
+                marketItemListView.setScrollOffset(button.getBottom() - viewH);
+            }
         }
 
         @Override
@@ -566,16 +780,12 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             marketItemListView.setBounds(padding, iconY, listViewWidth, listViewHeight);
             subscribeButton.setBounds(marketItemListView.getRight() + spacing, iconY, subscribeBtnWidth, 16);
 
-            // Row 4: auto-subscribe checkbox + subscription order + logger checkbox
+            // Row 4: auto-subscribe checkbox + logger checkbox
             int row4Y = iconY + listViewHeight + spacing;
             int loggerWidth = 60;
-            int autoSubWidth = (width - loggerWidth - spacing) / 2;
+            int autoSubWidth = width - loggerWidth - spacing;
             autoSubscribeCheckBox.setBounds(padding, row4Y, autoSubWidth, defaultElementHeight);
-            int orderLabelWidth = (width - loggerWidth - spacing) / 4;
-            int orderFieldWidth = width - autoSubWidth - orderLabelWidth - loggerWidth - 3 * spacing;
-            subscriptionOrderLabel.setBounds(autoSubscribeCheckBox.getRight() + spacing, row4Y, orderLabelWidth, defaultElementHeight);
-            subscriptionOrderTextBox.setBounds(subscriptionOrderLabel.getRight() + spacing, row4Y, orderFieldWidth, defaultElementHeight);
-            loggerCheckBox.setBounds(subscriptionOrderTextBox.getRight() + spacing, row4Y, loggerWidth, defaultElementHeight);
+            loggerCheckBox.setBounds(autoSubscribeCheckBox.getRight() + spacing, row4Y, loggerWidth, defaultElementHeight);
 
             // Row 5: PluginGuiElement (inline) or "Open Plugin" button
             int row5Y = row4Y + defaultElementHeight + spacing;
@@ -635,28 +845,6 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             GenericPluginData data = pluginData.getGenericData();
             data.setLoggerEnabled(enabled);
             getPluginManager().requestUpdateSettings(pluginData.getInstanceID(), data);
-        }
-
-        /**
-         * Called when the subscription order text changes.
-         * Parses the new value and sends a settings update request to the server.
-         */
-        private void onSubscriptionOrderChanged(String text) {
-            if (text == null || text.isEmpty()) return;
-            try {
-                int order = Integer.parseInt(text);
-                GenericPluginData data = pluginData.getGenericData();
-                if (data.getSubscriptionOrder() != order) {
-                    data.setSubscriptionOrder(order);
-                    getPluginManager().requestUpdateSettings(pluginData.getInstanceID(), data).thenAccept(result -> {
-                        if (result.success()) {
-                            parentScreen.refreshPluginList();
-                        }
-                    });
-                }
-            } catch (NumberFormatException e) {
-                // Invalid input, ignore
-            }
         }
 
         /**
@@ -845,6 +1033,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 itemView = new ItemView(stack);
                 itemView.setShowTooltip(true);
                 nameLabel = new Label(stack.getHoverName().getString());
+                // Tooltip on the name only: the item icon keeps its own item tooltip
+                PluginGuiElement.setSettingTooltip(Texts.SUBSCRIBE_TOGGLE_TOOLTIP, nameLabel);
 
                 addChild(itemView);
                 addChild(nameLabel);

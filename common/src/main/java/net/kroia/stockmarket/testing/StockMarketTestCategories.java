@@ -1,9 +1,10 @@
 package net.kroia.stockmarket.testing;
 
-import net.kroia.modutilities.testing.TestCategory;
+import net.kroia.testkit.TestCategory;
 
-import static net.kroia.modutilities.testing.TestCategory.ServerType.BOTH;
-import static net.kroia.modutilities.testing.TestCategory.ServerType.MASTER_ONLY;
+import static net.kroia.testkit.TestCategory.ServerType.BOTH;
+import static net.kroia.testkit.TestCategory.ServerType.MASTER_ONLY;
+import static net.kroia.testkit.TestCategory.ServerType.SLAVE_ONLY;
 
 public class StockMarketTestCategories {
 
@@ -72,7 +73,11 @@ public class StockMarketTestCategories {
             "stockmarket", "sm_villager_money_payment", "Value-based merchant money payment tests", BOTH, false);
 
     public static final TestCategory VOLATILITY_PLUGIN = new TestCategory(
-            "stockmarket", "sm_volatility_plugin", "VolatilityPlugin flow-equilibrium price tests", BOTH, false);
+            "stockmarket", "sm_volatility_plugin", "VolatilityPlugin random-walk tests", BOTH, false);
+
+    /** T-213: NetFlowPlugin flow-equilibrium price model tests. */
+    public static final TestCategory NET_FLOW_PLUGIN = new TestCategory(
+            "stockmarket", "sm_net_flow_plugin", "NetFlowPlugin flow-equilibrium price tests", BOTH, false);
 
     public static final TestCategory NEWS = new TestCategory(
             "stockmarket", "sm_news", "News event system data model tests (envelope, definitions, library, records)", BOTH, false);
@@ -153,6 +158,10 @@ public class StockMarketTestCategories {
     public static final TestCategory PLUGIN_TEST = new TestCategory(
             "stockmarket", "sm_plugin", "Plugin system tests", MASTER_ONLY, true);
 
+    /** T-225: PluginTestSuite's long market simulation gates, one topic each (off in normal autotest runs). */
+    public static final TestCategory MARKET_GATES = new TestCategory(
+            "stockmarket", "sm_market_gates", "Long market simulation gates: T-207 probes, T-208 Stage B, T-213 anchor gates", MASTER_ONLY, true);
+
     public static final TestCategory INTEGRATION = new TestCategory(
             "stockmarket", "sm_integration", "Integration tests", MASTER_ONLY, true);
 
@@ -168,6 +177,9 @@ public class StockMarketTestCategories {
     public static final TestCategory VILLAGER_REWRITE = new TestCategory(
             "stockmarket", "sm_villager_rewrite", "Villager trade offer rewrite tests", MASTER_ONLY, true);
 
+    public static final TestCategory DATA_MIGRATION = new TestCategory(
+            "stockmarket", "sm_data_migration", "SM-325: save-data version, step 1 (pre-2.2.0 -> 2.2.0) on a temp world: conversion, re-run safety, fresh world, newer save refused", BOTH, false);
+
     public static final TestCategory MOD_SETTINGS = new TestCategory(
             "stockmarket", "sm_mod_settings", "Mod settings JSON round-trip and sanitize-bounds tests", BOTH, false);
 
@@ -182,4 +194,49 @@ public class StockMarketTestCategories {
     // admin stop discard, step-start chains.
     public static final TestCategory NEWS_CHAINS = new TestCategory(
             "stockmarket", "sm_news_chains", "News event chain runtime: requirement filter, publish records, chain parse/validation, chance/delay/maturity, caps bypass, depth/ancestry guards, NBT round-trip, admin stop discard and step-start moment tests", BOTH, false);
+
+    // T-237: markets for items a slave cannot resolve are hidden there; runs on both sides
+    // (some tests skip by side), needs the live ItemID registry.
+    public static final TestCategory MARKET_VISIBILITY = new TestCategory(
+            "stockmarket", "sm_market_visibility", "Markets for items a slave cannot resolve: hidden from lists, pairs, order placement and the portfolio placeholder on the slave, still listed by the master", BOTH, true);
+
+    // T-192: pump-and-dump detector (pump + buy-sell cycle checks) and the per-admin alert toggle.
+    public static final TestCategory PUMP_DUMP = new TestCategory(
+            "stockmarket", "sm_pump_dump", "Pump-and-dump detector: pump and buy-sell cycle flags, window expiry, detector switch, and the persisted per-admin alert toggle (off = no chat, flag still recorded)", MASTER_ONLY, true);
+
+    // T-140: master-owned client settings (initial chart window) at join, after a SET, and on a slave.
+    public static final TestCategory CLIENT_SETTINGS_SYNC = new TestCategory(
+            "stockmarket", "sm_client_settings_sync", "Initial chart window sync: server-instances accessor, ServerTimeRequest join value, client fallback order, SET re-push and the slave getting the master's value", BOTH, true);
+
+    // T-246: the slave-masterdown autotest cell (run_matrix --configs slave-masterdown); skips in every other cell.
+    public static final TestCategory MASTER_DOWN = new TestCategory(
+            "stockmarket", "sm_master_down", "Slave with its master down: StockMarket screens and the StockMarket block refuse with the StockMarket message (slave-masterdown cell only)", SLAVE_ONLY, true);
+
+    // SM-288: port smoke checks, every cell (master and slave).
+    public static final TestCategory PORT_SMOKE = new TestCategory(
+            "stockmarket", "sm_port_smoke", "Port smoke checks: recipes loaded, NeoForge mod-bus setup fired, villager sidecar save/reload, display block merge/split/break and block entity save/load", BOTH, true);
+
+    // SM-313: client integration API for BankSystem (embedded chart, open trade screen); chart tests need a client (sp cells).
+    public static final TestCategory CLIENT_INTEGRATION = new TestCategory(
+            "stockmarket", "sm_client_integration", "Client integration API: embedded price chart subscription balance, unknown markets, trade screen initial market and OpenUIPacket market round trip", BOTH, true);
+    public static final TestCategory PICKER_REGISTRATION = new TestCategory("stockmarket", "sm_picker_registration", "SM-273: a not-yet-registered plain item gets an ItemID through the picker's server path and its market is created (master, trusted slave); an untrusted slave stays lookup-only", BOTH, true);
+    // SM-347: read-only web interface; port checks offline, HTTP tests on the master, never on a slave.
+    public static final TestCategory WEB = new TestCategory("stockmarket", "sm_web", "Web interface tests", BOTH, false);
+    public static final TestCategory DOCUMENTATION = new TestCategory("stockmarket", "sm_docs", "SM-276: relative links, images and anchors in README.md and documentation/ resolve; plugin SVGs are well-formed with a size (offline)", BOTH, false);
+    // BS-269: the master-side fixture hooks (FixtureTestRequest), driven from a trusted slave.
+    public static final TestCategory FIXTURE_HOOKS = new TestCategory("stockmarket", "sm_fixture_hooks", "BS-269: a trusted slave makes the master change a market setting and restore it, place a bot order, detach plugins, backfill candles and read back a filled order", SLAVE_ONLY, true);
+
+    // BS-269: opt-in driver of the generated audit fixture (slave-trusted cell, run only with --only).
+    public static final TestCategory AUDIT_FIXTURE = new TestCategory("stockmarket", "sm_audit_fixture", "BS-269 (opt-in): drives the whole audit-fixture story from a trusted slave and adds the StockMarket market cases B1-B8 and the market part of story E to the answer key", SLAVE_ONLY, true);
+
+    // SM-328: opt-in check of the save-data upgrade on a real 2.1.2 world (run with --only and --world).
+    public static final TestCategory UPGRADE_212 = new TestCategory("stockmarket", "sm_upgrade_212", "SM-328 (opt-in): a world saved by 2.1.2 after the upgrade: data version marker, one backup zip, markets kept, a NetFlowPlugin before each old VolatilityPlugin with the old flow settings (moved defaults), split flag saved", MASTER_ONLY, true);
+    // TK-3: client GUI suite (TestKit Gui driver): the trade screen's layout and one interaction; runs on the game client.
+    public static final TestCategory GUI = new TestCategory("stockmarket", "sm_gui", "TK-3: trade screen on the game client: layout at 1920x1080 @2 and @3, the +10 button raises the amount", BOTH, true);
+
+    // SM-335: profit-taking round trips over three markets with inter-market swaps (pump, swap before the bot reacts, split orders).
+    public static final TestCategory EXPLOIT = new TestCategory("stockmarket", "sm_exploit", "SM-335: round trips over three markets with inter-market swaps (pump then swap, swap before the bot reacts, A-B-A and triangle cycles, split orders); net profit must stay <= 5% of the capital at risk", MASTER_ONLY, true);
+
+    // TK-6: cross-server scenario (TestKit Scenario): runs on every server of a master + slaveA + slaveB setup, skips elsewhere.
+    public static final TestCategory SCENARIO = new TestCategory("stockmarket", "sm_scenario", "TK-6: a seller on slaveA and a buyer on slaveB trade; the master checks the fill and both players' balances; SM-352: two game clients trade through the trade screen", BOTH, true);
 }

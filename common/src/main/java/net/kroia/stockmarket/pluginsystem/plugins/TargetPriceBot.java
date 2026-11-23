@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.pluginsystem.plugins;
 
 import net.kroia.modutilities.NbtCompat;
+import net.kroia.stockmarket.api.plugin.interaction.IPluginOrderBook;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 
 import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.util.ItemID;
@@ -9,27 +11,150 @@ import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.util.PID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, TargetPriceBot.RuntimeStreamData> {
 
     /**
-     * Custom settings record for the TargetPriceBot PID controller gains.
+     * Custom per-market settings of the TargetPriceBot.
+     *
+     * @param pidP                 proportional gain
+     * @param pidI                 integral gain
+     * @param pidD                 derivative gain
+     * @param pidRate              integral limit (anti-windup)
+     * @param maxOrderVolumeFactor max volume of one bot order as a multiple of the market's player
+     *                             order limit ({@code MarketSettings.maxOrderVolume}). A factor keeps the
+     *                             bot limit tracking per-market limit changes. &lt;= 0, or a market
+     *                             without a player limit (0 = unlimited), means no bot limit.
+     * @param maxTargetMovePerSecond #89: max relative move of the target price the bot chases, per second
+     *                             of tick time (0.01 = 1%/s, compounding). The bot follows the plugins'
+     *                             target through this rate limit, so a sudden target jump (e.g. a pinned
+     *                             flow equilibrium) is walked towards slowly. &lt;= 0 = no limit.
+     * @param reversionTimeSeconds T-208: time constant (s) in which the bot's reference (its setpoint) decays
+     *                             from the price a player pushed to back to the plugins' target. &lt;= 0 = off
+     *                             (the bot chases the target through the rate limit only, as before T-208)
+     * @param oscillationPeriodSeconds T-208: period (s) of the reference's damped oscillation around its
+     *                             decaying centre; &lt;= 0 = {@link #DEFAULT_OSCILLATION_PERIOD_SECONDS}
+     * @param oscillationDamping   T-208: damping ratio ζ of that oscillation (0 = undamped, 1 = critical);
+     *                             negative = 0
+     * @param oscillationAmplitude T-208: initial swing towards the target as a fraction of the spike's
+     *                             excess over the target (0 = no swing); negative = 0
+     * @param availableVolumeLevels SM-334: price levels of the bot's "available volume", counted from the first
+     *                             level with volume in its direction (see
+     *                             {@link IPluginOrderBook#getRealVirtualAvailableVolume}). One bot order takes at most
+     *                             a share of it, so one step moves the price at most through an empty stretch plus
+     *                             this many levels. &lt;= 0 = {@link #DEFAULT_AVAILABLE_VOLUME_LEVELS}
+     * @param maxRampFraction      SM-334: share of the available volume one bot order may take once fully ramped
+     *                             (2 = 200%). Above 1 the order walks past the measured levels into the unmeasured
+     *                             book; the volume-to-target and order limit caps still apply. &lt;= 0 or not finite =
+     *                             {@link #DEFAULT_MAX_RAMP_FRACTION}
      */
-    public record Settings(float pidP, float pidI, float pidD, float pidRate) {
-        public static final StreamCodec<ByteBuf, Settings> CODEC = StreamCodec.composite(
-                ByteBufCodecs.FLOAT, Settings::pidP,
-                ByteBufCodecs.FLOAT, Settings::pidI,
-                ByteBufCodecs.FLOAT, Settings::pidD,
-                ByteBufCodecs.FLOAT, Settings::pidRate,
-                Settings::new
-        );
+    public record Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
+                           float maxTargetMovePerSecond, float reversionTimeSeconds, float oscillationPeriodSeconds,
+                           float oscillationDamping, float oscillationAmplitude, int availableVolumeLevels,
+                           float maxRampFraction) {
+        /** SM-334: invalid values (level count &lt;= 0, ramp fraction &lt;= 0 or not finite) become their defaults. */
+        public Settings {
+            if (availableVolumeLevels <= 0) availableVolumeLevels = DEFAULT_AVAILABLE_VOLUME_LEVELS;
+            if (!(maxRampFraction > 0) || Float.isInfinite(maxRampFraction)) maxRampFraction = DEFAULT_MAX_RAMP_FRACTION;
+        }
+
+        /** Settings with the SM-334 max ramp fraction at its default. */
+        public Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
+                        float maxTargetMovePerSecond, float reversionTimeSeconds, float oscillationPeriodSeconds,
+                        float oscillationDamping, float oscillationAmplitude, int availableVolumeLevels) {
+            this(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond, reversionTimeSeconds,
+                    oscillationPeriodSeconds, oscillationDamping, oscillationAmplitude, availableVolumeLevels,
+                    DEFAULT_MAX_RAMP_FRACTION);
+        }
+
+        /** Settings with the SM-334 available volume levels and max ramp fraction at their defaults. */
+        public Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
+                        float maxTargetMovePerSecond, float reversionTimeSeconds, float oscillationPeriodSeconds,
+                        float oscillationDamping, float oscillationAmplitude) {
+            this(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond, reversionTimeSeconds,
+                    oscillationPeriodSeconds, oscillationDamping, oscillationAmplitude, DEFAULT_AVAILABLE_VOLUME_LEVELS);
+        }
+
+        /** Settings with the T-208 reference model at its defaults. */
+        public Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
+                        float maxTargetMovePerSecond) {
+            this(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond, DEFAULT_REVERSION_TIME_SECONDS,
+                    DEFAULT_OSCILLATION_PERIOD_SECONDS, DEFAULT_OSCILLATION_DAMPING, DEFAULT_OSCILLATION_AMPLITUDE);
+        }
+
+        /** Creates a Settings instance with all default values. */
+        public static Settings createDefault() {
+            return new Settings(DEFAULT_PID_P, DEFAULT_PID_I, DEFAULT_PID_D, DEFAULT_PID_RATE,
+                    DEFAULT_MAX_ORDER_VOLUME_FACTOR, DEFAULT_MAX_TARGET_MOVE_PER_SECOND);
+        }
+
+        /** @return a copy with the given T-208 reference model parameters */
+        public Settings withReference(float reversionTime, float period, float damping, float amplitude) {
+            return new Settings(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond,
+                    reversionTime, period, damping, amplitude, availableVolumeLevels, maxRampFraction);
+        }
+
+        /** @return a copy with the given SM-334 available volume levels (&lt;= 0 = default) */
+        public Settings withAvailableVolumeLevels(int levels) {
+            return new Settings(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond,
+                    reversionTimeSeconds, oscillationPeriodSeconds, oscillationDamping, oscillationAmplitude, levels,
+                    maxRampFraction);
+        }
+
+        /** @return a copy with the given SM-334 max ramp fraction (&lt;= 0 = default) */
+        public Settings withMaxRampFraction(float fraction) {
+            return new Settings(pidP, pidI, pidD, pidRate, maxOrderVolumeFactor, maxTargetMovePerSecond,
+                    reversionTimeSeconds, oscillationPeriodSeconds, oscillationDamping, oscillationAmplitude,
+                    availableVolumeLevels, fraction);
+        }
+
+        public static final StreamCodec<ByteBuf, Settings> CODEC = new StreamCodec<>() {
+            @Override
+            public Settings decode(ByteBuf buf) {
+                float p = buf.readFloat();
+                float i = buf.readFloat();
+                float d = buf.readFloat();
+                float rate = buf.readFloat();
+                // Backward compatibility: saves before the volume limit stored only the 4 PID floats.
+                // Every decode path wraps exactly one settings payload per buffer, so "no bytes left"
+                // identifies the old format.
+                float factor = buf.isReadable() ? buf.readFloat() : DEFAULT_MAX_ORDER_VOLUME_FACTOR;
+                // Same for the target rate limit (#89), added after the volume factor.
+                float maxMove = buf.isReadable() ? buf.readFloat() : DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
+                // T-208 reference model, appended after the target rate limit.
+                float reversion = buf.isReadable() ? buf.readFloat() : DEFAULT_REVERSION_TIME_SECONDS;
+                float period = buf.isReadable() ? buf.readFloat() : DEFAULT_OSCILLATION_PERIOD_SECONDS;
+                float damping = buf.isReadable() ? buf.readFloat() : DEFAULT_OSCILLATION_DAMPING;
+                float amplitude = buf.isReadable() ? buf.readFloat() : DEFAULT_OSCILLATION_AMPLITUDE;
+                // SM-334 available volume levels, appended after the reference model.
+                int levels = buf.isReadable() ? buf.readInt() : DEFAULT_AVAILABLE_VOLUME_LEVELS;
+                // SM-334 max ramp fraction, appended after the level count.
+                float maxRamp = buf.isReadable() ? buf.readFloat() : DEFAULT_MAX_RAMP_FRACTION;
+                return new Settings(p, i, d, rate, factor, maxMove, reversion, period, damping, amplitude, levels, maxRamp);
+            }
+            @Override
+            public void encode(ByteBuf buf, Settings s) {
+                buf.writeFloat(s.pidP());
+                buf.writeFloat(s.pidI());
+                buf.writeFloat(s.pidD());
+                buf.writeFloat(s.pidRate());
+                buf.writeFloat(s.maxOrderVolumeFactor());
+                buf.writeFloat(s.maxTargetMovePerSecond());
+                buf.writeFloat(s.reversionTimeSeconds());
+                buf.writeFloat(s.oscillationPeriodSeconds());
+                buf.writeFloat(s.oscillationDamping());
+                buf.writeFloat(s.oscillationAmplitude());
+                buf.writeInt(s.availableVolumeLevels());
+                buf.writeFloat(s.maxRampFraction());
+            }
+        };
     }
 
     /**
@@ -64,6 +189,29 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         public PID pid;
         public int tickCounter = 0;
         public double targetPrice = 0;
+        /** Last step that placed an order (diagnostics, see {@link #test_getLastStep}). */
+        StepInfo lastStep;
+        /** T-208: the bot's reference (setpoint) state; {@link Reference#IDLE} = follow the target. */
+        Reference ref = Reference.IDLE;
+        /** T-208: the market's raw net player flow at the previous step (NaN = not seeded yet). */
+        double refLastRaw = Double.NaN;
+        /**
+         * Bot steps since the last player fill (raw net flow change); {@link Integer#MAX_VALUE} = no fill seen
+         * yet. Limits the gap guard to {@link #GAP_GUARD_MAX_BLOCK_SECONDS} after a fill.
+         */
+        int stepsSinceFill = Integer.MAX_VALUE;
+        /**
+         * SM-334: gap guard pause after the last player fill, in seconds, re-rolled on every fill from
+         * [{@link #GAP_GUARD_MIN_BLOCK_SECONDS}, {@link #GAP_GUARD_MAX_BLOCK_SECONDS}] so the bot's timing isn't predictable.
+         */
+        double guardBlockSeconds = (GAP_GUARD_MIN_BLOCK_SECONDS + GAP_GUARD_MAX_BLOCK_SECONDS) / 2;
+        /**
+         * SM-334: bot steps the bot was allowed to trade since the last player fill (drives {@link #rampFraction}).
+         * {@link Integer#MAX_VALUE} = fully ramped (no fill seen yet).
+         */
+        int rampSteps = Integer.MAX_VALUE;
+        /** SM-334: rolls {@link #guardBlockSeconds}; seeded by {@link #test_setGapGuardSeed} in tests. */
+        final Random rng = guardSeed != null ? new Random(guardSeed) : new Random();
         float pidP, pidI, pidD, pidRate;
 
         RuntimeData(float p, float i, float d, float rate) {
@@ -71,18 +219,371 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
             this.pidI = i;
             this.pidD = d;
             this.pidRate = rate;
-            this.pid = new PID(p, i, d, rate);
+            this.pid = createPid(p, i, d, rate);
         }
     }
     private final Map<ItemID, RuntimeData> marketData = new HashMap<>();
 
+    /**
+     * Diagnostics of one bot step that placed an order (replay traces).
+     *
+     * @param target      the rate-limited bot target (real price)
+     * @param priceBefore market price when the order was sized (real)
+     * @param estimate    the volume the bot measured to the target (real items, signed: + = buy)
+     * @param amount      the placed market order (real items, + = buy)
+     */
+    public record StepInfo(double target, double priceBefore, double estimate, double amount) {}
+
+    /**
+     * Test hook: the last step of the bot on {@code marketID} that placed an order. A new object per
+     * order, so callers detect a new order by identity.
+     *
+     * @return the step, or null if none yet / not subscribed
+     */
+    public StepInfo test_getLastStep(ItemID marketID) {
+        RuntimeData data = marketData.get(marketID);
+        return data == null ? null : data.lastStep;
+    }
+
+    /**
+     * Test hook: the bot's current rate-limited target on {@code marketID} (real price).
+     *
+     * @return the target, or NaN if not subscribed
+     */
+    public double test_getTargetPrice(ItemID marketID) {
+        RuntimeData data = marketData.get(marketID);
+        return data == null ? Double.NaN : data.targetPrice;
+    }
+
+    /**
+     * Creates the bot's PID with its output limited to [-1, 1], the range the bot actually uses
+     * as order fraction. Without the limit the output filter winds up while the price sits far
+     * from the target and the bot keeps pushing past the target for several cycles (T-178).
+     */
+    private static PID createPid(float p, float i, float d, float rate) {
+        PID pid = new PID(p, i, d, rate);
+        pid.setOutputLimit(1);
+        return pid;
+    }
+
+    /**
+     * Test hook: the bot's T-208 reference state on {@code marketID}.
+     *
+     * @return the state, or null if not subscribed
+     */
+    public Reference test_getReference(ItemID marketID) {
+        RuntimeData data = marketData.get(marketID);
+        return data == null ? null : data.ref;
+    }
+
     // Default PID gains — configurable via custom settings (per-market)
-    private static final float DEFAULT_PID_P = 0.5f;
-    private static final float DEFAULT_PID_I = 0.1f;
-    private static final float DEFAULT_PID_D = 0.0f;
-    private static final float DEFAULT_PID_RATE = 0.1f;
+    public static final float DEFAULT_PID_P = 0.5f;
+    public static final float DEFAULT_PID_I = 0.1f;
+    public static final float DEFAULT_PID_D = 0.0f;
+    public static final float DEFAULT_PID_RATE = 0.1f;
+    /** T-208: default reversion time constant of the bot's reference, 10 min. */
+    public static final float DEFAULT_REVERSION_TIME_SECONDS = 600f;
+    /** T-208: default oscillation period of the bot's reference, 60 s. */
+    public static final float DEFAULT_OSCILLATION_PERIOD_SECONDS = 60f;
+    /** T-208: default damping ratio of the reference's oscillation. */
+    public static final float DEFAULT_OSCILLATION_DAMPING = 0.3f;
+    /** T-208: default initial swing towards the target, as a fraction of the spike's excess. */
+    public static final float DEFAULT_OSCILLATION_AMPLITUDE = 0.15f;
+    /** T-208: below this (log price) the reference counts as settled and goes idle. */
+    public static final double REFERENCE_EPSILON = 1e-4;
+
+    /**
+     * T-208 state of the bot's reference (its setpoint), in log price. After a player pushes the price
+     * away from the plugins' target T, the reference starts at that price S and relaxes to T: its centre
+     * {@code ln T + c} decays with the reversion time while the reference swings around it as a damped
+     * oscillator. It never leaves [min(ln T, anchor), max(ln T, anchor)], so the bot never trades past
+     * the target nor beyond the last price a player pushed to.
+     *
+     * @param y      the reference, ln(price)
+     * @param v      its velocity (ln price per second)
+     * @param c      excess of the oscillation centre over ln(T); decays with the reversion time
+     * @param anchor ln of the last price a player pushed to (S), at most the bot's band edge (#96, SM-241,
+     *               {@link #referenceAnchorPrice})
+     * @param active false = idle, the bot follows T through {@link #limitTargetMove} as before T-208
+     */
+    public record Reference(double y, double v, double c, double anchor, boolean active) {
+        /** The idle reference. */
+        public static final Reference IDLE = new Reference(0, 0, 0, 0, false);
+    }
+
+    /** Angular frequency ω of the reference oscillation (rad/s) from the settings. */
+    private static double omega(Settings s) {
+        float period = s.oscillationPeriodSeconds() > 0 ? s.oscillationPeriodSeconds() : DEFAULT_OSCILLATION_PERIOD_SECONDS;
+        return 2 * Math.PI / period;
+    }
+
+    private static double clamp(double x, double lo, double hi) {
+        return Math.max(lo, Math.min(hi, x));
+    }
+
+    /**
+     * T-208: re-anchors the reference after a player fill (a change of the raw net flow). Pure.
+     * <ul>
+     *   <li>A fill while idle, or on the other side of T than the current centre, starts a new spike: centre
+     *       and reference at the price, plus a swing towards T of {@code amplitude x ω x excess} (capped by the
+     *       rate limit).</li>
+     *   <li>A fill on the same side as the centre keeps the centre, the reference and the velocity; only the
+     *       anchor moves to the price, and the reference is pulled inside the new band [T, price]. This covers a
+     *       fill towards T (a "ping") and, since SM-241, one that continues the spike further away: re-spiking
+     *       there pinned the reference to every new low of a steady seller, so the bot followed each sale down
+     *       instead of leaning back towards {@code ln T + c} (G3 collapse).</li>
+     * </ul>
+     *
+     * @param r       the current reference
+     * @param lnT     ln of the plugins' target price
+     * @param lnPrice ln of the market price after the fill (the bot passes it clamped to its band, #96)
+     * @param s       the bot settings (reversionTimeSeconds &lt;= 0 = model off, returns IDLE)
+     * @param maxMove max reference speed (ln price per second); &lt;= 0 = no limit
+     * @return the new reference
+     */
+    public static Reference anchorReference(Reference r, double lnT, double lnPrice, Settings s, float maxMove) {
+        if (!(s.reversionTimeSeconds() > 0) || Double.isNaN(lnT) || Double.isNaN(lnPrice)) return Reference.IDLE;
+        double excess = lnPrice - lnT;
+        // SM-241: same side as the centre = keep it, also when the fill continues the spike further away
+        boolean ping = r.active() && Math.signum(excess) == Math.signum(r.c());
+        if (ping)
+            return new Reference(clamp(r.y(), Math.min(lnT, lnPrice), Math.max(lnT, lnPrice)), r.v(), r.c(), lnPrice, true);
+        if (Math.abs(excess) < REFERENCE_EPSILON) return Reference.IDLE;
+        double v0 = -Math.max(0, s.oscillationAmplitude()) * omega(s) * excess;
+        if (maxMove > 0) v0 = clamp(v0, -maxMove, maxMove);
+        return new Reference(lnPrice, v0, excess, lnPrice, true);
+    }
+
+    /**
+     * T-208: advances the reference by {@code dt}. Pure. The centre's excess decays,
+     * {@code c *= exp(-dt / reversionTime)}; the reference follows it as a damped oscillator,
+     * {@code v += (ω²(ln T + c - y) - 2ζω v) dt}, |v| &lt;= maxMove, {@code y += v dt}, clamped to
+     * [min(ln T, anchor), max(ln T, anchor)] (velocity 0 at the bound). Goes idle once both the centre's
+     * excess and the distance to T are below {@link #REFERENCE_EPSILON}.
+     *
+     * @param r       the current reference (returned unchanged if idle)
+     * @param lnT     ln of the plugins' target price
+     * @param s       the bot settings (reversionTimeSeconds &lt;= 0 = model off, returns IDLE)
+     * @param maxMove max reference speed (ln price per second); &lt;= 0 = no limit
+     * @param dt      step time in seconds
+     * @return the new reference
+     */
+    public static Reference stepReference(Reference r, double lnT, Settings s, float maxMove, double dt) {
+        if (!r.active()) return r;
+        float tau = s.reversionTimeSeconds();
+        if (!(tau > 0) || Double.isNaN(lnT)) return Reference.IDLE;
+        double c = r.c() * Math.exp(-dt / tau);
+        double w = omega(s);
+        double zeta = Math.max(0, s.oscillationDamping());
+        double v = r.v() + (w * w * (lnT + c - r.y()) - 2 * zeta * w * r.v()) * dt;
+        if (maxMove > 0) v = clamp(v, -maxMove, maxMove);
+        double y = r.y() + v * dt;
+        double lo = Math.min(lnT, r.anchor()), hi = Math.max(lnT, r.anchor());
+        if (y < lo || y > hi) {
+            y = clamp(y, lo, hi);
+            v = 0;
+        }
+        if (Math.abs(c) < REFERENCE_EPSILON && Math.abs(y - lnT) < REFERENCE_EPSILON) return Reference.IDLE;
+        return new Reference(y, v, c, r.anchor(), true);
+    }
+    /**
+     * SM-241: lowest price a player fill may anchor the bot's reference at, as a multiple of the fair price E. The
+     * NetFlowPlugin's own floor (5%) is far below where the bot should still follow a dump: a steady seller walked
+     * the reference down to 5% of E and the market collapsed to the price floor (G3). At 25% the bot leans a dump
+     * back towards E long before that. Only the bot uses it; the equilibrium clamp stays the NetFlowPlugin's.
+     */
+    public static final float BOT_MIN_PRICE_MULT = 0.25f;
+
+    /**
+     * #96: the price a player fill may anchor the reference at: the market price clamped to the bot's band around
+     * the fair price, {@code [E x BOT_MIN_PRICE_MULT, E x maxPriceMult]} (SM-241: 25%, and the NetFlowPlugin's
+     * default upper clamp 3x). Inside the band a fill anchors where it left the price, so a player's spike holds
+     * (T-207); outside it the reference stops at the band edge, so the bot leans the price back into the band
+     * instead of following a dump towards the price floor (which pinned the bot there and let the dumper buy back
+     * for nothing) or a runaway pump.
+     * <p>
+     * ponytail: fixed clamps, not the market's own NetFlowPlugin settings (plugins can't read each other's
+     * settings); publish the band through IPluginMarket next to the equilibrium if admins start tuning them.
+     *
+     * @param price       the market price after the fill (real)
+     * @param equilibrium the market's fair price E (real); not positive = no band, the price is returned
+     * @return the price clamped to the band
+     */
+    public static double referenceAnchorPrice(double price, double equilibrium) {
+        if (!(equilibrium > 0)) return price;
+        return clamp(price, equilibrium * BOT_MIN_PRICE_MULT, equilibrium * NetFlowPlugin.DEFAULT_MAX_PRICE_MULT);
+    }
+
+    /** Default bot order limit: 10x the market's player order limit. */
+    public static final float DEFAULT_MAX_ORDER_VOLUME_FACTOR = 10f;
+    /**
+     * #89: default target rate limit, 0.5% per second (~35% per minute, x2 in ~2.3 min). Above the
+     * normal VolatilityPlugin random walk, which moves the target by well under 1% per step, but a
+     * pinned 5-20x flow target now takes minutes to reach instead of seconds.
+     */
+    public static final float DEFAULT_MAX_TARGET_MOVE_PER_SECOND = 0.005f;
+    /** Tick time between two bot steps: the bot acts every 5th update (5 ticks x 50 ms). */
+    private static final double STEP_SECONDS = 5 * 0.05;
+
+    /**
+     * Moves {@code current} towards {@code target} by at most {@code current * maxMovePerSecond * dt}.
+     *
+     * @param current          the rate-limited target of the previous step; &lt;= 0 = none yet (snap)
+     * @param target           the new raw target from the price plugins
+     * @param maxMovePerSecond max relative move per second; &lt;= 0 = no limit (returns target)
+     * @param dtSeconds        tick time since the previous step
+     * @return the new rate-limited target
+     */
+    public static double limitTargetMove(double current, double target, float maxMovePerSecond, double dtSeconds) {
+        if (!(maxMovePerSecond > 0) || !(current > 0)) return target;
+        double maxStep = current * maxMovePerSecond * dtSeconds;
+        return Math.max(current - maxStep, Math.min(current + maxStep, target));
+    }
+
+    /**
+     * Max volume of one bot order.
+     *
+     * @param maxPlayerOrderVolume the market's player order limit in real items; &lt;= 0 = unlimited
+     * @param factor               bot limit as a multiple of the player limit; &lt;= 0 = unlimited
+     * @return the limit in real items, {@link Double#POSITIVE_INFINITY} if unlimited
+     */
+    public static double botOrderVolumeLimit(double maxPlayerOrderVolume, float factor) {
+        if (maxPlayerOrderVolume <= 0 || factor <= 0) return Double.POSITIVE_INFINITY;
+        return maxPlayerOrderVolume * factor;
+    }
 
 
+
+    /**
+     * T-207: width of the gap window as a fraction of the current price (1% of the price; T-210:
+     * half a depth memory slot). The bot only trades if this first part of its way to the target holds liquidity.
+     */
+    public static final double GAP_WINDOW_FRACTION = 0.01;
+
+    /** T-207: gap guard switch, only turned off by tests to compare against the unguarded bot. */
+    private static boolean gapGuardEnabled = true;
+
+    /**
+     * Test hook: turns the T-207 gap guard on or off for all bots.
+     *
+     * @param enabled false = trade into empty gaps as before T-207
+     */
+    public static void test_setGapGuardEnabled(boolean enabled) { gapGuardEnabled = enabled; }
+
+    /**
+     * T-208: the gap guard blocks the bot for at most this long after the last player fill. The guard exists so
+     * the bot does not snap the price back through the gap a big order just swept; once the book had a minute
+     * to refill that job is done. Without the limit, steady player buying (one order every 30 s) kept the
+     * window below the minimum fill for good, so the bot never traded and the price ignored the plugins'
+     * equilibrium. Each new fill restarts the window.
+     * <p>
+     * SM-334: the pause is rolled per fill, uniformly from [{@link #GAP_GUARD_MIN_BLOCK_SECONDS}, this] (mean 60 s,
+     * as before), so a player can't time a trade to the moment the bot wakes up.
+     */
+    public static final double GAP_GUARD_MAX_BLOCK_SECONDS = 75;
+    /** SM-334: shortest gap guard pause after a player fill, see {@link #GAP_GUARD_MAX_BLOCK_SECONDS}. */
+    public static final double GAP_GUARD_MIN_BLOCK_SECONDS = 45;
+
+    /** SM-334: test seed of the pause rolls, null = random. Read when a market's bot data is created. */
+    private static Long guardSeed = null;
+
+    /**
+     * Test hook (SM-334): seeds the gap guard pause rolls of every bot market subscribed afterwards, so tests stay
+     * deterministic.
+     *
+     * @param seed the seed, or null for unseeded (production) rolls
+     */
+    public static void test_setGapGuardSeed(Long seed) { guardSeed = seed; }
+
+    /**
+     * Test hook (SM-334): the gap guard pause rolled at the last player fill on {@code marketID}.
+     *
+     * @return the pause in seconds, NaN if not subscribed
+     */
+    public double test_getGapGuardBlockSeconds(ItemID marketID) {
+        RuntimeData data = marketData.get(marketID);
+        return data == null ? Double.NaN : data.guardBlockSeconds;
+    }
+
+    /**
+     * SM-334: default of {@link Settings#availableVolumeLevels}: price levels the bot's "available volume" spans,
+     * from the first level with volume in its direction (empty levels before it are skipped), that level and the
+     * next ones. One bot order never takes more than this volume.
+     */
+    public static final int DEFAULT_AVAILABLE_VOLUME_LEVELS = 50;
+    /** SM-334: share of the available volume the bot's first order after a player push may take. */
+    public static final double RAMP_START_FRACTION = 0.02;
+    /**
+     * SM-334: seconds of trading after a player push until the bot may take its full share
+     * ({@link Settings#maxRampFraction}) of the available volume per step. The share grows linearly in between, so
+     * the price starts to slide slowly and then faster.
+     */
+    public static final double RAMP_SECONDS = 180;
+    /**
+     * SM-334: default of {@link Settings#maxRampFraction}: once fully ramped one order may take 200% of the measured
+     * available volume. The bot measures only a few levels so the scan stays cheap, but can still order more.
+     */
+    public static final float DEFAULT_MAX_RAMP_FRACTION = 2f;
+
+    /**
+     * SM-334: share of the available volume the bot may take after {@code steps} trading steps since the last
+     * player fill: linear from {@link #RAMP_START_FRACTION} to {@code max} over {@link #RAMP_SECONDS}.
+     *
+     * @param steps bot steps past the gap guard since the last fill; {@link Integer#MAX_VALUE} = no fill seen
+     * @param max   the share once fully ramped ({@link Settings#maxRampFraction}); below the start share it is used
+     *              from the first step
+     * @return the share in [min(RAMP_START_FRACTION, max), max]
+     */
+    public static double rampFraction(int steps, double max) {
+        if (max <= RAMP_START_FRACTION) return max;
+        return Math.min(max, RAMP_START_FRACTION + (max - RAMP_START_FRACTION) * steps * STEP_SECONDS / RAMP_SECONDS);
+    }
+
+    /** T-207: default of {@link #gapMinFill}. */
+    public static final double DEFAULT_GAP_MIN_FILL = 0.25;
+    /**
+     * T-207: how full the gap window must be, as a fraction of "default level volume at the window edge x
+     * price levels in the window" (an upper estimate of an undepleted window), before the bot trades.
+     */
+    private static double gapMinFill = DEFAULT_GAP_MIN_FILL;
+
+    /**
+     * Test hook: sets {@link #gapMinFill} for all bots.
+     *
+     * @param fill required fill fraction; &lt;= 0 disables the guard's volume check
+     */
+    public static void test_setGapMinFill(double fill) { gapMinFill = fill; }
+
+    /**
+     * T-207 gap guard: true if a bot order from {@code price} towards {@code target} would cross an
+     * (almost) empty stretch of the book, so even a tiny order would move the price far in one tick.
+     * <p>
+     * The window is the first {@link #GAP_WINDOW_FRACTION} of the price towards the target (or up to the
+     * target if it is closer), but at least one price step. The bot may trade only if the one-sided virtual volume in that window is
+     * at least one price level of the market's default (undepleted) depth at the window's edge. A swept
+     * book (after a big player order) holds ~0 there until the volume distribution refills it; a normal
+     * book holds dozens of levels' worth. So this covers both "too little volume up to the target" and
+     * "an empty gap wider than the window". Markets without a default depth (0) are never guarded.
+     *
+     * @param book   the market's order book
+     * @param price  the current market price (real)
+     * @param target the bot's target price (real)
+     * @return true if the bot should skip this step
+     */
+    public static boolean crossesEmptyGap(IPluginOrderBook book, double price, double target) {
+        if (!(price > 0) || target == price) return false;
+        // T-208: at least one price step wide. On cheap items (dirt at 0.1, step 0.01 = 10%) 1% of the
+        // price holds no level at all, so the window looked empty and blocked the bot forever.
+        double step = MarketManager.convertToRealAmountStatic(1);
+        double windowEnd = target > price
+                ? Math.max(Math.min(target, price * (1 + GAP_WINDOW_FRACTION)), price + step)
+                : Math.min(Math.max(target, price * (1 - GAP_WINDOW_FRACTION)), price - step);
+        double levels = Math.max(1, Math.abs(windowEnd - price) / step);
+        double minVolume = gapMinFill * Math.abs(book.getDefaultRealVolume(windowEnd)) * levels;
+        if (!(minVolume > 0)) return false;
+        // capped at minVolume: stops scanning as soon as enough volume is found
+        return Math.abs(book.getRealVirtualVolumeToPrice(windowEnd, minVolume)) < minVolume;
+    }
 
     public TargetPriceBot() {
         super();
@@ -118,35 +619,98 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         if(data.tickCounter < 5)
             return;
         data.tickCounter = 0;
-        data.targetPrice = market.market.getPreviousTargetPrice();
+        Settings settings = getCustomSettings(market.market.getMarketID());
+        Settings s = settings != null ? settings : Settings.createDefault();
+        float maxMove = s.maxTargetMovePerSecond();
+        double rawTarget = market.market.getPreviousTargetPrice();
         double currentPrice = market.market.getPrice();
+        // T-208: re-anchor the reference only on player fills (the raw net flow is an exact counter of
+        // them; bot orders don't change it). An admin reset of the flow (raw back to 0) drops it.
+        double raw = market.market.getNetPlayerItemFlow();
+        if (!(s.reversionTimeSeconds() > 0) || !(rawTarget > 0) || !(currentPrice > 0)
+                || (raw == 0 && data.refLastRaw != 0))
+            data.ref = Reference.IDLE;
+        else if (!Double.isNaN(data.refLastRaw) && raw != data.refLastRaw)
+            // #96: never further from the fair price than the bot's band (SM-241: floor E x BOT_MIN_PRICE_MULT)
+            data.ref = anchorReference(data.ref, Math.log(rawTarget),
+                    Math.log(referenceAnchorPrice(currentPrice, market.market.getEquilibriumPrice())), s, maxMove);
+        // T-208: restart the gap guard window on every player fill. SM-334: with a freshly rolled pause, and the
+        // bot's order size ramps up again from the start.
+        if (!Double.isNaN(data.refLastRaw) && raw != data.refLastRaw) {
+            data.stepsSinceFill = 0;
+            data.rampSteps = 0;
+            data.guardBlockSeconds = GAP_GUARD_MIN_BLOCK_SECONDS
+                    + data.rng.nextDouble() * (GAP_GUARD_MAX_BLOCK_SECONDS - GAP_GUARD_MIN_BLOCK_SECONDS);
+        }
+        else if (data.stepsSinceFill < Integer.MAX_VALUE) data.stepsSinceFill++;
+        data.refLastRaw = raw;
+        Reference next = data.ref.active() ? stepReference(data.ref, Math.log(rawTarget), s, maxMove, STEP_SECONDS) : data.ref;
+        // #89: while the reference is idle, chase the plugins' target only through the rate limit
+        // (persisted as targetPrice). Model off (reversion time 0) = this path only, as before T-208.
+        data.targetPrice = next.active() ? Math.exp(next.y())
+                : limitTargetMove(data.targetPrice, rawTarget, maxMove, STEP_SECONDS);
 
-        double output = data.pid.update(data.targetPrice - currentPrice);
+        // T-208: relative error in % of the price, so cheap items get the same urgency as
+        // expensive ones; an absolute error left the PID output on dirt at about 0.0025.
+        double error = currentPrice > 0 ? 100 * (data.targetPrice - currentPrice) / currentPrice : 0;
+        double output = data.pid.update(error, STEP_SECONDS);
         // Clamp PID output to [-1, 1] as a fraction of how aggressively to push
         double pidFraction = Math.min(Math.max(-1, output), 1);
 
-        // Size from virtual depth only: counting resting player limit orders here let the bot fill a
-        // whole player order in one go at its limit price, before the player's flow could move the price.
-        float volumeToTarget = market.oderBook.getRealVirtualVolume(currentPrice, data.targetPrice);
-        double absVolumeToTarget = Math.abs(volumeToTarget);
-
-        double normalized;
-        if (absVolumeToTarget < 0.01) {
-            normalized = 0;
-        } else {
-            // Scale order size proportional to orderbook depth and PID urgency
-            normalized = pidFraction * absVolumeToTarget;
-            // Constrain: don't overshoot by consuming more than the volume to target
-            if (normalized < 0 && volumeToTarget > 0)
-                normalized = Math.max(-volumeToTarget, normalized);
-            else if (normalized > 0 && volumeToTarget < 0)
-                normalized = Math.min(-volumeToTarget, normalized);
+        // Cap the order: an oversized bot order walks the price through the whole virtual book in one
+        // tick and can fill a far-away player limit order at its price (trading exploit).
+        float factor = settings != null ? settings.maxOrderVolumeFactor() : DEFAULT_MAX_ORDER_VOLUME_FACTOR;
+        double limit = botOrderVolumeLimit(market.market.getMaxRealOrderVolume(), factor);
+        // T-200: size from the exact one-sided virtual depth between the price and the target, read the
+        // way the matching walk reads it (incl. the depth memory). A market order of that size ends at or
+        // before the target, so the bot can never walk past its own target. Resting player limit orders
+        // are not counted: counting them let the bot fill a whole player order in one go at its limit
+        // price, and leaving them out only makes the order smaller.
+        // Signed like the book: negative = asks to buy through (target above), positive = bids to sell into.
+        float volumeToTarget = market.oderBook.getRealVirtualVolumeToPrice(data.targetPrice, limit);
+        // T-208: a target less than one price step away can't be reached without passing it (T-200), so
+        // the bot waits. The reference still advances, otherwise it would stay stuck next to the price.
+        if (Math.abs(data.targetPrice - currentPrice) < MarketManager.convertToRealAmountStatic(1)) {
+            data.ref = next;
+            return;
         }
-
-        double marketOrderAmount = ((double) Math.round(normalized * 100)) / 100;
+        // T-207: don't trade into an empty price gap (e.g. right after a big player order swept the
+        // book). Even a tiny order would fall through the gap and snap the price back at once.
+        // T-208: with an active reference the guard checks the full window in the direction of travel:
+        // the reference often sits within a level or two of the price, and a window shrunk to it would
+        // stay empty (and the frozen reference with it) until the swept range refills completely.
+        double guardTarget = !next.active() || data.targetPrice == currentPrice ? data.targetPrice
+                : currentPrice * (data.targetPrice > currentPrice ? 1 + GAP_WINDOW_FRACTION : 1 - GAP_WINDOW_FRACTION);
+        // T-208: only within the pause after the last player fill (SM-334: rolled per fill)
+        boolean guardWindow = data.stepsSinceFill * STEP_SECONDS < data.guardBlockSeconds;
+        if (gapGuardEnabled && guardWindow && crossesEmptyGap(market.oderBook, currentPrice, guardTarget)) {
+            // T-208: the reference freezes while the bot can't trade, so it doesn't run ahead of the price.
+            if (data.ref.active()) data.targetPrice = Math.exp(data.ref.y());
+            return;
+        }
+        data.ref = next;
+        // SM-334: take only a share of the available volume (the first availableVolumeLevels levels with volume in
+        // the bot's direction, empty levels before them skipped), ramped up after a player push. Without it, after
+        // the pause the bot sold the whole (thin, barely refilled) range between a pumped price and its target in
+        // one go. An empty stretch before the first volume is still crossed in one step.
+        double ramp = rampFraction(data.rampSteps, s.maxRampFraction());
+        if (data.rampSteps < Integer.MAX_VALUE) data.rampSteps++;
+        double available = Math.abs(market.oderBook.getRealVirtualAvailableVolume(data.targetPrice, s.availableVolumeLevels(), limit));
+        // At least 0.01 (the smallest order) once any volume is available, so a small share of a thin book doesn't
+        // truncate to no order at all and stall the bot until the ramp catches up.
+        double absVolumeToTarget = Math.min(Math.min(limit, Math.abs(volumeToTarget)),
+                available > 0 ? Math.max(ramp * available, 0.01) : 0);
+        // Direction to the target: +1 buy, -1 sell. The PID output only sets the urgency; if its sign
+        // still points the other way (filter lag right after the price crossed the target), don't
+        // trade instead of pushing the price further away.
+        double direction = volumeToTarget < 0 ? 1 : -1;
+        double urgency = Math.max(0, pidFraction * direction);
+        // Truncate (not round) to 0.01 so the order never exceeds the measured volume.
+        double marketOrderAmount = direction * Math.floor(urgency * absVolumeToTarget * 100) / 100;
         if(marketOrderAmount != 0)
         {
             market.market.placeOrder(marketOrderAmount);
+            data.lastStep = new StepInfo(data.targetPrice, currentPrice, volumeToTarget, marketOrderAmount);
             info("Placing order: " + marketOrderAmount + " (PID-OUT: " + output + ", fraction: " + pidFraction + ", volumeToTarget: " + volumeToTarget + ")");
         }
     }
@@ -209,7 +773,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
 
     @Override
     protected Settings provideDefaultCustomSettings() {
-        return new Settings(DEFAULT_PID_P, DEFAULT_PID_I, DEFAULT_PID_D, DEFAULT_PID_RATE);
+        return Settings.createDefault();
     }
 
     @Override
@@ -220,7 +784,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
             data.pidI = settings.pidI();
             data.pidD = settings.pidD();
             data.pidRate = settings.pidRate();
-            data.pid = new PID(data.pidP, data.pidI, data.pidD, data.pidRate);
+            data.pid = createPid(data.pidP, data.pidI, data.pidD, data.pidRate);
         }
     }
 
@@ -241,6 +805,13 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
             CompoundTag pidTag = new CompoundTag();
             data.pid.save(pidTag);
             marketTag.put("pid", pidTag);
+            // T-208 reference state
+            marketTag.putDouble("refY", data.ref.y());
+            marketTag.putDouble("refV", data.ref.v());
+            marketTag.putDouble("refC", data.ref.c());
+            marketTag.putDouble("refAnchor", data.ref.anchor());
+            marketTag.putDouble("refLastRaw", data.refLastRaw);
+            marketTag.putBoolean("refActive", data.ref.active());
             marketsTag.add(marketTag);
         }
         tag.put("marketData", marketsTag);
@@ -264,11 +835,17 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                             data.pidI = NbtCompat.getFloat(marketTag, "pidI");
                             data.pidD = NbtCompat.getFloat(marketTag, "pidD");
                             data.pidRate = NbtCompat.getFloat(marketTag, "pidRate");
-                            data.pid = new PID(data.pidP, data.pidI, data.pidD, data.pidRate);
+                            data.pid = createPid(data.pidP, data.pidI, data.pidD, data.pidRate);
                         }
                         if (marketTag.contains("targetPrice")) data.targetPrice = NbtCompat.getDouble(marketTag, "targetPrice");
                         if (marketTag.contains("tickCounter")) data.tickCounter = NbtCompat.getInt(marketTag, "tickCounter");
                         if (marketTag.contains("pid")) data.pid.load(NbtCompat.getCompound(marketTag, "pid"));
+                        // T-208: missing keys (older save) -> idle reference, flow seeded on the first step
+                        data.ref = marketTag.contains("refActive") && NbtCompat.getBoolean(marketTag, "refActive")
+                                ? new Reference(NbtCompat.getDouble(marketTag, "refY"), NbtCompat.getDouble(marketTag, "refV"),
+                                        NbtCompat.getDouble(marketTag, "refC"), NbtCompat.getDouble(marketTag, "refAnchor"), true)
+                                : Reference.IDLE;
+                        data.refLastRaw = marketTag.contains("refLastRaw") ? NbtCompat.getDouble(marketTag, "refLastRaw") : Double.NaN;
                     }
                 }
             }

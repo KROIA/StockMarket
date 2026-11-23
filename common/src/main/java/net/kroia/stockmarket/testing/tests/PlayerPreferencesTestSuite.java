@@ -1,9 +1,9 @@
 package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.minecraft.nbt.CompoundTag;
@@ -20,6 +20,11 @@ public class PlayerPreferencesTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.PLAYER_PREFERENCES;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override

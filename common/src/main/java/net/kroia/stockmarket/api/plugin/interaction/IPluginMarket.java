@@ -12,6 +12,18 @@ public interface IPluginMarket {
 
 
     /**
+     * Gets the market's max order size: the most items a single player order may buy or sell on
+     * this market. Bot orders are not limited by it; plugins may use it to size their own orders
+     * relative to what players can trade.
+     *
+     * <p>The default returns 0, so implementations that don't know a limit report "no limit".
+     *
+     * @return the limit in real items (whole item count, not raw backend units); 0 = no limit
+     */
+    default double getMaxRealOrderVolume() { return 0; }
+
+
+    /**
      * Gets the interval in ticks at which the plugin should send stream packets to clients.
      * @return The tick interval for sending stream packets.
      */
@@ -111,6 +123,38 @@ public interface IPluginMarket {
      */
     void addToTargetPrice(double delta);
 
+    /**
+     * T-213: publishes this tick's flow equilibrium price (the price the market settles at without noise).
+     * The NetFlowPlugin writes it; the VolatilityPlugin adds its random walk on top of it. Rolled over once
+     * per tick like the target price.
+     * <p>
+     * The default implementation is a no-op so existing external implementations keep compiling.
+     *
+     * @param equilibriumPrice the equilibrium price in real (scaled) units
+     */
+    default void setEquilibriumPrice(double equilibriumPrice) {}
+
+    /**
+     * T-213: the flow equilibrium price: the value set this tick if any plugin published one, else last tick's,
+     * else the default price (no equilibrium publisher, e.g. the NetFlowPlugin is removed or disabled).
+     * <p>
+     * The default implementation returns {@link #getDefaultRealPrice()}.
+     *
+     * @return the equilibrium price in real (scaled) units
+     */
+    default double getEquilibriumPrice() { return getDefaultRealPrice(); }
+
+    /**
+     * T-213: whether a plugin already wrote the target price this tick ({@link #setTargetPrice} or
+     * {@link #addToTargetPrice}). The NetFlowPlugin only sets the target to the bare equilibrium when nobody
+     * did, so a misordered plugin list never overwrites the VolatilityPlugin's target.
+     * <p>
+     * The default implementation returns false.
+     *
+     * @return true if the target price was written during the current tick
+     */
+    default boolean isTargetPriceSetThisTick() { return false; }
+
 
 
     /**
@@ -151,6 +195,40 @@ public interface IPluginMarket {
      * @return the net player item flow as a real (scaled) value
      */
     double getNetPlayerItemFlow();
+
+    /**
+     * Overwrites the net player item flow counter. Applied immediately (not cache-buffered).
+     * No built-in plugin calls this: the NetFlowPlugin only reads the flow and saturates its own
+     * private copy at the floor/ceiling of its equilibrium price. The counter is the exact item count
+     * of player fills; do not clamp it here.
+     * @param netPlayerItemFlow the new net flow in real (scaled) units, same sign
+     *                          convention as {@link #getNetPlayerItemFlow()}
+     * <p>
+     * The default implementation is a no-op so existing external implementations of this
+     * interface keep compiling. Implementations backed by a real market should override it.
+     */
+    default void setNetPlayerItemFlow(double netPlayerItemFlow) {}
+
+    /**
+     * Gets the faded net player item flow (#89): the same per-fill counting as
+     * {@link #getNetPlayerItemFlow()}, but it decays exponentially towards 0 with the admin
+     * half-life {@code MARKET.NET_FLOW_HALF_LIFE_MINUTES}. A one-off burst of trades fades out,
+     * sustained demand or supply keeps it up. Price plugins should use this value.
+     * <p>
+     * The default implementation returns {@link #getNetPlayerItemFlow()} (no fading) so
+     * existing external implementations of this interface keep compiling.
+     * @return the faded net flow as a real (scaled) value, same sign convention
+     */
+    default double getFadedNetPlayerItemFlow() { return getNetPlayerItemFlow(); }
+
+    /**
+     * Overwrites the faded net player item flow. Applied immediately (not cache-buffered).
+     * No built-in plugin calls this: the NetFlowPlugin saturates its own private copy at its price
+     * band instead of writing the stored value; do not use it to clamp the flow.
+     * The default implementation is a no-op.
+     * @param fadedNetPlayerItemFlow the new faded flow in real (scaled) units
+     */
+    default void setFadedNetPlayerItemFlow(double fadedNetPlayerItemFlow) {}
 
 
 

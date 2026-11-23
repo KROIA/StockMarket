@@ -1,0 +1,39 @@
+{
+  "id": "prismarine_monument_raid",
+  "picture": "prismarine_monument_raid.png",
+  "headline": {
+    "en_us": "Ocean monument stripped bare - prismarine floods in!",
+    "zh_cn": "海底神殿被洗劫一空——海晶石涌入！",
+    "de_de": "Ozeanmonument leergeräumt - Prismarin überflutet den Markt!"
+  },
+  "text": {
+    "en_us": "A guild of divers has stormed a great ocean monument and hauled its walls to the surface overnight. Prismarine shards and crystals hit the caravans all at once, and the sudden wall of supply has sent prices plunging before sellers can even set a fair rate.",
+    "zh_cn": "一支潜水者公会突袭了一座大型海底神殿，一夜之间把它的墙体搬上了水面。海晶碎片与海晶结晶同时涌入商队，突如其来的供给洪流让价格在卖家定价之前就已崩塌。",
+    "de_de": "Eine Taucherzunft hat ein großes Ozeanmonument gestürmt und seine Wände über Nacht an die Oberfläche geschafft. Prismarinscherben und -kristalle treffen mit einem Schlag auf die Karawanen, und die plötzliche Angebotswand lässt die Preise abstürzen, noch ehe die Verkäufer einen fairen Kurs festlegen können."
+  },
+  "category": "commodities",
+  "weight": 5,
+  "cooldownSeconds": 14400,
+  "impact": {
+    "type": "shock",
+    "peakFactor": -0.35,
+    "durationSeconds": 1500,
+    "reversal": "exponential",
+    "reversalSeconds": 3600,
+    "noise": 0.05
+  },
+  "markets": [
+    {
+      "item": "minecraft:prismarine_shard",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:prismarine_crystals",
+      "weightFactor": 0.9
+    },
+    {
+      "item": "minecraft:prismarine",
+      "weightFactor": 0.6
+    }
+  ]
+}

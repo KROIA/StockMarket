@@ -3,9 +3,9 @@ package net.kroia.stockmarket.testing.tests;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.kroia.modutilities.JsonUtilities;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.news.DefaultNewsEvents;
 import net.kroia.stockmarket.news.DefaultNewsPictures;
 import net.kroia.stockmarket.news.NewsEventDefinition;
@@ -39,6 +39,11 @@ public class NewsPictureLibraryTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.NEWS_PICTURES;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override

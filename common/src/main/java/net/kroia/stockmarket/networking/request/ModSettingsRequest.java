@@ -2,15 +2,21 @@ package net.kroia.stockmarket.networking.request;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.kroia.modutilities.PermissionCompat;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.minecraft.compat.StockMarketWebInterface;
 import net.kroia.stockmarket.networking.NetworkGate;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
+import net.kroia.stockmarket.util.StockMarketPermissions;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -28,6 +34,9 @@ import java.util.concurrent.CompletableFuture;
  *   <li>{@link Action#SET} — applies the values from the payload, sanitizes them
  *       (see {@link #sanitize}), persists them to {@code settings.json} and returns
  *       the confirmed (post-sanitize) state.</li>
+ *   <li>{@link Action#APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS} — (T-179) recomputes the max order
+ *       size of every market from its abundance and the SAVED {@code MAX_ORDER_VOLUME_FACTOR};
+ *       the payload is ignored, {@code OutputData.message} carries the updated market count.</li>
  * </ul>
  * <p>
  * <b>Wire format:</b> the payload is the {@link SettingsStore} JSON string of
@@ -36,11 +45,14 @@ import java.util.concurrent.CompletableFuture;
  * that is used for the settings.json file itself. This avoids duplicating a
  * structured codec for every setting and automatically covers settings added later.
  * <p>
- * <b>Security:</b> the handler enforces BOTH conditions server-side, regardless of
- * any client-side UI gating:
+ * <b>Security:</b> the handler enforces ALL of these conditions server-side, for every
+ * action, regardless of any client-side UI gating (SM-300):
  * <ul>
  *   <li>the sending player must have the StockMarket-admin flag (the same flag
- *       {@code /stockmarket manage} requires), and</li>
+ *       {@code /stockmarket manage} requires),</li>
+ *   <li>the sending player must be online on THIS server and have vanilla operator
+ *       level 2 ({@link StockMarketPermissions#FALLBACK_LEVEL}); a player connected
+ *       through a slave is therefore rejected — the screen is master-only, and</li>
  *   <li>this server must be the MASTER server — only the master loads and owns
  *       settings.json; slaves keep compile-time defaults by design.</li>
  * </ul>
@@ -66,6 +78,29 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
     public static final long MIN_CANDLE_TIME_MS = 1_000L;
     /** Maximum candle time in milliseconds (1 day). */
     public static final long MAX_CANDLE_TIME_MS = 86_400_000L;
+
+    /** Maximum per-player trade cooldown in milliseconds (1 minute); minimum is 0 = off. */
+    public static final long MAX_TRADE_COOLDOWN_MS = 60_000L;
+
+    /** Minimum max-order-volume factor (T-179): at least one item per abundance unit. */
+    public static final long MIN_MAX_ORDER_VOLUME_FACTOR = 1L;
+
+    /** Maximum net flow half-life (#89) in minutes (1 week); minimum is 0 = no fading. */
+    public static final float MAX_NET_FLOW_HALF_LIFE_MINUTES = 10_080f;
+    /** Maximum virtual depth recovery half-life (T-198) in minutes (1 week); minimum is 0 = memory off. */
+    public static final float MAX_VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES = 10_080f;
+    /** Minimum virtual depth price ceiling multiplier (T-198). */
+    public static final float MIN_VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER = 2f;
+    /** Maximum virtual depth price ceiling multiplier (T-198). */
+    public static final float MAX_VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER = 10_000f;
+    /** Minimum profit alert window (#89) in minutes. */
+    public static final long MIN_PROFIT_ALERT_WINDOW_MINUTES = 1L;
+    /** Maximum profit alert window (#89) in minutes (1 week). */
+    public static final long MAX_PROFIT_ALERT_WINDOW_MINUTES = 10_080L;
+    /** Minimum pump-and-dump cycle window (T-192) in minutes. */
+    public static final long MIN_PUMP_DUMP_CYCLE_MINUTES = 1L;
+    /** Maximum pump-and-dump cycle window (T-192) in minutes (1 week). */
+    public static final long MAX_PUMP_DUMP_CYCLE_MINUTES = 10_080L;
 
     /** Minimum villager price refresh interval in minutes. */
     public static final long MIN_PRICE_REFRESH_INTERVAL_MINUTES = 1L;
@@ -94,7 +129,14 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         /** Fetch the current settings state (input JSON is ignored/empty). */
         GET,
         /** Apply + persist the settings contained in the input JSON. */
-        SET;
+        SET,
+        /**
+         * T-179: recompute {@code maxOrderVolume} of EVERY market from its natural abundance and the
+         * currently SAVED {@code MAX_ORDER_VOLUME_FACTOR} (unsaved screen edits are not used — the
+         * client says so in its confirm popup). Input JSON is ignored. On success
+         * {@link OutputData#message} holds the number of updated markets. Appended (ordinal = wire format).
+         */
+        APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS;
 
         /** Wire codec: encoded as a single byte (the ordinal). */
         public static final StreamCodec<RegistryFriendlyByteBuf, Action> STREAM_CODEC =
@@ -120,7 +162,7 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
      * Output payload returned from the server to the client.
      *
      * @param success      true if the action succeeded (for SET: values applied AND persisted)
-     * @param message      short human-readable failure reason, empty on success
+     * @param message      short human-readable failure reason, empty on success (APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS: the updated market count)
      * @param settingsJson the CONFIRMED current server state (post-sanitize) as
      *                     SettingsStore JSON; empty string when the request was rejected
      *                     before touching the settings (no permission / not master)
@@ -146,14 +188,18 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
-        // --- Permission check: require the StockMarket-admin flag (the same flag
-        // /stockmarket manage requires), resolved from the master's user map so it
-        // also works for players connected through a slave. Enforced here
-        // regardless of the client-side button gating. Both GET and SET share this
-        // gate (the branches below only add the T-129 slave-trust checks).
-        if (playerSender == null || !playerIsAdmin(playerSender)) {
+        // --- Permission check (SM-300): require BOTH the StockMarket-admin flag (the
+        // same flag /stockmarket manage requires) AND vanilla operator level 2. The op
+        // level can only be checked for a player online on THIS server, so a sender
+        // connected through a slave fails here — the screen is master-only anyway.
+        // Enforced regardless of the client-side button gating. Every action shares
+        // this gate (the branches below only add the T-129 slave-trust checks).
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        ServerPlayer player = playerSender == null || server == null ? null : server.getPlayerList().getPlayer(playerSender);
+        if (player == null || !PermissionCompat.hasPermission(player, StockMarketPermissions.FALLBACK_LEVEL)
+                || !playerIsAdmin(playerSender)) {
             warn("Rejected mod settings " + input.action() + " from " + getPlayerName(playerSender) + ": no permission");
-            return CompletableFuture.completedFuture(new OutputData(false, "No permission (StockMarket admin required)", ""));
+            return CompletableFuture.completedFuture(new OutputData(false, "No permission (operator level 2 and StockMarket admin required)", ""));
         }
 
         // --- Master check: only the master server loads/owns settings.json.
@@ -194,6 +240,22 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
                     store.toJsonString(settings.getEditableGroups())));
         }
 
+        // ------------- APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS (T-179) -------------
+        // Same admin + op + master + trusted-slave gates as SET (checked above). Markets only exist on
+        // the master (slaves have no ServerMarketManager), so no slave propagation is needed —
+        // order checks run on the master and the new limits reach clients via MarketPriceStream.
+        if (input.action() == Action.APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS) {
+            if (!(getServerMarketManager() instanceof ServerMarketManager marketManager)) {
+                return CompletableFuture.completedFuture(new OutputData(false, "Market manager not available",
+                        store.toJsonString(settings.getEditableGroups())));
+            }
+            long factor = net.kroia.stockmarket.StockMarketModBackend.getMaxOrderVolumeFactor(); // saved value, >= 1
+            int count = marketManager.applyDefaultMaxOrderVolumeToAllMarkets(factor);
+            info("Max order volume of " + count + " markets recomputed with factor " + factor + " by " + getPlayerName(playerSender));
+            return CompletableFuture.completedFuture(new OutputData(true, String.valueOf(count),
+                    store.toJsonString(settings.getEditableGroups())));
+        }
+
         // ------------------------------ SET ------------------------------
         JsonObject root;
         try {
@@ -208,6 +270,9 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         // to detect whether the VillagerTrading group changed (slave propagation).
         ItemStack currencyBefore = settings.MARKET.CURRENCY.get();
         String villagerBefore = store.toJsonString(settings.VILLAGER_TRADING);
+        int initialLoadBefore = settings.MARKET.getPriceHistoryInitialLoadCandles(); // T-140 client re-push
+        boolean webEnabledBefore = Boolean.TRUE.equals(settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.get()); // SM-347
+        Integer webPortBefore = settings.INTEGRATIONS.WEB_INTERFACE_PORT.get();
 
         String applyError = null;
         try {
@@ -225,6 +290,20 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         // previous currency if the new one is empty/unresolvable.
         sanitize(settings, currencyBefore);
 
+        // SM-347: validate a new or newly enabled web interface port before saving. On rejection both web
+        // settings go back to their previous values; the other settings of this SET still save.
+        boolean webEnabled = Boolean.TRUE.equals(settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.get());
+        int webPort = settings.INTEGRATIONS.WEB_INTERFACE_PORT.get();
+        if (webEnabled && (!webEnabledBefore || !java.util.Objects.equals(webPortBefore, webPort))) {
+            String reason = StockMarketWebInterface.checkPort(webPort);
+            if (reason != null) {
+                settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.set(webEnabledBefore);
+                settings.INTEGRATIONS.WEB_INTERFACE_PORT.set(webPortBefore);
+                String msg = "Web interface port " + webPort + " rejected: " + reason;
+                applyError = applyError == null ? msg : applyError + "; " + msg;
+            }
+        }
+
         // Persist ONLY settings.json (targeted save — no full market/plugin NBT save).
         boolean saved = BACKEND_INSTANCES.DATA_MANAGER.saveSettingsToFile(UtilitiesPlatform.getServer());
         if (!saved && applyError == null) {
@@ -236,6 +315,17 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   master broadcasts. Recompute + broadcast immediately (same path as the
         //   periodic refresh in VillagerTradeManager.tickMaster()) so slaves pick
         //   up ENABLED/margin changes without waiting for the next interval.
+        //   REPLACE_EMERALDS_FOR_UNLISTED (T-167) rides inside the table as
+        //   replaceEmeraldsForUnlisted (slaves rewrite their own villagers and
+        //   never read settings.json); the emerald price is the emerald's entry
+        //   in the table's price map. Toggling it bumps the table version, so
+        //   every server re-evaluates (converts or restores) its villagers on
+        //   the next interaction — no extra propagation needed.
+        //   USE_PRESET_PRICES_FOR_VILLAGERS (T-243) is handled the same way: it
+        //   rides inside the table as usePresetPrices, together with the preset
+        //   default prices the master resolved (presetPricesRawByItemIdShort) —
+        //   slaves have no preset files of their own. The immediate
+        //   recompute + broadcast below covers it; no extra propagation needed.
         // * Utilities (autosave, logging) and ServerMarket (orderbook size, currency,
         //   candle time) are consumed ONLY on the master (slaves have no DataManager,
         //   no ServerMarketManager and no master-side logger settings) — no
@@ -246,14 +336,65 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   the master (slave requests are auto-routed). No slave-broadcast is
         //   required — the value is authoritative simply because only the master
         //   reads it. No client-side value is ever trusted.
-        // * ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES (T-137):
-        //   client-only preference (initial chart window size). Clients fetch the
-        //   current value via the normal GET path when opening the Mod Settings
-        //   screen, so no push-broadcast is needed.
+        // * ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES (T-137 / T-140):
+        //   client-side initial chart window size. Slaves never read it. Clients get
+        //   the master's value at join through ServerTimeRequest (routed to the
+        //   master, also from a slave). When a SET changes it, the master pushes the
+        //   new value to every online player via ClientSettingsSyncPacket (own players
+        //   + relay to every slave, which forwards it to its players) — see below.
         // * ServerMarket.TRADING_HOURS_USE_REAL_TIME (T-158): trading hours are
         //   evaluated only on the master (ServerMarketManager.update reads the
         //   setting live every tick). Slaves/clients receive the resulting market
         //   state + clock via the market price stream — no propagation needed.
+        // * ServerMarket.CANDLE_USE_GAME_TIME (T-218): restart-required, read once by the master's
+        //   ServerMarketManager (candle rotation + history aggregation). Slaves never rotate or
+        //   serve candles; their players get the flag from the master via ServerTimeRequest on
+        //   join — no propagation needed.
+        // * ServerMarket.TRADE_COOLDOWN_MS (T-166): read live only in the master-side
+        //   order handlers (CreateOrderRequest / PlaceInterMarketOrderRequest
+        //   .handleOnMasterServer); slave players' orders are routed to the master,
+        //   so the master's value applies everywhere — no propagation needed.
+        //   Clients learn the value through MarketPriceStream.TradingStatus (T-179, <= ~100 ms).
+        // * ServerMarket.MAX_ORDER_VOLUME_FACTOR (T-179): read only on the master when a
+        //   max order size is derived (new markets/presets, saves without a value, the
+        //   APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS action). Markets/presets live only on the
+        //   master — no propagation needed. Changing it does NOT touch existing markets.
+        // * ServerMarket.NET_FLOW_HALF_LIFE_MINUTES (#89, default 360 since T-208): read live every
+        //   tick in ServerMarket.update() on the master; markets only live there — no propagation
+        //   needed. The one-shot 10 -> 360 change of older settings.json files is part of save-data
+        //   step 1 (StockMarketDataMigration, SM-325).
+        // * ServerMarket.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES / VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER
+        //   (T-198): read live by the master's VirtualOrderbook (every tick / window move / depth
+        //   read); markets only live on the master — no propagation needed.
+        // * ServerMarket.PROFIT_ALERT_THRESHOLD / PROFIT_ALERT_WINDOW_MINUTES (#89): read live when
+        //   a player order completes, which only happens on the master — no propagation needed.
+        //   (Admins online on a slave are not alerted; see ProfitAlerts.)
+        // * ServerMarket.PUMP_DUMP_ENABLED / PUMP_DUMP_PRICE_MOVE_PERCENT / PUMP_DUMP_CYCLE_MINUTES /
+        //   PUMP_DUMP_CYCLE_PROFIT (T-192): read live by PumpDumpDetector when a player order finishes,
+        //   which only happens on the master — no propagation needed.
+        // * Utilities.ALERTS_DEFAULT_ON (T-192): read live by TradeAlerts when an alert is sent; alerts
+        //   are only raised and sent on the master — no propagation needed. The per-admin toggle
+        //   (/stockmarket alerts on|off) is stored in the master's StockMarket user data.
+        // * Integrations (T-217): slaves never load settings.json and keep the defaults, so every
+        //   Integrations gate is decided on the master. No propagation needed for any of them:
+        //   - PLACEHOLDERS_ENABLED: checked once at server start (restart-required). Off on the
+        //     master = no placeholder values; slaves keep polling PlaceholderSnapshotRequest and get
+        //     empty values. A slave's own value is never read.
+        //   - SYNC_ADMIN_FLAG_WITH_PERMISSION (moved from Utilities): the master's LuckPerms listener
+        //     is registered at server start only while it is on (restart-required); op/deop and the
+        //     master-side check of forwarded slave changes read it live (AsyncMarketManager
+        //     SyncAdminFlagFromPermission). Slaves always listen and forward when trusted. Turning it
+        //     on here may trigger the one-time LuckPerms migration (below).
+        //   - DISCORD_ENABLED: read live on every post (StockMarketDiscord); only the master posts
+        //     (slaves never register the feed), so a slave's value is never read.
+        //   - WEB_INTERFACE_ENABLED / WEB_INTERFACE_PORT (SM-347): applied right below on the master
+        //     (StockMarketWebInterface.apply). Slaves keep the defaults and apply() refuses to start there
+        //     (not the master), so no propagation needed.
+        StockMarketWebInterface.apply(BACKEND_INSTANCES);
+        if (Boolean.TRUE.equals(settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.get()) && StockMarketWebInterface.getRunningPort() == -1) {
+            String msg = "saved, but the web interface could not start (see server log)";
+            applyError = applyError == null ? msg : applyError + "; " + msg;
+        }
         String villagerAfter = store.toJsonString(settings.VILLAGER_TRADING);
         if (!villagerAfter.equals(villagerBefore) && BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER != null) {
             BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
@@ -261,11 +402,17 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
             info("VillagerTrading settings changed — price table recomputed and broadcast to slaves");
         }
 
+        // T-140: re-push the initial chart window to every online player (master + slaves).
+        if (net.kroia.stockmarket.networking.packet.ClientSettingsSyncPacket.broadcastIfChanged(
+                initialLoadBefore, settings.MARKET.getPriceHistoryInitialLoadCandles()))
+            info("Initial chart window changed — pushed to all online players");
+
         // Notify other online admins about the change.
         broadcastToAdmins(playerSender, Component.translatable("message.stockmarket.admin_broadcast.mod_settings_updated", getPlayerName(playerSender)));
         info("Mod settings updated by " + getPlayerName(playerSender) + (saved ? " (persisted)" : " (PERSIST FAILED)"));
 
         boolean success = saved && applyError == null;
+        net.kroia.stockmarket.util.AdminFlagSync.migrateIfNeeded(); // setting may have just been turned on
         return CompletableFuture.completedFuture(new OutputData(success,
                 applyError == null ? "" : applyError,
                 store.toJsonString(settings.getEditableGroups())));
@@ -283,9 +430,21 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
      *   <li>{@code ServerMarket.CURRENCY}: must be a non-empty ItemStack, else previous value</li>
      *   <li>{@code ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE} ∈ [16, 65,536]</li>
      *   <li>{@code ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES} ∈ [16, 8,192]</li>
+     *   <li>{@code ServerMarket.TRADE_COOLDOWN_MS} ∈ [0, 60,000 ms]</li>
+     *   <li>{@code ServerMarket.MAX_ORDER_VOLUME_FACTOR} &ge; 1</li>
+     *   <li>{@code ServerMarket.NET_FLOW_HALF_LIFE_MINUTES} ∈ [0, 10,080]; NaN = default</li>
+     *   <li>{@code ServerMarket.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES} ∈ [0, 10,080]; NaN = default</li>
+     *   <li>{@code ServerMarket.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER} ∈ [2, 10,000]; NaN = default</li>
+     *   <li>{@code ServerMarket.PROFIT_ALERT_THRESHOLD} &ge; 0; NaN/Infinite = default</li>
+     *   <li>{@code ServerMarket.PROFIT_ALERT_WINDOW_MINUTES} ∈ [1, 10,080]</li>
+     *   <li>{@code ServerMarket.PUMP_DUMP_PRICE_MOVE_PERCENT} &ge; 0; NaN/Infinite = default</li>
+     *   <li>{@code ServerMarket.PUMP_DUMP_CYCLE_MINUTES} ∈ [1, 10,080]</li>
+     *   <li>{@code ServerMarket.PUMP_DUMP_CYCLE_PROFIT} &ge; 0; NaN/Infinite = default</li>
      *   <li>{@code VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES} ∈ [1, 10,080]</li>
      *   <li>{@code VillagerTrading.VILLAGER_BUY_MARGIN / VILLAGER_SELL_MARGIN} ∈ [0.01, 100];
      *       NaN/Infinite values fall back to the setting's default</li>
+     *   <li>{@code Integrations.WEB_INTERFACE_PORT}: null = default (range and conflicts are checked in the SET
+     *       path by {@code StockMarketWebInterface.checkPort})</li>
      * </ul>
      * Static and side-effect free apart from the settings object itself, so the
      * in-game test suite can verify the bounds without a running request.
@@ -315,6 +474,26 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
                 clampInt(settings.MARKET.PRICE_HISTORY_INITIAL_LOAD_CANDLES.get(),
                         MIN_PRICE_HISTORY_INITIAL_LOAD, MAX_PRICE_HISTORY_INITIAL_LOAD,
                         settings.MARKET.PRICE_HISTORY_INITIAL_LOAD_CANDLES.getDefaultValue()));
+        settings.MARKET.TRADE_COOLDOWN_MS.set(
+                clamp(settings.MARKET.TRADE_COOLDOWN_MS.get(), 0L, MAX_TRADE_COOLDOWN_MS));
+        settings.MARKET.MAX_ORDER_VOLUME_FACTOR.set(
+                clamp(settings.MARKET.MAX_ORDER_VOLUME_FACTOR.get(), MIN_MAX_ORDER_VOLUME_FACTOR, Long.MAX_VALUE));
+        settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.set(clampFloat(settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.get(),
+                0f, MAX_NET_FLOW_HALF_LIFE_MINUTES, settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue()));
+        settings.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(clampFloat(settings.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get(),
+                0f, MAX_VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES, settings.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue()));
+        settings.MARKET.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER.set(clampFloat(settings.MARKET.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER.get(),
+                MIN_VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER, MAX_VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER, settings.MARKET.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER.getDefaultValue()));
+        settings.MARKET.PROFIT_ALERT_THRESHOLD.set(clampFloat(settings.MARKET.PROFIT_ALERT_THRESHOLD.get(),
+                0f, Float.MAX_VALUE, settings.MARKET.PROFIT_ALERT_THRESHOLD.getDefaultValue()));
+        settings.MARKET.PROFIT_ALERT_WINDOW_MINUTES.set(clamp(settings.MARKET.PROFIT_ALERT_WINDOW_MINUTES.get(),
+                MIN_PROFIT_ALERT_WINDOW_MINUTES, MAX_PROFIT_ALERT_WINDOW_MINUTES));
+        settings.MARKET.PUMP_DUMP_PRICE_MOVE_PERCENT.set(clampFloat(settings.MARKET.PUMP_DUMP_PRICE_MOVE_PERCENT.get(),
+                0f, Float.MAX_VALUE, settings.MARKET.PUMP_DUMP_PRICE_MOVE_PERCENT.getDefaultValue()));
+        settings.MARKET.PUMP_DUMP_CYCLE_MINUTES.set(clamp(settings.MARKET.PUMP_DUMP_CYCLE_MINUTES.get(),
+                MIN_PUMP_DUMP_CYCLE_MINUTES, MAX_PUMP_DUMP_CYCLE_MINUTES));
+        settings.MARKET.PUMP_DUMP_CYCLE_PROFIT.set(clampFloat(settings.MARKET.PUMP_DUMP_CYCLE_PROFIT.get(),
+                0f, Float.MAX_VALUE, settings.MARKET.PUMP_DUMP_CYCLE_PROFIT.getDefaultValue()));
         ItemStack currency = settings.MARKET.CURRENCY.get();
         if (currency == null || currency.isEmpty()) {
             // Never allow an empty trading currency — keep the previous one.
@@ -332,6 +511,18 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         settings.VILLAGER_TRADING.VILLAGER_SELL_MARGIN.set(
                 clampMargin(settings.VILLAGER_TRADING.VILLAGER_SELL_MARGIN.get(),
                         settings.VILLAGER_TRADING.VILLAGER_SELL_MARGIN.getDefaultValue()));
+
+        // Integrations
+        if (settings.INTEGRATIONS.WEB_INTERFACE_PORT.get() == null)
+            settings.INTEGRATIONS.WEB_INTERFACE_PORT.set(settings.INTEGRATIONS.WEB_INTERFACE_PORT.getDefaultValue());
+        if (settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.get() == null)
+            settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.set(false);
+    }
+
+    /** Clamps a Float setting value into [min, max]; null, NaN and Infinite fall back to {@code fallback}. */
+    private static float clampFloat(@Nullable Float value, float min, float max, float fallback) {
+        if (value == null || value.isNaN() || value.isInfinite()) return fallback;
+        return Math.max(min, Math.min(max, value));
     }
 
     /** Clamps a Long setting value into [min, max]; null falls back to min. */

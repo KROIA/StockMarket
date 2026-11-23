@@ -3,27 +3,49 @@ package net.kroia.stockmarket.testing.tests;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.villagertrading.MoneyPayment;
 import net.kroia.stockmarket.villagertrading.VillagerTradePriceTable;
 import net.kroia.stockmarket.villagertrading.VillagerTradeRewriter;
 import net.kroia.stockmarket.villagertrading.VillagerTradeData;
+import net.kroia.stockmarket.villagertrading.VillagerTradeManager;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.village.ReputationEventType;
+import net.minecraft.world.entity.npc.Villager; // mc<=1.21.10
+//import net.minecraft.world.entity.npc.villager.Villager; // mc>=1.21.11
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.trading.ItemCost;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.function.ToLongFunction;
 
 /**
@@ -33,6 +55,9 @@ import java.util.function.ToLongFunction;
  * {@link VillagerTradeRewriter#classify},
  * {@link VillagerTradeRewriter#tableLookup}) using synthetic
  * {@link MerchantOffers} and price tables — no live villager entity needed.
+ * The T-243 tests cover preset prices and check that a converted villager
+ * trade leaves a (scratch) market untouched. The SM-284 test goes through a
+ * real villager entity, the interaction handler and the {@code VillagerMixin}.
  */
 public class VillagerTradeRewriteTestSuite extends TestSuite {
 
@@ -62,6 +87,28 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         addTest("item_cost_accepts_plain_currency", this::test_item_cost_accepts_plain_currency);
         addTest("clamp_warns_once_per_offer", this::test_clamp_warns_once_per_offer);
         addTest("table_lookup_resolves_item_ids", this::test_table_lookup_resolves_item_ids);
+        addTest("emerald_replace_off_unchanged", this::test_emerald_replace_off_unchanged);
+        addTest("emerald_replace_converts_unlisted", this::test_emerald_replace_converts_unlisted);
+        addTest("emerald_replace_no_emerald_market_unchanged", this::test_emerald_replace_no_emerald_market_unchanged);
+        addTest("emerald_replace_listed_item_uses_market", this::test_emerald_replace_listed_item_uses_market);
+        addTest("emerald_replace_toggle_off_restores", this::test_emerald_replace_toggle_off_restores);
+        addTest("preset_prices_price_unlisted_item", this::test_preset_prices_price_unlisted_item);
+        addTest("preset_prices_missing_preset_uses_emerald_price", this::test_preset_prices_missing_preset_uses_emerald_price);
+        addTest("cap_discounts_no_discount_flag", this::test_cap_discounts_no_discount_flag);
+        addTest("converted_trade_no_market_impact", this::test_converted_trade_no_market_impact);
+        addTest("real_villager_interaction_path", this::test_real_villager_interaction_path);
+    }
+
+    /** Master backend for the market-impact test (static injection, see DevBootstrap). */
+    private static StockMarketModBackend.ServerInstances backend;
+
+    /**
+     * Injects the master server instances.
+     *
+     * @param b the master's server instances
+     */
+    public static void setBackend(StockMarketModBackend.ServerInstances b) {
+        backend = b;
     }
 
     // ========================================================================
@@ -75,11 +122,28 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private static VillagerTradePriceTable table(long version, boolean enabled, ItemStack currency,
                                                  Map<Short, Long> prices) {
         return new VillagerTradePriceTable(version, enabled, currency,
-                BUY_MARGIN, SELL_MARGIN, prices);
+                BUY_MARGIN, SELL_MARGIN, false, prices, false, Map.of());
     }
 
     private static VillagerTradePriceTable moneyTable(long version) {
         return table(version, true, moneyCurrency(), Map.of());
+    }
+
+    /** Enabled money table with the given REPLACE_EMERALDS_FOR_UNLISTED flag. */
+    private static VillagerTradePriceTable emeraldReplaceTable(long version, boolean replace) {
+        return new VillagerTradePriceTable(version, true, moneyCurrency(),
+                BUY_MARGIN, SELL_MARGIN, replace, Map.of(), false, Map.of());
+    }
+
+    /** Enabled money table with emerald replacement and preset prices on, using the given preset map. */
+    private static VillagerTradePriceTable presetTable(long version, Map<Short, Long> presetPrices) {
+        return new VillagerTradePriceTable(version, true, moneyCurrency(),
+                BUY_MARGIN, SELL_MARGIN, true, Map.of(), true, presetPrices);
+    }
+
+    /** Emerald market only (100 raw per emerald) — iron and coal are unlisted. */
+    private static ToLongFunction<ItemStack> emeraldOnlyLookup() {
+        return stack -> stack.is(Items.EMERALD) ? 100L : 0L;
     }
 
     /** Villager sells: 5 emeralds → 1 iron ingot. */
@@ -596,5 +660,551 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         if (!r.passed()) return r;
 
         return pass("tableLookup resolves ItemIDs and falls back to 0 for unknown items");
+    }
+
+    // ========================================================================
+    // REPLACE_EMERALDS_FOR_UNLISTED
+    // ========================================================================
+
+    /** Option off: an emerald market alone must not convert unlisted offers. */
+    private TestResult test_emerald_replace_off_unchanged() {
+        MerchantOffers offers = new MerchantOffers();
+        MerchantOffer vanilla = sellIronOffer();
+        offers.add(vanilla);
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, emeraldReplaceTable(1L, false), emeraldOnlyLookup(), null);
+
+        TestResult r = assertFalse("Nothing rewritten with the option off", changed);
+        if (!r.passed()) return r;
+        r = assertTrue("Live offer instance untouched", offers.get(0) == vanilla);
+        if (!r.passed()) return r;
+
+        return pass("Option off keeps unlisted offers in emerald form");
+    }
+
+    /** Option on + emerald market: unlisted offers convert without margins (T-243). */
+    private TestResult test_emerald_replace_converts_unlisted() {
+        MerchantOffers offers = new MerchantOffers();
+        offers.add(sellIronOffer());
+        offers.add(buyCoalOffer());
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, emeraldReplaceTable(1L, true), emeraldOnlyLookup(), null);
+
+        TestResult r = assertTrue("Unlisted offers must be converted", changed);
+        if (!r.passed()) return r;
+        MerchantOffer sell = offers.get(0);
+        r = assertTrue("Sell cost is currency", isMoney(sell.getBaseCostA()));
+        if (!r.passed()) return r;
+        // 5 emeralds × 100 raw = 500 raw, no sell margin
+        r = assertEquals("Sell cost = emeralds × emerald price, no margin (500 raw)",
+                500L, rawValue(sell.getBaseCostA(), sell.getCostB()));
+        if (!r.passed()) return r;
+        r = assertEquals("Converted sell offer keeps its priceMultiplier (discounts capped later)",
+                0.05f, sell.getPriceMultiplier());
+        if (!r.passed()) return r;
+
+        MerchantOffer buy = offers.get(1);
+        r = assertTrue("Buy result is currency", isMoney(buy.getResult()));
+        if (!r.passed()) return r;
+        // 1 emerald × 100 raw = 100 raw, no buy margin
+        r = assertEquals("Payout = emeralds × emerald price, no margin (100 raw)",
+                100L, rawValue(buy.getResult()));
+        if (!r.passed()) return r;
+        r = assertEquals("Converted buy offer keeps its priceMultiplier", 0.05f, buy.getPriceMultiplier());
+        if (!r.passed()) return r;
+        r = assertTrue("Converted offers are tracked as rewritten",
+                entry.get(0).isRewritten() && entry.get(1).isRewritten());
+        if (!r.passed()) return r;
+
+        return pass("Unlisted offers converted via the emerald market without margins");
+    }
+
+    /** Option on but no emerald market: unlisted offers stay emerald. */
+    private TestResult test_emerald_replace_no_emerald_market_unchanged() {
+        MerchantOffers offers = new MerchantOffers();
+        MerchantOffer vanilla = sellIronOffer();
+        offers.add(vanilla);
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, emeraldReplaceTable(1L, true), stack -> 0L, null);
+
+        TestResult r = assertFalse("Nothing rewritten without an emerald market", changed);
+        if (!r.passed()) return r;
+        r = assertTrue("Live offer instance untouched", offers.get(0) == vanilla);
+        if (!r.passed()) return r;
+
+        return pass("No emerald market keeps unlisted offers in emerald form");
+    }
+
+    /** Option on: a listed item is still priced from its own market (market wins). */
+    private TestResult test_emerald_replace_listed_item_uses_market() {
+        MerchantOffers offers = new MerchantOffers();
+        offers.add(sellIronOffer());
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+        ToLongFunction<ItemStack> ironAndEmerald = stack -> stack.is(Items.IRON_INGOT) ? 200L
+                : stack.is(Items.EMERALD) ? 100L : 0L;
+
+        VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(1L, true), ironAndEmerald, null);
+
+        // iron 200 raw × 1.2 = 240 raw (the emerald path would give 500 raw)
+        TestResult r = assertEquals("Listed item priced from its own market (240 raw)",
+                240L, rawValue(offers.get(0).getBaseCostA(), offers.get(0).getCostB()));
+        if (!r.passed()) return r;
+
+        return pass("Market price of the traded item wins over the emerald conversion");
+    }
+
+    /** Converted offers are restored when the option is turned off, and via restoreAll. */
+    private TestResult test_emerald_replace_toggle_off_restores() {
+        MerchantOffers offers = new MerchantOffers();
+        offers.add(sellIronOffer());
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(1L, true), emeraldOnlyLookup(), null);
+        offers.get(0).increaseUses();
+
+        // v2: option switched off → offer returns to the emerald original.
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, emeraldReplaceTable(2L, false), emeraldOnlyLookup(), null);
+        TestResult r = assertTrue("Turning the option off must change the offer", changed);
+        if (!r.passed()) return r;
+        r = assertTrue("Offer restored to emerald cost", offers.get(0).getBaseCostA().is(Items.EMERALD));
+        if (!r.passed()) return r;
+        r = assertEquals("Original emerald count restored", 5, offers.get(0).getBaseCostA().getCount());
+        if (!r.passed()) return r;
+        r = assertEquals("Live uses carried through the restore", 1, offers.get(0).getUses());
+        if (!r.passed()) return r;
+
+        // v3: option on again → converts; then the full restore (feature disabled) path.
+        VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(3L, true), emeraldOnlyLookup(), null);
+        r = assertTrue("Re-enabled option converts again", isMoney(offers.get(0).getBaseCostA()));
+        if (!r.passed()) return r;
+        VillagerTradeRewriter.restoreAll(offers, entry);
+        r = assertTrue("restoreAll returns the converted offer to emeralds",
+                offers.get(0).getBaseCostA().is(Items.EMERALD));
+        if (!r.passed()) return r;
+        r = assertEquals("Original priceMultiplier restored", 0.05f, offers.get(0).getPriceMultiplier());
+        if (!r.passed()) return r;
+
+        return pass("Emerald-converted offers restore on option-off and on full restore");
+    }
+
+    // ========================================================================
+    // USE_PRESET_PRICES_FOR_VILLAGERS (T-243)
+    // ========================================================================
+
+    /**
+     * Preset prices on: an unlisted item is priced from its rounded preset price,
+     * even though an emerald market exists and the item has no market.
+     */
+    private TestResult test_preset_prices_price_unlisted_item() {
+        ItemID ironID = ItemID.getOrRegisterFromItemStackServerSide_direct(new ItemStack(Items.IRON_INGOT));
+        TestResult r = assertTrue("Iron ItemID must be registered", ironID.isValid());
+        if (!r.passed()) return r;
+        Map<Short, Long> presets = new HashMap<>();
+        presets.put(ironID.getShort(), 257L); // preset 2.57 → rounded 2.60
+
+        MerchantOffers offers = new MerchantOffers();
+        offers.add(sellIronOffer()); // 5 emeralds → 1 iron
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, presetTable(1L, presets), emeraldOnlyLookup(), null);
+
+        r = assertTrue("Unlisted iron offer must be converted", changed);
+        if (!r.passed()) return r;
+        MerchantOffer sell = offers.get(0);
+        r = assertTrue("Sell cost is currency", isMoney(sell.getBaseCostA()));
+        if (!r.passed()) return r;
+        // 1 iron × rounded preset 260 raw; the emerald path would give 500 raw
+        r = assertEquals("Sell cost = rounded preset price, no margin (260 raw)",
+                260L, rawValue(sell.getBaseCostA(), sell.getCostB()));
+        if (!r.passed()) return r;
+
+        return pass("Preset prices price unlisted items instead of the emerald price");
+    }
+
+    /**
+     * Preset prices on (SM-308): an item without a preset price falls back to the
+     * rounded emerald price and is flagged no-discount; without an emerald market
+     * it stays in emeralds.
+     */
+    private TestResult test_preset_prices_missing_preset_uses_emerald_price() {
+        MerchantOffers offers = new MerchantOffers();
+        offers.add(sellIronOffer());
+        offers.add(buyCoalOffer());
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        // Empty preset map: neither iron nor coal has a preset price.
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, presetTable(1L, Map.of()), emeraldOnlyLookup(), null);
+
+        TestResult r = assertTrue("Offers without a preset price must be converted", changed);
+        if (!r.passed()) return r;
+        MerchantOffer sell = offers.get(0);
+        r = assertTrue("Sell cost is currency", isMoney(sell.getBaseCostA()));
+        if (!r.passed()) return r;
+        // 5 emeralds × 100 raw = 500 raw, no margin
+        r = assertEquals("Sell cost = emeralds × emerald price (500 raw)",
+                500L, rawValue(sell.getBaseCostA(), sell.getCostB()));
+        if (!r.passed()) return r;
+        MerchantOffer buy = offers.get(1);
+        r = assertTrue("Buy result is currency", isMoney(buy.getResult()));
+        if (!r.passed()) return r;
+        r = assertEquals("Payout = emeralds × emerald price (100 raw)", 100L, rawValue(buy.getResult()));
+        if (!r.passed()) return r;
+        r = assertTrue("Fallback offers are flagged no-discount",
+                entry.get(0).isNoDiscount() && entry.get(1).isNoDiscount());
+        if (!r.passed()) return r;
+
+        // Same offers with preset prices off: converted too, but not flagged.
+        VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(2L, true), emeraldOnlyLookup(), null);
+        r = assertTrue("Preset prices off: no no-discount flag",
+                !entry.get(0).isNoDiscount() && !entry.get(1).isNoDiscount());
+        if (!r.passed()) return r;
+
+        // No emerald market: the offers stay in emeralds.
+        MerchantOffers emeraldOffers = new MerchantOffers();
+        MerchantOffer vanilla = sellIronOffer();
+        emeraldOffers.add(vanilla);
+        VillagerTradeData.VillagerEntry emeraldEntry = new VillagerTradeData.VillagerEntry();
+        changed = VillagerTradeRewriter.processOffers(
+                emeraldOffers, emeraldEntry, presetTable(1L, Map.of()), stack -> 0L, null);
+        r = assertFalse("Nothing converted without an emerald market", changed);
+        if (!r.passed()) return r;
+        r = assertTrue("Offer untouched (emerald)", emeraldOffers.get(0) == vanilla);
+        if (!r.passed()) return r;
+
+        return pass("Items without a preset price use the emerald price with no discount");
+    }
+
+    /**
+     * capDiscounts (SM-308): a no-discount offer loses every discount but keeps a
+     * price increase; a normal rewritten offer is still capped at 20%; an offer
+     * in emerald form keeps its vanilla discount.
+     */
+    private TestResult test_cap_discounts_no_discount_flag() {
+        MerchantOffers offers = new MerchantOffers();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+        for (int i = 0; i < 4; i++) {
+            // 10 money → 1 iron, demand 0: the 20% cap is 2 items.
+            offers.add(new MerchantOffer(new ItemCost(moneyCurrency().getItem(), 10), Optional.empty(),
+                    new ItemStack(Items.IRON_INGOT), 0, 16, 2, 0.05f, 0));
+            entry.append(new VillagerTradeData.OriginalOffer(sellIronOffer(), i != 3));
+        }
+        entry.get(0).setNoDiscount(true);
+        entry.get(1).setNoDiscount(true);
+        offers.get(0).setSpecialPriceDiff(-5); // flagged, discounted
+        offers.get(1).setSpecialPriceDiff(3);  // flagged, bad reputation
+        offers.get(2).setSpecialPriceDiff(-5); // not flagged
+        offers.get(3).setSpecialPriceDiff(-5); // emerald form (not rewritten)
+
+        VillagerTradeRewriter.capDiscounts(offers, entry);
+
+        TestResult r = assertEquals("Flagged offer has no discount", 0, offers.get(0).getSpecialPriceDiff());
+        if (!r.passed()) return r;
+        r = assertEquals("Flagged offer keeps a price increase", 3, offers.get(1).getSpecialPriceDiff());
+        if (!r.passed()) return r;
+        r = assertEquals("Unflagged offer capped at 20% (2 of 10)", -2, offers.get(2).getSpecialPriceDiff());
+        if (!r.passed()) return r;
+        r = assertEquals("Emerald-form offer keeps its vanilla discount", -5, offers.get(3).getSpecialPriceDiff());
+        if (!r.passed()) return r;
+
+        return pass("No-discount offers lose every discount, others are capped at 20%");
+    }
+
+    /**
+     * Villagers have no market impact: converting offers and paying a converted
+     * offer must not place orders, change the net player flow or move the price
+     * of the market used as reference (a scratch market stands in for the
+     * emerald market).
+     */
+    private TestResult test_converted_trade_no_market_impact() {
+        if (backend == null) {
+            return fail("VillagerTradeRewriteTestSuite requires the master backend");
+        }
+        TestFixture fixture = new TestFixture("VillagerTradeRewrite");
+        fixture.setBackend(backend);
+        try {
+            IServerMarket market = fixture.createMarket("emerald_standin");
+            long priceBefore = market.getCurrentMarketPrice();
+            long flowBefore = market.getNetPlayerItemFlow();
+            int ordersBefore = market.getLimitOrders().size();
+            TestResult r = assertTrue("Scratch market has a price", priceBefore > 0);
+            if (!r.passed()) return r;
+
+            ToLongFunction<ItemStack> lookup = stack -> stack.is(Items.EMERALD) ? market.getCurrentMarketPrice() : 0L;
+            MerchantOffers offers = new MerchantOffers();
+            offers.add(sellIronOffer());
+            offers.add(buyCoalOffer());
+            VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+            VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(1L, true), lookup, null);
+
+            // Pay the converted sell offer the way the trade menu does.
+            MerchantOffer sell = offers.get(0);
+            r = assertTrue("Sell offer converted to money", isMoney(sell.getBaseCostA()));
+            if (!r.passed()) return r;
+            ItemStack payment = sell.getCostA().copy();
+            r = assertTrue("Payment satisfies the offer", MoneyPayment.satisfied(sell, payment, ItemStack.EMPTY));
+            if (!r.passed()) return r;
+            MoneyPayment.consume(sell, payment, ItemStack.EMPTY);
+
+            r = assertEquals("No orders placed", ordersBefore, market.getLimitOrders().size());
+            if (!r.passed()) return r;
+            r = assertEquals("Net player flow unchanged", flowBefore, market.getNetPlayerItemFlow());
+            if (!r.passed()) return r;
+            r = assertEquals("Market price unchanged", priceBefore, market.getCurrentMarketPrice());
+            if (!r.passed()) return r;
+
+            return pass("Converted villager trades leave the market untouched");
+        } finally {
+            fixture.cleanup();
+        }
+    }
+
+    // ========================================================================
+    // SM-284: the real interaction path (master cells with a player online)
+    // ========================================================================
+
+    /** Emerald price the SM-284 test puts into the table; its 2-digit reference price is 1200 raw. */
+    private static final long SM284_EMERALD_RAW = 1234L;
+    /** Unlisted, preset-free candidates for the offer that has no preset price. */
+    private static final Item[] SM284_PLAIN_ITEMS = {Items.BELL, Items.SPYGLASS, Items.LODESTONE, Items.RECOVERY_COMPASS};
+
+    /**
+     * SM-284: a real villager with emerald offers goes through {@link VillagerTradeRewriter#onInteractEntity}
+     * (the interaction handler) and {@code Villager.mobInteract} (vanilla's {@code updateSpecialPrices} plus the
+     * {@code VillagerMixin} cap). The table is recomputed from the real settings; only the emerald price is set to
+     * {@link #SM284_EMERALD_RAW} so the rounding is known. Checks:
+     * <ul>
+     *   <li>converted offers cost 5 emeralds × the rounded reference price (1200 raw);</li>
+     *   <li>with a cured-zombie reputation and Hero of the Village V, no converted offer is discounted by more
+     *       than {@link VillagerTradeRewriter#MAX_DISCOUNT_PERCENT}%, while a non-emerald (passthrough) offer
+     *       keeps its bigger vanilla discount;</li>
+     *   <li>USE_PRESET_PRICES_FOR_VILLAGERS on: an item with a preset (and no market) costs its rounded preset
+     *       price; an item without a preset keeps the emerald price and gets no discount (SM-308); off again:
+     *       both are back at the emerald price.</li>
+     * </ul>
+     * The villager is never added to the world. Settings, table, sidecar entry and the player's Hero effect are
+     * restored; vanilla counts each mobInteract in the player's "talked to villager" statistic.
+     */
+    private TestResult test_real_villager_interaction_path() {
+        if (backend == null || backend.VILLAGER_TRADE_MANAGER == null || backend.SERVER_SETTINGS == null
+                || backend.MARKET_MANAGER == null || backend.MARKET_MANAGER.getSync() == null) {
+            return skip("master only");
+        }
+        MinecraftServer server = getServer();
+        if (server == null || server.getPlayerList().getPlayers().isEmpty()) {
+            return skip("no player online");
+        }
+        ServerPlayer player = server.getPlayerList().getPlayers().get(0);
+        if (player.isSecondaryUseActive() || player.getMainHandItem().is(Items.VILLAGER_SPAWN_EGG)
+                || player.containerMenu != player.inventoryMenu) {
+            return skip("the player sneaks, holds a villager spawn egg or has a menu open");
+        }
+        ItemID emeraldID = ItemIDManager.getItemID(new ItemStack(Items.EMERALD));
+        if (!emeraldID.isValid()) {
+            return skip("emerald has no ItemID in this world");
+        }
+
+        VillagerTradeManager manager = backend.VILLAGER_TRADE_MANAGER;
+        StockMarketModSettings.VillagerTrading settings = backend.SERVER_SETTINGS.VILLAGER_TRADING;
+        VillagerTradePriceTable oldTable = manager.getTable();
+        boolean oldEnabled = settings.ENABLED.get();
+        boolean oldReplace = settings.REPLACE_EMERALDS_FOR_UNLISTED.get();
+        boolean oldPreset = settings.USE_PRESET_PRICES_FOR_VILLAGERS.get();
+        MobEffectInstance oldHero = player.getEffect(MobEffects.HERO_OF_THE_VILLAGE);
+        Villager villager = EntityType.VILLAGER.create(player.level()); // mc<=1.21.1
+        //Villager villager = EntityType.VILLAGER.create(player.level(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // mc>=1.21.2 mc<=26.1
+        //Villager villager = net.minecraft.world.entity.EntityTypes.VILLAGER.create(player.level(), net.minecraft.world.entity.EntitySpawnReason.LOAD); // mc>=26.2
+        if (villager == null) {
+            return fail("could not create a villager");
+        }
+        VillagerTradeData savedData = manager.getSavedData(server);
+        long[] version = {System.currentTimeMillis()};
+        try {
+            settings.ENABLED.set(true);
+            settings.REPLACE_EMERALDS_FOR_UNLISTED.set(true);
+
+            // Find the preset item first (preset prices on), then work with them off.
+            settings.USE_PRESET_PRICES_FOR_VILLAGERS.set(true);
+            VillagerTradePriceTable presetTable = recomputeWithEmerald(manager, emeraldID, version);
+            if (!presetTable.enabled()) {
+                return skip("villager trading stays disabled (no currency configured)");
+            }
+            if (!(presetTable.currency().getItem() instanceof MoneyItem)) {
+                return skip("the currency is not a BankSystem money item");
+            }
+            TestResult r = assertTrue("USE_PRESET_PRICES_FOR_VILLAGERS on reaches the table", presetTable.usePresetPrices());
+            if (!r.passed()) return r;
+            ItemStack presetItem = findPresetItemWithoutMarket(presetTable);
+            ItemStack plainItem = findPlainItem(presetTable);
+            if (plainItem == null) {
+                return skip("every candidate item has a market or a preset");
+            }
+
+            MerchantOffers offers = villager.getOffers(); // no profession: empty, filled below
+            offers.add(new MerchantOffer(new ItemCost(Items.EMERALD, 5), Optional.empty(), plainItem.copy(), 0, 16, 2, 0.05f, 0));
+            offers.add(new MerchantOffer(new ItemCost(Items.WHEAT, 20), Optional.empty(), new ItemStack(Items.BREAD), 0, 16, 2, 0.05f, 0));
+            if (presetItem != null) {
+                offers.add(new MerchantOffer(new ItemCost(Items.EMERALD, 5), Optional.empty(), presetItem.copy(), 0, 16, 2, 0.05f, 0));
+            }
+            long emeraldPrice = 5 * VillagerTradeRewriter.roundReferencePriceRaw(SM284_EMERALD_RAW);
+
+            // 1) Preset prices off: converted at the rounded emerald price, discounts capped.
+            settings.USE_PRESET_PRICES_FOR_VILLAGERS.set(false);
+            r = assertFalse("USE_PRESET_PRICES_FOR_VILLAGERS off reaches the table",
+                    recomputeWithEmerald(manager, emeraldID, version).usePresetPrices());
+            if (!r.passed()) return r;
+            VillagerTradeRewriter.onInteractEntity(player, villager, InteractionHand.MAIN_HAND);
+            r = assertEquals("rounded reference price (5 × 1200 raw)", emeraldPrice, sellPrice(villager, 0));
+            if (!r.passed()) return r;
+            if (presetItem != null) {
+                r = assertEquals("preset item at the emerald price while preset prices are off", emeraldPrice, sellPrice(villager, 2));
+                if (!r.passed()) return r;
+            }
+            villager.onReputationEventFrom(ReputationEventType.ZOMBIE_VILLAGER_CURED, player);
+            player.addEffect(new MobEffectInstance(MobEffects.HERO_OF_THE_VILLAGE, 1200, 4));
+            r = withTradeMenu(villager, player, () -> {
+                TestResult c = assertCapped("plain offer", villager.getOffers().get(0));
+                if (!c.passed()) return c;
+                MerchantOffer control = villager.getOffers().get(1);
+                c = assertTrue("passthrough offer keeps its vanilla discount (> 20%), diff " + control.getSpecialPriceDiff(),
+                        -control.getSpecialPriceDiff() * 100 > control.getBaseCostA().getCount() * VillagerTradeRewriter.MAX_DISCOUNT_PERCENT);
+                if (!c.passed() || presetItem == null) return c;
+                return assertCapped("preset-item offer", villager.getOffers().get(2));
+            });
+            if (!r.passed()) return r;
+
+            // 2) Preset prices on: preset item at its preset price, the other one no discount.
+            settings.USE_PRESET_PRICES_FOR_VILLAGERS.set(true);
+            VillagerTradePriceTable onTable = recomputeWithEmerald(manager, emeraldID, version);
+            VillagerTradeRewriter.onInteractEntity(player, villager, InteractionHand.MAIN_HAND);
+            VillagerTradeData.VillagerEntry entry = savedData.getEntry(villager.getUUID());
+            r = assertNotNull("sidecar entry created by the interaction", entry);
+            if (!r.passed()) return r;
+            r = assertEquals("no-preset offer keeps the emerald price", emeraldPrice, sellPrice(villager, 0));
+            if (!r.passed()) return r;
+            r = assertTrue("no-preset offer flagged no-discount", entry.get(0).isNoDiscount());
+            if (!r.passed()) return r;
+            if (presetItem != null) {
+                long presetPrice = VillagerTradeRewriter.roundReferencePriceRaw(
+                        VillagerTradeRewriter.presetLookup(onTable).applyAsLong(presetItem));
+                r = assertEquals("preset item at its rounded preset price", presetPrice, sellPrice(villager, 2));
+                if (!r.passed()) return r;
+            }
+            r = withTradeMenu(villager, player, () -> {
+                TestResult c = assertEquals("no-preset offer gets no discount", 0, villager.getOffers().get(0).getSpecialPriceDiff());
+                if (!c.passed() || presetItem == null) return c;
+                return assertCapped("preset-item offer", villager.getOffers().get(2));
+            });
+            if (!r.passed()) return r;
+
+            // 3) Preset prices off again: back to the emerald price, no flag.
+            settings.USE_PRESET_PRICES_FOR_VILLAGERS.set(false);
+            recomputeWithEmerald(manager, emeraldID, version);
+            VillagerTradeRewriter.onInteractEntity(player, villager, InteractionHand.MAIN_HAND);
+            r = assertFalse("no-discount flag cleared", entry.get(0).isNoDiscount());
+            if (!r.passed()) return r;
+            if (presetItem != null) {
+                r = assertEquals("preset item back at the emerald price", emeraldPrice, sellPrice(villager, 2));
+                if (!r.passed()) return r;
+            }
+            return pass("real interaction path: rounded prices, 20% cap, preset toggle"
+                    + (presetItem == null ? "; no preset item without a market, preset price not checked" : ""));
+        } finally {
+            settings.ENABLED.set(oldEnabled);
+            settings.REPLACE_EMERALDS_FOR_UNLISTED.set(oldReplace);
+            settings.USE_PRESET_PRICES_FOR_VILLAGERS.set(oldPreset);
+            manager.applyTable(oldTable);
+            savedData.removeEntry(villager.getUUID());
+            player.removeEffect(MobEffects.HERO_OF_THE_VILLAGE);
+            if (oldHero != null) {
+                player.addEffect(new MobEffectInstance(oldHero));
+            }
+            if (player.containerMenu != player.inventoryMenu) {
+                player.closeContainer();
+            }
+        }
+    }
+
+    /**
+     * Recomputes the master table from the settings and applies it with the emerald price set to
+     * {@link #SM284_EMERALD_RAW} and a new version (so the next interaction reprices).
+     */
+    private static VillagerTradePriceTable recomputeWithEmerald(VillagerTradeManager manager, ItemID emeraldID, long[] version) {
+        manager.recomputeTable();
+        VillagerTradePriceTable t = manager.getTable();
+        Map<Short, Long> prices = new HashMap<>(t.pricesRawByItemIdShort());
+        prices.put(emeraldID.getShort(), SM284_EMERALD_RAW);
+        VillagerTradePriceTable applied = new VillagerTradePriceTable(++version[0], t.enabled(), t.currency(),
+                t.buyMargin(), t.sellMargin(), t.replaceEmeraldsForUnlisted(), prices,
+                t.usePresetPrices(), t.presetPricesRawByItemIdShort());
+        manager.applyTable(applied);
+        return applied;
+    }
+
+    /** @return a market preset's item that has a preset price but no market in {@code table}, or null */
+    private static @Nullable ItemStack findPresetItemWithoutMarket(VillagerTradePriceTable table) {
+        if (backend.PRESET_MANAGER == null) return null;
+        ToLongFunction<ItemStack> market = VillagerTradeRewriter.tableLookup(table);
+        ToLongFunction<ItemStack> preset = VillagerTradeRewriter.presetLookup(table);
+        for (MarketPresetCategory category : backend.PRESET_MANAGER.getCategories()) {
+            for (MarketPreset p : category.getPresets()) {
+                ItemStack stack = p.toItemStack();
+                if (!stack.isEmpty() && !stack.is(Items.EMERALD) && !(stack.getItem() instanceof MoneyItem)
+                        && preset.applyAsLong(stack) > 0 && market.applyAsLong(stack) <= 0) {
+                    return stack.copyWithCount(1);
+                }
+            }
+        }
+        return null;
+    }
+
+    /** @return a candidate item with neither a market nor a preset price in {@code table}, or null */
+    private static @Nullable ItemStack findPlainItem(VillagerTradePriceTable table) {
+        ToLongFunction<ItemStack> market = VillagerTradeRewriter.tableLookup(table);
+        ToLongFunction<ItemStack> preset = VillagerTradeRewriter.presetLookup(table);
+        for (Item item : SM284_PLAIN_ITEMS) {
+            ItemStack stack = new ItemStack(item);
+            if (market.applyAsLong(stack) <= 0 && preset.applyAsLong(stack) <= 0) return stack;
+        }
+        return null;
+    }
+
+    /** @return the raw money value of the live sell offer's costs */
+    private static long sellPrice(Villager villager, int index) {
+        MerchantOffer offer = villager.getOffers().get(index);
+        return isMoney(offer.getBaseCostA()) ? rawValue(offer.getBaseCostA(), offer.getCostB()) : -1L;
+    }
+
+    /** Asserts the offer's discount is at most {@link VillagerTradeRewriter#MAX_DISCOUNT_PERCENT}% of its cost. */
+    private TestResult assertCapped(String label, MerchantOffer offer) {
+        int base = offer.getBaseCostA().getCount();
+        int demandBonus = Math.max(0, Mth.floor((float) (base * offer.getDemand()) * offer.getPriceMultiplier()));
+        int discount = -offer.getSpecialPriceDiff();
+        return assertTrue(label + ": discount " + discount + " of " + (base + demandBonus) + " items is at most "
+                        + VillagerTradeRewriter.MAX_DISCOUNT_PERCENT + "%",
+                discount * 100 <= (base + demandBonus) * VillagerTradeRewriter.MAX_DISCOUNT_PERCENT);
+    }
+
+    /**
+     * Opens the villager's trade menu for {@code player} like a right click ({@code mobInteract}: vanilla's
+     * {@code updateSpecialPrices}, then the {@code VillagerMixin} cap), runs {@code check} while it is open (closing
+     * resets the discounts) and closes it again.
+     */
+    private TestResult withTradeMenu(Villager villager, ServerPlayer player, Supplier<TestResult> check) {
+        villager.mobInteract(player, InteractionHand.MAIN_HAND);
+        try {
+            TestResult r = assertTrue("the trade menu opened", villager.getTradingPlayer() == player);
+            return r.passed() ? check.get() : r;
+        } finally {
+            player.closeContainer();
+        }
     }
 }

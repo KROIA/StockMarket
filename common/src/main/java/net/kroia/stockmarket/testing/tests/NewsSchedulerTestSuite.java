@@ -3,23 +3,38 @@ package net.kroia.stockmarket.testing.tests;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
+import net.kroia.stockmarket.news.NewsEventDefinition;
+import net.kroia.stockmarket.stockmarket.market.preset.DefaultPresets;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin.RuntimeStreamData;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.TestMarket;
 import net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.TestNewsPlugin;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 
 import static net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.createTempDir;
 import static net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.deleteRecursively;
@@ -55,6 +70,11 @@ public class NewsSchedulerTestSuite extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         // Pre-scheduled queue (timeline)
         addTest("queue_refills_to_size_with_offsets_in_range", this::test_queue_refillsToSizeWithOffsetsInRange);
@@ -74,6 +94,9 @@ public class NewsSchedulerTestSuite extends TestSuite {
         // Runtime stream payload
         addTest("stream_payload_round_trip", this::test_streamPayload_roundTrip);
         addTest("provide_runtime_data_carries_timeline_and_state", this::test_provideRuntimeData_carriesTimelineAndState);
+
+        // SM-344: shipped defaults give about 4-8 news per real day across all markets
+        addTest("default_files_give_4_to_8_news_per_day", this::test_defaultFiles_give4To8NewsPerDay);
     }
 
     // ========================================================================
@@ -707,6 +730,103 @@ public class NewsSchedulerTestSuite extends TestSuite {
                     decoded.scheduler().minOverridden());
         } catch (IOException e) {
             return fail("temp dir failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    // ========================================================================
+    // SM-344: news rate with the shipped defaults
+    // ========================================================================
+
+    /** SM-344 rate band: news per real day across all markets (target about 6). */
+    static final double MIN_NEWS_PER_DAY = 4.0, MAX_NEWS_PER_DAY = 8.0;
+
+    /**
+     * SM-344: with the shipped files (default events + scheduler.json) and every default
+     * preset as a market, the long-run mean must stay inside 4-8 news per real day for
+     * several RNG seeds (30 simulated days each).
+     */
+    private TestResult test_defaultFiles_give4To8NewsPerDay() {
+        StringBuilder outside = new StringBuilder();
+        for (long seed = 1; seed <= 5; seed++) {
+            int[] perDay = simulateNewsPerDay(seed, 30, null, null, null);
+            double mean = Arrays.stream(perDay).average().orElse(0);
+            if (mean < MIN_NEWS_PER_DAY || mean > MAX_NEWS_PER_DAY) {
+                outside.append(" seed ").append(seed).append(": ").append(mean).append(" news/day");
+            }
+        }
+        return assertTrue("mean news per day outside " + MIN_NEWS_PER_DAY + "-" + MAX_NEWS_PER_DAY + ":" + outside,
+                outside.isEmpty());
+    }
+
+    /**
+     * Runs the real scheduler on the shipped default files (written into a temp news folder
+     * by a fresh library reload) with one market per plain-item default preset, and counts
+     * the published news per simulated real day. Event markets resolve through the
+     * production matchers (exact ids and globs; tags only where the item tags are bound,
+     * i.e. in-game). Requirements are not evaluated (no world registry): they only remove
+     * a few low-weight events from a pool that is never empty, so the rate barely moves.
+     *
+     * @param seed       plugin RNG seed
+     * @param days       simulated days
+     * @param minSeconds interval min override, or null for the file value
+     * @param maxSeconds interval max override, or null for the file value
+     * @param maxGlobal  global active cap override, or null for the file value
+     * @return published news per day
+     */
+    static int[] simulateNewsPerDay(long seed, int days, @Nullable Long minSeconds,
+                                    @Nullable Long maxSeconds,
+                                    @Nullable Integer maxGlobal) {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            TestNewsPlugin plugin = new TestNewsPlugin();
+            plugin.getLibrary().reload(dir); // empty folder -> writes and loads the shipped defaults
+            plugin.test_setLibraryLoaded(true);
+            plugin.test_setRandom(new Random(seed));
+
+            Set<ItemID> ids = new LinkedHashSet<>();
+            for (MarketPresetCategory category
+                    : DefaultPresets.generate(null)) {
+                for (MarketPreset preset : category.getPresets()) {
+                    Item item = BuiltInRegistries.ITEM
+                            .getOptional(ResourceLocation.tryParse(preset.getItemId())).orElse(null); // mc<=1.21.10
+                            //.getOptional(Identifier.tryParse(preset.getItemId())).orElse(null); // mc>=1.21.11
+                    if (item == null || item == Items.AIR) continue;
+                    ItemID id = ItemID.of(new ItemStack(item));
+                    if (id != null && id.isValid()) ids.add(id);
+                }
+            }
+            List<MarketInterface> markets = new ArrayList<>();
+            for (ItemID id : ids) markets.add(new MarketInterface(new TestMarket(id, 100), null));
+            // Production matcher resolution, fed into the stub maps of TestNewsPlugin.
+            for (var definition : plugin.getLibrary().getDefinitions().values()) {
+                plugin.resolutions.put(definition.getId(), definition.resolveMarkets(ids));
+                for (var sequence : definition.getSequences()) {
+                    for (var step : sequence.getSteps()) {
+                        if (step.getMarkets() != null) {
+                            plugin.stepResolutions.put(definition.getId() + "#" + step.getName(),
+                                    NewsEventDefinition.resolveMatchers(step.getMarkets(), ids));
+                        }
+                    }
+                }
+            }
+            if (minSeconds != null || maxSeconds != null || maxGlobal != null) {
+                String error = plugin.applySchedulerOverrides(minSeconds, maxSeconds, maxGlobal, null, false, markets);
+                if (error != null) throw new IllegalArgumentException(error);
+            }
+
+            final long stepMs = 60_000L, dayMs = 86_400_000L;
+            int[] perDay = new int[days];
+            for (int d = 0; d < days; d++) {
+                int before = plugin.published.size();
+                for (long t = 0; t < dayMs; t += stepMs) plugin.advanceTime(stepMs, markets);
+                perDay[d] = plugin.published.size() - before;
+            }
+            return perDay;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         } finally {
             deleteRecursively(dir);
         }

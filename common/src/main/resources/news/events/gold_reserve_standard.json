@@ -1,0 +1,34 @@
+{
+  "id": "gold_reserve_standard",
+  "picture": "gold_reserve_standard.png",
+  "headline": {
+    "en_us": "Trade council adopts the gold standard!",
+    "zh_cn": "贸易议会确立金本位！",
+    "de_de": "Handelsrat führt den Goldstandard ein!"
+  },
+  "text": {
+    "en_us": "The trade council has voted to back all inter-village trade with gold reserves. Demand for gold is expected to remain permanently elevated - a structural shift, not a passing rally.",
+    "zh_cn": "贸易议会已投票通过，以黄金储备为所有村庄间贸易提供支撑。黄金需求预计将永久性走高——这是结构性转变，而非一时涨势。",
+    "de_de": "Der Handelsrat hat beschlossen, den gesamten Handel zwischen den Dörfern mit Goldreserven zu decken. Die Goldnachfrage dürfte dauerhaft erhöht bleiben - ein struktureller Wandel, keine kurzfristige Rally."
+  },
+  "category": "politics",
+  "weight": 2,
+  "cooldownSeconds": 86400,
+  "impact": {
+    "type": "trend",
+    "peakFactor": 0.25,
+    "rampUpSeconds": 1500,
+    "durationSeconds": 3000,
+    "reversal": "none"
+  },
+  "markets": [
+    { "item": "minecraft:gold_ingot", "weightFactor": 1.0 }
+  ],
+  "requires": [
+    { "type": "notFired", "eventId": "gold_reserve_standard" }
+  ],
+  "records": { "era": "gold_standard" },
+  "chains": [
+    { "eventId": "gold_rush_rumor", "on": "step", "step": "hold", "chance": 0.5, "delaySeconds": { "min": 300, "max": 900 } }
+  ]
+}

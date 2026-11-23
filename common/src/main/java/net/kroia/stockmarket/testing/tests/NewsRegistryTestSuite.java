@@ -1,8 +1,8 @@
 package net.kroia.stockmarket.testing.tests;
 
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.news.NewsWorldRegistry;
 import net.kroia.stockmarket.news.NewsWorldRegistry.FireInfo;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
@@ -24,6 +24,11 @@ public class NewsRegistryTestSuite extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.NEWS_REGISTRY;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
