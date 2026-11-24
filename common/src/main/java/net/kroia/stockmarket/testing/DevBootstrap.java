@@ -31,6 +31,10 @@ public final class DevBootstrap {
         if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT) {
             TestRegistry.register(new TradeScreenGuiTestSuite());
             TestRegistry.register(new ScreenTradeClientScenarioSuite()); // SM-352: client part of the two-client trade scenario
+            TestRegistry.register(new DocsScreenshotSuite()); // SM-358: documentation screenshots (opt-in, --only)
+            TestRegistry.register(new DocsWorldShotsSuite()); // SM-361: in-world documentation shots (opt-in, --only)
+            TestRegistry.register(new DocsDiscordFeedSuite()); // SM-359: posts the Discord feed example of the docs (opt-in, --only)
+            TestRegistry.register(new DocsPluginShotSuite()); // SM-361: example plugin picture of the developer docs (opt-in, --only)
         }
     }
 

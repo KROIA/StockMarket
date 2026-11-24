@@ -451,10 +451,12 @@ public class ManagementScreen extends StockMarketGuiScreen {
         }
 
         private void loadMarketGrid() {
-            allMarketItems.clear();
-            marketGridView.removeChilds();
             getMarketManager().requestMarkets().thenAccept(markets -> {
                 Minecraft.getInstance().execute(() -> {
+                    // SM-362: clear here, not before the request. Several refreshes can be in
+                    // flight at once (one per ADDED broadcast plus CreateMarketTab's callback);
+                    // clearing up front let every answer append a full copy of the list.
+                    allMarketItems.clear();
                     List<ItemID> sorted = new ArrayList<>(markets);
                     sorted.sort(MARKET_TYPE_COMPARATOR);
                     for (ItemID id : sorted) {
@@ -470,10 +472,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
                             // selectable and deletable.
                             stack = createBrokenMarketPlaceholder(id);
                         }
-                        MarketItemView view = new MarketItemView(stack, id);
-                        allMarketItems.add(view);
-                        marketGridView.addChild(view);
+                        allMarketItems.add(new MarketItemView(stack, id));
                     }
+                    applySearchFilter(); // rebuilds the grid from allMarketItems
                     refreshMarketStates();
                 });
             });

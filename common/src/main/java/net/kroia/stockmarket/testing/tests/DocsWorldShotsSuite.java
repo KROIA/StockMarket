@@ -1,0 +1,777 @@
+package net.kroia.stockmarket.testing.tests;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
+import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
+import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
+import net.kroia.banksystem.minecraft.entity.custom.MoneyStockpileBlockEntity;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.gui.client.ClientCompat;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.minecraft.compat.StockMarketWebInterface;
+import net.kroia.stockmarket.minecraft.entity.custom.StockMarketDisplayBlockEntity;
+import net.kroia.stockmarket.screen.custom.DisplayChartScreen;
+import net.kroia.stockmarket.screen.TradeScreen;
+import net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.gui.Gui;
+import net.kroia.testkit.gui.Screenshots;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.CloudStatus;
+import net.minecraft.client.Options;
+import net.minecraft.client.gui.screens.inventory.MerchantScreen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.storage.LevelResource;
+import org.jetbrains.annotations.Nullable;
+import org.lwjgl.glfw.GLFW;
+
+import java.awt.Rectangle;
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.WebSocket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
+
+/**
+ * SM-361: the in-world and outside-the-game pictures of the documentation site (Docs/planning/images.md section 1,
+ * "StockMarket and shared"): the home corner, the terminal family, the Stock Market Displays, a news popup, a
+ * villager's trade screen, two admin alerts in the chat, two GIFs (programming Terminal Blocks, a market buy) and
+ * the web interface. Runs on the market world of {@link DocsScreenshotSuite} (its
+ * fixture is built here when this suite runs alone: {@code --only stockmarket/sm_docs_shots/DocsWorldShotsSuite}).
+ * <p>
+ * The scene is the user's home corner, {@code Docs/planning/structures/home-hero.nbt}, placed at its origin
+ * (6, -60, -13) of the cell's superflat world: display blocks store their main block by absolute coordinates. The
+ * file is taken from {@code -Dstockmarket.docs.structure} or found in a parent folder of the game dir (the mods
+ * workspace). The camera spots start from the table of images.md and are tuned on the pictures. The web picture needs Firefox
+ * ({@code -Dstockmarket.docs.firefox}, default its Windows install path); without it that shot is skipped.
+ */
+public class DocsWorldShotsSuite extends DocsScreenshotSuite {
+
+    private static final String STRUCTURE = "Docs/planning/structures/home-hero.nbt";
+    private static final String STRUCTURE_PROPERTY = "stockmarket.docs.structure";
+    private static final String FIREFOX_PROPERTY = "stockmarket.docs.firefox";
+    /** The news popup is shot with the HUD on (it is part of the HUD). */
+    private static final Screenshots.Scene HUD = new Screenshots.Scene(SCENE.windowWidth(), SCENE.windowHeight(), SCENE.guiScale(), SCENE.dayTime(), false);
+    /** News event started for the popup: copper, a market no other docs event touches. */
+    private static final String TOAST_NEWS = "copper_seam_discovery";
+
+    /**
+     * The main blocks of the Stock Market Displays and their charts: the 3x2 one diamond, the three 2x1 ones top to
+     * bottom. The 2x1 ones show markets no running news event moves: gold and iron (the builder's choice) end in the
+     * fixture events' jump, which squeezes the rest of their candles into a flat line.
+     */
+    private static final Map<BlockPos, Item> CHARTS = Map.of(
+            new BlockPos(22, -57, 5), Items.DIAMOND,
+            new BlockPos(18, -56, 5), Items.LAPIS_LAZULI,
+            new BlockPos(18, -57, 5), Items.REDSTONE,
+            new BlockPos(18, -58, 5), Items.EMERALD);
+
+    /** Whether the home corner is placed and filled; the corner shots skip without it. */
+    private static @Nullable String cornerProblem = "home corner not placed yet";
+
+    @Override
+    public void registerTests() {
+        addTest("fixture", this::test_fixture);
+        addTest("home_corner", this::test_homeCorner);
+        // camera spots of images.md, tuned on the pictures (2026-11-24). A narrow view from further back lets the corner
+        // fill the picture: with FOV 70 the displays and the terminal row only fit with most of the frame sky and floor.
+        addTest("home_hero", () -> withFov(40, () -> corner("shared/home-hero.png", SCENE, 27.0, -58.52, 1.0, 69.5f, -4, null)));
+        // the Stock Market Displays only: the Bank Displays further west (x 11-16) stay out of the picture
+        addTest("display_in_world", () -> withFov(30, () -> corner("stockmarket/display-in-world.png", SCENE, 23.99, -58.82, -2.37, 17, -1, this::stockMarketBlock)));
+        addTest("terminal_family", () -> corner("shared/terminal-family.png", SCENE, 11.5, -59, -2, 90, 14, this::terminalRow));
+        addTest("news_toast", () -> {
+            try {
+                // the top-right corner around the popup (320x64 pixels at the right edge)
+                return corner("stockmarket/news-toast.png", HUD, 11.5, -59, -2, 90, 14, this::newsToast,
+                        () -> new Rectangle(HUD.windowWidth() - 360, 0, 360, 100));
+            } finally {
+                Gui.onClient(() -> Minecraft.getInstance().gameRenderer.setRenderHand(true));
+            }
+        });
+        addTest("villager_trade", () -> {
+            try {
+                return corner("stockmarket/villager-trade.png", SCENE, 20.5, -59, -7.5, 0, 8, this::villagerTrade, DocsWorldShotsSuite::tradeWindow);
+            } finally {
+                Gui.onClient(() -> jeiOverlay(true));
+            }
+        });
+        addTest("alert_chat", () -> {
+            try {
+                return corner("shared/alert-chat.png", HUD, 11.5, -59, -2, 90, 14, this::alerts, () -> chatArea(ALERT_LINES));
+            } finally {
+                Gui.sendCommand("gamerule sendCommandFeedback true");
+            }
+        });
+        addTest("program_terminal", this::test_programTerminal);
+        addTest("trading_gif", this::test_tradingGif);
+        addTest("web_interface", this::test_webInterface);
+    }
+
+    // ---------------------------------------------------------------- home corner
+
+    /** Places the home corner, fills its displays and Money Stockpile and writes a week of Savings' balance history. */
+    private TestResult test_homeCorner() {
+        if (fixture == null) return skip(String.valueOf(fixtureProblem));
+        Path source = findStructure();
+        if (source == null) return skip(cornerProblem = "no " + STRUCTURE + " in a parent folder of the game dir (or -D" + STRUCTURE_PROPERTY + ")");
+        MinecraftServer server = Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer());
+        try {
+            Path target = server.getWorldPath(LevelResource.GENERATED_DIR).resolve("docs/structures/home-hero.nbt");
+            Files.createDirectories(target.getParent());
+            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            return fail(cornerProblem = "structure not copied: " + e);
+        }
+        // the cell's client renders 2 chunks; the corner and the sky behind it need more
+        Gui.onClient(() -> Minecraft.getInstance().options.renderDistance().set(8));
+        // placed and filled while the player is far away, so the client first loads the corner already filled: its
+        // displays keep the chart view (price range) they first got, the one of the builder's world
+        for (String command : List.of("gamemode creative", "gamerule sendCommandFeedback false", "gamerule doMobSpawning false",
+                "gamerule doDaylightCycle false", "gamerule doWeatherCycle false", "time set " + SCENE.dayTime(), "weather clear",
+                "tp @s 16 -59 -600", "forceload add 0 -16 31 15")) {
+            Gui.sendCommand(command);
+            Gui.waitTicks(2);
+        }
+        Gui.waitTicks(60);
+        Gui.sendCommand("place template docs:home-hero 6 -60 -13");
+        Gui.waitTicks(20);
+        Gui.sendCommand("kill @e[type=!minecraft:player,type=!minecraft:item_frame]"); // the flat world's animals, no mobs in the pictures
+
+        String problem = writeBalanceHistory();
+        if (problem == null) problem = await(server.submit(() -> fillCorner(server.overworld())), WAIT_MS);
+        Gui.sendCommand("tp @s 16 -59 -4");
+        Gui.waitTicks(5);
+        Gui.sendCommand("forceload remove 0 -16 31 15");
+        if (problem != null) return fail(cornerProblem = problem);
+        Gui.waitTicks(200); // chunks around the corner, display contents, chart data
+        problem = fitDisplayCharts();
+        if (problem != null) return fail(cornerProblem = problem);
+        cornerProblem = null;
+        return pass("placed from " + source);
+    }
+
+    /**
+     * Fits each Stock Market Display's chart to its newest candles the way a player does: opens its chart screen
+     * (what a right-click on the display opens), presses Space (vertical fit over the visible candles) and closes
+     * it, which stores the view in the block. The first fit of a fresh display can leave its candles in a thin band.
+     *
+     * @return null, or what is missing
+     */
+    private static @Nullable String fitDisplayCharts() {
+        for (BlockPos pos : CHARTS.keySet()) {
+            boolean opened = Gui.onClient(() -> {
+                if (!(Minecraft.getInstance().level.getBlockEntity(pos) instanceof StockMarketDisplayBlockEntity display)
+                        || display.getSelectedItemID() == null)
+                    return false;
+                CompoundTag view = display.getChart() instanceof DisplayCandlestickChart chart ? chart.getViewportState() : null;
+                ClientCompat.setScreen(new DisplayChartScreen(pos, display.getSelectedItemID(), display.getSecondItemID(), pos.asLong(), view));
+                return true;
+            });
+            if (!opened) return "no configured Stock Market Display at " + pos + " on the client";
+            Gui.waitForScreen(DisplayChartScreen.class, 40);
+            Gui.waitTicks(DATA_TICKS); // the candles arrive
+            Gui.key(GLFW.GLFW_KEY_SPACE);
+            Gui.waitTicks(5);
+            Gui.close();
+            Gui.waitTicks(5);
+        }
+        return null;
+    }
+
+    /** The structure file: the system property, else {@link #STRUCTURE} below a parent folder of the game dir. */
+    private static @Nullable Path findStructure() {
+        String property = System.getProperty(STRUCTURE_PROPERTY);
+        if (property != null) return Files.isRegularFile(Paths.get(property)) ? Paths.get(property) : null;
+        Path dir = Gui.onClient(() -> Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath());
+        for (Path p = dir; p != null; p = p.getParent())
+            if (Files.isRegularFile(p.resolve(STRUCTURE))) return p.resolve(STRUCTURE);
+        return null;
+    }
+
+    /**
+     * Server thread: points the displays at this world's markets and Savings, and refills the Money Stockpile (the
+     * structure stores the builder's world's item numbers). Positions: images.md "The home corner".
+     *
+     * @return null, or what is missing
+     */
+    private static @Nullable String fillCorner(ServerLevel level) {
+        if (!"stockmarket:stock_market_block".equals(BuiltInRegistries.BLOCK.getKey(level.getBlockState(new BlockPos(7, -59, -3)).getBlock()).toString()))
+            return "the home corner was not placed (no Stock Market Block at 7 -59 -3)";
+        for (Map.Entry<BlockPos, Item> chart : CHARTS.entrySet()) {
+            if (!(level.getBlockEntity(chart.getKey()) instanceof StockMarketDisplayBlockEntity display))
+                return "no Stock Market Display at " + chart.getKey();
+            display.setConfig(StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, fixture.market(chart.getValue()));
+            // the stored chart view fits the builder's prices, and a market change keeps it (SM-364): drop it
+            display.applyViewport(null);
+        }
+        // the main blocks of the 2x1 and the 2x2 Bank Display
+        for (BlockPos pos : List.of(new BlockPos(12, -57, 5), new BlockPos(15, -57, 5))) {
+            if (!(level.getBlockEntity(pos) instanceof BankSystemDisplayBlockEntity display))
+                return "no Bank Display at " + pos;
+            display.setConfig(BankSystemDisplayBlockEntity.DisplayType.BALANCE_HISTORY, fixture.account());
+        }
+        if (!(level.getBlockEntity(new BlockPos(12, -58, 5)) instanceof MoneyStockpileBlockEntity pile))
+            return "no Money Stockpile at 12 -58 5";
+        pile.getItems().clear();
+        List<ItemStack> money = BankSystemItems.getMoneyItems(); // coins first, then the notes by value
+        for (int i = 0; i < money.size(); i++)
+            pile.addItems(money.get(i).copyWithCount(i < 6 ? 1 : i < 12 ? 2 : 5));
+        return null;
+    }
+
+    /** A week of invented balance history of Savings (money, diamond, iron every two hours) for the Bank Displays. */
+    private @Nullable String writeBalanceHistory() {
+        var manager = BankSystemModBackend.getBalanceHistoryManager();
+        if (manager == null) return "no balance history manager";
+        long scale = await(BankSystemMod.getAPI().getServerBankManager().getAsync().getItemFractionScaleFactorAsync(), WAIT_MS);
+        long now = System.currentTimeMillis(), step = TimeUnit.HOURS.toMillis(2);
+        int points = 7 * 12;
+        Random random = new Random(7);
+        List<BalanceHistoryRecord> records = new ArrayList<>();
+        double cash = 8_200, diamonds = 40, iron = 96;
+        for (int i = 0; i <= points; i++) {
+            long time = now - (points - i) * step;
+            cash += (12_450 - 8_200) / (double) points + random.nextGaussian() * 90;
+            if (i % 9 == 0) diamonds += 3;
+            if (i % 14 == 0) iron -= 5;
+            records.add(new BalanceHistoryRecord(fixture.account(), fixture.money().getShort(), Math.round(cash) * scale, 0, time));
+            records.add(new BalanceHistoryRecord(fixture.account(), fixture.market(Items.DIAMOND).getShort(), Math.round(Math.min(diamonds, 64)) * scale, 0, time));
+            records.add(new BalanceHistoryRecord(fixture.account(), fixture.market(Items.IRON_INGOT).getShort(), Math.round(Math.max(iron, 64)) * scale, 0, time));
+        }
+        await(manager.save(records), 60_000);
+        return null;
+    }
+
+    // ---------------------------------------------------------------- corner shots
+
+    /**
+     * A shot from a camera spot of images.md: feet position, yaw, pitch. The player flies, so spots above the floor
+     * hold. {@code prepare} (may be null) sets the scene up after the teleport.
+     */
+    private TestResult corner(String file, Screenshots.Scene scene, double x, double y, double z, float yaw, float pitch,
+                              @Nullable Supplier<String> prepare) {
+        return corner(file, scene, x, y, z, yaw, pitch, prepare, null);
+    }
+
+    /** As above, the picture cut to {@code crop} (pixels) when not null. */
+    private TestResult corner(String file, Screenshots.Scene scene, double x, double y, double z, float yaw, float pitch,
+                              @Nullable Supplier<String> prepare, @Nullable Supplier<Rectangle> crop) {
+        if (cornerProblem != null) return skip(cornerProblem);
+        return shot(file, scene, () -> {
+            Gui.sendCommand(String.format(Locale.ROOT, "tp @s %.2f %.2f %.2f %.1f %.1f", x, y, z, yaw, pitch));
+            Gui.onClient(() -> {
+                var player = Minecraft.getInstance().player;
+                player.getAbilities().flying = true;
+                player.onUpdateAbilities();
+            });
+            Gui.waitTicks(40);
+            return prepare == null ? null : prepare.get();
+        }, crop);
+    }
+
+    /**
+     * Runs {@code shot} with a vertical field of view of {@code fov} degrees (30..110) and without FOV effects (flying
+     * widens it by 10 %), then restores both: a narrow view lets the corner fill the picture from further away.
+     */
+    private static TestResult withFov(int fov, Supplier<TestResult> shot) {
+        Options options = Gui.onClient(() -> Minecraft.getInstance().options);
+        int oldFov = Gui.onClient(() -> options.fov().get());
+        double oldEffects = Gui.onClient(() -> options.fovEffectScale().get());
+        Gui.onClient(() -> {
+            options.fov().set(fov);
+            options.fovEffectScale().set(0.0);
+        });
+        try {
+            return shot.get();
+        } finally {
+            Gui.onClient(() -> {
+                options.fov().set(oldFov);
+                options.fovEffectScale().set(oldEffects);
+            });
+        }
+    }
+
+    /** A Stock Market Block under the 3x2 display, so the display picture shows where the markets are traded. */
+    private @Nullable String stockMarketBlock() {
+        Gui.sendCommand("setblock 21 -59 5 stockmarket:stock_market_block[facing=north]");
+        Gui.waitTicks(20);
+        return null;
+    }
+
+    /** The open trade screen's window plus a small margin, in pixels (vanilla MerchantScreen: 276x166 GUI pixels, centred). */
+    private static Rectangle tradeWindow() {
+        return Gui.onClient(() -> {
+            Minecraft mc = Minecraft.getInstance();
+            int scale = (int) mc.getWindow().getGuiScale(), margin = 2;
+            int left = (mc.screen.width - 276) / 2 - margin, top = (mc.screen.height - 166) / 2 - margin;
+            return new Rectangle(left * scale, top * scale, (276 + 2 * margin) * scale, (166 + 2 * margin) * scale);
+        });
+    }
+
+    /** The Terminal Block and the ATM join the Stock Market Block and the Bank Terminal Block on the west wall. */
+    private @Nullable String terminalRow() {
+        Gui.sendCommand("setblock 7 -59 -4 banksystem:terminal_block[facing=east]");
+        Gui.sendCommand("setblock 7 -59 -1 banksystem:atm_block[facing=east]"); // in place of the Share Stamper
+        Gui.waitTicks(20);
+        return null;
+    }
+
+    /** News popups on, one news event published: its popup is in the top-right corner for five seconds. */
+    private @Nullable String newsToast() {
+        String problem = terminalRow();
+        if (problem != null) return problem;
+        Gui.onClient(() -> {
+            PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+            prefs.setNewsToastEnabled(true);
+            StockMarketGuiElement.updatePlayerPreferences(prefs);
+            Minecraft.getInstance().gameRenderer.setRenderHand(false); // HUD on, but no empty hand in front of the blocks
+        });
+        Gui.waitTicks(20);
+        Gui.sendCommand("stockmarket news trigger " + TOAST_NEWS);
+        Gui.waitTicks(5);
+        Gui.sendCommand("stockmarket news skipphase " + TOAST_NEWS); // published now: the popup shows
+        Gui.waitTicks(20);
+        Gui.onClient(() -> Minecraft.getInstance().gui.getChat().clearMessages(false));
+        return null;
+    }
+
+    /** A toolsmith whose trades are listed items, so they are priced in money; its trade screen opened. */
+    private @Nullable String villagerTrade() {
+        StockMarketModBackend.ServerInstances b = StockMarketModBackend.getServerInstances();
+        MinecraftServer server = Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer());
+        await(server.submit(() -> b.VILLAGER_TRADE_MANAGER.recomputeTable()), WAIT_MS); // the markets are newer than the price table
+        String offers = Stream.of(offer("coal", 15, "emerald", 1), offer("iron_ingot", 4, "emerald", 1),
+                offer("gold_ingot", 3, "emerald", 1), offer("diamond", 1, "emerald", 1),
+                offer("emerald", 1, "redstone", 4), offer("emerald", 1, "lapis_lazuli", 2)).reduce((a, c) -> a + "," + c).orElseThrow();
+        Gui.sendCommand("time set " + SCENE.dayTime()); // daylight behind the window, also after the evening shot of the full topic
+        Gui.sendCommand("kill @e[type=minecraft:villager]");
+        Gui.sendCommand("summon minecraft:villager 20.5 -59 -5.0 {NoAI:1b,Invulnerable:1b,PersistenceRequired:1b,Silent:1b,Rotation:[180f,0f],"
+                + "VillagerData:{profession:\"minecraft:toolsmith\",level:4,type:\"minecraft:plains\"},Offers:{Recipes:[" + offers + "]}}");
+        Gui.waitTicks(20);
+        boolean found = Gui.onClient(() -> {
+            Minecraft mc = Minecraft.getInstance();
+            var villager = mc.level.getEntitiesOfClass(Villager.class, mc.player.getBoundingBox().inflate(6)).stream()
+                    .min(Comparator.comparingDouble(v -> v.distanceTo(mc.player))).orElse(null);
+            if (villager != null) mc.gameMode.interact(mc.player, villager, InteractionHand.MAIN_HAND);
+            return villager != null;
+        });
+        if (!found) return "no villager next to the player";
+        Gui.waitForScreen(MerchantScreen.class, 100);
+        Gui.onClient(() -> jeiOverlay(false));
+        Gui.waitTicks(20);
+        return null;
+    }
+
+    /**
+     * Shows or hides JEI's item list and bookmarks beside container screens. JEI's API has no switch for them: this
+     * flips its internal toggles (the Ctrl+O key, kept in memory only) by reflection. Client thread.
+     */
+    private static void jeiOverlay(boolean on) {
+        try {
+            Object state = Class.forName("mezz.jei.common.Internal").getMethod("getClientToggleState").invoke(null);
+            Class<?> type = state.getClass();
+            if ((boolean) type.getMethod("isOverlayEnabled").invoke(state) != on)
+                type.getMethod("toggleOverlayEnabled").invoke(state);
+            if ((boolean) type.getMethod("isBookmarkOverlayEnabled").invoke(state) != on)
+                type.getMethod("toggleBookmarkEnabled").invoke(state);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            // ponytail: JEI internals; without JEI there is no list, after a JEI rename the list stays in the picture
+        }
+    }
+
+    // ---------------------------------------------------------------- alerts and GIFs
+
+    /**
+     * Low thresholds, then one BankSystem suspicion flag (Tavrik moves 1'500 $ from Savings into the new Farm Co-op
+     * account: "Transfer to a new account") and one StockMarket profit alert (a market sell of 10 diamonds), both in
+     * the chat of the player, who is admin of both mods. Command feedback stays off until the test restores it.
+     */
+    private @Nullable String alerts() {
+        var bankSettings = BankSystemModBackend.getInstances_forTesting().SERVER_SETTINGS.AUDIT;
+        var marketSettings = StockMarketModBackend.getServerInstances().SERVER_SETTINGS.MARKET;
+        IAsyncBankManager bank = BankSystemMod.getAPI().getServerBankManager().getAsync();
+        MinecraftServer server = Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer());
+        UUID self = fixture.self();
+        if (!Boolean.TRUE.equals(await(bank.setBanksystemAdminModeAsync(self, true), WAIT_MS))) return "BankSystem admin flag not set";
+        Integer coop = await(onServer(server, () -> bank.createBankAccountGetAccountNrAsync("Farm Co-op")), WAIT_MS);
+        if (coop == null || coop < 0) return "no Farm Co-op account: " + coop;
+        long scale = await(bank.getItemFractionScaleFactorAsync(), WAIT_MS);
+        // ponytail: the thresholds stay low for the rest of this throwaway cell
+        bankSettings.NEW_ACCOUNT_TRANSFER_AMOUNT.set(1_000L);
+        marketSettings.PROFIT_ALERT_THRESHOLD.set(1_000f);
+        Gui.sendCommand("gamerule sendCommandFeedback false");
+        Gui.waitTicks(10);
+        Gui.onClient(() -> Minecraft.getInstance().gui.getChat().clearMessages(false));
+        // as the /money send command does: a transfer tagged with the acting player
+        BankStatus status = await(server.submit(() -> {
+            var accounts = BankSystemMod.getAPI().getServerBankManager().getSync();
+            accounts.getBankAccount(coop).getOrCreateBank(fixture.money()); // the new account has no money bank yet
+            IServerBank savings = accounts.getBankAccount(fixture.account()).getBank(fixture.money());
+            return TransactionLedger.withActor(TransactionLedger.player(self), () -> TransactionLedger.tagged(LedgerType.TRANSFER, self, null,
+                    () -> savings.transfer(1_500L * scale, coop)));
+        }), WAIT_MS);
+        if (status != BankStatus.SUCCESS) return "transfer to Farm Co-op: " + status;
+        Gui.waitTicks(20);
+        ClientMarket diamond = Gui.onClient(() -> StockMarketModBackend.getClientInstances().MARKET_MANAGER.getMarket(fixture.market(Items.DIAMOND)));
+        String error = order(() -> diamond.createMarketSellOrder(fixture.account(), -10), "market sell");
+        if (error != null) return error;
+        Gui.waitTicks(40);
+        return null;
+    }
+
+    /** Chat lines of the two alerts (the BankSystem one has its account, amount and reason lines). */
+    private static final int ALERT_LINES = 7;
+
+    /**
+     * The bottom {@code lines} chat lines with their background, in pixels. Vanilla chat (closed): 9 GUI pixels a
+     * line, its bottom 40 above the screen's, the background as wide as the chat plus 12.
+     */
+    private static Rectangle chatArea(int lines) {
+        return Gui.onClient(() -> {
+            Minecraft mc = Minecraft.getInstance();
+            int scale = (int) mc.getWindow().getGuiScale(), margin = 2;
+            int bottom = mc.getWindow().getGuiScaledHeight() - 40 + margin, top = bottom - margin - lines * 9 - margin;
+            return new Rectangle(0, top * scale, (mc.gui.getChat().getWidth() + 12 + margin) * scale, (bottom - top) * scale);
+        });
+    }
+
+    /**
+     * The GIF of images.md: holding Banking Software, the player right-clicks the left of two Terminal Blocks on the
+     * counter (it becomes a Bank Terminal Block), switches to Trading Software, turns to the right one and right-clicks
+     * it (a Stock Market Block). Each Terminal Block stands below its software's item frame (z 3 and 2), HUD on.
+     */
+    private TestResult test_programTerminal() {
+        if (cornerProblem != null) return skip(cornerProblem);
+        Options options = Gui.onClient(() -> Minecraft.getInstance().options);
+        CloudStatus clouds = Gui.onClient(() -> options.cloudStatus().get());
+        float left = 81.9f, right = 98.1f; // from z 3.0 onto the centres of the blocks at z 3 and z 2
+        try {
+            Gui.close();
+            Gui.sendCommand("gamerule sendCommandFeedback false"); // no "Replaced a slot" lines in the chat
+            Gui.sendCommand("setblock 7 -58 3 banksystem:terminal_block[facing=east]");
+            Gui.sendCommand("setblock 7 -58 2 banksystem:terminal_block[facing=east]");
+            Gui.sendCommand("item replace entity @s weapon.mainhand with banksystem:banking_software");
+            Gui.sendCommand(String.format(Locale.ROOT, "tp @s 11.0 -59 3.0 %.1f 0", left));
+            Gui.onClient(() -> {
+                options.cloudStatus().set(CloudStatus.OFF); // moving clouds would change every frame
+                Minecraft.getInstance().gui.getChat().clearMessages(false);
+            });
+            Gui.waitTicks(40);
+            boolean[] used = new boolean[2];
+            Path gif = Screenshots.record("shared/program-terminal.gif", HUD, () -> {
+                Gui.waitTicks(15);
+                used[0] = Gui.useItem();
+                Gui.waitTicks(30);
+                Gui.sendCommand("item replace entity @s weapon.mainhand with stockmarket:trading_software");
+                Gui.waitTicks(20);
+                turn(right, 10);
+                Gui.waitTicks(10);
+                used[1] = Gui.useItem();
+                Gui.waitTicks(40);
+            });
+            String blocks = Gui.onClient(() -> {
+                var level = Minecraft.getInstance().level;
+                return BuiltInRegistries.BLOCK.getKey(level.getBlockState(new BlockPos(7, -58, 3)).getBlock()) + ", "
+                        + BuiltInRegistries.BLOCK.getKey(level.getBlockState(new BlockPos(7, -58, 2)).getBlock());
+            });
+            if (!used[0] || !used[1]) return fail("use item did nothing: " + used[0] + ", " + used[1] + "; blocks " + blocks);
+            if (!"banksystem:bank_terminal_block, stockmarket:stock_market_block".equals(blocks)) return fail("blocks after the GIF: " + blocks);
+            return pass(gif + ", " + Files.size(gif) / 1024 + " KB");
+        } catch (RuntimeException | IOException e) {
+            return fail("program-terminal.gif: " + e);
+        } finally {
+            Gui.onClient(() -> options.cloudStatus().set(clouds));
+            Gui.sendCommand("item replace entity @s weapon.mainhand with air");
+            Gui.sendCommand("gamerule sendCommandFeedback true");
+        }
+    }
+
+    /** Turns the camera to {@code yaw} in {@code ticks} ticks, eased, as a player moves the mouse. */
+    private static void turn(float yaw, int ticks) {
+        float from = Gui.onClient(() -> Minecraft.getInstance().player.getYRot());
+        for (int i = 1; i <= ticks; i++) {
+            float t = (float) i / ticks, to = from + (yaw - from) * t * t * (3 - 2 * t);
+            Gui.onClient(() -> Minecraft.getInstance().player.setYRot(to));
+            Gui.waitTicks(1);
+        }
+    }
+
+    /**
+     * The optional trading GIF of images.md: right-click the Stock Market Block of the west wall, pick diamond, a
+     * market buy of one, then the trade in My History. The pointer shows each click.
+     */
+    private TestResult test_tradingGif() {
+        if (cornerProblem != null) return skip(cornerProblem);
+        Options options = Gui.onClient(() -> Minecraft.getInstance().options);
+        CloudStatus clouds = Gui.onClient(() -> options.cloudStatus().get());
+        try {
+            Gui.close();
+            Gui.sendCommand("gamerule sendCommandFeedback false"); // no command lines in the chat
+            Gui.sendCommand("item replace entity @s weapon.mainhand with air");
+            Gui.sendCommand("tp @s 10.5 -59 -2.5 90 24"); // onto the Stock Market Block at 7 -59 -3
+            Gui.onClient(() -> {
+                options.cloudStatus().set(CloudStatus.OFF);
+                Minecraft.getInstance().gui.getChat().clearMessages(false);
+            });
+            Gui.waitTicks(40);
+            Path gif = Screenshots.record("stockmarket/trading-screen.gif", HUD, () -> {
+                Gui.waitTicks(10);
+                if (!Gui.useItem()) throw new IllegalStateException("the Stock Market Block did not open");
+                Gui.waitForScreen(TradeScreen.class, 100);
+                Gui.waitTicks(30);
+                Gui.click(itemView(Items.DIAMOND));
+                Gui.waitTicks(20);
+                click(n -> "+1".equals(n.text()), "+1 button", true);
+                Gui.waitTicks(10);
+                click(n -> "Buy".equals(n.text()), "Buy button", true);
+                Gui.waitTicks(20);
+                Gui.click("My History");
+                Gui.waitTicks(30);
+            });
+            return pass(gif + ", " + Files.size(gif) / 1024 + " KB");
+        } catch (RuntimeException | IOException e) {
+            return fail("trading-screen.gif: " + e);
+        } finally {
+            Gui.close();
+            Gui.onClient(() -> options.cloudStatus().set(clouds));
+            Gui.sendCommand("gamerule sendCommandFeedback true");
+        }
+    }
+
+    /** One vanilla trade in summon NBT: the villager takes {@code buy}, gives {@code sell}. */
+    private static String offer(String buy, int buyCount, String sell, int sellCount) {
+        return "{buy:{id:\"minecraft:" + buy + "\",count:" + buyCount + "},sell:{id:\"minecraft:" + sell + "\",count:" + sellCount
+                + "},maxUses:12,uses:0,xp:10,priceMultiplier:0.05f,rewardExp:1b}";
+    }
+
+    // ---------------------------------------------------------------- web interface
+
+    /** The web interface on a free port, diamond selected, shot by headless Firefox at 1920x1080. */
+    private TestResult test_webInterface() {
+        if (fixture == null) return skip(String.valueOf(fixtureProblem));
+        Path firefox = Paths.get(System.getProperty(FIREFOX_PROPERTY, "C:/Program Files/Mozilla Firefox/firefox.exe"));
+        if (!Files.isRegularFile(firefox)) return skip("no Firefox at " + firefox + " (-D" + FIREFOX_PROPERTY + ")");
+        StockMarketModBackend.ServerInstances b = StockMarketModBackend.getServerInstances();
+        StockMarketModSettings.Integrations settings = b.SERVER_SETTINGS.INTEGRATIONS;
+        boolean enabledBefore = Boolean.TRUE.equals(settings.WEB_INTERFACE_ENABLED.get());
+        int portBefore = settings.WEB_INTERFACE_PORT.get();
+        try {
+            writeRecentTrades(b);
+            int port = freePort();
+            settings.WEB_INTERFACE_ENABLED.set(true);
+            settings.WEB_INTERFACE_PORT.set(port);
+            StockMarketWebInterface.apply(b);
+            if (StockMarketWebInterface.getRunningPort() != port) return fail("web interface not running on " + port);
+            String selectDiamond = """
+                    new Promise(resolve => {
+                      const start = Date.now();
+                      const tick = () => {
+                        const li = document.querySelector('li[title="minecraft:diamond"]');
+                        if (li) { li.click(); resolve(true); }
+                        else if (Date.now() - start > 20000) resolve(false);
+                        else setTimeout(tick, 200);
+                      };
+                      tick();
+                    })""";
+            byte[] png = firefoxShot(firefox, "http://127.0.0.1:" + port + "/", selectDiamond, 5_000);
+            String root = System.getProperty(Screenshots.ROOT_PROPERTY);
+            Path base = root != null ? Paths.get(root)
+                    : Gui.onClient(() -> Minecraft.getInstance().gameDirectory.toPath()).resolve("screenshots").resolve("testkit");
+            Path file = base.resolve("stockmarket/web-interface.png").toAbsolutePath().normalize();
+            Files.createDirectories(file.getParent());
+            Files.write(file, png);
+            return pass(file.toString());
+        } catch (Exception e) {
+            return fail("web-interface.png: " + e);
+        } finally {
+            settings.WEB_INTERFACE_ENABLED.set(enabledBefore);
+            settings.WEB_INTERFACE_PORT.set(portBefore);
+            StockMarketWebInterface.apply(b);
+        }
+    }
+
+    /** Invented trades of the last half hour on diamond for the "recent trades" list (no player shows there). */
+    private void writeRecentTrades(StockMarketModBackend.ServerInstances b) {
+        ItemID diamond = fixture.market(Items.DIAMOND);
+        long price = await(await(b.MARKET_MANAGER.getAsync().getMarketAsync(diamond), WAIT_MS).getCurrentMarketPriceAsync(), WAIT_MS);
+        long now = System.currentTimeMillis();
+        Random random = new Random(11);
+        List<OrderRecordStruct> trades = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            long amount = (random.nextInt(16) + 1) * (random.nextBoolean() ? 1L : -1L);
+            long tradePrice = Math.round(price * (1 + random.nextGaussian() * 0.004));
+            UUID trader = UUID.nameUUIDFromBytes(("docs-trader-" + i % 3).getBytes()); // invented, never shown
+            trades.add(new OrderRecordStruct(diamond.getShort(), 0, trader, 0,
+                    net.kroia.stockmarket.stockmarket.marketmanager.MarketManager.convertToRawAmountStatic(amount), tradePrice,
+                    now - (12 - i) * 150_000L));
+        }
+        await(b.ORDER_RECORD_MANAGER.save(trades), WAIT_MS);
+    }
+
+    private static int freePort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
+        }
+    }
+
+    /**
+     * Opens {@code url} in headless Firefox at 1920x1080 over WebDriver BiDi, runs {@code script} (a JavaScript
+     * expression giving a promise of true), waits {@code settleMs} and returns the PNG. Only the Firefox started
+     * here (own profile, {@code --no-remote}) and its child processes are ended afterwards.
+     */
+    static byte[] firefoxShot(Path firefox, String url, String script, long settleMs) throws Exception {
+        int port = freePort();
+        Path profile = Files.createTempDirectory("sm-docs-firefox");
+        // US number and date format whatever the PC's region (the page formats with the browser's locale)
+        Files.writeString(profile.resolve("user.js"), String.join("\n",
+                "user_pref(\"intl.locale.requested\", \"en-US\");",
+                "user_pref(\"intl.accept_languages\", \"en-US, en\");",
+                "user_pref(\"intl.regional_prefs.use_os_locales\", false);",
+                "user_pref(\"javascript.use_us_english_locale\", true);", ""));
+        Process process = new ProcessBuilder(firefox.toString(), "--headless", "--no-remote", "--profile", profile.toString(),
+                "--remote-debugging-port", String.valueOf(port))
+                .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+        try (Bidi bidi = Bidi.connect(port)) {
+            bidi.call("session.new", json("capabilities", new JsonObject()));
+            String context = bidi.call("browsingContext.create", json("type", "tab")).get("context").getAsString();
+            bidi.call("browsingContext.setViewport", json("context", context, "viewport", json("width", 1920, "height", 1080)));
+            bidi.call("browsingContext.navigate", json("context", context, "url", url, "wait", "complete"));
+            JsonObject done = bidi.call("script.evaluate", json("expression", script, "target", json("context", context), "awaitPromise", true));
+            if (!"success".equals(done.get("type").getAsString()) || !done.getAsJsonObject("result").get("value").getAsBoolean())
+                throw new IllegalStateException("page script did not succeed: " + done);
+            Thread.sleep(settleMs);
+            String data = bidi.call("browsingContext.captureScreenshot", json("context", context)).get("data").getAsString();
+            bidi.call("session.end", new JsonObject());
+            return Base64.getDecoder().decode(data);
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroy);
+            process.destroy();
+            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
+                process.destroyForcibly();
+            }
+            try (Stream<Path> files = Files.walk(profile)) {
+                files.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+            } catch (IOException ignored) {
+                // a leftover temp profile is harmless
+            }
+        }
+    }
+
+    /** A JSON object from key/value pairs (String, Number, Boolean or JsonElement values). */
+    private static JsonObject json(Object... pairs) {
+        JsonObject o = new JsonObject();
+        for (int i = 0; i < pairs.length; i += 2) {
+            String key = (String) pairs[i];
+            Object value = pairs[i + 1];
+            if (value instanceof JsonElement e) o.add(key, e);
+            else if (value instanceof Number n) o.addProperty(key, n);
+            else if (value instanceof Boolean bool) o.addProperty(key, bool);
+            else o.addProperty(key, String.valueOf(value));
+        }
+        return o;
+    }
+
+    /** A minimal WebDriver BiDi connection: numbered commands, each answered by the message with its id. */
+    private static final class Bidi implements AutoCloseable, WebSocket.Listener {
+        private final Map<Integer, CompletableFuture<JsonObject>> pending = new ConcurrentHashMap<>();
+        private final AtomicInteger ids = new AtomicInteger();
+        private final StringBuilder message = new StringBuilder();
+        private WebSocket socket;
+
+        /** Connects to the browser started with {@code --remote-debugging-port port}, waiting up to 30 s for it. */
+        static Bidi connect(int port) throws Exception {
+            Bidi bidi = new Bidi();
+            HttpClient http = HttpClient.newHttpClient();
+            Exception last = null;
+            for (int i = 0; i < 60 && bidi.socket == null; i++) {
+                Thread.sleep(500);
+                try {
+                    bidi.socket = http.newWebSocketBuilder().buildAsync(URI.create("ws://127.0.0.1:" + port + "/session"), bidi).get(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    last = e; // the browser is not listening yet
+                }
+            }
+            if (bidi.socket == null) throw new IOException("no WebDriver BiDi on port " + port, last);
+            return bidi;
+        }
+
+        /** Sends a command and returns its result; throws on an error answer or after 60 s. */
+        JsonObject call(String method, JsonObject params) throws Exception {
+            int id = ids.incrementAndGet();
+            CompletableFuture<JsonObject> answer = new CompletableFuture<>();
+            pending.put(id, answer);
+            socket.sendText(json("id", id, "method", method, "params", params).toString(), true).get(10, TimeUnit.SECONDS);
+            JsonObject reply = answer.get(60, TimeUnit.SECONDS);
+            if (reply.has("error")) throw new IOException(method + ": " + reply.get("error") + " " + reply.get("message"));
+            return reply.getAsJsonObject("result");
+        }
+
+        @Override
+        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+            message.append(data);
+            if (last) {
+                JsonObject m = JsonParser.parseString(message.toString()).getAsJsonObject();
+                message.setLength(0);
+                if (m.has("id") && !m.get("id").isJsonNull()) {
+                    CompletableFuture<JsonObject> answer = pending.remove(m.get("id").getAsInt());
+                    if (answer != null) answer.complete(m);
+                }
+            }
+            webSocket.request(1);
+            return null;
+        }
+
+        @Override
+        public void onError(WebSocket webSocket, Throwable error) {
+            pending.values().forEach(f -> f.completeExceptionally(error));
+        }
+
+        @Override
+        public void close() {
+            if (socket != null) socket.abort();
+        }
+    }
+}
