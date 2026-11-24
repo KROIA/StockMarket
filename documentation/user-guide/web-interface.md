@@ -30,6 +30,12 @@ Switching the setting off stops the web server right away.
 
 ## What the page shows
 
+<p align="center">
+  <img src="../images/WebView.png" width="800" alt="The web interface: the searchable market list on the left, a 15-minute candlestick chart of Gold Ingot with volume bars in the middle and the order book depth on the right.">
+  <br>
+  <em>Market view with the market list, the chart and the order book depth.</em>
+</p>
+
 * **Market list** with search, an item icon, the current price and a status dot: green = open, grey = closed (outside trading hours), amber = maintenance. The list has two collapsible groups like the in-game trade screen: **Items** and **Company shares** (BankSystem company shares). All prices are in the trading currency.
 * **Candlestick chart** with a volume histogram. Timeframes are 1m, 5m, 15m, 1h, 4h and 1D. When candles follow in-game time (see [Candle timebase](candle-timebase.md)) the timeframes are in-game hours: 1h, 4h, 1D and 1W and the time axis shows the in-game day and hour, like the in-game chart. With real-world time, times when the server was offline show as flat candles without volume at the last price, as in game, so every candle sits at its real time.
 * **Order book depth** within 25 % of the current price, sell volume above the price and buy volume below it. This includes the bot liquidity, the same as the in-game order book.
