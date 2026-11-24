@@ -78,6 +78,8 @@ public class DiscordIntegrationTestSuite extends TestSuite {
     private static final String LIVE_ENV = "MC_DISCORD_TEST_WEBHOOK_FILE";
     /** Marker of the live test's alert; its trades are recognized by the scratch player's UUID. */
     private static final String LIVE = "StockMarket live webhook test";
+    /** Name of the live webhook in webhooks.json; only {@link #withLiveWebhook} routes types to it. */
+    private static final String LIVE_HOOK = "stockmarket-live-test";
 
     private final TestFixture fixture = new TestFixture("Discord");
     private IServerMarket market;
@@ -341,26 +343,41 @@ public class DiscordIntegrationTestSuite extends TestSuite {
     }
 
     /**
-     * Posts one embed per type (market-buy, market-sell, market-exchange, market-alert) to the webhook in the file named by
-     * {@value #LIVE_ENV}, through the real {@link DiscordWebhooks} config and sender. Swaps webhooks.json and
-     * stockmarket.json for the test and restores both byte for byte (finally). The URL is a secret: it never goes
-     * into a result, log or exception text. Skips when the env var is unset or the file does not exist.
+     * Posts one embed per type (market-buy, market-sell, market-exchange, market-alert) to the live webhook
+     * ({@link #withLiveWebhook}). Skips when the env var is unset or the file does not exist.
      */
     private TestResult live() {
+        return withLiveWebhook(backend, StockMarketDiscord.TYPES, this::livePosts);
+    }
+
+    /**
+     * Live webhook harness of {@code live_webhook_posts} and {@link DocsDiscordFeedSuite}: reads the webhook URL from
+     * the file named by {@value #LIVE_ENV}, routes {@code types} of stockmarket.json to it (webhooks.json holds only
+     * that webhook, under a name no other config uses, so no other type or mod can post), switches
+     * {@code DISCORD_ENABLED} on and runs {@code body} through the real {@link DiscordWebhooks} config and sender.
+     * Restores webhooks.json and stockmarket.json byte for byte, the switch, {@link StockMarketDiscord#sink} and the
+     * ledger test sink (finally). The URL is a secret: it never goes into a result, log or exception text.
+     *
+     * @param backend the master's server instances
+     * @param types   the types routed to the webhook; the others stay disabled
+     * @param body    posts and waits for the sender; runs only once the config is live
+     * @return the body's result; skip when the env var is unset or names no file
+     */
+    static TestResult withLiveWebhook(StockMarketModBackend.ServerInstances backend, List<String> types, Supplier<TestResult> body) {
         String file = System.getenv(LIVE_ENV);
         if (file == null || file.isBlank())
-            return skip("env " + LIVE_ENV + " not set");
+            return TestResult.skip("", "env " + LIVE_ENV + " not set");
         Path secret = Path.of(file.strip());
         if (!Files.isRegularFile(secret))
-            return skip("env " + LIVE_ENV + ": file not found");
+            return TestResult.skip("", "env " + LIVE_ENV + ": file not found");
         String url;
         try {
             url = Files.readString(secret, StandardCharsets.UTF_8).strip();
         } catch (IOException | RuntimeException e) { // no e text: keep file content out of the result
-            return fail("env " + LIVE_ENV + ": cannot read the file (" + e.getClass().getSimpleName() + ")");
+            return TestResult.fail("", "env " + LIVE_ENV + ": cannot read the file (" + e.getClass().getSimpleName() + ")");
         }
         if (url.isEmpty())
-            return fail("env " + LIVE_ENV + ": the file is blank");
+            return TestResult.fail("", "env " + LIVE_ENV + ": the file is blank");
         Path dir = Platform.getConfigFolder().resolve("modutilities").resolve("discord");
         Path hooksFile = dir.resolve("webhooks.json"), routesFile = dir.resolve(StockMarketMod.MOD_ID + ".json");
         byte[] oldHooks, oldRoutes;
@@ -368,7 +385,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
             oldHooks = Files.exists(hooksFile) ? Files.readAllBytes(hooksFile) : null;
             oldRoutes = Files.exists(routesFile) ? Files.readAllBytes(routesFile) : null;
         } catch (IOException e) {
-            return fail("cannot back up the Discord config: " + e);
+            return TestResult.fail("", "cannot back up the Discord config: " + e);
         }
         Setting<Boolean> setting = backend.SERVER_SETTINGS.INTEGRATIONS.DISCORD_ENABLED;
         boolean before = setting.get();
@@ -376,9 +393,34 @@ public class DiscordIntegrationTestSuite extends TestSuite {
         TestResult result;
         boolean restored;
         try {
-            result = livePosts(url, dir, hooksFile, routesFile, setting);
+            JsonObject hooks = new JsonObject();
+            hooks.addProperty(LIVE_HOOK, url);
+            JsonObject hooksRoot = new JsonObject();
+            hooksRoot.add("webhooks", hooks);
+            JsonObject routes = new JsonObject();
+            for (String t : types) {
+                JsonObject route = new JsonObject();
+                JsonArray names = new JsonArray();
+                names.add(LIVE_HOOK);
+                route.addProperty("enabled", true);
+                route.add("webhooks", names);
+                route.addProperty("minAmount", 0);
+                routes.add(t, route);
+            }
+            JsonObject routesRoot = new JsonObject();
+            routesRoot.add("types", routes);
+            Files.createDirectories(dir);
+            Files.writeString(hooksFile, hooksRoot.toString(), StandardCharsets.UTF_8);
+            Files.writeString(routesFile, routesRoot.toString(), StandardCharsets.UTF_8);
+            DiscordWebhooks.reload();
+            if (!DiscordWebhooks.isActive())
+                result = TestResult.fail("", "DiscordWebhooks inactive after reload (webhook URL rejected?)");
+            else {
+                setting.set(true);
+                result = body.get();
+            }
         } catch (IOException e) {
-            result = fail("cannot write the Discord config: " + e);
+            result = TestResult.fail("", "cannot write the Discord config: " + e);
         } finally {
             setting.set(before);
             StockMarketDiscord.sink = previous;
@@ -386,34 +428,11 @@ public class DiscordIntegrationTestSuite extends TestSuite {
             restored = put(hooksFile, oldHooks) & put(routesFile, oldRoutes); // both, even if the first fails
             DiscordWebhooks.reload();
         }
-        return restored ? result : fail("could not restore webhooks.json / stockmarket.json in " + dir + "; fix by hand");
+        return restored ? result : TestResult.fail("", "could not restore webhooks.json / stockmarket.json in " + dir + "; fix by hand");
     }
 
-    /** Body of {@link #live()}: writes the test config, posts every type once, waits for the sender. Caller restores. */
-    private TestResult livePosts(String url, Path dir, Path hooksFile, Path routesFile, Setting<Boolean> setting) throws IOException {
-        JsonObject hooks = new JsonObject();
-        hooks.addProperty("live-test", url);
-        JsonObject hooksRoot = new JsonObject();
-        hooksRoot.add("webhooks", hooks);
-        JsonObject types = new JsonObject();
-        for (String t : StockMarketDiscord.TYPES) {
-            JsonObject route = new JsonObject();
-            JsonArray names = new JsonArray();
-            names.add("live-test");
-            route.addProperty("enabled", true);
-            route.add("webhooks", names);
-            route.addProperty("minAmount", 0);
-            types.add(t, route);
-        }
-        JsonObject routesRoot = new JsonObject();
-        routesRoot.add("types", types);
-        Files.createDirectories(dir);
-        Files.writeString(hooksFile, hooksRoot.toString(), StandardCharsets.UTF_8);
-        Files.writeString(routesFile, routesRoot.toString(), StandardCharsets.UTF_8);
-        DiscordWebhooks.reload();
-        if (!DiscordWebhooks.isActive())
-            return fail("DiscordWebhooks inactive after reload (webhook URL rejected?)");
-
+    /** Body of {@link #live()}: posts every type once and waits for the sender. */
+    private TestResult livePosts() {
         // only this test's posts reach Discord: trades of the scratch player, the alert with the LIVE marker
         Map<String, Integer> forwarded = new ConcurrentHashMap<>();
         StockMarketDiscord.sink = (type, v) -> {
@@ -424,7 +443,6 @@ public class DiscordIntegrationTestSuite extends TestSuite {
             DiscordWebhooks.post(StockMarketMod.MOD_ID, type, v);
         };
         OrderLedger.Writer.testSink = e -> {}; // keep the scratch fills out of BankSystem's trade ledger
-        setting.set(true);
         filledAndCanceled(500, 200, -1800);  // market-buy: 2 for 18 -> avg 9
         filledAndCanceled(-500, -200, 4000); // market-sell: 2 for 40 -> avg 20
         putAndCancel(filledExchange());      // market-exchange: sold 1 @ 20, bought 2 @ 9, leftover 2
