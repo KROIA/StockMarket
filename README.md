@@ -1,41 +1,72 @@
-# StockMarket Mod
+# StockMarket
+
+<div align="center">
+    <img src="documentation/images/tradingView.gif" alt="StockMarket overview">
+</div>
 
 StockMarket adds a market for any item, with a real order book: market and limit orders, matched between players. Markets stay alive without players: plugins add volume, price movement and a trading bot.
+
+<div align="center">
 
 [![Documentation](https://img.shields.io/badge/Documentation-Open_the_guide-2d8a4e?style=for-the-badge)](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/)
 
 [![For developers](https://img.shields.io/badge/For_developers-Plugin_and_API_guide-555555)](https://kroia.github.io/BanksystemStockmarketDoku/developers/)
 
+</div>
+
 ## Features
-- New [blocks and items](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/blocks-and-recipes/) to trade at the market.
-- A matching engine inspired by the real market, with [market and limit orders](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/trading/) in an [order book](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/price-chart/).
-- Configurable [plugins](https://kroia.github.io/BanksystemStockmarketDoku/admin/stockmarket/plugins/) that give the market liquidity, volatility and price movements.
-- A JSON-configurable [news event system](https://kroia.github.io/BanksystemStockmarketDoku/admin/stockmarket/news/) whose headlines move prices. Players read them in a craftable [newspaper](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/newspaper/), and admins can [write their own events](https://kroia.github.io/BanksystemStockmarketDoku/admin/stockmarket/news/tutorial/) without touching code.
-- An optional read-only [web interface](https://kroia.github.io/BanksystemStockmarketDoku/admin/web-interface/) that shows the markets live in a browser.
+
+- A market for any item, with a real order book: [market and limit orders](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/trading/), matched between players.
+- Swap one item for another in [Item / Item](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/pair-trading/) mode.
+- [Candlestick charts](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/price-chart/) in the trading screen, on the [Stock Market Display](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/display-block/) and on an optional read-only [web page](https://kroia.github.io/BanksystemStockmarketDoku/admin/web-interface/).
+- Markets stay alive without players: configurable [plugins](https://kroia.github.io/BanksystemStockmarketDoku/admin/stockmarket/plugins/) add volume, price movement and a trading bot.
+- [Market news](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/newspaper/) that moves prices, read in a craftable Newspaper. Admins can [write their own events](https://kroia.github.io/BanksystemStockmarketDoku/admin/stockmarket/news/tutorial/) without touching code.
+- [Company shares](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/company-shares/) trade like any item, and [villager prices](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/villager-trading/) follow the market.
+- [Trading hours](https://kroia.github.io/BanksystemStockmarketDoku/admin/stockmarket/trading-hours/) for each market.
+- [Multi-server markets](https://kroia.github.io/BanksystemStockmarketDoku/admin/multi-server/): connected servers trade on the same markets.
+- [Placeholders](https://kroia.github.io/BanksystemStockmarketDoku/admin/placeholders/) for TAB and Placeholder API, a [Discord feed](https://kroia.github.io/BanksystemStockmarketDoku/admin/discord/) of trades and alerts and LuckPerms [permissions](https://kroia.github.io/BanksystemStockmarketDoku/admin/permissions/).
+- An [API for mod authors](https://kroia.github.io/BanksystemStockmarketDoku/developers/) to read markets, place orders and write their own market plugins.
 
 ## Blocks and items
-[Stock Market Block](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/blocks-and-recipes/#stock-market-block), [Trading Software](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/blocks-and-recipes/#trading-software), [Stock Market Display](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/blocks-and-recipes/#stock-market-display) and [Newspaper](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/blocks-and-recipes/#newspaper).
+
+All recipes are on the [Blocks and recipes](https://kroia.github.io/BanksystemStockmarketDoku/stockmarket/blocks-and-recipes/) page.
+
+| Block | What it does |
+|---|---|
+| **Stock Market Block** | Opens the trading screen. You don't craft it: right-click a BankSystem Terminal Block with Trading Software. |
+| **Stock Market Display** | Shows a live price chart on a wall. |
+
+| Item | What it is for |
+|---|---|
+| **Trading Software** | Turns a Terminal Block into a Stock Market Block. |
+| **Newspaper** | Opens the market news. |
 
 ## Supported versions
-StockMarket 2.2.0 on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket):
+
+StockMarket needs [BankSystem](https://www.curseforge.com/minecraft/mc-mods/banksystem) of the same version line (StockMarket `2.2.x` runs with BankSystem `2.2.x`), [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api) and, on Fabric, [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api). ModUtilities is inside the BankSystem jar, you don't have to install it. Details: [Installation](https://kroia.github.io/BanksystemStockmarketDoku/admin/install/).
+
+Downloads: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket) · [Modrinth](https://modrinth.com/mod/kroia_stockmarket)
 
 | Minecraft | Fabric | NeoForge |
-|-----------|--------|----------|
-| 26.3    | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-26.3]    | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-26.3] |
-| 26.2    | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-26.2]    | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-26.2] |
-| 26.1    | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-26.1]    | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-26.1] |
-| 1.21.11 | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.11] | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.11] |
-| 1.21.10 | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.10] | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.10] |
-| 1.21.9  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.9]  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.9] |
-| 1.21.8  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.8]  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.8] |
-| 1.21.7  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.7]  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.7] |
-| 1.21.6  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.6]  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.6] |
-| 1.21.5  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.5]  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.5] |
-| 1.21.4  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.4]  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.4] |
-| 1.21.3  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.3]  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.3] |
-| 1.21.2  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.2]  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.2] |
-| 1.21.1  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.1]  | [![Version](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.1] |
+|---|---|---|
+| 26.3 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-26.3] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-26.3] |
+| 26.2 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-26.2] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-26.2] |
+| 26.1 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-26.1] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-26.1] |
+| 1.21.11 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.11] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.11] |
+| 1.21.10 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.10] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.10] |
+| 1.21.9 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.9] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.9] |
+| 1.21.8 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.8] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.8] |
+| 1.21.7 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.7] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.7] |
+| 1.21.6 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.6] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.6] |
+| 1.21.5 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.5] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.5] |
+| 1.21.4 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.4] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.4] |
+| 1.21.3 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.3] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.3] |
+| 1.21.2 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.2] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.2] |
+| 1.21.1 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.1] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.1] |
 
+Release notes for every version: [changelog/](changelog/)
+
+<!-- Links to CurseForge -->
 [2.2.0-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/files/9781895
 [2.2.0-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/files/9781893
 [2.2.0-neoforge-1.21.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/files/9781898
@@ -64,8 +95,3 @@ StockMarket 2.2.0 on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/s
 [2.2.0-fabric-26.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/files/9781930
 [2.2.0-neoforge-26.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/files/9781935
 [2.2.0-fabric-26.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/files/9781934
-
-## Requirements
-StockMarket needs [BankSystem](https://github.com/KROIA/BankSystem) of the same version line (StockMarket `2.2.x` runs with BankSystem `2.2.x`), plus [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api) and, on Fabric, [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api). ModUtilities is bundled, you don't have to install it. Details: [Installation](https://kroia.github.io/BanksystemStockmarketDoku/admin/install/).
-
-Release notes for every version: [changelog/](changelog/)
