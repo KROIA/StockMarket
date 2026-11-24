@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
  * time or the connection was lost, often wrapped in a {@link java.util.concurrent.CompletionException}. The server
  * may have applied the change: never undo or resend it automatically, reload the plugin list instead. A failed
  * {@link #requestPluginList()} or {@link #requestReorderPlugin} leaves the cached list as it was. See
- * {@code documentation/developer-guide/api/async-market-api.md}, section 3.
+ * <a href="https://kroia.github.io/BanksystemStockmarketDoku/developers/stockmarket/market-access-api/#when-a-request-fails">Market access API, "When a request fails"</a>.
  */
 public interface IClientPluginManager {
     /** Returns the last synced list of plugin data (metadata + subscriptions). */
