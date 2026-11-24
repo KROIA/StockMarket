@@ -4,6 +4,7 @@ import dev.architectury.event.events.common.CommandRegistrationEvent;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.testkit.TestCommandRegistration;
 import net.kroia.testkit.TestRegistry;
+import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
@@ -31,10 +32,29 @@ public final class DevBootstrap {
         if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT) {
             TestRegistry.register(new TradeScreenGuiTestSuite());
             TestRegistry.register(new ScreenTradeClientScenarioSuite()); // SM-352: client part of the two-client trade scenario
-            TestRegistry.register(new DocsScreenshotSuite()); // SM-358: documentation screenshots (opt-in, --only)
-            TestRegistry.register(new DocsWorldShotsSuite()); // SM-361: in-world documentation shots (opt-in, --only)
-            TestRegistry.register(new DocsDiscordFeedSuite()); // SM-359: posts the Discord feed example of the docs (opt-in, --only)
-            TestRegistry.register(new DocsPluginShotSuite()); // SM-361: example plugin picture of the developer docs (opt-in, --only)
+            // documentation pictures (opt-in, --only); 1.21.1 only, see registerIfPresent
+            registerIfPresent("DocsScreenshotSuite"); // SM-358: documentation screenshots
+            registerIfPresent("DocsWorldShotsSuite"); // SM-361: in-world documentation shots
+            registerIfPresent("DocsDiscordFeedSuite"); // SM-359: posts the Discord feed example of the docs
+            registerIfPresent("DocsPluginShotSuite"); // SM-361: example plugin picture of the developer docs
+        }
+    }
+
+    /**
+     * SM-371: registers a suite of {@code net.kroia.stockmarket.testing.tests} by its class name. The documentation
+     * picture suites ({@code Docs*Suite}) use 1.21.1 client APIs and are compiled only on 1.21.1 (common/build.gradle
+     * leaves them out on the port branches), so a missing class is skipped.
+     *
+     * @param simpleName class name of the suite, without the package
+     */
+    private static void registerIfPresent(String simpleName) {
+        try {
+            TestRegistry.register((TestSuite) Class.forName("net.kroia.stockmarket.testing.tests." + simpleName)
+                    .getDeclaredConstructor().newInstance());
+        } catch (ClassNotFoundException e) {
+            // not compiled on this branch
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("cannot create test suite " + simpleName, e);
         }
     }
 
