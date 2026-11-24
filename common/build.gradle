@@ -76,6 +76,11 @@ if (!devFeatures) {
         include 'net/kroia/stockmarket/testing/**'
     }
 }
+// SM-371: the documentation picture suites use 1.21.1 client APIs and only run on 1.21.1. The port branches leave
+// them out (main, and test in release mode); DevBootstrap registers them by class name and skips a missing one.
+if (rootProject.minecraft_version != '1.21.1') {
+    [sourceSets.main, sourceSets.test].each { it.java.exclude 'net/kroia/stockmarket/testing/tests/Docs*Suite.java' }
+}
 configurations.testCompileOnly.extendsFrom configurations.compileOnly // ModUtilities/BankSystem/TestKit/LuckPerms/JEI APIs
 // ModUtilities, BankSystem and TestKit are modCompileOnly (the game provides them); offline the tests need them at runtime.
 // Loom creates the remapped configuration only after evaluation.
