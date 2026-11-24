@@ -351,7 +351,7 @@ public class DiscordIntegrationTestSuite extends TestSuite {
     }
 
     /**
-     * Live webhook harness of {@code live_webhook_posts} and {@link DocsDiscordFeedSuite}: reads the webhook URL from
+     * Live webhook harness of {@code live_webhook_posts} and {@code DocsDiscordFeedSuite}: reads the webhook URL from
      * the file named by {@value #LIVE_ENV}, routes {@code types} of stockmarket.json to it (webhooks.json holds only
      * that webhook, under a name no other config uses, so no other type or mod can post), switches
      * {@code DISCORD_ENABLED} on and runs {@code body} through the real {@link DiscordWebhooks} config and sender.
