@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
  * refused before it reaches the market (untrusted slave, a function clients may not call, unknown market); treat
  * {@code null} like {@code false}.
  * <p>
- * Details and a handling example: {@code documentation/developer-guide/api/async-market-api.md}, section 3.
+ * Details and a handling example: <a href="https://kroia.github.io/BanksystemStockmarketDoku/developers/stockmarket/market-access-api/#when-a-request-fails">Market access API, "When a request fails"</a>.
  */
 public interface IAsyncMarket {
 
