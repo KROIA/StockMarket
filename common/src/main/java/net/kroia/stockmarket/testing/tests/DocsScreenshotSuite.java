@@ -10,6 +10,7 @@ import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.gui.client.ClientCompat;
+import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
@@ -47,6 +48,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
+
+import javax.imageio.ImageIO;
+import java.awt.Rectangle;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -127,7 +134,7 @@ public class DocsScreenshotSuite extends TestSuite {
     @Override
     public void registerTests() {
         addTest("fixture", this::test_fixture);
-        addTest("trading_screen", () -> shot("stockmarket/trading-screen.png", this::tradeScreen));
+        addTest("trading_screen", () -> shot("stockmarket/trading-screen.png", () -> tradeScreen(Items.IRON_INGOT))); // the page sells iron
         addTest("price_chart", () -> shot("stockmarket/price-chart.png", this::priceChart));
         addTest("item_item_mode", () -> shot("stockmarket/item-item-mode.png", this::itemItemMode));
         addTest("companies_tab", () -> shot("stockmarket/companies-tab.png", this::companiesTab));
@@ -341,6 +348,11 @@ public class DocsScreenshotSuite extends TestSuite {
     }
 
     TestResult shot(String file, Screenshots.Scene scene, Supplier<String> prepare) {
+        return shot(file, scene, prepare, null);
+    }
+
+    /** As {@link #shot(String, Screenshots.Scene, Supplier)}, cut to {@code crop} (pixels, asked after {@code prepare}) when not null. */
+    TestResult shot(String file, Screenshots.Scene scene, Supplier<String> prepare, @Nullable Supplier<Rectangle> crop) {
         if (fixture == null) return skip(String.valueOf(fixtureProblem));
         try {
             String problem = prepare.get();
@@ -349,8 +361,10 @@ public class DocsScreenshotSuite extends TestSuite {
             boolean screen = Gui.onClient(() -> Minecraft.getInstance().screen != null);
             if (screen) parkMouse();
             List<Layout.Problem> layout = screen ? Gui.layoutProblems() : List.of();
+            Rectangle area = crop == null ? null : crop.get();
             Path path = Screenshots.take(file, scene);
             if (!Files.isRegularFile(path)) return fail("no screenshot at " + path);
+            if (area != null) crop(path, area);
             // layout problems are reported, not failed: the picture is checked by eye (overlapping decorations are normal)
             return pass(path + "; layout problems " + layout.size() + (layout.isEmpty() ? ""
                     : ": " + layout.stream().limit(6).map(Layout.Problem::message).toList()));
@@ -359,6 +373,18 @@ public class DocsScreenshotSuite extends TestSuite {
         } finally {
             Gui.close();
             Gui.waitTicks(5);
+        }
+    }
+
+    // ponytail: local crop, switch to Screenshots.take(crop) once TK-14 lands
+    /** Cuts the PNG at {@code png} down to {@code area} (pixels, clipped to the picture). */
+    static void crop(Path png, Rectangle area) {
+        try {
+            BufferedImage image = ImageIO.read(png.toFile());
+            Rectangle r = area.intersection(new Rectangle(image.getWidth(), image.getHeight()));
+            ImageIO.write(image.getSubimage(r.x, r.y, r.width, r.height), "png", png.toFile());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
@@ -371,7 +397,11 @@ public class DocsScreenshotSuite extends TestSuite {
     }
 
     private @Nullable String tradeScreen() {
-        Gui.onClient(() -> TradeScreen.openScreen(fixture.market(Items.DIAMOND)));
+        return tradeScreen(Items.DIAMOND);
+    }
+
+    private @Nullable String tradeScreen(Item item) {
+        Gui.onClient(() -> TradeScreen.openScreen(fixture.market(item)));
         Gui.waitForScreen(TradeScreen.class, 100);
         Gui.waitTicks(DATA_TICKS);
         return null;
@@ -418,7 +448,7 @@ public class DocsScreenshotSuite extends TestSuite {
 
     private @Nullable String displayConfig() {
         open(() -> new DisplayConfigScreen(BlockPos.ZERO, StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART,
-                fixture.market(Items.DIAMOND), fixture.money()), DisplayConfigScreen.class);
+                fixture.market(Items.DIAMOND), fixture.market(Items.IRON_INGOT)), DisplayConfigScreen.class); // an Item / Item pair
         return null;
     }
 
@@ -481,6 +511,14 @@ public class DocsScreenshotSuite extends TestSuite {
         management();
         Gui.click("Manage Plugins");
         Gui.waitTicks(DATA_TICKS);
+        // the order book's debug lines are on by default (for the session): unticked like a player would
+        List<GuiNode> debug = Gui.findAll(n -> n.visible() && n.handle() instanceof CheckBox box && box.isChecked()
+                && "Orderbook debug markers".equals(box.getText()));
+        if (!debug.isEmpty()) { // only its box (the right end) takes the click
+            GuiNode box = debug.get(0);
+            Gui.click(box.x() + box.width() - box.height() / 2, box.centerY(), GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            Gui.waitTicks(10);
+        }
         return null;
     }
 
@@ -588,14 +626,8 @@ public class DocsScreenshotSuite extends TestSuite {
         });
     }
 
-    /** Stops all news events but the first, so the Active tab shows one running event. */
+    /** The Active tab with the fixture's three running events. */
     private TestResult test_newsActive() {
-        if (fixture == null) return skip(String.valueOf(fixtureProblem));
-        for (String id : NEWS.subList(1, NEWS.size())) {
-            Gui.sendCommand("stockmarket news stop " + id);
-            Gui.waitTicks(5);
-        }
-        Gui.waitTicks(20);
         return shot("stockmarket/news/active.png", () -> newsTab("Active"));
     }
 

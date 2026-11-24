@@ -24,6 +24,7 @@ import net.kroia.testkit.TestResult;
 import net.kroia.testkit.gui.Gui;
 import net.kroia.testkit.gui.Screenshots;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.Options;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -39,6 +40,7 @@ import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
+import java.awt.Rectangle;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.URI;
@@ -104,20 +106,24 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
     public void registerTests() {
         addTest("fixture", this::test_fixture);
         addTest("home_corner", this::test_homeCorner);
-        // camera spots of images.md, tuned on the pictures (2026-11-24): closer to the displays and the terminal row
-        addTest("home_hero", () -> corner("shared/home-hero.png", SCENE, 25.5, -57, -4.5, 58, 10, null));
-        addTest("display_in_world", () -> corner("stockmarket/display-in-world.png", SCENE, 23.5, -59, 1.5, 43, -4, null));
+        // camera spots of images.md, tuned on the pictures (2026-11-24). A narrow view from further back lets the corner
+        // fill the picture: with FOV 70 the displays and the terminal row only fit with most of the frame sky and floor.
+        addTest("home_hero", () -> withFov(40, () -> corner("shared/home-hero.png", SCENE, 27.0, -58.52, 1.0, 69.5f, -4, null)));
+        // the Stock Market Displays only: the Bank Displays further west (x 11-16) stay out of the picture
+        addTest("display_in_world", () -> withFov(30, () -> corner("stockmarket/display-in-world.png", SCENE, 23.99, -58.82, -2.37, 17, -1, this::stockMarketBlock)));
         addTest("terminal_family", () -> corner("shared/terminal-family.png", SCENE, 11.5, -59, -2, 90, 14, this::terminalRow));
         addTest("news_toast", () -> {
             try {
-                return corner("stockmarket/news-toast.png", HUD, 11.5, -59, -2, 90, 14, this::newsToast);
+                // the top-right corner around the popup (320x64 pixels at the right edge)
+                return corner("stockmarket/news-toast.png", HUD, 11.5, -59, -2, 90, 14, this::newsToast,
+                        () -> new Rectangle(HUD.windowWidth() - 360, 0, 360, 100));
             } finally {
                 Gui.onClient(() -> Minecraft.getInstance().gameRenderer.setRenderHand(true));
             }
         });
         addTest("villager_trade", () -> {
             try {
-                return corner("stockmarket/villager-trade.png", SCENE, 20.5, -59, -7.5, 0, 8, this::villagerTrade);
+                return corner("stockmarket/villager-trade.png", SCENE, 20.5, -59, -7.5, 0, 8, this::villagerTrade, DocsWorldShotsSuite::tradeWindow);
             } finally {
                 Gui.onClient(() -> jeiOverlay(true));
             }
@@ -268,6 +274,12 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
      */
     private TestResult corner(String file, Screenshots.Scene scene, double x, double y, double z, float yaw, float pitch,
                               @Nullable Supplier<String> prepare) {
+        return corner(file, scene, x, y, z, yaw, pitch, prepare, null);
+    }
+
+    /** As above, the picture cut to {@code crop} (pixels) when not null. */
+    private TestResult corner(String file, Screenshots.Scene scene, double x, double y, double z, float yaw, float pitch,
+                              @Nullable Supplier<String> prepare, @Nullable Supplier<Rectangle> crop) {
         if (cornerProblem != null) return skip(cornerProblem);
         return shot(file, scene, () -> {
             Gui.sendCommand(String.format(Locale.ROOT, "tp @s %.2f %.2f %.2f %.1f %.1f", x, y, z, yaw, pitch));
@@ -278,6 +290,45 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
             });
             Gui.waitTicks(40);
             return prepare == null ? null : prepare.get();
+        }, crop);
+    }
+
+    /**
+     * Runs {@code shot} with a vertical field of view of {@code fov} degrees (30..110) and without FOV effects (flying
+     * widens it by 10 %), then restores both: a narrow view lets the corner fill the picture from further away.
+     */
+    private static TestResult withFov(int fov, Supplier<TestResult> shot) {
+        Options options = Gui.onClient(() -> Minecraft.getInstance().options);
+        int oldFov = Gui.onClient(() -> options.fov().get());
+        double oldEffects = Gui.onClient(() -> options.fovEffectScale().get());
+        Gui.onClient(() -> {
+            options.fov().set(fov);
+            options.fovEffectScale().set(0.0);
+        });
+        try {
+            return shot.get();
+        } finally {
+            Gui.onClient(() -> {
+                options.fov().set(oldFov);
+                options.fovEffectScale().set(oldEffects);
+            });
+        }
+    }
+
+    /** A Stock Market Block under the 3x2 display, so the display picture shows where the markets are traded. */
+    private @Nullable String stockMarketBlock() {
+        Gui.sendCommand("setblock 21 -59 5 stockmarket:stock_market_block[facing=north]");
+        Gui.waitTicks(20);
+        return null;
+    }
+
+    /** The open trade screen's window plus a small margin, in pixels (vanilla MerchantScreen: 276x166 GUI pixels, centred). */
+    private static Rectangle tradeWindow() {
+        return Gui.onClient(() -> {
+            Minecraft mc = Minecraft.getInstance();
+            int scale = (int) mc.getWindow().getGuiScale(), margin = 2;
+            int left = (mc.screen.width - 276) / 2 - margin, top = (mc.screen.height - 166) / 2 - margin;
+            return new Rectangle(left * scale, top * scale, (276 + 2 * margin) * scale, (166 + 2 * margin) * scale);
         });
     }
 
@@ -316,6 +367,7 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
         String offers = Stream.of(offer("coal", 15, "emerald", 1), offer("iron_ingot", 4, "emerald", 1),
                 offer("gold_ingot", 3, "emerald", 1), offer("diamond", 1, "emerald", 1),
                 offer("emerald", 1, "redstone", 4), offer("emerald", 1, "lapis_lazuli", 2)).reduce((a, c) -> a + "," + c).orElseThrow();
+        Gui.sendCommand("time set " + SCENE.dayTime()); // daylight behind the window, also after the evening shot of the full topic
         Gui.sendCommand("kill @e[type=minecraft:villager]");
         Gui.sendCommand("summon minecraft:villager 20.5 -59 -5.0 {NoAI:1b,Invulnerable:1b,PersistenceRequired:1b,Silent:1b,Rotation:[180f,0f],"
                 + "VillagerData:{profession:\"minecraft:toolsmith\",level:4,type:\"minecraft:plains\"},Offers:{Recipes:[" + offers + "]}}");
@@ -435,6 +487,12 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
     static byte[] firefoxShot(Path firefox, String url, String script, long settleMs) throws Exception {
         int port = freePort();
         Path profile = Files.createTempDirectory("sm-docs-firefox");
+        // US number and date format whatever the PC's region (the page formats with the browser's locale)
+        Files.writeString(profile.resolve("user.js"), String.join("\n",
+                "user_pref(\"intl.locale.requested\", \"en-US\");",
+                "user_pref(\"intl.accept_languages\", \"en-US, en\");",
+                "user_pref(\"intl.regional_prefs.use_os_locales\", false);",
+                "user_pref(\"javascript.use_us_english_locale\", true);", ""));
         Process process = new ProcessBuilder(firefox.toString(), "--headless", "--no-remote", "--profile", profile.toString(),
                 "--remote-debugging-port", String.valueOf(port))
                 .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
