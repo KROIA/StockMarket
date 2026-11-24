@@ -29,7 +29,7 @@ public interface IClientMarketManager {
      * in time or the connection was lost, or with an {@link IllegalStateException} when the request could not be sent;
      * the cache is then left as it is. Callbacks may get the cause wrapped in a
      * {@link java.util.concurrent.CompletionException}. A failure is never "no markets". See
-     * {@code documentation/developer-guide/api/async-market-api.md}, section 3.
+     * <a href="https://kroia.github.io/BanksystemStockmarketDoku/developers/stockmarket/market-access-api/#when-a-request-fails">Market access API, "When a request fails"</a>.
      *
      * @return future with the items of all markets on the server
      */
