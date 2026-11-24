@@ -32,7 +32,6 @@ import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.testkit.TestCategory;
-import net.kroia.testkit.TestRegistry;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
 import net.kroia.testkit.gui.Gui;
@@ -40,21 +39,16 @@ import net.kroia.testkit.gui.GuiNode;
 import net.kroia.testkit.gui.Layout;
 import net.kroia.testkit.gui.Screenshots;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.MouseHandler;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
-import javax.imageio.ImageIO;
 import java.awt.Rectangle;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -63,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -78,7 +73,7 @@ import java.util.function.Supplier;
  * its picture; a failed shot does not stop the others.
  * <p>
  * Opt-in: the shots take minutes and resize the window, so the suite runs only when named with
- * {@code --only stockmarket/sm_docs_shots} (it is also in the selection file's exclude list). Start the client with
+ * {@code --only stockmarket/sm_docs_shots} ({@link #onDemand()}). Start the client with
  * {@code --client-name Tavrik}: the player name shows on some screens. Needs the integrated server (sp cells).
  * The in-world pictures are taken by {@link DocsWorldShotsSuite} on the same world.
  */
@@ -131,6 +126,12 @@ public class DocsScreenshotSuite extends TestSuite {
         return Side.CLIENT;
     }
 
+    /** The shots take minutes and resize the window: they run only when named with --only (also DocsWorldShotsSuite). */
+    @Override
+    public boolean onDemand() {
+        return true;
+    }
+
     @Override
     public void registerTests() {
         addTest("fixture", this::test_fixture);
@@ -163,13 +164,10 @@ public class DocsScreenshotSuite extends TestSuite {
     /** Builds the invented market world (see the class Javadoc). Every shot skips if this fails. */
     TestResult test_fixture() {
         if (fixture != null) return pass("built by an earlier docs suite in this client");
-        String include = System.getProperty(TestRegistry.INCLUDE_PROPERTY);
-        if (include == null || include.isBlank() || TestRegistry.isExcluded(TestRegistry.topicKey(this), include, null))
-            return skip(fixtureProblem = "opt-in: --only " + TOPIC);
         StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
         if (client == null || client.MARKET_MANAGER == null) return skip(fixtureProblem = "not in a world");
-        if (Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer()) == null)
-            return skip(fixtureProblem = "needs the integrated server (sp cell)");
+        MinecraftServer server = Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer());
+        if (server == null) return skip(fixtureProblem = "needs the integrated server (sp cell)");
         StockMarketModBackend.ServerInstances b = StockMarketModBackend.getServerInstances();
         if (b == null || b.MARKET_MANAGER.isSlave()) return skip(fixtureProblem = "not the StockMarket master");
         try {
@@ -190,7 +188,7 @@ public class DocsScreenshotSuite extends TestSuite {
                 ItemID id = await(ItemIDManager.registerItemStackServerSide(new ItemStack(item)), WAIT_MS);
                 IAsyncMarket market = Boolean.TRUE.equals(await(b.MARKET_MANAGER.getAsync().marketExistsAsync(id), WAIT_MS))
                         ? await(b.MARKET_MANAGER.getAsync().getMarketAsync(id), WAIT_MS)
-                        : await(b.MARKET_MANAGER.getAsync().createMarketAsync(id), WAIT_MS);
+                        : await(onServer(server, () -> b.MARKET_MANAGER.getAsync().createMarketAsync(id)), WAIT_MS);
                 if (market == null) return fail(fixtureProblem = "market " + id + " not created");
                 markets.put(item, id);
                 asyncMarkets.put(id, market);
@@ -233,10 +231,10 @@ public class DocsScreenshotSuite extends TestSuite {
                         return fail(fixtureProblem = "company " + c.getKey() + " not created: " + (out == null ? "no answer" : "code " + out.resultCode()));
                     info = await(AsyncCompanyManager.getCompanyInfoAsync(c.getKey()), WAIT_MS);
                 }
-                AsyncCompanyManager.OpenShareMarketOutput open = await(AsyncCompanyManager.openShareMarketAsync(info.companyId(), c.getValue(), self), WAIT_MS);
+                int companyId = info.companyId();
+                AsyncCompanyManager.OpenShareMarketOutput open = await(onServer(server, () -> AsyncCompanyManager.openShareMarketAsync(companyId, c.getValue(), self)), WAIT_MS);
                 if (open == null || (open.status() != AsyncCompanyManager.SM_STATUS_SUCCESS && open.status() != AsyncCompanyManager.SM_STATUS_ALREADY_EXISTS))
                     return fail(fixtureProblem = "share market of " + c.getKey() + " not opened: " + (open == null ? "no answer" : open.status() + " " + open.reason()));
-                int companyId = info.companyId();
                 ItemID share = await(ItemIDManager.registerItemStackServerSide(
                         Gui.onClient(() -> StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), companyId))), WAIT_MS);
                 companies.add(share);
@@ -287,6 +285,14 @@ public class DocsScreenshotSuite extends TestSuite {
         }
     }
 
+    /**
+     * Starts {@code call} on the server thread: on the master the async API runs on the calling thread, and a market
+     * created from the test thread raced the server tick's loop over the markets (ConcurrentModificationException).
+     */
+    static <T> CompletableFuture<T> onServer(MinecraftServer server, Supplier<CompletableFuture<T>> call) {
+        return server.submit(call).thenCompose(f -> f);
+    }
+
     /** Deposits {@code amount} raw units of {@code item} into the player's personal account; returns an error or null. */
     private @Nullable String deposit(IAsyncBankManager bank, UUID self, ItemID item, long amount) {
         IAsyncBank b = await(bank.getOrCreatePersonalBankAsync(self, item), WAIT_MS);
@@ -296,7 +302,7 @@ public class DocsScreenshotSuite extends TestSuite {
     }
 
     /** Places one order from the client, retrying while the trade cooldown refuses it; returns an error or null. */
-    private @Nullable String order(Supplier<java.util.concurrent.CompletableFuture<CreateOrderRequest.OutputData>> place, String what) {
+    @Nullable String order(Supplier<CompletableFuture<CreateOrderRequest.OutputData>> place, String what) {
         for (int i = 0; i < 10; i++) {
             CreateOrderRequest.OutputData out = await(Gui.onClient(place::get), WAIT_MS);
             if (out != null && out.status == CreateOrderRequest.Status.TRADING_TOO_FAST) {
@@ -359,12 +365,11 @@ public class DocsScreenshotSuite extends TestSuite {
             if (problem != null) return fail(problem);
             // in the world (no screen) the mouse turns the camera: it is left alone there
             boolean screen = Gui.onClient(() -> Minecraft.getInstance().screen != null);
-            if (screen) parkMouse();
+            if (screen) Gui.hover(-100, -100); // no hover highlight or tooltip in the picture
             List<Layout.Problem> layout = screen ? Gui.layoutProblems() : List.of();
             Rectangle area = crop == null ? null : crop.get();
-            Path path = Screenshots.take(file, scene);
+            Path path = Screenshots.take(file, scene, area);
             if (!Files.isRegularFile(path)) return fail("no screenshot at " + path);
-            if (area != null) crop(path, area);
             // layout problems are reported, not failed: the picture is checked by eye (overlapping decorations are normal)
             return pass(path + "; layout problems " + layout.size() + (layout.isEmpty() ? ""
                     : ": " + layout.stream().limit(6).map(Layout.Problem::message).toList()));
@@ -373,18 +378,6 @@ public class DocsScreenshotSuite extends TestSuite {
         } finally {
             Gui.close();
             Gui.waitTicks(5);
-        }
-    }
-
-    // ponytail: local crop, switch to Screenshots.take(crop) once TK-14 lands
-    /** Cuts the PNG at {@code png} down to {@code area} (pixels, clipped to the picture). */
-    static void crop(Path png, Rectangle area) {
-        try {
-            BufferedImage image = ImageIO.read(png.toFile());
-            Rectangle r = area.intersection(new Rectangle(image.getWidth(), image.getHeight()));
-            ImageIO.write(image.getSubimage(r.x, r.y, r.width, r.height), "png", png.toFile());
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
         }
     }
 
@@ -649,30 +642,12 @@ public class DocsScreenshotSuite extends TestSuite {
     }
 
     /** The visible ItemView showing {@code item}. */
-    private static GuiNode itemView(Item item) {
+    static GuiNode itemView(Item item) {
         return Gui.find(n -> n.visible() && shows(n, item), "item view " + item);
     }
 
-    /**
-     * Moves Minecraft's cursor position off the window, so no tooltip of a hovered element is in the shot (screens
-     * render hover from the real cursor, which the GUI driver never moves; the OS cursor stays where it is).
-     */
-    private static void parkMouse() {
-        Gui.onClient(() -> {
-            try {
-                for (String name : new String[]{"xpos", "ypos"}) {
-                    var field = MouseHandler.class.getDeclaredField(name);
-                    field.setAccessible(true);
-                    field.setDouble(Minecraft.getInstance().mouseHandler, -1000);
-                }
-            } catch (ReflectiveOperationException | RuntimeException e) {
-                // ponytail: Mojang field names (NeoForge at runtime); on Fabric a hovered tooltip may stay in the shot
-            }
-        });
-    }
-
     /** Clicks the first visible match; throws if there is none and {@code required}. */
-    private static void click(Predicate<GuiNode> filter, String what, boolean required) {
+    static void click(Predicate<GuiNode> filter, String what, boolean required) {
         List<GuiNode> found = Gui.findAll(n -> n.visible() && filter.test(n));
         if (!found.isEmpty()) Gui.click(found.get(0));
         else if (required) throw new IllegalStateException("no visible " + what);

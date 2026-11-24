@@ -5,6 +5,11 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankmanager.IAsyncBankManager;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
 import net.kroia.banksystem.minecraft.entity.custom.MoneyStockpileBlockEntity;
@@ -17,13 +22,16 @@ import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.minecraft.compat.StockMarketWebInterface;
 import net.kroia.stockmarket.minecraft.entity.custom.StockMarketDisplayBlockEntity;
 import net.kroia.stockmarket.screen.custom.DisplayChartScreen;
+import net.kroia.stockmarket.screen.TradeScreen;
 import net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.gui.Gui;
 import net.kroia.testkit.gui.Screenshots;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.CloudStatus;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.core.BlockPos;
@@ -69,7 +77,8 @@ import java.util.stream.Stream;
 /**
  * SM-361: the in-world and outside-the-game pictures of the documentation site (Docs/planning/images.md section 1,
  * "StockMarket and shared"): the home corner, the terminal family, the Stock Market Displays, a news popup, a
- * villager's trade screen and the web interface. Runs on the market world of {@link DocsScreenshotSuite} (its
+ * villager's trade screen, two admin alerts in the chat, two GIFs (programming Terminal Blocks, a market buy) and
+ * the web interface. Runs on the market world of {@link DocsScreenshotSuite} (its
  * fixture is built here when this suite runs alone: {@code --only stockmarket/sm_docs_shots/DocsWorldShotsSuite}).
  * <p>
  * The scene is the user's home corner, {@code Docs/planning/structures/home-hero.nbt}, placed at its origin
@@ -128,6 +137,15 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
                 Gui.onClient(() -> jeiOverlay(true));
             }
         });
+        addTest("alert_chat", () -> {
+            try {
+                return corner("shared/alert-chat.png", HUD, 11.5, -59, -2, 90, 14, this::alerts, () -> chatArea(ALERT_LINES));
+            } finally {
+                Gui.sendCommand("gamerule sendCommandFeedback true");
+            }
+        });
+        addTest("program_terminal", this::test_programTerminal);
+        addTest("trading_gif", this::test_tradingGif);
         addTest("web_interface", this::test_webInterface);
     }
 
@@ -400,6 +418,165 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
                 type.getMethod("toggleBookmarkEnabled").invoke(state);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             // ponytail: JEI internals; without JEI there is no list, after a JEI rename the list stays in the picture
+        }
+    }
+
+    // ---------------------------------------------------------------- alerts and GIFs
+
+    /**
+     * Low thresholds, then one BankSystem suspicion flag (Tavrik moves 1'500 $ from Savings into the new Farm Co-op
+     * account: "Transfer to a new account") and one StockMarket profit alert (a market sell of 10 diamonds), both in
+     * the chat of the player, who is admin of both mods. Command feedback stays off until the test restores it.
+     */
+    private @Nullable String alerts() {
+        var bankSettings = BankSystemModBackend.getInstances_forTesting().SERVER_SETTINGS.AUDIT;
+        var marketSettings = StockMarketModBackend.getServerInstances().SERVER_SETTINGS.MARKET;
+        IAsyncBankManager bank = BankSystemMod.getAPI().getServerBankManager().getAsync();
+        MinecraftServer server = Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer());
+        UUID self = fixture.self();
+        if (!Boolean.TRUE.equals(await(bank.setBanksystemAdminModeAsync(self, true), WAIT_MS))) return "BankSystem admin flag not set";
+        Integer coop = await(onServer(server, () -> bank.createBankAccountGetAccountNrAsync("Farm Co-op")), WAIT_MS);
+        if (coop == null || coop < 0) return "no Farm Co-op account: " + coop;
+        long scale = await(bank.getItemFractionScaleFactorAsync(), WAIT_MS);
+        // ponytail: the thresholds stay low for the rest of this throwaway cell
+        bankSettings.NEW_ACCOUNT_TRANSFER_AMOUNT.set(1_000L);
+        marketSettings.PROFIT_ALERT_THRESHOLD.set(1_000f);
+        Gui.sendCommand("gamerule sendCommandFeedback false");
+        Gui.waitTicks(10);
+        Gui.onClient(() -> Minecraft.getInstance().gui.getChat().clearMessages(false));
+        // as the /money send command does: a transfer tagged with the acting player
+        BankStatus status = await(server.submit(() -> {
+            var accounts = BankSystemMod.getAPI().getServerBankManager().getSync();
+            accounts.getBankAccount(coop).getOrCreateBank(fixture.money()); // the new account has no money bank yet
+            IServerBank savings = accounts.getBankAccount(fixture.account()).getBank(fixture.money());
+            return TransactionLedger.withActor(TransactionLedger.player(self), () -> TransactionLedger.tagged(LedgerType.TRANSFER, self, null,
+                    () -> savings.transfer(1_500L * scale, coop)));
+        }), WAIT_MS);
+        if (status != BankStatus.SUCCESS) return "transfer to Farm Co-op: " + status;
+        Gui.waitTicks(20);
+        ClientMarket diamond = Gui.onClient(() -> StockMarketModBackend.getClientInstances().MARKET_MANAGER.getMarket(fixture.market(Items.DIAMOND)));
+        String error = order(() -> diamond.createMarketSellOrder(fixture.account(), -10), "market sell");
+        if (error != null) return error;
+        Gui.waitTicks(40);
+        return null;
+    }
+
+    /** Chat lines of the two alerts (the BankSystem one has its account, amount and reason lines). */
+    private static final int ALERT_LINES = 7;
+
+    /**
+     * The bottom {@code lines} chat lines with their background, in pixels. Vanilla chat (closed): 9 GUI pixels a
+     * line, its bottom 40 above the screen's, the background as wide as the chat plus 12.
+     */
+    private static Rectangle chatArea(int lines) {
+        return Gui.onClient(() -> {
+            Minecraft mc = Minecraft.getInstance();
+            int scale = (int) mc.getWindow().getGuiScale(), margin = 2;
+            int bottom = mc.getWindow().getGuiScaledHeight() - 40 + margin, top = bottom - margin - lines * 9 - margin;
+            return new Rectangle(0, top * scale, (mc.gui.getChat().getWidth() + 12 + margin) * scale, (bottom - top) * scale);
+        });
+    }
+
+    /**
+     * The GIF of images.md: holding Banking Software, the player right-clicks the left of two Terminal Blocks on the
+     * counter (it becomes a Bank Terminal Block), switches to Trading Software, turns to the right one and right-clicks
+     * it (a Stock Market Block). Each Terminal Block stands below its software's item frame (z 3 and 2), HUD on.
+     */
+    private TestResult test_programTerminal() {
+        if (cornerProblem != null) return skip(cornerProblem);
+        Options options = Gui.onClient(() -> Minecraft.getInstance().options);
+        CloudStatus clouds = Gui.onClient(() -> options.cloudStatus().get());
+        float left = 81.9f, right = 98.1f; // from z 3.0 onto the centres of the blocks at z 3 and z 2
+        try {
+            Gui.close();
+            Gui.sendCommand("gamerule sendCommandFeedback false"); // no "Replaced a slot" lines in the chat
+            Gui.sendCommand("setblock 7 -58 3 banksystem:terminal_block[facing=east]");
+            Gui.sendCommand("setblock 7 -58 2 banksystem:terminal_block[facing=east]");
+            Gui.sendCommand("item replace entity @s weapon.mainhand with banksystem:banking_software");
+            Gui.sendCommand(String.format(Locale.ROOT, "tp @s 11.0 -59 3.0 %.1f 0", left));
+            Gui.onClient(() -> {
+                options.cloudStatus().set(CloudStatus.OFF); // moving clouds would change every frame
+                Minecraft.getInstance().gui.getChat().clearMessages(false);
+            });
+            Gui.waitTicks(40);
+            boolean[] used = new boolean[2];
+            Path gif = Screenshots.record("shared/program-terminal.gif", HUD, () -> {
+                Gui.waitTicks(15);
+                used[0] = Gui.useItem();
+                Gui.waitTicks(30);
+                Gui.sendCommand("item replace entity @s weapon.mainhand with stockmarket:trading_software");
+                Gui.waitTicks(20);
+                turn(right, 10);
+                Gui.waitTicks(10);
+                used[1] = Gui.useItem();
+                Gui.waitTicks(40);
+            });
+            String blocks = Gui.onClient(() -> {
+                var level = Minecraft.getInstance().level;
+                return BuiltInRegistries.BLOCK.getKey(level.getBlockState(new BlockPos(7, -58, 3)).getBlock()) + ", "
+                        + BuiltInRegistries.BLOCK.getKey(level.getBlockState(new BlockPos(7, -58, 2)).getBlock());
+            });
+            if (!used[0] || !used[1]) return fail("use item did nothing: " + used[0] + ", " + used[1] + "; blocks " + blocks);
+            if (!"banksystem:bank_terminal_block, stockmarket:stock_market_block".equals(blocks)) return fail("blocks after the GIF: " + blocks);
+            return pass(gif + ", " + Files.size(gif) / 1024 + " KB");
+        } catch (RuntimeException | IOException e) {
+            return fail("program-terminal.gif: " + e);
+        } finally {
+            Gui.onClient(() -> options.cloudStatus().set(clouds));
+            Gui.sendCommand("item replace entity @s weapon.mainhand with air");
+            Gui.sendCommand("gamerule sendCommandFeedback true");
+        }
+    }
+
+    /** Turns the camera to {@code yaw} in {@code ticks} ticks, eased, as a player moves the mouse. */
+    private static void turn(float yaw, int ticks) {
+        float from = Gui.onClient(() -> Minecraft.getInstance().player.getYRot());
+        for (int i = 1; i <= ticks; i++) {
+            float t = (float) i / ticks, to = from + (yaw - from) * t * t * (3 - 2 * t);
+            Gui.onClient(() -> Minecraft.getInstance().player.setYRot(to));
+            Gui.waitTicks(1);
+        }
+    }
+
+    /**
+     * The optional trading GIF of images.md: right-click the Stock Market Block of the west wall, pick diamond, a
+     * market buy of one, then the trade in My History. The pointer shows each click.
+     */
+    private TestResult test_tradingGif() {
+        if (cornerProblem != null) return skip(cornerProblem);
+        Options options = Gui.onClient(() -> Minecraft.getInstance().options);
+        CloudStatus clouds = Gui.onClient(() -> options.cloudStatus().get());
+        try {
+            Gui.close();
+            Gui.sendCommand("gamerule sendCommandFeedback false"); // no command lines in the chat
+            Gui.sendCommand("item replace entity @s weapon.mainhand with air");
+            Gui.sendCommand("tp @s 10.5 -59 -2.5 90 24"); // onto the Stock Market Block at 7 -59 -3
+            Gui.onClient(() -> {
+                options.cloudStatus().set(CloudStatus.OFF);
+                Minecraft.getInstance().gui.getChat().clearMessages(false);
+            });
+            Gui.waitTicks(40);
+            Path gif = Screenshots.record("stockmarket/trading-screen.gif", HUD, () -> {
+                Gui.waitTicks(10);
+                if (!Gui.useItem()) throw new IllegalStateException("the Stock Market Block did not open");
+                Gui.waitForScreen(TradeScreen.class, 100);
+                Gui.waitTicks(30);
+                Gui.click(itemView(Items.DIAMOND));
+                Gui.waitTicks(20);
+                click(n -> "+1".equals(n.text()), "+1 button", true);
+                Gui.waitTicks(10);
+                click(n -> "Buy".equals(n.text()), "Buy button", true);
+                Gui.waitTicks(20);
+                Gui.click("My History");
+                Gui.waitTicks(30);
+            });
+            return pass(gif + ", " + Files.size(gif) / 1024 + " KB");
+        } catch (RuntimeException | IOException e) {
+            return fail("trading-screen.gif: " + e);
+        } finally {
+            Gui.close();
+            Gui.onClient(() -> options.cloudStatus().set(clouds));
+            Gui.sendCommand("gamerule sendCommandFeedback true");
         }
     }
 
