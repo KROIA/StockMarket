@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
  * changed), often wrapped in a {@link java.util.concurrent.CompletionException}. After an unknown outcome a caller
  * must never undo or resend a write automatically: reload the catalog instead. A slave without a master connection
  * sends nothing and completes at once with an empty list or {@code false}. Details:
- * {@code documentation/developer-guide/api/async-market-api.md}, section 3.
+ * <a href="https://kroia.github.io/BanksystemStockmarketDoku/developers/stockmarket/market-access-api/#when-a-request-fails">Market access API, "When a request fails"</a>.
  */
 public interface IAsyncPresetManager {
 
