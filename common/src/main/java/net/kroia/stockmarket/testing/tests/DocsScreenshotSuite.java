@@ -294,7 +294,7 @@ public class DocsScreenshotSuite extends TestSuite {
     }
 
     /** Deposits {@code amount} raw units of {@code item} into the player's personal account; returns an error or null. */
-    private @Nullable String deposit(IAsyncBankManager bank, UUID self, ItemID item, long amount) {
+    @Nullable String deposit(IAsyncBankManager bank, UUID self, ItemID item, long amount) {
         IAsyncBank b = await(bank.getOrCreatePersonalBankAsync(self, item), WAIT_MS);
         if (b == null) return "no bank for " + item;
         BankStatus status = await(b.depositAsync(amount), WAIT_MS);

@@ -236,6 +236,9 @@ public class StockMarketTestCategories {
     // SM-358 / SM-361: opt-in documentation screenshots (client suites, sp cell, run only with --only stockmarket/sm_docs_shots).
     public static final TestCategory DOCS_SHOTS = new TestCategory("stockmarket", "sm_docs_shots", "SM-358/SM-361 (opt-in): builds an invented market world and takes the documentation screenshots (trade, management, plugin and news screens)", BOTH, true);
 
+    // SM-359: opt-in, posts the example Discord feed of the docs to a real webhook (run only with --only stockmarket/sm_docs_discord).
+    public static final TestCategory DOCS_DISCORD = new TestCategory("stockmarket", "sm_docs_discord", "SM-359 (opt-in): posts three example Discord feed messages (market buy, market sell, profit alert) to the webhook named by MC_DISCORD_TEST_WEBHOOK_FILE, for the docs picture", BOTH, true);
+
     // SM-335: profit-taking round trips over three markets with inter-market swaps (pump, swap before the bot reacts, split orders).
     public static final TestCategory EXPLOIT = new TestCategory("stockmarket", "sm_exploit", "SM-335: round trips over three markets with inter-market swaps (pump then swap, swap before the bot reacts, A-B-A and triangle cycles, split orders); net profit must stay <= 5% of the capital at risk", MASTER_ONLY, true);
 
