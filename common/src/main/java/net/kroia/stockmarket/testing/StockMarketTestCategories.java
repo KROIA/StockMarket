@@ -233,6 +233,8 @@ public class StockMarketTestCategories {
     public static final TestCategory UPGRADE_212 = new TestCategory("stockmarket", "sm_upgrade_212", "SM-328 (opt-in): a world saved by 2.1.2 after the upgrade: data version marker, one backup zip, markets kept, a NetFlowPlugin before each old VolatilityPlugin with the old flow settings (moved defaults), split flag saved", MASTER_ONLY, true);
     // TK-3: client GUI suite (TestKit Gui driver): the trade screen's layout and one interaction, the management screen's market grid; runs on the game client.
     public static final TestCategory GUI = new TestCategory("stockmarket", "sm_gui", "TK-3: trade and management screens on the game client: layout at 1920x1080 @2 and @3, the +10 button raises the amount; SM-362: the management grid lists each market once after overlapping refreshes", BOTH, true);
+    // SM-358 / SM-361: opt-in documentation screenshots (client suites, sp cell, run only with --only stockmarket/sm_docs_shots).
+    public static final TestCategory DOCS_SHOTS = new TestCategory("stockmarket", "sm_docs_shots", "SM-358/SM-361 (opt-in): builds an invented market world and takes the documentation screenshots (trade, management, plugin and news screens)", BOTH, true);
 
     // SM-335: profit-taking round trips over three markets with inter-market swaps (pump, swap before the bot reacts, split orders).
     public static final TestCategory EXPLOIT = new TestCategory("stockmarket", "sm_exploit", "SM-335: round trips over three markets with inter-market swaps (pump then swap, swap before the bot reacts, A-B-A and triangle cycles, split orders); net profit must stay <= 5% of the capital at risk", MASTER_ONLY, true);
