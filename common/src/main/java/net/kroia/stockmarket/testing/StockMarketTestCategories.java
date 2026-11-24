@@ -238,6 +238,8 @@ public class StockMarketTestCategories {
 
     // SM-359: opt-in, posts the example Discord feed of the docs to a real webhook (run only with --only stockmarket/sm_docs_discord).
     public static final TestCategory DOCS_DISCORD = new TestCategory("stockmarket", "sm_docs_discord", "SM-359 (opt-in): posts three example Discord feed messages (market buy, market sell, profit alert) to the webhook named by MC_DISCORD_TEST_WEBHOOK_FILE, for the docs picture", BOTH, true);
+    // SM-361: opt-in, the example plugin picture of the developer docs (run only with --only stockmarket/sm_docs_plugin; needs the example plugin jar).
+    public static final TestCategory DOCS_PLUGIN = new TestCategory("stockmarket", "sm_docs_plugin", "SM-361 (opt-in): the example plugin picture of the developer docs (PriceFloorPlugin added, enabled, diamond subscribed, Min Price applied); skips without the example plugin", BOTH, true);
 
     // SM-335: profit-taking round trips over three markets with inter-market swaps (pump, swap before the bot reacts, split orders).
     public static final TestCategory EXPLOIT = new TestCategory("stockmarket", "sm_exploit", "SM-335: round trips over three markets with inter-market swaps (pump then swap, swap before the bot reacts, A-B-A and triangle cycles, split orders); net profit must stay <= 5% of the capital at risk", MASTER_ONLY, true);

@@ -500,7 +500,7 @@ public class DocsScreenshotSuite extends TestSuite {
         return null;
     }
 
-    private @Nullable String pluginManagement() {
+    @Nullable String pluginManagement() {
         management();
         Gui.click("Manage Plugins");
         Gui.waitTicks(DATA_TICKS);
@@ -637,7 +637,7 @@ public class DocsScreenshotSuite extends TestSuite {
     }
 
     /** Whether {@code n} is an ItemView showing {@code item} (empty item views have no stack). */
-    private static boolean shows(GuiNode n, Item item) {
+    static boolean shows(GuiNode n, Item item) {
         return n.handle() instanceof ItemView v && v.getItemStack() != null && v.getItemStack().is(item);
     }
 
@@ -653,7 +653,7 @@ public class DocsScreenshotSuite extends TestSuite {
         else if (required) throw new IllegalStateException("no visible " + what);
     }
 
-    private static @Nullable GuiNode findIn(GuiNode root, Predicate<GuiNode> filter) {
+    static @Nullable GuiNode findIn(GuiNode root, Predicate<GuiNode> filter) {
         List<GuiNode> found = new ArrayList<>();
         root.forEach(n -> {
             if (found.isEmpty() && filter.test(n)) found.add(n);
@@ -662,7 +662,7 @@ public class DocsScreenshotSuite extends TestSuite {
     }
 
     /** Scrolls the list view that holds {@code node} so the node's row is at the top. */
-    private static void scrollTo(GuiNode node) {
+    static void scrollTo(GuiNode node) {
         Gui.onClient(() -> {
             GuiElement row = (GuiElement) node.handle();
             GuiElement parent = row.getParent();

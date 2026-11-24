@@ -34,6 +34,7 @@ public final class DevBootstrap {
             TestRegistry.register(new DocsScreenshotSuite()); // SM-358: documentation screenshots (opt-in, --only)
             TestRegistry.register(new DocsWorldShotsSuite()); // SM-361: in-world documentation shots (opt-in, --only)
             TestRegistry.register(new DocsDiscordFeedSuite()); // SM-359: posts the Discord feed example of the docs (opt-in, --only)
+            TestRegistry.register(new DocsPluginShotSuite()); // SM-361: example plugin picture of the developer docs (opt-in, --only)
         }
     }
 
