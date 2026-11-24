@@ -32,6 +32,7 @@ public final class DevBootstrap {
             TestRegistry.register(new TradeScreenGuiTestSuite());
             TestRegistry.register(new ScreenTradeClientScenarioSuite()); // SM-352: client part of the two-client trade scenario
             TestRegistry.register(new DocsScreenshotSuite()); // SM-358: documentation screenshots (opt-in, --only)
+            TestRegistry.register(new DocsWorldShotsSuite()); // SM-361: in-world documentation shots (opt-in, --only)
         }
     }
 

@@ -73,17 +73,18 @@ import java.util.function.Supplier;
  * Opt-in: the shots take minutes and resize the window, so the suite runs only when named with
  * {@code --only stockmarket/sm_docs_shots} (it is also in the selection file's exclude list). Start the client with
  * {@code --client-name Tavrik}: the player name shows on some screens. Needs the integrated server (sp cells).
+ * The in-world pictures are taken by {@link DocsWorldShotsSuite} on the same world.
  */
 public class DocsScreenshotSuite extends TestSuite {
 
     /** The topic to name with --only. */
     static final String TOPIC = "stockmarket/sm_docs_shots";
-    private static final long WAIT_MS = 15_000;
+    static final long WAIT_MS = 15_000;
     private static final long MINUTE = 60_000L;
     /** One-minute candles written per market (about 33 hours). */
     private static final int HISTORY_CANDLES = 2_000;
     /** Ticks to wait after opening a screen, so its requests are answered and charts are filled. */
-    private static final int DATA_TICKS = 60;
+    static final int DATA_TICKS = 60;
     /** The ten markets of the docs world; diamond first, the market most shots show. */
     private static final List<Item> MARKET_ITEMS = List.of(Items.DIAMOND, Items.IRON_INGOT, Items.GOLD_INGOT,
             Items.EMERALD, Items.COAL, Items.COPPER_INGOT, Items.REDSTONE, Items.LAPIS_LAZULI, Items.WHEAT, Items.OAK_LOG);
@@ -99,12 +100,12 @@ public class DocsScreenshotSuite extends TestSuite {
     private static final int WHEAT_OPEN = 8 * 60, WHEAT_CLOSE = 18 * 60;
     private static final long EVENING = 14_000;
     /** User decision 2026-11-24: Full HD at GUI scale 2 (960x540 GUI space); at 1280x720 buttons overlap. */
-    private static final Screenshots.Scene SCENE = new Screenshots.Scene(1920, 1080, 2, 6_000, true);
+    static final Screenshots.Scene SCENE = new Screenshots.Scene(1920, 1080, 2, 6_000, true);
 
     /** The world built by {@link #test_fixture()}, shared with later docs suites in the same client; null until built. */
     static @Nullable Fixture fixture;
     /** Why the fixture could not be built (the shots skip with it), or null. */
-    private static @Nullable String fixtureProblem = "fixture not built yet";
+    static @Nullable String fixtureProblem = "fixture not built yet";
 
     /** What the fixture created: the player, its personal account, the money item and the market ids. */
     record Fixture(UUID self, String name, int account, ItemID money, Map<Item, ItemID> markets, List<ItemID> companies) {
@@ -153,7 +154,8 @@ public class DocsScreenshotSuite extends TestSuite {
     // ---------------------------------------------------------------- fixture
 
     /** Builds the invented market world (see the class Javadoc). Every shot skips if this fails. */
-    private TestResult test_fixture() {
+    TestResult test_fixture() {
+        if (fixture != null) return pass("built by an earlier docs suite in this client");
         String include = System.getProperty(TestRegistry.INCLUDE_PROPERTY);
         if (include == null || include.isBlank() || TestRegistry.isExcluded(TestRegistry.topicKey(this), include, null))
             return skip(fixtureProblem = "opt-in: --only " + TOPIC);
@@ -334,17 +336,19 @@ public class DocsScreenshotSuite extends TestSuite {
      * Runs {@code prepare} (opens the screen and brings it into the listed state), takes the picture and closes the
      * screen. {@code prepare} returns null when ready or a reason to fail.
      */
-    private TestResult shot(String file, Supplier<String> prepare) {
+    TestResult shot(String file, Supplier<String> prepare) {
         return shot(file, SCENE, prepare);
     }
 
-    private TestResult shot(String file, Screenshots.Scene scene, Supplier<String> prepare) {
+    TestResult shot(String file, Screenshots.Scene scene, Supplier<String> prepare) {
         if (fixture == null) return skip(String.valueOf(fixtureProblem));
         try {
             String problem = prepare.get();
             if (problem != null) return fail(problem);
-            parkMouse();
-            List<Layout.Problem> layout = Gui.layoutProblems();
+            // in the world (no screen) the mouse turns the camera: it is left alone there
+            boolean screen = Gui.onClient(() -> Minecraft.getInstance().screen != null);
+            if (screen) parkMouse();
+            List<Layout.Problem> layout = screen ? Gui.layoutProblems() : List.of();
             Path path = Screenshots.take(file, scene);
             if (!Files.isRegularFile(path)) return fail("no screenshot at " + path);
             // layout problems are reported, not failed: the picture is checked by eye (overlapping decorations are normal)
