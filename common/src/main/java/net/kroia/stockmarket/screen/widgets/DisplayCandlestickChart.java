@@ -68,7 +68,7 @@ public class DisplayCandlestickChart extends CandlestickChart implements AutoClo
      * Creates a chart embedded in another mod's screen (SM-313, see
      * {@code StockMarketClientIntegration.createPriceChart}). Its zoom/position is stored under its
      * own key, so it never moves the TradeScreen's or a display block's view; on first use it
-     * starts from the player's TradeScreen view of the market.
+     * fits itself to the market's prices.
      *
      * @param itemID the market to show
      * @return a chart that connects on creation if the market is cached, else lazily on render
@@ -235,9 +235,9 @@ public class DisplayCandlestickChart extends CandlestickChart implements AutoClo
 
     private boolean tryConnect() {
         if (BACKEND_INSTANCES == null) return false;
-        // Own saved view first (set by an earlier connection of this chart key); else the trade view.
-        boolean hasOwnView = lookupSavedViewport(displayViewportKey) != null;
-
+        // The view: the one handed in (setInitialViewport, the block's stored view) or the chart's own saved
+        // one (setPriceDataProvider restores it), else the chart fits itself. SM-387: the trade screen's view
+        // is not copied; a copied view stopped widening to new prices.
         if (secondMarketID != null) {
             // Cross-rate (Item/Item) mode
             // targetMarketID = "I want" item (numerator in the price ratio)
@@ -263,11 +263,6 @@ public class DisplayCandlestickChart extends CandlestickChart implements AutoClo
             if (initialViewport != null) {
                 deserializeViewport(initialViewport);
                 initialViewport = null;
-            } else if (!hasOwnView) {
-                CompoundTag tradeViewport = lookupSavedViewport(provider.getViewportKey());
-                if (tradeViewport != null) {
-                    deserializeViewport(tradeViewport);
-                }
             }
             return true;
         } else {
@@ -282,11 +277,6 @@ public class DisplayCandlestickChart extends CandlestickChart implements AutoClo
             if (initialViewport != null) {
                 deserializeViewport(initialViewport);
                 initialViewport = null;
-            } else if (!hasOwnView) {
-                CompoundTag tradeViewport = lookupSavedViewport(market.getViewportKey());
-                if (tradeViewport != null) {
-                    deserializeViewport(tradeViewport);
-                }
             }
             return true;
         }
