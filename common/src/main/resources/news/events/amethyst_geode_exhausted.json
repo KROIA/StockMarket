@@ -1,0 +1,48 @@
+{
+  "id": "amethyst_geode_exhausted",
+  "picture": "amethyst_geode_exhausted.png",
+  "headline": {
+    "en_us": "The great geode is mined out - amethyst grows scarce again",
+    "zh_cn": "巨型晶洞已被采空——紫水晶再度稀缺",
+    "de_de": "Die große Geode ist erschöpft - Amethyst wird wieder knapp"
+  },
+  "text": {
+    "en_us": "The colossal geode that flooded the caravans with crystal has finally been stripped to bare stone. With the last clusters hauled away, amethyst is trickling in at its old pace again, and jewelers expect the price to climb slowly back to where it stood before the find.",
+    "zh_cn": "曾让商队满载晶体的巨型晶洞终于被采得只剩光秃岩壁。最后的晶簇运走之后，紫水晶又恢复了往日缓慢的供应节奏，珠宝商预计其价格将逐步回升至发现晶洞之前的水平。",
+    "de_de": "Die gewaltige Geode, die die Karawanen mit Kristall überschwemmte, ist endgültig bis auf den nackten Fels abgebaut. Seit die letzten Drusen fortgeschafft sind, kommt Amethyst wieder im alten Tempo herein, und Juweliere erwarten, dass der Preis langsam auf das Niveau von vor dem Fund zurückklettert."
+  },
+  "category": "commodities",
+  "weight": 10,
+  "undoes": "amethyst_geode_discovery",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
+  },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": 0.3,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:amethyst_shard",
+      "weightFactor": 1.0
+    }
+  ]
+}

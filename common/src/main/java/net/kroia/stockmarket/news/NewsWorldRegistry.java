@@ -11,6 +11,7 @@ import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -34,9 +35,11 @@ import java.util.Map;
  *       key and value each at most {@value #MAX_KEY_LENGTH}/{@value #MAX_VALUE_LENGTH}
  *       characters — a write beyond a cap is <b>refused</b> (WARN log,
  *       {@link #putValue} returns false).</li>
- *   <li><b>Permanent bake deltas</b> (SM-341) — per event id and market, the absolute
- *       default-price change its permanent bakes applied ({@link #addBakeDelta}); an
- *       event with {@code "undoes"} adds it back ({@link #takeBakeDelta}).</li>
+ *   <li><b>Permanent shifts</b> (MU-181) — per permanent event id and market, how many of
+ *       its bakes are not reverted yet ({@link #addShifts}/{@link #removeShift}), each
+ *       market's normal default price from before its first unreverted shift
+ *       ({@link #getNormalPrice}) and, per permanent event, when its counterpart event
+ *       (the one with {@code "undoes"}) may fire next ({@link #getUndoEligibleAtMs}).</li>
  * </ul>
  * <p>
  * <b>Consumers of this contract:</b> the T-097 requirement predicates read via
@@ -75,9 +78,13 @@ public class NewsWorldRegistry implements ServerSaveable {
     private static final String KEY_FIRE_FIRST_MS = "firstMs";
     private static final String KEY_FIRE_LAST_MS = "lastMs";
     private static final String KEY_FIRE_GAME_DAY = "gameDay";
-    private static final String KEY_BAKE_DELTAS = "bakeDeltas";
-    private static final String KEY_BAKE_EVENT = "event";
-    private static final String KEY_BAKE_DELTA = "delta";
+    private static final String KEY_SHIFTS = "permanentShifts";
+    private static final String KEY_SHIFT_EVENT = "event";
+    private static final String KEY_SHIFT_COUNT = "count";
+    private static final String KEY_NORMAL_PRICES = "normalPrices";
+    private static final String KEY_NORMAL_PRICE = "price";
+    private static final String KEY_UNDO_AT = "undoEligibleAt";
+    private static final String KEY_SHIFTS_MIGRATED = "permanentShiftsMigrated";
 
     /**
      * Immutable per-event fire record — the auto-recorded side of the registry.
@@ -102,51 +109,145 @@ public class NewsWorldRegistry implements ServerSaveable {
     private final Map<String, String> customValues = new LinkedHashMap<>();
 
     /**
-     * SM-341: absolute default-price change each event's permanent bakes applied, per
-     * event id and market (summed over repeated bakes). An event with {@code "undoes"}
-     * takes the entry of the event it undoes and adds it back.
+     * MU-181: per permanent event id and market, the number of that event's bakes that are
+     * not reverted yet. The event may fire again only when none of its subscribed markets
+     * has a count left; each firing of its counterpart takes one off per market.
      */
-    private final Map<String, Map<ItemID, Double>> bakeDeltas = new LinkedHashMap<>();
-
-    // ── Permanent bake deltas (SM-341) ───────────────────────────────────
+    private final Map<String, Map<ItemID, Integer>> shiftCounts = new LinkedHashMap<>();
 
     /**
-     * Adds the absolute default-price change a permanent bake of {@code eventId} applied
-     * to {@code marketID} (summed with earlier, not yet undone bakes of that event there).
-     *
-     * @param eventId  the baking event's id (null/blank ignored)
-     * @param marketID the market whose default price changed (null ignored)
-     * @param delta    new default price minus old default price (real units)
+     * MU-181: per market, the default price (real units) from before its first unreverted
+     * permanent shift. Present exactly while the market has at least one shift left.
      */
-    public void addBakeDelta(@Nullable String eventId, @Nullable ItemID marketID, double delta) {
-        if (eventId == null || eventId.isBlank() || marketID == null || !Double.isFinite(delta)) return;
-        bakeDeltas.computeIfAbsent(eventId, k -> new LinkedHashMap<>()).merge(marketID, delta, Double::sum);
+    private final Map<ItemID, Double> normalPrices = new LinkedHashMap<>();
+
+    /**
+     * MU-181: per permanent event id, the wall-clock epoch ms from which its counterpart
+     * may fire (absent = right away).
+     */
+    private final Map<String, Long> undoEligibleAtMs = new LinkedHashMap<>();
+
+    /** MU-181: true once the one-time migration from the fire records has run. */
+    private boolean shiftsMigrated;
+
+    // ── Permanent shifts (MU-181) ────────────────────────────────────────
+
+    /**
+     * Records {@code count} unreverted permanent shifts of {@code eventId} on a market.
+     * If the market had no shift left so far, {@code normalPrice} becomes its normal level.
+     *
+     * @param eventId     the permanent event whose bake shifted the market (null/blank ignored)
+     * @param marketID    the shifted market (null ignored)
+     * @param count       how many shifts to add (&lt;= 0 ignored)
+     * @param normalPrice the market's default price before the shift (real units, must be
+     *                    positive); only used when the market had no shift left
+     */
+    public void addShifts(@Nullable String eventId, @Nullable ItemID marketID, int count, double normalPrice) {
+        if (eventId == null || eventId.isBlank() || marketID == null || count <= 0) return;
+        if (totalShiftCount(marketID) == 0) {
+            if (!(normalPrice > 0) || !Double.isFinite(normalPrice)) return;
+            normalPrices.put(marketID, normalPrice);
+        }
+        shiftCounts.computeIfAbsent(eventId, k -> new LinkedHashMap<>()).merge(marketID, count, Integer::sum);
     }
 
     /**
-     * @param eventId  the baking event's id
+     * Takes one shift of {@code eventId} off a market. When the market has no shift left
+     * afterwards, its normal level is forgotten.
+     *
+     * @param eventId  the permanent event being reverted
      * @param marketID the market
-     * @return the stored delta of that event on that market, or null if none is stored
+     * @return true if a shift was taken off
      */
-    public @Nullable Double getBakeDelta(@Nullable String eventId, @Nullable ItemID marketID) {
-        Map<ItemID, Double> perMarket = eventId == null ? null : bakeDeltas.get(eventId);
-        return perMarket == null ? null : perMarket.get(marketID);
+    public boolean removeShift(@Nullable String eventId, @Nullable ItemID marketID) {
+        Map<ItemID, Integer> perMarket = eventId == null ? null : shiftCounts.get(eventId);
+        Integer count = perMarket == null ? null : perMarket.get(marketID);
+        if (count == null) return false;
+        if (count <= 1) {
+            perMarket.remove(marketID);
+            if (perMarket.isEmpty()) shiftCounts.remove(eventId);
+        } else {
+            perMarket.put(marketID, count - 1);
+        }
+        if (totalShiftCount(marketID) == 0) normalPrices.remove(marketID);
+        return true;
     }
 
     /**
-     * Removes and returns the stored delta of {@code eventId} on {@code marketID}
-     * (used by an {@code "undoes"} event, which adds it back once).
-     *
-     * @param eventId  the undone event's id
+     * @param eventId  the permanent event
      * @param marketID the market
-     * @return the removed delta, or null if none was stored
+     * @return how many of the event's shifts on that market are not reverted yet
      */
-    public @Nullable Double takeBakeDelta(@Nullable String eventId, @Nullable ItemID marketID) {
-        Map<ItemID, Double> perMarket = eventId == null ? null : bakeDeltas.get(eventId);
-        if (perMarket == null) return null;
-        Double delta = perMarket.remove(marketID);
-        if (perMarket.isEmpty()) bakeDeltas.remove(eventId);
-        return delta;
+    public int shiftCount(@Nullable String eventId, @Nullable ItemID marketID) {
+        Map<ItemID, Integer> perMarket = eventId == null ? null : shiftCounts.get(eventId);
+        Integer count = perMarket == null ? null : perMarket.get(marketID);
+        return count == null ? 0 : count;
+    }
+
+    /**
+     * @param marketID the market
+     * @return the unreverted shifts on that market, summed over all permanent events
+     */
+    public int totalShiftCount(@Nullable ItemID marketID) {
+        int total = 0;
+        for (Map<ItemID, Integer> perMarket : shiftCounts.values()) {
+            total += perMarket.getOrDefault(marketID, 0);
+        }
+        return total;
+    }
+
+    /**
+     * The event-level counter: the highest per-market shift count of the event.
+     *
+     * @param eventId the permanent event
+     * @param markets only count these markets (e.g. the subscribed ones), or null for all
+     * @return how many reversals the event still needs (0 = it may fire again)
+     */
+    public int pendingUndos(@Nullable String eventId, @Nullable Collection<ItemID> markets) {
+        Map<ItemID, Integer> perMarket = eventId == null ? null : shiftCounts.get(eventId);
+        if (perMarket == null) return 0;
+        int max = 0;
+        for (Map.Entry<ItemID, Integer> entry : perMarket.entrySet()) {
+            if (markets == null || markets.contains(entry.getKey())) max = Math.max(max, entry.getValue());
+        }
+        return max;
+    }
+
+    /**
+     * @param marketID the market
+     * @return its default price (real units) from before its first unreverted shift, or
+     *         null when it has no shift left
+     */
+    public @Nullable Double getNormalPrice(@Nullable ItemID marketID) {
+        return marketID == null ? null : normalPrices.get(marketID);
+    }
+
+    /**
+     * @param eventId the permanent event
+     * @return the epoch ms from which its counterpart may fire; 0 when not set (right away)
+     */
+    public long getUndoEligibleAtMs(@Nullable String eventId) {
+        Long at = eventId == null ? null : undoEligibleAtMs.get(eventId);
+        return at == null ? 0 : at;
+    }
+
+    /**
+     * @param eventId the permanent event (null/blank ignored)
+     * @param epochMs the wall-clock epoch ms from which its counterpart may fire next
+     */
+    public void setUndoEligibleAtMs(@Nullable String eventId, long epochMs) {
+        if (eventId == null || eventId.isBlank()) return;
+        undoEligibleAtMs.put(eventId, epochMs);
+    }
+
+    /** @return true once the one-time migration from the fire records has run */
+    public boolean isShiftsMigrated() {
+        return shiftsMigrated;
+    }
+
+    /** Marks the one-time migration from the fire records as done (persisted). */
+    public void markShiftsMigrated() {
+        shiftsMigrated = true;
     }
 
     // ── Auto fire records ────────────────────────────────────────────────
@@ -308,16 +409,22 @@ public class NewsWorldRegistry implements ServerSaveable {
         return removeValue(key);
     }
 
-    /** Wipes the whole registry: all fire records, custom pairs and bake deltas. */
+    /**
+     * Wipes the whole registry: all fire records, custom pairs and permanent-shift state
+     * (counts, normal prices, counterpart timers and the migration flag).
+     */
     public void clearAll() {
         fireInfos.clear();
         customValues.clear();
-        bakeDeltas.clear();
+        shiftCounts.clear();
+        normalPrices.clear();
+        undoEligibleAtMs.clear();
+        shiftsMigrated = false;
     }
 
-    /** @return true if the registry holds no fire records, custom pairs or bake deltas */
+    /** @return true if the registry holds no fire records, custom pairs or permanent shifts */
     public boolean isEmpty() {
-        return fireInfos.isEmpty() && customValues.isEmpty() && bakeDeltas.isEmpty();
+        return fireInfos.isEmpty() && customValues.isEmpty() && shiftCounts.isEmpty();
     }
 
     // ── NBT persistence (ServerSaveable) ─────────────────────────────────
@@ -351,17 +458,31 @@ public class NewsWorldRegistry implements ServerSaveable {
         }
         tag.put(KEY_VALUES, valuesTag);
 
-        ListTag deltasTag = new ListTag();
-        for (Map.Entry<String, Map<ItemID, Double>> perEvent : bakeDeltas.entrySet()) {
-            for (Map.Entry<ItemID, Double> entry : perEvent.getValue().entrySet()) {
-                CompoundTag deltaTag = new CompoundTag();
-                deltaTag.putString(KEY_BAKE_EVENT, perEvent.getKey());
-                entry.getKey().save(deltaTag);
-                deltaTag.putDouble(KEY_BAKE_DELTA, entry.getValue());
-                deltasTag.add(deltaTag);
+        ListTag shiftsTag = new ListTag();
+        for (Map.Entry<String, Map<ItemID, Integer>> perEvent : shiftCounts.entrySet()) {
+            for (Map.Entry<ItemID, Integer> entry : perEvent.getValue().entrySet()) {
+                CompoundTag shiftTag = new CompoundTag();
+                shiftTag.putString(KEY_SHIFT_EVENT, perEvent.getKey());
+                entry.getKey().save(shiftTag);
+                shiftTag.putInt(KEY_SHIFT_COUNT, entry.getValue());
+                shiftsTag.add(shiftTag);
             }
         }
-        tag.put(KEY_BAKE_DELTAS, deltasTag);
+        tag.put(KEY_SHIFTS, shiftsTag);
+
+        ListTag normalsTag = new ListTag();
+        for (Map.Entry<ItemID, Double> entry : normalPrices.entrySet()) {
+            CompoundTag normalTag = new CompoundTag();
+            entry.getKey().save(normalTag);
+            normalTag.putDouble(KEY_NORMAL_PRICE, entry.getValue());
+            normalsTag.add(normalTag);
+        }
+        tag.put(KEY_NORMAL_PRICES, normalsTag);
+
+        CompoundTag undoAtTag = new CompoundTag();
+        undoEligibleAtMs.forEach(undoAtTag::putLong);
+        tag.put(KEY_UNDO_AT, undoAtTag);
+        tag.putBoolean(KEY_SHIFTS_MIGRATED, shiftsMigrated);
         return true;
     }
 
@@ -405,16 +526,37 @@ public class NewsWorldRegistry implements ServerSaveable {
                 putValue(key, NbtCompat.getString(valuesTag, key));
             }
         }
-        if (NbtCompat.contains(tag, KEY_BAKE_DELTAS, Tag.TAG_LIST)) {
-            ListTag deltasTag = NbtCompat.getList(tag, KEY_BAKE_DELTAS, Tag.TAG_COMPOUND);
-            for (int i = 0; i < deltasTag.size(); i++) {
-                CompoundTag deltaTag = NbtCompat.getCompound(deltasTag, i);
-                ItemID marketID = ItemID.createFromTag(deltaTag);
+        // MU-181 permanent shifts. A pre-MU-181 file has none of these keys (its SM-341
+        // "bakeDeltas" are ignored): the plugin then runs the one-time migration from the
+        // fire records. A shift whose market has no normal level cannot be reverted and
+        // is dropped.
+        Map<ItemID, Double> loadedNormals = new LinkedHashMap<>();
+        if (NbtCompat.contains(tag, KEY_NORMAL_PRICES, Tag.TAG_LIST)) {
+            ListTag normalsTag = NbtCompat.getList(tag, KEY_NORMAL_PRICES, Tag.TAG_COMPOUND);
+            for (int i = 0; i < normalsTag.size(); i++) {
+                CompoundTag normalTag = NbtCompat.getCompound(normalsTag, i);
+                ItemID marketID = ItemID.createFromTag(normalTag);
                 if (marketID == null || marketID.getShort() == 0) continue;
-                addBakeDelta(NbtCompat.getString(deltaTag, KEY_BAKE_EVENT), marketID,
-                        NbtCompat.getDouble(deltaTag, KEY_BAKE_DELTA));
+                loadedNormals.put(marketID, NbtCompat.getDouble(normalTag, KEY_NORMAL_PRICE));
             }
         }
+        if (NbtCompat.contains(tag, KEY_SHIFTS, Tag.TAG_LIST)) {
+            ListTag shiftsTag = NbtCompat.getList(tag, KEY_SHIFTS, Tag.TAG_COMPOUND);
+            for (int i = 0; i < shiftsTag.size(); i++) {
+                CompoundTag shiftTag = NbtCompat.getCompound(shiftsTag, i);
+                ItemID marketID = ItemID.createFromTag(shiftTag);
+                if (marketID == null || marketID.getShort() == 0) continue;
+                addShifts(NbtCompat.getString(shiftTag, KEY_SHIFT_EVENT), marketID,
+                        NbtCompat.getInt(shiftTag, KEY_SHIFT_COUNT), loadedNormals.getOrDefault(marketID, 0.0));
+            }
+        }
+        if (NbtCompat.contains(tag, KEY_UNDO_AT, Tag.TAG_COMPOUND)) {
+            CompoundTag undoAtTag = NbtCompat.getCompound(tag, KEY_UNDO_AT);
+            for (String eventId : NbtCompat.keys(undoAtTag)) {
+                setUndoEligibleAtMs(eventId, NbtCompat.getLong(undoAtTag, eventId));
+            }
+        }
+        shiftsMigrated = NbtCompat.getBoolean(tag, KEY_SHIFTS_MIGRATED);
         return true;
     }
 }

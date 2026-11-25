@@ -51,7 +51,7 @@ public final class NewsEventDefinition {
     private static final Set<String> KNOWN_EVENT_KEYS = Set.of(
             "id", "headline", "text", "category", "weight", "cooldownSeconds",
             "adminOnly", "announceDelayMs", "impact", "sequences", "markets", "picture",
-            "requires", "records", "chains", "undoes");
+            "requires", "records", "chains", "undoes", "undoDelaySeconds", "undoRepeatDelaySeconds");
     private static final Set<String> KNOWN_IMPACT_KEYS = Set.of(
             "type", "peakFactor", "rampUpSeconds", "durationSeconds",
             "reversal", "reversalSeconds", "noise");
@@ -92,6 +92,20 @@ public final class NewsEventDefinition {
         /** The default range: publish and impact happen simultaneously. */
         public static final AnnounceDelayRange ZERO = new AnnounceDelayRange(0, 0);
     }
+
+    /**
+     * MU-181 default of {@code undoDelaySeconds}: after a fresh firing of a permanent event,
+     * its counterpart becomes eligible 3 to 21 days (wall clock) later.
+     */
+    public static final AnnounceDelayRange DEFAULT_UNDO_DELAY =
+            new AnnounceDelayRange(3L * 86_400_000L, 21L * 86_400_000L);
+
+    /**
+     * MU-181 default of {@code undoRepeatDelaySeconds}: while reversals are still pending,
+     * the next one becomes eligible 1 to 3 days (wall clock) after the previous one.
+     */
+    public static final AnnounceDelayRange DEFAULT_UNDO_REPEAT_DELAY =
+            new AnnounceDelayRange(86_400_000L, 3L * 86_400_000L);
 
     /**
      * One portable market matcher from the event's {@code markets[]} array.
@@ -586,6 +600,8 @@ public final class NewsEventDefinition {
     private final Map<String, String> records;
     private final List<ChainDefinition> chains;
     private final @Nullable String undoesEventId;
+    private final AnnounceDelayRange undoDelayMs;
+    private final AnnounceDelayRange undoRepeatDelayMs;
 
     private NewsEventDefinition(String id, Map<String, String> headline, Map<String, String> text,
                                 String category, float weight, long cooldownSeconds,
@@ -594,7 +610,8 @@ public final class NewsEventDefinition {
                                 List<SequenceDefinition> sequences, List<MarketMatcher> markets,
                                 @Nullable String pictureFileName,
                                 List<NewsRequirement> requirements, Map<String, String> records,
-                                List<ChainDefinition> chains, @Nullable String undoesEventId) {
+                                List<ChainDefinition> chains, @Nullable String undoesEventId,
+                                AnnounceDelayRange undoDelayMs, AnnounceDelayRange undoRepeatDelayMs) {
         this.id = id;
         this.headline = Collections.unmodifiableMap(headline);
         this.text = Collections.unmodifiableMap(text);
@@ -611,6 +628,8 @@ public final class NewsEventDefinition {
         this.records = Collections.unmodifiableMap(records);
         this.chains = Collections.unmodifiableList(chains);
         this.undoesEventId = undoesEventId;
+        this.undoDelayMs = undoDelayMs;
+        this.undoRepeatDelayMs = undoRepeatDelayMs;
     }
 
     // ── Accessors ────────────────────────────────────────────────────────
@@ -721,14 +740,55 @@ public final class NewsEventDefinition {
     public List<ChainDefinition> getChains() { return chains; }
 
     /**
-     * SM-341: the optional {@code "undoes"} event id. When this event's permanent shift
-     * bakes, each market gets back exactly the absolute default-price change the undone
-     * event's bakes left there (stored in {@link NewsWorldRegistry#takeBakeDelta}) instead
-     * of this event's own factor; markets without a stored change keep their default price.
+     * MU-181: the optional {@code "undoes"} event id, which makes this event the counterpart
+     * of a permanent event. The counterpart is eligible only while the permanent event has
+     * unreverted shifts ({@link NewsWorldRegistry#pendingUndos}) and its delay has passed;
+     * it affects only the markets that still carry a shift, ramps each of them one step back
+     * toward its normal price and never applies its own factor.
      *
-     * @return the undone event's id, or null when the event bakes normally
+     * @return the reverted permanent event's id, or null when the event bakes normally
      */
     public @Nullable String getUndoesEventId() { return undoesEventId; }
+
+    /**
+     * MU-181: {@code "undoDelaySeconds"} (number or {@code {min, max}}, default 3–21 days),
+     * read on the counterpart: how long after a fresh firing of the permanent event the
+     * first reversal becomes eligible.
+     *
+     * @return the delay range in milliseconds (wall clock)
+     */
+    public AnnounceDelayRange getUndoDelayMs() { return undoDelayMs; }
+
+    /**
+     * MU-181: {@code "undoRepeatDelaySeconds"} (number or {@code {min, max}}, default
+     * 1–3 days), read on the counterpart: how long after one reversal the next pending
+     * one becomes eligible.
+     *
+     * @return the delay range in milliseconds (wall clock)
+     */
+    public AnnounceDelayRange getUndoRepeatDelayMs() { return undoRepeatDelayMs; }
+
+    /**
+     * @return true if at least one of the event's sequences ends in a {@code permanent}
+     *         step (legacy {@code "reversal": "none"} included)
+     */
+    public boolean isPermanent() {
+        for (SequenceDefinition sequence : sequences) {
+            List<StepDefinition> steps = sequence.getSteps();
+            if (!steps.isEmpty() && steps.get(steps.size() - 1).isPermanent()) return true;
+        }
+        return false;
+    }
+
+    /**
+     * MU-181: a permanent event without {@code "undoes"}. Each of its firings is counted
+     * per market, and it may fire again only after its counterpart reverted all of them.
+     *
+     * @return true if the event's firings are counted
+     */
+    public boolean isCountedPermanent() {
+        return undoesEventId == null && isPermanent();
+    }
 
     // ── Matcher resolution ───────────────────────────────────────────────
 
@@ -1033,8 +1093,8 @@ public final class NewsEventDefinition {
             }
         }
 
-        // undoes — optional id of the event whose permanent bakes this event reverts
-        // (SM-341). Non-fatal like 'records': a broken value only drops the field.
+        // undoes — optional id of the permanent event this counterpart reverts (MU-181).
+        // Non-fatal like 'records': a broken value only drops the field.
         String undoesEventId = null;
         if (json.has("undoes")) {
             JsonElement undoesEl = json.get("undoes");
@@ -1046,6 +1106,14 @@ public final class NewsEventDefinition {
                 nonFatalErrors++;
             }
         }
+        // undoDelaySeconds / undoRepeatDelaySeconds — counterpart delays (MU-181), non-fatal:
+        // a broken value falls back to the default.
+        AnnounceDelayRange undoDelay = parseSecondsRange(json, "undoDelaySeconds",
+                DEFAULT_UNDO_DELAY, file, id, report);
+        AnnounceDelayRange undoRepeatDelay = parseSecondsRange(json, "undoRepeatDelaySeconds",
+                DEFAULT_UNDO_REPEAT_DELAY, file, id, report);
+        if (undoDelay == null) { undoDelay = DEFAULT_UNDO_DELAY; nonFatalErrors++; }
+        if (undoRepeatDelay == null) { undoRepeatDelay = DEFAULT_UNDO_REPEAT_DELAY; nonFatalErrors++; }
 
         // chains[] — optional event-chain entries (sequences plan §4, task T-098).
         // Malformed chain entries are ERRORs for the entry (the entry is skipped) but do
@@ -1118,7 +1186,43 @@ public final class NewsEventDefinition {
 
         return new NewsEventDefinition(id, headline, text, category, weight, cooldownSeconds,
                 adminOnly, announceDelay, impact, sequences, matchers, pictureFileName,
-                requirements, records, chains, undoesEventId);
+                requirements, records, chains, undoesEventId, undoDelay, undoRepeatDelay);
+    }
+
+    /**
+     * Parses an optional seconds field given as a non-negative number or a
+     * {@code {min, max}} object (MU-181 counterpart delays).
+     *
+     * @param json     the event object
+     * @param key      the field name
+     * @param fallback the range used when the field is absent
+     * @param file     source file name for report entries
+     * @param eventId  owning event id for report entries
+     * @param report   collector for problems
+     * @return the range in milliseconds, {@code fallback} when absent, or null (ERROR
+     *         reported) when the value is malformed
+     */
+    private static @Nullable AnnounceDelayRange parseSecondsRange(JsonObject json, String key,
+                                                                  AnnounceDelayRange fallback,
+                                                                  String file, String eventId,
+                                                                  ValidationReport report) {
+        JsonElement el = json.get(key);
+        if (el == null) return fallback;
+        Double min = null;
+        Double max = null;
+        if (el.isJsonPrimitive() && el.getAsJsonPrimitive().isNumber()) {
+            min = max = getFiniteNumber(json, key);
+        } else if (el.isJsonObject()) {
+            warnUnknownKeys(el.getAsJsonObject(), KNOWN_DELAY_KEYS, key, file, eventId, report);
+            min = getFiniteNumber(el.getAsJsonObject(), "min");
+            max = getFiniteNumber(el.getAsJsonObject(), "max");
+        }
+        if (min == null || max == null || min < 0 || min > max) {
+            report.addError(file, eventId, "'" + key + "' must be a non-negative number or a"
+                    + " {min, max} object with min <= max — using the default, event kept");
+            return null;
+        }
+        return new AnnounceDelayRange(secondsToMillis(min), secondsToMillis(max));
     }
 
     /**
