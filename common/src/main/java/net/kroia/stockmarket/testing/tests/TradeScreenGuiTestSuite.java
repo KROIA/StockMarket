@@ -21,6 +21,7 @@ import net.kroia.stockmarket.screen.uiElements.trading_panel.InterMarketTradingP
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -72,6 +73,8 @@ public class TradeScreenGuiTestSuite extends TestSuite {
     private static final long WAIT_MS = 10_000;
     /** Item of the temporary market the +10 and management tests use (also used by CrossServerTradeScenarioSuite, never at the same time). */
     private static final ItemStack ITEM = new ItemStack(Items.DEAD_BUSH);
+    /** Second temporary market, the "want" side of the pair-mode test. */
+    private static final ItemStack PAIR_ITEM = new ItemStack(Items.FERN);
 
     @Override
     public TestCategory getCategory() {
@@ -88,6 +91,8 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         addTest("layout_full_hd_scale_2_and_3", this::test_layout);
         addTest("layout_market_closed", this::test_layoutMarketClosed); // SM-367
         addTest("chart_texts_do_not_overlap", this::test_chartTexts); // SM-367
+        addTest("chart_widens_to_new_price", this::test_chartWidensToNewPrice); // SM-368
+        addTest("pair_rate_shows_item_names", this::test_pairRateNames); // SM-368
         addTest("plus10_button_raises_quantity", this::test_plus10);
         addTest("management_no_duplicate_markets", this::test_management_no_duplicate_markets);
         addTest("display_chart_configure_button", this::test_display_chart_configure_button); // SM-360
@@ -274,6 +279,87 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         }
     }
 
+    /**
+     * SM-368: the chart is fitted to the price range once; when the price then leaves that range while the newest
+     * candle is in view, the range widens so the candle stays visible (it used to slide out under the chart).
+     */
+    private TestResult test_chartWidensToNewPrice() {
+        try {
+            ChartScreen screen = Gui.onClient(() -> new ChartScreen(false, 157.95));
+            Gui.open(screen);
+            Gui.waitTicks(10);
+            double fittedMin = Gui.onClient(screen.chart::getMinVisiblePrice);
+            if (fittedMin <= 140) return fail("fitted range already reaches 140.00 (bottom " + fittedMin + "), test data too wide");
+            Gui.onClient(() -> screen.data.setCurrentMarketPrice(14000)); // 140.00, below the fitted range
+            Gui.waitTicks(10);
+            double min = Gui.onClient(screen.chart::getMinVisiblePrice);
+            return assertTrue("chart bottom " + min + " (fitted " + fittedMin + ") reaches the new price 140.00", min <= 140);
+        } finally {
+            Gui.close();
+        }
+    }
+
+    /**
+     * SM-368: in item-for-item mode with a pair restored from the player's preferences (not picked in the selector),
+     * the trade panel's rate text ends in both item names (it used to end in a bare "/"), and it shows the same rate
+     * as the pair selector above it. Runs on two temporary markets ({@link #withTemporaryMarket}).
+     */
+    private TestResult test_pairRateNames() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null) return skip("not in a world");
+        return withTemporaryMarket(client, have -> withTemporaryMarket(client, PAIR_ITEM, want -> {
+            ItemID[] oldPair = Gui.onClient(() -> {
+                PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+                ItemID[] old = {prefs.getLastPairHaveMarketID(), prefs.getLastPairWantMarketID()};
+                prefs.setLastPairHaveMarketID(have);
+                prefs.setLastPairWantMarketID(want);
+                StockMarketGuiElement.updatePlayerPreferences(prefs);
+                return old;
+            });
+            try {
+                Gui.onClient(() -> TradeScreen.openScreen(have));
+                Gui.waitForScreen(TradeScreen.class, OPEN_TICKS);
+                if (Gui.findAll(n -> n.handle() instanceof GuiElement).isEmpty())
+                    return skip("needs the ModUtilities GuiLocator (no GuiElement nodes on the trade screen)");
+                String pairMode = Gui.onClient(() -> Component.translatable("gui.stockmarket.trade_screen.mode_pair").getString());
+                List<GuiNode> modeButton = Gui.findAll(n -> n.visible() && n.handle() instanceof Button && pairMode.equals(n.text()));
+                if (modeButton.isEmpty()) return fail("no '" + pairMode + "' button; trading area: " + describeTradingArea());
+                Gui.click(modeButton.get(0));
+                String[] rateText = Gui.onClient(() -> {
+                    String haveName = have.getStack().getHoverName().getString(), wantName = want.getStack().getHoverName().getString();
+                    String full = Component.translatable("gui.stockmarket.inter_market_market_exchange.rate", "\u0001", haveName, wantName).getString();
+                    return new String[]{full.substring(0, full.indexOf('\u0001')), full.substring(full.indexOf('\u0001') + 1),
+                            " " + haveName + " / " + wantName};
+                });
+                String prefix = rateText[0], suffix = rateText[1], selectorSuffix = rateText[2];
+                String panelRate = null, selectorRate = null;
+                for (int t = 0; t < OPEN_TICKS && (panelRate == null || selectorRate == null); t++) {
+                    Gui.waitTicks(1);
+                    panelRate = selectorRate = null;
+                    for (GuiNode n : Gui.findAll(n -> n.visible() && n.text() != null)) { // one snapshot: same tick
+                        String text = n.text();
+                        if (text.startsWith(prefix) && text.endsWith(suffix) && text.length() > prefix.length() + suffix.length())
+                            panelRate = text.substring(prefix.length(), text.length() - suffix.length());
+                        else if (text.endsWith(selectorSuffix))
+                            selectorRate = text.substring(0, text.length() - selectorSuffix.length());
+                    }
+                }
+                if (panelRate == null) return fail("no rate text '" + prefix + "..." + suffix + "' within " + OPEN_TICKS
+                        + " ticks; trading area: " + describeTradingArea());
+                if (selectorRate == null) return fail("no pair selector rate '..." + selectorSuffix + "'");
+                return assertEquals("trade panel rate vs pair selector rate", selectorRate, panelRate);
+            } finally {
+                Gui.close();
+                Gui.onClient(() -> {
+                    PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+                    prefs.setLastPairHaveMarketID(oldPair[0]);
+                    prefs.setLastPairWantMarketID(oldPair[1]);
+                    StockMarketGuiElement.updatePlayerPreferences(prefs);
+                });
+            }
+        }));
+    }
+
     /** @return why the chart's drawn texts are wrong (too few, outside the chart, overlapping), or null */
     private static @Nullable String textBoxProblem(CandlestickChart chart) {
         List<Rectangle> boxes = chart.getDrawnTextBoxes();
@@ -301,6 +387,8 @@ public class TradeScreenGuiTestSuite extends TestSuite {
      */
     static final class ChartScreen extends StockMarketGuiScreen {
         final CandlestickChart chart = new CandlestickChart();
+        /** The chart's candles; a test may move the price (client thread). */
+        final PriceHistoryData data;
         private final boolean mini;
 
         /** @param currentPrice the live price (close of the newest candle) */
@@ -316,7 +404,7 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                 candles.add(new PriceHistoryData.Candle(start + i * 300_000L, open,
                         Math.max(open, close) + 20, Math.min(open, close) - 20, 10 + i % 7));
             }
-            PriceHistoryData data = new PriceHistoryData(ItemID.INVALID_ID, 100, candles, Math.round(currentPrice * 100));
+            data = new PriceHistoryData(ItemID.INVALID_ID, 100, candles, Math.round(currentPrice * 100));
             String key = "test:chart:" + System.identityHashCode(data); // own viewport, nothing restored from an earlier run
             chart.setPriceDataProvider(new IPriceDataProvider() {
                 @Override public PriceHistoryData getPriceHistoryData(long candleTimeDelta) { return data; }
@@ -424,6 +512,11 @@ public class TradeScreenGuiTestSuite extends TestSuite {
      * @param body   the test; gets the market's ItemID, its result is returned
      */
     private TestResult withTemporaryMarket(StockMarketModBackend.ClientInstances client, Function<ItemID, TestResult> body) {
+        return withTemporaryMarket(client, ITEM, body);
+    }
+
+    /** {@link #withTemporaryMarket(StockMarketModBackend.ClientInstances, Function)} for the market of {@code item}. */
+    private TestResult withTemporaryMarket(StockMarketModBackend.ClientInstances client, ItemStack item, Function<ItemID, TestResult> body) {
         // join-synced client setting, no server round trip; /stockmarket op answers command_master_only on a slave
         if (!Gui.onClient(StockMarketGuiElement::isMasterServer))
             return skip("/stockmarket op is master-only: no admin flag or temporary market on a slave");
@@ -442,7 +535,7 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                 if (!admin)
                     return skip("no StockMarket admin flag after /stockmarket op (a slave refuses it: master only)");
             }
-            market = await(Gui.onClient(() -> ItemID.getOrRegisterFromItemStackClientSide(ITEM)), WAIT_MS);
+            market = await(Gui.onClient(() -> ItemID.getOrRegisterFromItemStackClientSide(item)), WAIT_MS);
             ItemID id = market;
             // a run aborted before its cleanup leaves the market behind: delete it so the create below succeeds
             if (Boolean.TRUE.equals(await(Gui.onClient(() -> async.marketExistsAsync(id)), WAIT_MS)))

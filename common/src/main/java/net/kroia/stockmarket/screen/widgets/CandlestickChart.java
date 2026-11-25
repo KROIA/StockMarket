@@ -76,7 +76,7 @@ public class CandlestickChart extends StockMarketGuiElement {
     // T-221: the timeframe is kept as its delta (ms), not as a button index: the index meant a
     // different timeframe in the other candle timebase (real 1h = index 3 = game 1W).
     private record ViewportState(double viewX, double viewY, double viewWidth, double viewHeight,
-                                 double zoomLevel, long candleDeltaMs) {}
+                                 double zoomLevel, long candleDeltaMs, boolean autoWidenVertical) {}
 
     private static final Map<String, ViewportState> savedViewports = new HashMap<>();
 
@@ -109,6 +109,11 @@ public class CandlestickChart extends StockMarketGuiElement {
     private int firstVisibleCandleIndex = 0;
     private int lastVisibleCandleIndex = 0;
     private boolean firstDraw = false;
+    /**
+     * SM-368: set by a vertical fit, cleared when the user zooms or drags vertically. While set and the newest
+     * candle is in view, the vertical range widens when the price leaves it (it was fitted only once).
+     */
+    private boolean autoWidenVertical = false;
     private boolean dragging = false;
     private boolean skipAutoCenterOnce = false;
 
@@ -533,7 +538,31 @@ public class CandlestickChart extends StockMarketGuiElement {
             int lastIdx = candleCount - 1;
             int firstIdx = Math.max(0, candleCount - targetCandles);
             applyVerticalFitToRange(firstIdx, lastIdx);
+        } else if (autoWidenVertical && lastVisibleCandleIndex == data.getCandles().size() - 1) {
+            widenVerticalRange(firstVisibleCandleIndex, lastVisibleCandleIndex);
         }
+    }
+
+    /**
+     * SM-368: widens the vertical range so the given candles and the current price fit, with 10% margin on the
+     * side that grew. Never narrows, so the view does not jump with every price change.
+     */
+    private void widenVerticalRange(int firstIndexInclusive, int lastIndexInclusive) {
+        double min = data.toRealPrice(data.getMinPrice(firstIndexInclusive, lastIndexInclusive));
+        double max = data.toRealPrice(data.getMaxPrice(firstIndexInclusive, lastIndexInclusive));
+        double price = data.getCurrentMarketRealPrice();
+        if (price > 0) {
+            min = Math.min(min, price);
+            max = Math.max(max, price);
+        }
+        double bottom = chartviewRect.y, top = chartviewRect.y + chartviewRect.height;
+        if (min >= bottom && max <= top)
+            return;
+        double margin = (Math.max(max, top) - Math.min(min, bottom)) * 0.1;
+        if (min < bottom) bottom = Math.max(0, min - margin);
+        if (max > top) top = max + margin;
+        chartviewRect.y = bottom;
+        chartviewRect.height = top - bottom;
     }
 
     private void renderVolumeBars() {
@@ -866,6 +895,7 @@ public class CandlestickChart extends StockMarketGuiElement {
 
         // Vertical zoom (disabled when holding Shift for horizontal-only zoom)
         if (!isKeyPressed(InputConstants.KEY_LEFT_SHIFT)) {
+            autoWidenVertical = false; // SM-368: the user picked the range now
             double newHeight = chartviewRect.height * zoomFactor;
             if (newHeight < Long.MAX_VALUE && newHeight > 0.1) {
                 chartviewRect.height = newHeight;
@@ -946,6 +976,8 @@ public class CandlestickChart extends StockMarketGuiElement {
             // Subtract because dragging right should move the view left
             chartviewRect.x -= worldDeltaX;
             chartviewRect.y = Math.max(0, chartviewRect.y - worldDeltaY);
+            if (dy != 0)
+                autoWidenVertical = false; // SM-368: the user picked the range now
 
             clampViewToNewestCandle();
             clampViewToOldestCandle();
@@ -1004,6 +1036,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         chartviewRect.width = Math.max(NbtCompat.getDouble(tag, "viewW"), MIN_ZOOM_CANDLES);
         chartviewRect.height = NbtCompat.getDouble(tag, "viewH");
         zoomLevel = Math.max(NbtCompat.getDouble(tag, "zoom"), MIN_ZOOM_CANDLES);
+        autoWidenVertical = false; // a stored placement stays as it was
         skipAutoCenterOnce = true;
         // T-221: timeframe saved as its delta. Older tags (display blocks) hold an index into the
         // real-time deltas, the only set before T-218; a delta outside the active set falls back
@@ -1056,7 +1089,7 @@ public class CandlestickChart extends StockMarketGuiElement {
             savedViewports.put(this.priceDataProvider.getViewportKey(), new ViewportState(
                     chartviewRect.x, chartviewRect.y,
                     chartviewRect.width, chartviewRect.height,
-                    zoomLevel, currentDelta));
+                    zoomLevel, currentDelta, autoWidenVertical));
         }
     }
 
@@ -1075,6 +1108,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         chartviewRect.width = Math.max(state.viewWidth, MIN_ZOOM_CANDLES);
         chartviewRect.height = state.viewHeight;
         zoomLevel = Math.max(state.zoomLevel, MIN_ZOOM_CANDLES);
+        autoWidenVertical = state.autoWidenVertical;
         currentCandleTimeIdx = ClientMarket.candleTimeDeltaIndex(state.candleDeltaMs);
 
         // Load the correct candle data and update button colors without auto-centering
@@ -1115,6 +1149,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         double priceDifference = maxPrice - minPrice;
         chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1);
         chartviewRect.height = (maxPrice + priceDifference * 0.1) - chartviewRect.y;
+        autoWidenVertical = true;
     }
 
     public void autoCenterView() {
@@ -1129,6 +1164,7 @@ public class CandlestickChart extends StockMarketGuiElement {
 
             chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1);
             chartviewRect.height = Math.max((maxPrice + priceDifference * 0.1) - chartviewRect.y, 0.1);
+            autoWidenVertical = true;
             if (chartviewRect.width > lastIndex) {
                 chartviewRect.width = lastIndex;
             }

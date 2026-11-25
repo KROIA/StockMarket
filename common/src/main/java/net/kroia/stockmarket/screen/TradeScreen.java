@@ -609,6 +609,8 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         // Update cross-rate and inter-market trading panel when in pair mode
         if (isPairMode && pairHaveMarketID != null && pairWantMarketID != null) {
+            // SM-368: the selector's rate is read in the same tick as the panel's, so both match
+            pairSelectorWidget.updateRate();
             ClientMarket haveM = getMarket(pairHaveMarketID);
             ClientMarket wantM = getMarket(pairWantMarketID);
             if (haveM != null && wantM != null) {
@@ -1403,6 +1405,8 @@ public class TradeScreen extends StockMarketGuiScreen {
                 // Set pair direction on the overlay so order markers display at the correct rate
                 orderMarkerOverlay.setPairDirection(pairHaveMarketID, pairWantMarketID);
                 pendingOrdersPanel.setPairDirection(pairHaveMarketID);
+                // SM-368: a pair restored from the preferences never went through onPairSelected
+                applyPairItemNames();
             }
         } else {
             pendingOrdersPanel.setPairDirection(null);
@@ -1494,13 +1498,20 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
         }
 
-        // Update inter-market trading panel item names
+        applyPairItemNames();
+    }
+
+    /**
+     * Gives the inter-market trading panel the names of the pair's items (its rate and estimated-cost
+     * texts end in them). SM-368: also called when pair mode opens with a pair restored from the
+     * preferences, which used to leave the names empty ("Rate: 9.50 /").
+     */
+    private void applyPairItemNames() {
+        // prefer company displayName if this ItemID is a stamped share (T-147)
         if (pairHaveMarketID != null) {
-            // prefer company displayName if this ItemID is a stamped share (T-147)
             interMarketTradingPanel.setHaveItemName(ShareVisualHelpers.getDisplayName(pairHaveMarketID, pairHaveMarketID.getStack().getHoverName()).getString());
         }
         if (pairWantMarketID != null) {
-            // prefer company displayName if this ItemID is a stamped share (T-147)
             interMarketTradingPanel.setWantItemName(ShareVisualHelpers.getDisplayName(pairWantMarketID, pairWantMarketID.getStack().getHoverName()).getString());
         }
     }
