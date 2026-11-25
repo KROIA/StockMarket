@@ -18,6 +18,8 @@ public class PluginRegistryObject {
     private final String pluginName;
     private final String pluginDescription;
     private final Supplier<ServerPlugin> serverPluginFactory;
+    /** SM-377: lang key of the description; null = only the plain {@link #pluginDescription}. */
+    private @Nullable String descriptionKey = null;
 
     // Set separately via clientSetup() to avoid loading client classes on dedicated server
     private @Nullable Supplier<PluginGuiElement> guiElementFactory = null;
@@ -35,6 +37,21 @@ public class PluginRegistryObject {
     public String getPluginTypeID() { return pluginTypeID; }
     public String getPluginName() { return pluginName; }
     public String getPluginDescription() { return pluginDescription; }
+
+    /**
+     * SM-377: gives this plugin type a translatable description. Built-in plugins set one;
+     * plugins without a key keep showing their plain {@link #getPluginDescription()} text.
+     *
+     * @param key lang key of the description
+     * @return this, for chaining after {@link PluginRegistry#registerPlugin}
+     */
+    public PluginRegistryObject withDescriptionKey(String key) {
+        this.descriptionKey = key;
+        return this;
+    }
+
+    /** SM-377: the description's lang key, or null if the plugin only has a plain-text description. */
+    public @Nullable String getDescriptionKey() { return descriptionKey; }
 
     /**
      * Sets the GUI element factory for this plugin.
