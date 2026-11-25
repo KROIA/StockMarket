@@ -279,6 +279,20 @@ public class NewsEventLibrary {
         return definitions.get(id);
     }
 
+    /**
+     * MU-181: the counterpart events ({@code "undoes": permanentEventId}) of a permanent event.
+     *
+     * @param permanentEventId the permanent event id
+     * @return the loaded counterparts in pool order (empty when none)
+     */
+    public List<NewsEventDefinition> getCounterparts(String permanentEventId) {
+        List<NewsEventDefinition> counterparts = new ArrayList<>();
+        for (NewsEventDefinition definition : definitions.values()) {
+            if (permanentEventId.equals(definition.getUndoesEventId())) counterparts.add(definition);
+        }
+        return counterparts;
+    }
+
     /** @return the number of loaded event definitions */
     public int getDefinitionCount() {
         return definitions.size();
@@ -358,6 +372,8 @@ public class NewsEventLibrary {
                 // SM-341: give an unedited old luxury_goods_tax its "once until repealed" gate.
                 DefaultNewsEvents.migrateOldLuxuryTax(newsDir.resolve(DefaultNewsEvents.DEFAULT_EVENTS_DIR)
                         .resolve("luxury_goods_tax.json"));
+                // MU-181: unedited old end_of_gold_standard / luxury_tax_repealed become counterparts.
+                DefaultNewsEvents.migrateOldCounterparts(newsDir.resolve(DefaultNewsEvents.DEFAULT_EVENTS_DIR));
             }
         } catch (IOException e) {
             report.addError("", null, "failed to access news config directory '" + newsDir
@@ -537,6 +553,31 @@ public class NewsEventLibrary {
                     && !chainTargets.contains(definition.getId())) {
                 report.addWarning("", definition.getId(),
                         "'weight' is 0 and the event is not adminOnly — it can never fire");
+            }
+        }
+
+        // MU-181 permanent/counterpart pairing.
+        Set<String> reverted = new LinkedHashSet<>();
+        for (NewsEventDefinition definition : mergedDefinitions.values()) {
+            String undoes = definition.getUndoesEventId();
+            if (undoes == null) continue;
+            NewsEventDefinition target = mergedDefinitions.get(undoes);
+            if (target == null || !target.isCountedPermanent()) {
+                report.addWarning("", definition.getId(), "'undoes' names '" + undoes
+                        + "', which is not a loaded permanent event without 'undoes' — the event can never fire");
+            } else {
+                reverted.add(undoes);
+            }
+            if (!definition.isPermanent()) {
+                report.addWarning("", definition.getId(), "'undoes' needs a permanent last step"
+                        + " (or \"reversal\": \"none\") — otherwise the reversal snaps back when the event ends");
+            }
+        }
+        for (NewsEventDefinition definition : mergedDefinitions.values()) {
+            if (definition.isCountedPermanent() && !reverted.contains(definition.getId())) {
+                report.addWarning("", definition.getId(), "permanent event without a counterpart"
+                        + " (an event with \"undoes\": \"" + definition.getId()
+                        + "\") — it fires once and then stays blocked");
             }
         }
 

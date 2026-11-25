@@ -7,6 +7,8 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.plugin.interaction.IPluginMarket;
 import net.kroia.stockmarket.news.ActiveNewsEvent;
 import net.kroia.stockmarket.news.NewsEventDefinition;
 import net.kroia.stockmarket.news.NewsEventLibrary;
@@ -493,6 +495,17 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
     private final List<PlannedSlot> plannedQueue = new ArrayList<>();
 
     /**
+     * MU-181: most reversals the migration gives one permanent event from an old world's
+     * history. Old worlds fired some events 30-90 times; one reversal each would take
+     * months to a year, so the backlog is folded into at most this many (bigger) steps.
+     * The steps still land exactly on the normal price. New worlds count every firing.
+     */
+    static final int MIGRATION_MAX_SHIFTS_PER_EVENT = 10;
+
+    /** MU-181: the markets of the last {@link #advanceTime} call (the counterpart ramp reads their default prices). */
+    private List<MarketInterface> lastAdvanceMarkets = List.of();
+
+    /**
      * How often (ticking ms) time-only queue slots are re-offered to the event picker
      * (see {@link #upgradeTimeOnlySlots}). Throttled because every attempt runs
      * {@link #computeEligibleEvents} (matcher resolution per definition).
@@ -734,6 +747,9 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
      * @param markets   the subscribed markets of the current update cycle
      */
     public void advanceTime(long elapsedMs, List<MarketInterface> markets) {
+        lastAdvanceMarkets = markets;
+        migratePermanentShifts(markets); // MU-181, once per world
+
         // T-098: capture pre-advance step indices for step-start chain detection.
         Map<Long, Integer> preAdvanceSteps = new HashMap<>();
         for (ActiveNewsEvent event : activeEvents) {
@@ -908,6 +924,7 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         // at fire time (firePlannedSlot re-calls this method; chain fires also re-check).
         NewsWorldRegistry registry = getNewsWorldRegistry();
         long nowEpochMs = System.currentTimeMillis();
+        List<ItemID> enabledMarkets = newsEnabledMarkets(markets);
 
         for (NewsEventDefinition definition : library.getDefinitions().values()) {
             if (definition.isAdminOnly()) continue;
@@ -919,7 +936,12 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
             if (registry != null && !NewsRequirement.allMet(definition.getRequirements(), registry, nowEpochMs)) {
                 continue;
             }
-            Map<ItemID, Float> resolved = resolveEventMarkets(definition, candidates);
+            if (!shiftGateOpen(definition, enabledMarkets)) continue; // MU-181
+            // MU-181: a counterpart runs for days in the background, so it ignores the
+            // per-market cap and targets exactly the markets that still carry a shift.
+            Map<ItemID, Float> resolved = definition.getUndoesEventId() != null
+                    ? shiftedMarkets(definition.getUndoesEventId(), enabledMarkets)
+                    : resolveEventMarkets(definition, candidates);
             if (!resolved.isEmpty()) {
                 eligible.add(new EligibleEvent(definition, resolved));
             }
@@ -944,13 +966,87 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         return candidates;
     }
 
-    /** @return the number of active events currently influencing the given market */
+    /**
+     * @return the number of active events currently influencing the given market that
+     *         count toward the per-market cap (MU-181 counterparts do not)
+     */
     private int activeEventCountOn(ItemID marketID) {
         int count = 0;
         for (ActiveNewsEvent event : activeEvents) {
-            if (event.getMarketWeights().containsKey(marketID)) count++;
+            if (event.getMarketWeights().containsKey(marketID) && !isCounterpart(event)) count++;
         }
         return count;
+    }
+
+    /** @return the subscribed markets with {@code newsEnabled} */
+    private List<ItemID> newsEnabledMarkets(List<MarketInterface> markets) {
+        List<ItemID> enabled = new ArrayList<>();
+        for (MarketInterface marketInterface : markets) {
+            ItemID marketID = marketInterface.market.getMarketID();
+            if (settingsFor(marketID).newsEnabled()) enabled.add(marketID);
+        }
+        return enabled;
+    }
+
+    /**
+     * @return true for a running MU-181 counterpart (an event with {@code "undoes"}); it
+     *         runs for days in the background and counts toward neither activity cap
+     */
+    private boolean isCounterpart(ActiveNewsEvent event) {
+        NewsEventDefinition definition = library.getDefinition(event.getDefinitionId());
+        return definition != null && definition.getUndoesEventId() != null;
+    }
+
+    /**
+     * MU-181 gate shared by the scheduler and chain fires (admin triggers bypass it like
+     * requirements): a counted permanent event is blocked while one of {@code markets}
+     * still carries one of its shifts; a counterpart waits until its delay has passed.
+     *
+     * @param definition the event
+     * @param markets    the subscribed news-enabled markets
+     * @return true if the gate lets the event fire
+     */
+    private boolean shiftGateOpen(NewsEventDefinition definition, Collection<ItemID> markets) {
+        NewsWorldRegistry registry = getNewsWorldRegistry();
+        String undoes = definition.getUndoesEventId();
+        if (registry == null) return undoes == null;
+        if (definition.isCountedPermanent()) return registry.pendingUndos(definition.getId(), markets) == 0;
+        return undoes == null || currentEpochMs() >= registry.getUndoEligibleAtMs(undoes);
+    }
+
+    /**
+     * MU-181: the markets a counterpart of {@code undoes} affects — every given market
+     * that still carries a shift of that event, whatever the counterpart's own matchers
+     * say (so no shift can be left behind).
+     *
+     * @param undoes  the permanent event the counterpart reverts
+     * @param markets the markets to consider
+     * @return the shifted markets with weight 1 (activation replaces the weights)
+     */
+    private Map<ItemID, Float> shiftedMarkets(String undoes, Collection<ItemID> markets) {
+        Map<ItemID, Float> shifted = new LinkedHashMap<>();
+        NewsWorldRegistry registry = getNewsWorldRegistry();
+        if (registry == null) return shifted;
+        for (ItemID marketID : markets) {
+            if (registry.shiftCount(undoes, marketID) > 0) shifted.put(marketID, 1.0f);
+        }
+        return shifted;
+    }
+
+    /**
+     * MU-181: the default price one reversal moves a market to. With {@code remaining}
+     * unreverted shifts on the market, each reversal covers an equal share of the
+     * (logarithmic) distance, so the last one lands exactly on {@code normal}.
+     *
+     * @param base      the market's current default price
+     * @param normal    the market's normal default price (before its first unreverted shift)
+     * @param remaining the market's unreverted shifts over all events, this one included
+     * @return {@code base * (normal / base)^(1 / remaining)}, or {@code normal} when
+     *         {@code remaining <= 1} or {@code base} is not positive
+     */
+    public static double reversalTarget(double base, double normal, int remaining) {
+        if (remaining <= 1 || !(base > 0)) return normal;
+        return base * Math.pow(normal / base, 1.0 / remaining);
     }
 
     /** @return true if an event with the given definition id is currently active */
@@ -1538,7 +1634,11 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
      * </ul>
      */
     private void firePlannedSlot(String plannedEventId, List<MarketInterface> markets) {
-        if (activeEvents.size() >= getEffectiveMaxActiveEventsGlobal()) {
+        int cappedActive = 0; // MU-181: running counterparts do not count toward the cap
+        for (ActiveNewsEvent event : activeEvents) {
+            if (!isCounterpart(event)) cappedActive++;
+        }
+        if (cappedActive >= getEffectiveMaxActiveEventsGlobal()) {
             return; // slot lapses at the global cap
         }
         List<EligibleEvent> eligible = computeEligibleEvents(markets);
@@ -1652,6 +1752,16 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
             warn("Refused to activate news event '" + definition.getId() + "' without sequences");
             return null;
         }
+        // MU-181: a counterpart only touches markets that still carry a shift.
+        String undoes = definition.getUndoesEventId();
+        if (undoes != null) {
+            resolvedMarkets = shiftedMarkets(undoes, resolvedMarkets.keySet());
+            if (resolvedMarkets.isEmpty()) {
+                info("Refused to activate news event '" + definition.getId()
+                        + "': no market carries a shift of '" + undoes + "'");
+                return null;
+            }
+        }
 
         // 1. Pick ONE sequence by weight. Single-sequence events (all legacy events)
         //    consume no RNG value — keeps the legacy random stream unchanged.
@@ -1685,6 +1795,16 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         }
         NewsSequence sequence = sequenceDefinition.createSequence(rolledDurationsMs,
                 scheduler.getImpactStrengthMultiplier());
+        if (undoes != null) {
+            // MU-181 slow reversal: per market, the weight that makes the sequence's final
+            // factor (1 + finalValue * weight * sensitivity) equal the reversal target's
+            // ratio, so the live ramp ends where the bake puts the default price.
+            Map<ItemID, Float> rampWeights = counterpartRampWeights(undoes, resolvedMarkets.keySet(),
+                    sequence.finalValue());
+            for (int i = 0; i < stepMarkets.size(); i++) {
+                stepMarkets.set(i, new LinkedHashMap<>(rampWeights));
+            }
+        }
 
         // 3. Announce delay + freeze. The legacy envelope (null for sequence-authored
         //    events) rides along as a record/phase-name descriptor snapshot.
@@ -2135,6 +2255,11 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
             info("Chain target '" + pca.targetEventId + "' requirements not met — skipping");
             return null;
         }
+        List<ItemID> allCandidates = newsEnabledMarkets(markets);
+        if (!shiftGateOpen(definition, allCandidates)) {
+            info("Chain target '" + pca.targetEventId + "' blocked by its permanent-shift counter — skipping");
+            return null;
+        }
 
         // Resolve markets. sameMarkets override takes precedence; otherwise resolve
         // against ALL subscribed + news-enabled markets (no per-market cap — caps bypass).
@@ -2142,13 +2267,6 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         if (pca.resolvedMarketsOverride != null && !pca.resolvedMarketsOverride.isEmpty()) {
             resolvedMarkets = new LinkedHashMap<>(pca.resolvedMarketsOverride);
         } else {
-            List<ItemID> allCandidates = new ArrayList<>();
-            for (MarketInterface mi : markets) {
-                ItemID marketID = mi.market.getMarketID();
-                if (settingsFor(marketID).newsEnabled()) {
-                    allCandidates.add(marketID);
-                }
-            }
             resolvedMarkets = resolveEventMarkets(definition, allCandidates);
         }
 
@@ -2292,31 +2410,31 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
      * {@code 1 + finalValue * weight * sensitivity} — for legacy events {@code finalValue
      * == peakFactor}, byte-identical to the pre-T-095 bake.
      * <p>
-     * SM-341: every bake stores its absolute default-price change in the world registry
-     * ({@link NewsWorldRegistry#addBakeDelta}). An event with {@code "undoes"} does not
-     * apply its own factor: it adds back the stored change of the undone event per market
-     * and clears it; a market without a stored change is left as it is.
+     * MU-181: every bake of a counted permanent event (no {@code "undoes"}) adds one shift
+     * per market to the world registry ({@link NewsWorldRegistry#addShifts}, remembering
+     * the market's normal price before its first unreverted shift). The first bake of a
+     * fresh firing arms the counterpart's {@code undoDelaySeconds}. A counterpart does not
+     * apply its own factor: per market it moves the default price to
+     * {@link #reversalTarget} and takes one shift off; its first bake arms
+     * {@code undoRepeatDelaySeconds} for the next pending reversal.
      */
     private void bakePermanentShift(ActiveNewsEvent event, List<MarketInterface> markets) {
         double finalValue = event.getSequence().finalValue();
         NewsWorldRegistry registry = getNewsWorldRegistry();
-        NewsEventDefinition definition = library.getDefinition(event.getDefinitionId());
+        String eventId = event.getDefinitionId();
+        NewsEventDefinition definition = library.getDefinition(eventId);
         String undoes = definition != null ? definition.getUndoesEventId() : null;
+        boolean firstBake = event.getBakedMarkets().isEmpty();
+        boolean freshFiring = registry != null && undoes == null && registry.pendingUndos(eventId, null) == 0;
+        boolean anyBaked = false;
         for (MarketInterface marketInterface : markets) {
             ItemID marketID = marketInterface.market.getMarketID();
             Float weightFactor = event.getPendingBakeWeights().get(marketID);
             if (weightFactor == null) continue;
+            anyBaked = true;
 
             if (undoes != null) {
-                Double delta = registry != null ? registry.takeBakeDelta(undoes, marketID) : null;
-                if (delta != null) {
-                    double restored = marketInterface.market.getDefaultRealPrice() - delta;
-                    if (restored > 0 && Double.isFinite(restored)) {
-                        marketInterface.market.setDefaultRealPrice(restored);
-                    }
-                    info("Undid the permanent news shift of event '" + undoes + "' on market "
-                            + marketID + " (default price change " + (-delta) + ")");
-                }
+                if (registry != null) revertOneShift(marketInterface.market, undoes, registry);
                 event.markBaked(marketID);
                 continue;
             }
@@ -2330,17 +2448,178 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
             double newDefault = oldDefault * bakeFactor;
             if (newDefault > 0 && Double.isFinite(newDefault)) {
                 marketInterface.market.setDefaultRealPrice(newDefault);
-                if (registry != null) {
-                    // Read back: the market rounds to its raw price units, so the stored
-                    // change is what really happened and the undo lands on the old value.
-                    registry.addBakeDelta(event.getDefinitionId(), marketID,
-                            marketInterface.market.getDefaultRealPrice() - oldDefault);
-                }
+                if (registry != null) registry.addShifts(eventId, marketID, 1, oldDefault);
             }
             event.markBaked(marketID);
-            info("Baked permanent news shift of event '" + event.getDefinitionId()
+            info("Baked permanent news shift of event '" + eventId
                     + "' into market " + marketID + " (factor " + bakeFactor + ")");
         }
+
+        if (registry == null || !firstBake || !anyBaked) return;
+        if (undoes != null) {
+            registry.setUndoEligibleAtMs(undoes, currentEpochMs()
+                    + sampleUniformMs(definition.getUndoRepeatDelayMs().minMs(), definition.getUndoRepeatDelayMs().maxMs()));
+        } else if (freshFiring) {
+            List<NewsEventDefinition> counterparts = library.getCounterparts(eventId);
+            if (!counterparts.isEmpty()) {
+                NewsEventDefinition.AnnounceDelayRange delay = counterparts.get(0).getUndoDelayMs();
+                registry.setUndoEligibleAtMs(eventId, currentEpochMs() + sampleUniformMs(delay.minMs(), delay.maxMs()));
+            }
+        }
+    }
+
+    /**
+     * MU-181: one reversal step of a counterpart on one market — moves the default price
+     * to {@link #reversalTarget} (at least one raw price unit toward normal, so rounding
+     * can never stall it; exactly normal on the last one) and takes one shift of
+     * {@code undoes} off. A market without a shift of {@code undoes} is left as it is.
+     */
+    private void revertOneShift(IPluginMarket market, String undoes, NewsWorldRegistry registry) {
+        ItemID marketID = market.getMarketID();
+        Double normal = registry.getNormalPrice(marketID);
+        if (normal == null || registry.shiftCount(undoes, marketID) <= 0) return;
+        int remaining = registry.totalShiftCount(marketID);
+        double base = market.getDefaultRealPrice();
+        double target = reversalTarget(base, normal, remaining);
+        if (remaining > 1) {
+            long baseRaw = market.convertRealPriceToBackendPrice(base);
+            long normalRaw = market.convertRealPriceToBackendPrice(normal);
+            if (market.convertRealPriceToBackendPrice(target) == baseRaw && baseRaw != normalRaw) {
+                target = market.convertBackendPriceToRealPrice(baseRaw + Long.signum(normalRaw - baseRaw));
+            }
+        }
+        market.setDefaultRealPrice(target);
+        registry.removeShift(undoes, marketID);
+        info("Reverted one permanent news shift of event '" + undoes + "' on market " + marketID
+                + " (default price " + base + " -> " + target + ", " + (remaining - 1) + " left on the market)");
+    }
+
+    /**
+     * MU-181: the live-ramp weights of a counterpart activation — per market the weight
+     * that makes {@code 1 + finalValue * weight * sensitivity} equal
+     * {@code reversalTarget / currentDefaultPrice}, read from the markets of the last
+     * {@link #advanceTime} call. 0 (no live ramp, the bake still lands exactly) when the
+     * price is unknown there (no tick yet) or the sequence ends at 0.
+     */
+    private Map<ItemID, Float> counterpartRampWeights(String undoes, Collection<ItemID> marketIDs,
+                                                      double finalValue) {
+        Map<ItemID, Float> weights = new LinkedHashMap<>();
+        NewsWorldRegistry registry = getNewsWorldRegistry();
+        Map<ItemID, Double> defaults = new HashMap<>();
+        for (MarketInterface marketInterface : lastAdvanceMarkets) {
+            defaults.put(marketInterface.market.getMarketID(), marketInterface.market.getDefaultRealPrice());
+        }
+        for (ItemID marketID : marketIDs) {
+            Double base = defaults.get(marketID);
+            Double normal = registry != null ? registry.getNormalPrice(marketID) : null;
+            double scale = finalValue * settingsFor(marketID).sensitivity();
+            float weight = 0f;
+            if (base != null && base > 0 && normal != null && scale != 0) {
+                double ratio = reversalTarget(base, normal, registry.totalShiftCount(marketID)) / base;
+                weight = (float) ((ratio - 1.0) / scale);
+            }
+            weights.put(marketID, weight);
+        }
+        return weights;
+    }
+
+    /**
+     * MU-181 one-time migration of a world from before the permanent-shift counters: per
+     * counted permanent event, its unreverted firings are its fire count minus its
+     * counterparts' fire counts, capped at {@link #MIGRATION_MAX_SHIFTS_PER_EVENT} (a
+     * published, not yet baked running instance is left to its own bake). Every subscribed
+     * market the event resolves to gets that many shifts; a market's normal price is its
+     * preset default price, else its current default price. Runs once the library and
+     * markets are there, then never again.
+     */
+    private void migratePermanentShifts(List<MarketInterface> markets) {
+        NewsWorldRegistry registry = getNewsWorldRegistry();
+        if (registry == null || registry.isShiftsMigrated() || !libraryLoaded
+                || library.getDefinitionCount() == 0 || markets.isEmpty()) return;
+        Map<ItemID, IPluginMarket> byId = new LinkedHashMap<>();
+        for (MarketInterface marketInterface : markets) {
+            byId.put(marketInterface.market.getMarketID(), marketInterface.market);
+        }
+        for (NewsEventDefinition definition : library.getDefinitions().values()) {
+            if (!definition.isCountedPermanent()) continue;
+            String eventId = definition.getId();
+            int unreverted = registry.fireCount(eventId);
+            for (NewsEventDefinition counterpart : library.getCounterparts(eventId)) {
+                unreverted -= registry.fireCount(counterpart.getId());
+            }
+            if (unreverted <= 0) continue;
+            unreverted = Math.min(unreverted, MIGRATION_MAX_SHIFTS_PER_EVENT);
+            ActiveNewsEvent running = findActiveEvent(eventId);
+            for (ItemID marketID : resolveEventMarkets(definition, byId.keySet()).keySet()) {
+                int count = unreverted;
+                if (running != null && running.isPublished() && running.getPendingBakeWeights().containsKey(marketID)) {
+                    count--;
+                }
+                IPluginMarket market = byId.get(marketID);
+                double normal = presetDefaultPrice(marketID);
+                if (!(normal > 0)) normal = market.getDefaultRealPrice();
+                registry.addShifts(eventId, marketID, count, normal);
+                info("Migrated " + count + " unreverted permanent shift(s) of event '" + eventId
+                        + "' on market " + marketID + " (normal price " + registry.getNormalPrice(marketID) + ")");
+            }
+        }
+        registry.markShiftsMigrated();
+    }
+
+    /**
+     * MU-181 migration seam: the market's preset default price (real units), or NaN when
+     * no preset is known. Protected so tests can supply one.
+     */
+    protected double presetDefaultPrice(ItemID marketID) {
+        try {
+            StockMarketModBackend.ServerInstances instances = StockMarketModBackend.getServerInstances();
+            var preset = instances != null && instances.PRESET_MANAGER != null
+                    ? instances.PRESET_MANAGER.getPreset(marketID) : null;
+            return preset != null ? preset.getDefaultPrice() : Double.NaN;
+        } catch (Exception ignored) {
+            return Double.NaN;
+        }
+    }
+
+    /**
+     * MU-181 status of an event's permanent-shift counter for {@code /news info}, the list
+     * markers and the event details screen.
+     *
+     * @param text one line, e.g. "active, 3 reversals pending, next eligible in 5 d"
+     * @param open true if the counter lets the event fire now
+     */
+    public record ShiftStatus(String text, boolean open) {
+    }
+
+    /**
+     * @param definition the event
+     * @return the counter status of a counted permanent event or a counterpart, or null
+     *         for any other event (or without a world registry)
+     */
+    public @Nullable ShiftStatus shiftStatus(NewsEventDefinition definition) {
+        NewsWorldRegistry registry = getNewsWorldRegistry();
+        String undoes = definition.getUndoesEventId();
+        if (registry == null || (undoes == null && !definition.isCountedPermanent())) return null;
+        String reverted = undoes != null ? undoes : definition.getId();
+        int pending = registry.pendingUndos(reverted, null);
+        long waitMs = registry.getUndoEligibleAtMs(reverted) - currentEpochMs();
+        String next = waitMs > 0 ? "next eligible in " + formatWait(waitMs) : "next eligible now";
+        String reversals = pending + (pending == 1 ? " reversal" : " reversals") + " pending";
+        if (undoes != null) {
+            return pending == 0
+                    ? new ShiftStatus("reverts '" + undoes + "': inactive until it fires again", false)
+                    : new ShiftStatus("reverts '" + undoes + "': " + reversals + ", " + next, waitMs <= 0);
+        }
+        if (pending == 0) return new ShiftStatus("permanent shift: none in force", true);
+        return new ShiftStatus("permanent shift active, " + reversals + ", "
+                + (library.getCounterparts(reverted).isEmpty() ? "no counterpart (stays blocked)" : next), false);
+    }
+
+    /** @return a wait as {@code "5 d"}, {@code "7 h"} or {@code "12 min"} */
+    private static String formatWait(long ms) {
+        if (ms >= 86_400_000L) return Math.round(ms / 86_400_000.0) + " d";
+        if (ms >= 3_600_000L) return Math.round(ms / 3_600_000.0) + " h";
+        return Math.max(1, Math.round(ms / 60_000.0)) + " min";
     }
 
     // ── Library ──────────────────────────────────────────────────────────
