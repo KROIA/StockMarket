@@ -1301,7 +1301,8 @@ public class NewsChainsTestSuite extends TestSuite {
     /**
      * Migration of an old world: 3 recorded firings and no reversal give counter 3 on every
      * market the event resolves to, with the preset price (else the current default) as
-     * normal; reversals already fired are subtracted; it runs only once.
+     * normal; reversals already fired are subtracted; it runs only once; a long history
+     * (37 firings) is capped at 10 reversals.
      */
     private TestResult test_migration_countsUnrevertedFirings() {
         Path dir = null;
@@ -1335,7 +1336,15 @@ public class NewsChainsTestSuite extends TestSuite {
             withReversal.recordFire(UNDO, 2000L, 1);
             plugin.setRegistrySupplier(() -> withReversal);
             plugin.advanceTime(0, mkts);
-            return assertEquals("a fired reversal is subtracted", 2, withReversal.shiftCount(PERM, M1));
+            r = assertEquals("a fired reversal is subtracted", 2, withReversal.shiftCount(PERM, M1));
+            if (!r.passed()) return r;
+
+            NewsWorldRegistry longHistory = new NewsWorldRegistry();
+            for (int i = 0; i < 37; i++) longHistory.recordFire(PERM, 1000L + i, 1);
+            plugin.setRegistrySupplier(() -> longHistory);
+            plugin.advanceTime(0, mkts);
+            return assertTrue("37 firings are capped at 10 reversals per event",
+                    longHistory.shiftCount(PERM, M1) == 10 && longHistory.pendingUndos(PERM, null) == 10);
         } catch (IOException e) {
             return fail("setup failed: " + e);
         } finally {

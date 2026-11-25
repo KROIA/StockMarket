@@ -290,7 +290,8 @@ public class PluginTestSuite extends TestSuite {
             case NEWS_RECOVERY -> {
                 // (a) like amethyst: at the 1-raw-unit price floor, normal 10, 18 old firings of one falling event
                 addTest("news_recovery_floor_market",
-                        () -> test_newsRecovery("floor_market", 0.01, 10, new int[]{18}, new double[]{0.3}));
+                        // 37 old firings: the migration caps them at 10 reversals
+                        () -> test_newsRecovery("floor_market", 0.01, 10, new int[]{37}, new double[]{0.3}));
                 // (b) like iron: at 1900, normal 15, three different raising events
                 addTest("news_recovery_three_events",
                         () -> test_newsRecovery("three_events", 1900, 15, new int[]{8, 3, 1}, new double[]{-0.24, -0.18, -0.28}));

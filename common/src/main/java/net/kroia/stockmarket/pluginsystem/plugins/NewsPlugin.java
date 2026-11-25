@@ -494,6 +494,14 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
      */
     private final List<PlannedSlot> plannedQueue = new ArrayList<>();
 
+    /**
+     * MU-181: most reversals the migration gives one permanent event from an old world's
+     * history. Old worlds fired some events 30-90 times; one reversal each would take
+     * months to a year, so the backlog is folded into at most this many (bigger) steps.
+     * The steps still land exactly on the normal price. New worlds count every firing.
+     */
+    static final int MIGRATION_MAX_SHIFTS_PER_EVENT = 10;
+
     /** MU-181: the markets of the last {@link #advanceTime} call (the counterpart ramp reads their default prices). */
     private List<MarketInterface> lastAdvanceMarkets = List.of();
 
@@ -2518,10 +2526,11 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
     /**
      * MU-181 one-time migration of a world from before the permanent-shift counters: per
      * counted permanent event, its unreverted firings are its fire count minus its
-     * counterparts' fire counts (a published, not yet baked running instance is left to
-     * its own bake). Every subscribed market the event resolves to gets that many shifts;
-     * a market's normal price is its preset default price, else its current default
-     * price. Runs once the library and markets are there, then never again.
+     * counterparts' fire counts, capped at {@link #MIGRATION_MAX_SHIFTS_PER_EVENT} (a
+     * published, not yet baked running instance is left to its own bake). Every subscribed
+     * market the event resolves to gets that many shifts; a market's normal price is its
+     * preset default price, else its current default price. Runs once the library and
+     * markets are there, then never again.
      */
     private void migratePermanentShifts(List<MarketInterface> markets) {
         NewsWorldRegistry registry = getNewsWorldRegistry();
@@ -2539,6 +2548,7 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
                 unreverted -= registry.fireCount(counterpart.getId());
             }
             if (unreverted <= 0) continue;
+            unreverted = Math.min(unreverted, MIGRATION_MAX_SHIFTS_PER_EVENT);
             ActiveNewsEvent running = findActiveEvent(eventId);
             for (ItemID marketID : resolveEventMarkets(definition, byId.keySet()).keySet()) {
                 int count = unreverted;
