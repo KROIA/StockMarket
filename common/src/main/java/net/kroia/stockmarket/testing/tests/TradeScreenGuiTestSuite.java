@@ -29,6 +29,7 @@ import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
+import net.kroia.testkit.autotest.AutoTest;
 import net.kroia.testkit.gui.Gui;
 import net.kroia.testkit.gui.GuiNode;
 import net.kroia.testkit.gui.Layout;
@@ -505,8 +506,8 @@ public class TradeScreenGuiTestSuite extends TestSuite {
      * reset.
      * <p>
      * Skips on a slave before any admin read: {@code /stockmarket op} is master-only, so neither the admin flag nor
-     * the market can be set there. The slave is detected from the join-synced client setting
-     * ({@link StockMarketGuiElement#isMasterServer()}).
+     * the market can be set there. SM-378: the slave is detected from TestKit's {@link AutoTest#serverRole()} (the
+     * cell's role for the joined server), not from a client setting read on the client thread.
      *
      * @param client the client instances (the player is in a world)
      * @param body   the test; gets the market's ItemID, its result is returned
@@ -517,8 +518,8 @@ public class TradeScreenGuiTestSuite extends TestSuite {
 
     /** {@link #withTemporaryMarket(StockMarketModBackend.ClientInstances, Function)} for the market of {@code item}. */
     private TestResult withTemporaryMarket(StockMarketModBackend.ClientInstances client, ItemStack item, Function<ItemID, TestResult> body) {
-        // join-synced client setting, no server round trip; /stockmarket op answers command_master_only on a slave
-        if (!Gui.onClient(StockMarketGuiElement::isMasterServer))
+        // no server round trip; /stockmarket op answers command_master_only on a slave
+        if (AutoTest.serverRole().isSlave())
             return skip("/stockmarket op is master-only: no admin flag or temporary market on a slave");
         IAsyncMarketManager async = AsyncMarketManager.createClientManager(); // admin flag + exists checks
         UUID self = Gui.onClient(() -> Minecraft.getInstance().player.getUUID());
