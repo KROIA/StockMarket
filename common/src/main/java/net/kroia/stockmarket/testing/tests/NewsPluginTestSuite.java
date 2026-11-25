@@ -192,6 +192,8 @@ public class NewsPluginTestSuite extends TestSuite {
         final Map<String, Map<ItemID, Float>> stepResolutions = new HashMap<>();
         final Map<ItemID, Settings> marketSettings = new HashMap<>();
         final List<NewsRecord> published = new ArrayList<>();
+        /** MU-181 migration stub: preset default prices; markets without an entry have no preset. */
+        final Map<ItemID, Double> presetPrices = new HashMap<>();
 
         TestNewsPlugin() {
             test_setLibraryLoaded(true); // never touch the real config folder
@@ -232,7 +234,14 @@ public class NewsPluginTestSuite extends TestSuite {
             return marketSettings.getOrDefault(marketID, Settings.createDefault());
         }
 
-        @Override protected long currentEpochMs() { return 1_000_000L; }
+        @Override protected double presetDefaultPrice(ItemID marketID) {
+            return presetPrices.getOrDefault(marketID, Double.NaN);
+        }
+
+        /** Wall clock of the registry timers; the MU-181 market simulation advances it. */
+        long epochMs = 1_000_000L;
+
+        @Override protected long currentEpochMs() { return epochMs; }
         @Override protected long currentGameDay() { return 42L; }
     }
 

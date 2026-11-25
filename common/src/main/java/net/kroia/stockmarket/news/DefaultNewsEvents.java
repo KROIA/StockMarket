@@ -63,8 +63,9 @@ import java.util.Set;
  * <b>Additive self-healing (existing installs):</b> on every reload {@link NewsEventLibrary}
  * writes {@code DefaultEvents/<id>.json} for any shipped default whose id is defined in
  * <b>no</b> loaded file ({@link #writeMissingEventFiles}); existing files (admin edits) are
- * never overwritten (exceptions: the one-time SM-338 scheduler and SM-341 luxury tax
- * upgrades, {@link #migrateOldSchedulerDefaults}, {@link #migrateOldLuxuryTax}). The default
+ * never overwritten (exceptions: the one-time SM-338 scheduler, SM-341 luxury tax and MU-181
+ * counterpart upgrades, {@link #migrateOldSchedulerDefaults}, {@link #migrateOldLuxuryTax},
+ * {@link #migrateOldCounterparts}). The default
  * pictures are healed independently and per id into {@code pictures/}
  * (see {@link DefaultNewsPictures#extractMissingDefaults}).
  */
@@ -120,9 +121,12 @@ public final class DefaultNewsEvents {
      *       registry; ALL must hold for the event to become eligible.</li>
      *   <li>{@code records{}} — string→string registry writes applied at publish
      *       (last write wins).</li>
-     *   <li>{@code undoes} — optional event id; when this event's permanent shift bakes it
-     *       adds back, per market, the default-price change that event's bakes left there
-     *       (e.g. {@code luxury_tax_repealed} undoes {@code luxury_goods_tax}).</li>
+     *   <li>{@code undoes} — optional id of a permanent event; makes this event its
+     *       counterpart (MU-181): eligible only while that event has unreverted firings and
+     *       {@code undoDelaySeconds} (first reversal, default 3–21 days) or
+     *       {@code undoRepeatDelaySeconds} (next one, default 1–3 days) have passed; each
+     *       firing ramps the shifted markets one step back to their normal price (e.g.
+     *       {@code luxury_tax_repealed} undoes {@code luxury_goods_tax}).</li>
      *   <li>{@code chains[]} — follow-up activations triggered on
      *       {@code publish|step|completion} with a chance and a delay range.</li>
      * </ul>
@@ -482,6 +486,44 @@ public final class DefaultNewsEvents {
                     + " - file left unchanged", file, e);
             return false;
         }
+    }
+
+    /** Ids of the counterparts {@link #migrateOldCounterparts} upgrades; old texts in {@code /news/legacy/}. */
+    private static final List<String> OLD_COUNTERPART_IDS = List.of("end_of_gold_standard", "luxury_tax_repealed");
+
+    /**
+     * MU-181 upgrade of the unedited 2.2.0/2.2.1 {@code end_of_gold_standard} and
+     * {@code luxury_tax_repealed} files in {@code DefaultEvents/} (gated by requirements, no
+     * slow reversal) to the shipped counterparts. A file that is still exactly the old
+     * shipped version (with or without the zh_cn translations) is replaced; an admin-edited
+     * file is never touched. Never throws; an unreadable file is left unchanged.
+     *
+     * @param defaultEventsDir the {@code DefaultEvents} folder
+     * @return the number of files rewritten
+     */
+    public static int migrateOldCounterparts(Path defaultEventsDir) {
+        int rewritten = 0;
+        for (String id : OLD_COUNTERPART_IDS) {
+            Path file = defaultEventsDir.resolve(id + ".json");
+            String shipped = EVENT_TEXTS.get(id);
+            if (shipped == null || !Files.exists(file)) continue;
+            try {
+                JsonObject old = JsonUtilities.fromString(readResource(RESOURCE_DIR + "legacy/" + id + ".json"))
+                        .getAsJsonObject();
+                JsonObject oldWithoutZh = old.deepCopy();
+                oldWithoutZh.getAsJsonObject("headline").remove("zh_cn");
+                oldWithoutZh.getAsJsonObject("text").remove("zh_cn");
+                JsonElement current = JsonUtilities.fromString(Files.readString(file, StandardCharsets.UTF_8));
+                if (!old.equals(current) && !oldWithoutZh.equals(current)) continue;
+                Files.writeString(file, shipped, StandardCharsets.UTF_8);
+                rewritten++;
+                StockMarketMod.LOGGER.info("[NewsEventLibrary] Updated the unedited {} event in {}"
+                        + " (now slowly reverts its permanent event)", id, file);
+            } catch (Exception e) {
+                StockMarketMod.LOGGER.warn("[NewsEventLibrary] Could not migrate {} - file left unchanged", file, e);
+            }
+        }
+        return rewritten;
     }
 
     private static void logLuxuryTaxMigrated(Path file) {
