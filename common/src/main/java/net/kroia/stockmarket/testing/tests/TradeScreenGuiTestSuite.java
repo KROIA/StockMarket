@@ -173,7 +173,8 @@ public class TradeScreenGuiTestSuite extends TestSuite {
      * (chart screen), clicks "Configure Display", picks market B (1/100 of A's price) with the setup's search box
      * and list, and clicks Apply. The display then shows B, and its chart in the world has B's price in view and
      * no longer A's (SM-364: it used to keep A's price range, so the new market's candles were off the chart). Two
-     * temporary markets ({@link #withTemporaryMarket}); needs the integrated server (sp) to place the display.
+     * temporary markets ({@link #withTemporaryMarket}); needs the integrated server (sp) to place the display in front
+     * of the player at eye level, where its chart is drawn.
      */
     private TestResult test_display_reconfigure_through_ui() {
         StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
@@ -181,8 +182,12 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         MinecraftServer server = Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer());
         if (server == null) return skip("needs the integrated server (singleplayer) to place a display");
         return withTemporaryMarket(client, a -> withTemporaryMarket(client, PAIR_ITEM, b -> {
-            BlockPos pos = Gui.onClient(() -> Minecraft.getInstance().player.blockPosition().above(3));
-            BlockState before = await(server.submit(() -> server.overworld().getBlockState(pos)), WAIT_MS);
+            // Two blocks in front of the player at eye level, the screen facing the player (displayFacingNorth): the
+            // in-world chart is drawn every frame, as for a player looking at it. The block in between is cleared.
+            BlockPos feet = Gui.onClient(() -> Minecraft.getInstance().player.blockPosition());
+            BlockPos pos = feet.south(2).above(), between = feet.south().above();
+            BlockState[] before = await(server.submit(() -> new BlockState[]{
+                    server.overworld().getBlockState(pos), server.overworld().getBlockState(between)}), WAIT_MS);
             try {
                 String problem = await(server.submit(() -> {
                     StockMarketModBackend.ServerInstances backend = StockMarketModBackend.getServerInstances();
@@ -194,6 +199,7 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                     low.test_setCurrentMarketPrice(DISPLAY_PRICE_HIGH / 100);
                     low.getCurrentMarketPriceStructAndReset();
                     ServerLevel level = server.overworld();
+                    level.removeBlock(between, false);
                     level.setBlock(pos, displayFacingNorth(), Block.UPDATE_ALL);
                     if (!(level.getBlockEntity(pos) instanceof StockMarketDisplayBlockEntity d)) return "no display at " + pos;
                     d.setConfig(StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, a);
@@ -205,11 +211,19 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                     return fail("the display configured for " + a + " did not reach the client");
                 Gui.close();
                 if (!aimAt(pos)) return fail("the crosshair does not reach the display at " + pos);
+                if (!Gui.waitUntil(() -> chartRange(pos, a) != null, OPEN_TICKS))
+                    return fail("the display's chart did not connect to market A: " + chartState(client, pos, a));
+                // A second, different price once the chart is connected: A's live candle then spans a real range. A
+                // single flat candle fits to a zero-height view (CandlestickChart#applyVerticalFitToRange has no minimum).
+                await(server.submit(() -> {
+                    IServerMarket high = StockMarketModBackend.getServerInstances().MARKET_MANAGER.getServerMarketManager().getMarket(a);
+                    if (high != null) high.test_setCurrentMarketPrice(DISPLAY_PRICE_HIGH * 11 / 10);
+                }), WAIT_MS);
 
-                // A in the world: its new price arrived and is on the chart
+                // A in the world: its second price arrived and is on the chart
                 boolean showsA = Gui.waitUntil(() -> {
                     ClientMarket m = client.MARKET_MANAGER.getMarket(a);
-                    return m != null && m.getCurrentMarketPrice() >= DISPLAY_PRICE_HIGH / 2
+                    return m != null && m.getCurrentMarketPrice() > DISPLAY_PRICE_HIGH
                             && inView(chartRange(pos, a), m.getCurrentMarketRealPrice());
                 }, OPEN_TICKS * 2);
                 if (!showsA) return fail("the display's chart does not show market A's price: " + chartState(client, pos, a));
@@ -237,21 +251,24 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                         + "): " + chartState(client, pos, b), showsB);
             } finally {
                 Gui.close();
-                await(server.submit(() -> { server.overworld().setBlock(pos, before, Block.UPDATE_ALL); }), WAIT_MS);
+                await(server.submit(() -> {
+                    server.overworld().setBlock(pos, before[0], Block.UPDATE_ALL);
+                    server.overworld().setBlock(between, before[1], Block.UPDATE_ALL);
+                }), WAIT_MS);
             }
         }));
     }
 
-    /** A Stock Market Display block facing north (its screen side), as the display tests place it above the player. */
+    /** A Stock Market Display block whose screen faces north, i.e. towards a player standing north of it. */
     private static BlockState displayFacingNorth() {
         return StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get().defaultBlockState()
                 .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH);
     }
 
     /**
-     * Turns the player towards the north-facing display block at {@code pos} (above the player, see
-     * {@link #displayFacingNorth}) and waits until the crosshair is on it. Only the client's view turns, like
-     * moving the mouse.
+     * Turns the player towards the north-facing display block at {@code pos} ({@link #displayFacingNorth}; the player
+     * stands below or north of it) and waits until the crosshair is on it. Aims into the thin panel through its
+     * screen side. Only the client's view turns, like moving the mouse.
      *
      * @return true once the crosshair is on {@code pos}
      */
@@ -334,14 +351,40 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         return range != null && price >= range[0] && price <= range[1];
     }
 
-    /** Diagnostic: the display's chart range and the market's client price. */
+    /**
+     * Diagnostic: the display's chart range and the market's client price, plus why the range is what it is:
+     * canvas height 0 means the chart was never drawn with candles (the canvas is sized only while drawing); view
+     * is the price window (chartviewRect y/height as viewY/viewH); autoWiden false means a copied view that never
+     * widens to new prices (e.g. taken from the trade screen); candles shows the count and the newest one's range.
+     */
     private static String chartState(StockMarketModBackend.ClientInstances client, BlockPos pos, ItemID market) {
         return Gui.onClient(() -> {
             double[] range = chartRange(pos, market);
             ClientMarket m = client.MARKET_MANAGER.getMarket(market);
-            return "chart " + (range == null ? "not connected to " + market : range[0] + ".." + range[1])
+            String state = "chart " + (range == null ? "not connected to " + market : range[0] + ".." + range[1])
                     + ", price " + (m == null ? "unknown" : m.getCurrentMarketRealPrice() + " (raw " + m.getCurrentMarketPrice() + ")");
+            if (!(Minecraft.getInstance().level.getBlockEntity(pos) instanceof StockMarketDisplayBlockEntity d)
+                    || !(d.getChart() instanceof DisplayCandlestickChart chart))
+                return state + ", no display chart at " + pos;
+            Object data = chartField(chart, "data");
+            String candles = data instanceof PriceHistoryData h && !h.getCandles().isEmpty()
+                    ? h.getCandles().size() + " (newest " + h.toRealPrice(h.getCandles().getLast().low) + ".."
+                            + h.toRealPrice(h.getCandles().getLast().high) + ")"
+                    : data == null ? "no data" : "0";
+            return state + ", canvas height " + chart.getCanvasBounds().height + ", view " + chart.getViewportState()
+                    + ", autoWiden " + chartField(chart, "autoWidenVertical") + ", candles " + candles;
         });
+    }
+
+    /** Diagnostic: a private field of {@link CandlestickChart} (test-only reflection), or "?" if it cannot be read. */
+    private static @Nullable Object chartField(CandlestickChart chart, String name) {
+        try {
+            java.lang.reflect.Field field = CandlestickChart.class.getDeclaredField(name);
+            field.setAccessible(true);
+            return field.get(chart);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return "?";
+        }
     }
 
     /**
@@ -788,7 +831,11 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                 List<MarketPresetCategory> categories = await(Gui.onClient(() -> client.PRESET_MANAGER.getCategoriesAsync()), WAIT_MS);
                 for (MarketPresetCategory category : categories) {
                     String name = Gui.onClient(() -> MarketPresetCategory.displayName(category.getCategory()));
-                    if (!Gui.waitUntil(() -> !shownTopFirst(Button.class, name).isEmpty(), OPEN_TICKS))
+                    // Polled here, not in Gui.waitUntil: its condition runs on the client thread, where Gui.findAll throws
+                    boolean shown = false;
+                    for (int t = 0; t <= OPEN_TICKS && !(shown = !shownTopFirst(Button.class, name).isEmpty()); t++)
+                        Gui.waitTicks(1);
+                    if (!shown)
                         return fail("no category button '" + name + "' on the Create Markets tab");
                     clickShown(Button.class, name);
                     Gui.waitTicks(2); // the grid is rebuilt
