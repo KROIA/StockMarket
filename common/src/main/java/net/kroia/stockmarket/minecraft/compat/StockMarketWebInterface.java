@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.minecraft.compat;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -20,8 +21,19 @@ import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.PriceHistoryData;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffectUtil;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import org.jetbrains.annotations.Nullable;
 
@@ -90,8 +102,11 @@ public final class StockMarketWebInterface {
 
     /** Item registry name allowed in {@code /api/icon}: {@code namespace:path}, no '/', no segment starting with '.'. */
     private static final Pattern ICON_ITEM = Pattern.compile("[a-z0-9_-][a-z0-9_.-]*:[a-z0-9_-][a-z0-9_.-]*");
-    /** Icon PNGs read from the class path; an empty array = not found. Cleared when it grows past {@link #CACHE_MAX_ENTRIES}. */
-    private static final Map<String, byte[]> ICON_BYTES = new ConcurrentHashMap<>();
+    /** A translation key shown as the name (no translation on this server), e.g. {@code item.create.brass_ingot}. */
+    private static final Pattern UNTRANSLATED = Pattern.compile("[a-z0-9_]+(\\.[a-z0-9_]+)+");
+    /** SM-363: components whose enchantments are named, stored enchantments (books) first. */
+    private static final List<DataComponentType<ItemEnchantments>> ENCHANTMENT_COMPONENTS =
+            List.of(DataComponents.STORED_ENCHANTMENTS, DataComponents.ENCHANTMENTS);
 
     private record Cached(long at, byte[] body) {}
     // ponytail: per-URI cache with a 1 s TTL, cleared when full; switch to a per-tick snapshot if many viewers
@@ -129,6 +144,9 @@ public final class StockMarketWebInterface {
         Integer port = b.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_PORT.get();
         int p = port == null ? b.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_PORT.getDefaultValue() : port;
         backend = b;
+        // SM-363: read on every apply (server start, settings change), so it needs no restart; a failed download retries here
+        if (Boolean.TRUE.equals(b.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.get()))
+            WebIconTextures.startDownload();
         if (p == runningPort)
             return;
         start(p, loopbackOnly());
@@ -146,6 +164,7 @@ public final class StockMarketWebInterface {
         executor = null;
         runningPort = -1;
         CACHE.clear();
+        WebIconTextures.closePacks();
     }
 
     /**
@@ -173,6 +192,7 @@ public final class StockMarketWebInterface {
             httpServer = server;
             executor = pool;
             runningPort = port;
+            WebIconTextures.openPacks();
             StockMarketMod.LOGGER.info("[StockMarket Web] serving on {}:{}", loopbackOnly ? "127.0.0.1" : "0.0.0.0", port);
             return true;
         } catch (IOException | LinkageError | RuntimeException e) {
@@ -331,7 +351,7 @@ public final class StockMarketWebInterface {
     }
 
     /**
-     * Class-path locations of an item's icon: its item texture, then its block texture (block items whose item
+     * Resource names of an item's icon by file name: its item texture, then its block texture (block items whose item
      * model uses a block texture of the same name). The item ID must match {@link #ICON_ITEM}, so no path traversal.
      *
      * @param item item registry name, e.g. {@code minecraft:diamond}
@@ -347,8 +367,8 @@ public final class StockMarketWebInterface {
     }
 
     /**
-     * {@code GET /api/icon?item=ns:path}: the item's PNG from the class path (mod jars; in singleplayer also the game's
-     * own textures). 400 for a disallowed name, 404 when no texture is found. Never touches the server thread.
+     * {@code GET /api/icon?item=ns:path}: the item's PNG ({@link WebIconTextures}: texture packs, then the class path).
+     * 400 for a disallowed name, 404 when no texture is found. Never touches the server thread.
      */
     private static void handleIcon(HttpExchange ex) throws IOException {
         try {
@@ -357,28 +377,12 @@ public final class StockMarketWebInterface {
                 return;
             }
             String item = parseQuery(ex.getRequestURI().getRawQuery()).get("item");
-            List<String> paths = iconResourcePaths(item);
-            if (paths == null || !ex.getRequestURI().getPath().equals("/api/icon")) {
+            if (iconResourcePaths(item) == null || !ex.getRequestURI().getPath().equals("/api/icon")) {
                 send(ex, 400, "text/plain; charset=utf-8", "Bad item".getBytes(StandardCharsets.UTF_8));
                 return;
             }
-            byte[] png = ICON_BYTES.get(item);
+            byte[] png = WebIconTextures.icon(item);
             if (png == null) {
-                png = new byte[0];
-                ClassLoader loader = StockMarketWebInterface.class.getClassLoader();
-                for (String path : paths) {
-                    try (InputStream in = loader.getResourceAsStream(path)) {
-                        if (in != null) {
-                            png = in.readAllBytes();
-                            break;
-                        }
-                    }
-                }
-                if (ICON_BYTES.size() > CACHE_MAX_ENTRIES)
-                    ICON_BYTES.clear();
-                ICON_BYTES.put(item, png);
-            }
-            if (png.length == 0) {
                 send(ex, 404, "text/plain; charset=utf-8", "No icon".getBytes(StandardCharsets.UTF_8));
                 return;
             }
@@ -456,6 +460,16 @@ public final class StockMarketWebInterface {
             m.addProperty("candleStart", candle.time());
             m.addProperty("candleVolume", candle.tradedVolume());
             list.add(m);
+        }
+        // SM-363: markets whose names are still equal (same item, other hidden data) get their market number
+        Map<String, Integer> nameCount = new HashMap<>();
+        for (JsonElement e : list)
+            nameCount.merge(e.getAsJsonObject().get("name").getAsString(), 1, Integer::sum);
+        for (JsonElement e : list) {
+            JsonObject m = e.getAsJsonObject();
+            String name = m.get("name").getAsString();
+            if (nameCount.get(name) > 1)
+                m.addProperty("name", name + " #" + m.get("id").getAsInt());
         }
         o.add("markets", list);
         return o;
@@ -655,10 +669,42 @@ public final class StockMarketWebInterface {
         }
     }
 
-    /** The item's display name, else its ID name (same rule as {@link StockMarketDiscord}). */
-    private static String itemName(ItemID id) {
+    /**
+     * SM-363: the item's display name with its variant details, as the web interface and {@link StockMarketDiscord}
+     * show it, e.g. {@code Enchanted Book (Sharpness V)} or {@code Potion of Swiftness (Speed 08:00)}. An empty stack
+     * or an untranslated name (a translation key) falls back to the registry name. Server thread.
+     *
+     * @param id the item
+     * @return the name, never null
+     */
+    static String itemName(ItemID id) {
         ItemStack stack = id.getStackTemplate();
-        return stack.isEmpty() ? id.getName() : stack.getHoverName().getString();
+        if (stack.isEmpty())
+            return id.getName();
+        String name = stack.getHoverName().getString();
+        if (UNTRANSLATED.matcher(name).matches())
+            name = id.getName();
+        List<String> details = new ArrayList<>();
+        for (DataComponentType<ItemEnchantments> type : ENCHANTMENT_COMPONENTS) {
+            ItemEnchantments enchantments = stack.get(type);
+            if (enchantments != null)
+                for (Object2IntMap.Entry<Holder<Enchantment>> e : enchantments.entrySet())
+                    details.add(Enchantment.getFullname(e.getKey(), e.getIntValue()).getString());
+        }
+        PotionContents potion = stack.get(DataComponents.POTION_CONTENTS);
+        if (potion != null) {
+            // the duration factors of the vanilla tooltips
+            float factor = stack.is(Items.LINGERING_POTION) ? 0.25f : stack.is(Items.TIPPED_ARROW) ? 0.125f : 1f;
+            for (MobEffectInstance effect : potion.getAllEffects()) {
+                String detail = effect.getEffect().value().getDisplayName().getString();
+                if (effect.getAmplifier() > 0)
+                    detail += " " + Component.translatable("potion.potency." + effect.getAmplifier()).getString();
+                if (!effect.endsWithin(20))
+                    detail += " " + MobEffectUtil.formatDuration(effect, factor, 20f).getString();
+                details.add(detail);
+            }
+        }
+        return details.isEmpty() ? name : name + " (" + String.join(", ", details) + ")";
     }
 
     private static double real(long raw) {

@@ -10,7 +10,6 @@ import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
-import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
@@ -175,10 +174,9 @@ public final class StockMarketDiscord {
         return name != null ? name : ServerStockMarketCommandHandler.tryGetPlayerName(uuid);
     }
 
-    /** The item's display name, else its ID name. */
+    /** The item's name as the web interface shows it (SM-363: with enchantments / potion effects). */
     private static String itemName(ItemID id) {
-        ItemStack stack = id.getStackTemplate();
-        return stack.isEmpty() ? id.getName() : stack.getHoverName().getString();
+        return StockMarketWebInterface.itemName(id);
     }
 
     /** Raw amount as a plain real number without trailing zeros (locale independent), e.g. 250 -> "2.5". */

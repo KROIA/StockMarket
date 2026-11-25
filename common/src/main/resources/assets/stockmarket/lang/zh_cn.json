@@ -336,6 +336,8 @@
   "gui.stockmarket.mod_settings_screen.setting.Integrations.WEB_INTERFACE_ENABLED.description": "在 http://<服务器>:<端口>/ 提供只读的市场页面\n（图表、订单簿、最近成交）。仅限主服务器。\n无需登录：只有在所有人都可以查看时\n才在防火墙中开放该端口。立即生效。",
   "gui.stockmarket.mod_settings_screen.setting.Integrations.WEB_INTERFACE_PORT": "端口",
   "gui.stockmarket.mod_settings_screen.setting.Integrations.WEB_INTERFACE_PORT.tooltip": "1024-65535。不能是游戏端口、多服务器连接端口或已被占用的端口。",
+  "gui.stockmarket.mod_settings_screen.setting.Integrations.WEB_INTERFACE_DOWNLOAD_TEXTURES": "下载物品材质",
+  "gui.stockmarket.mod_settings_screen.setting.Integrations.WEB_INTERFACE_DOWNLOAD_TEXTURES.tooltip": "从 Mojang 下载一次 Minecraft 客户端（约 27 MB）到\nconfig/StockMarket/web/，使专用服务器上的网页\n显示原版物品图标。手动放入该文件夹的客户端 jar\n或资源包同样有效。单人游戏无需下载。立即生效。",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE": "订单簿数组长度",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE.tooltip": "市场虚拟订单簿价格数组的长度。\n只有新建的市场会使用修改后的值；\n已有市场保持原长度，直到服务器重启。\n范围：100 - 1000000。",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CURRENCY": "交易货币",

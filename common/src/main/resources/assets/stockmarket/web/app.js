@@ -16,8 +16,8 @@
   const fmtVol = n => n.toLocaleString(undefined, { maximumFractionDigits: n < 10 ? 2 : 0 });
   const fmtRate = n => n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 4 });
   const fmtTime = ms => new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  // an untranslated key such as "item.mod.thing" -> show the item id instead
-  const displayName = m => /^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(m.name) ? m.itemId : m.name;
+  // the server sends the name with its variant details and its own fallback for untranslated names (SM-363)
+  const displayName = m => m.name || m.itemId;
   function tfLabel(tf) {
     if (!state.gameTime) return WALL_LABELS[tf] || (tf / 60000) + 'm';
     const h = tf / GAME_HOUR_MS;
@@ -151,7 +151,8 @@
       const ul = el('ul');
       for (const m of list) {
         const li = el('li', m.id === state.sel ? 'sel' : '');
-        li.title = m.itemId;
+        li.title = displayName(m) + '\n' + m.itemId;
+        li.dataset.item = m.itemId;
         li.append(el('span', 'dot ' + m.state), icon(m.itemId, displayName(m)), el('span', 'name', displayName(m)), el('span', 'price', fmtPrice(m.price)));
         li.onclick = () => { setMode('market'); select(m.id); };
         ul.append(li);

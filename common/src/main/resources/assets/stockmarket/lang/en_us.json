@@ -259,6 +259,8 @@
   "gui.stockmarket.mod_settings_screen.setting.Integrations.WEB_INTERFACE_ENABLED.description": "Serves a read-only market page (charts, order book,\nrecent trades) at http://<server>:<port>/. Master only.\nNo login: only open the port in your firewall if\neveryone may see it. Applies immediately.",
   "gui.stockmarket.mod_settings_screen.setting.Integrations.WEB_INTERFACE_PORT": "Port",
   "gui.stockmarket.mod_settings_screen.setting.Integrations.WEB_INTERFACE_PORT.tooltip": "1024-65535. Not the game port, not the multi-server link port, not a port already in use.",
+  "gui.stockmarket.mod_settings_screen.setting.Integrations.WEB_INTERFACE_DOWNLOAD_TEXTURES": "Download item textures",
+  "gui.stockmarket.mod_settings_screen.setting.Integrations.WEB_INTERFACE_DOWNLOAD_TEXTURES.tooltip": "Downloads the Minecraft client (about 27 MB) once from\nMojang into config/StockMarket/web/, so the web page\nshows vanilla item icons on a dedicated server.\nA client jar or resource pack copied there works too.\nNot needed in singleplayer. Takes effect immediately.",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE": "Orderbook array size",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE.tooltip": "Size of the virtual orderbook price array of a market.\nOnly NEWLY created markets use the changed value;\nexisting markets keep their size until a server restart.\nRange: 100 - 1000000.",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CURRENCY": "Trading currency",

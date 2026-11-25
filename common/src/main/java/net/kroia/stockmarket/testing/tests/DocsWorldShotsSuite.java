@@ -609,7 +609,7 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
                     new Promise(resolve => {
                       const start = Date.now();
                       const tick = () => {
-                        const li = document.querySelector('li[title="minecraft:diamond"]');
+                        const li = document.querySelector('li[data-item="minecraft:diamond"]');
                         if (li) { li.click(); resolve(true); }
                         else if (Date.now() - start > 20000) resolve(false);
                         else setTimeout(tick, 200);

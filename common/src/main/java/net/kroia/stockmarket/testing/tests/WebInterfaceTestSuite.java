@@ -1,5 +1,9 @@
 package net.kroia.stockmarket.testing.tests;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.sun.net.httpserver.HttpServer;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PermissionCompat;
 import net.kroia.testkit.TestCategory;
@@ -10,22 +14,50 @@ import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.minecraft.compat.StockMarketWebInterface;
+import net.kroia.stockmarket.minecraft.compat.WebIconTextures;
 import net.kroia.stockmarket.networking.request.ModSettingsRequest;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.util.StockMarketPermissions;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.alchemy.Potions;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * SM-347: the read-only web interface ({@link StockMarketWebInterface}).
@@ -34,6 +66,9 @@ import java.util.UUID;
  * player UUID in the trades, no path traversal, POST refused, the server stops again; a settings change moves the
  * port; the admin SET path rejects a reserved port. Slave: never starts. Every test restores the web settings and
  * re-applies them in {@code finally}.
+ * <p>
+ * SM-363 (no internet needed): texture lookup through item models in a generated pack, the download's metadata,
+ * size and SHA-1 checks (against a local HTTP server), icons over HTTP, and market names with variant details.
  */
 public class WebInterfaceTestSuite extends TestSuite {
 
@@ -65,6 +100,12 @@ public class WebInterfaceTestSuite extends TestSuite {
         addTest("settings_change_moves_port", this::test_settingsChangeMovesPort);
         addTest("mod_settings_set_rejects_game_port", this::test_setRejectsReservedPort);
         addTest("slave_never_starts", this::test_slaveNeverStarts);
+        addTest("texture_path_validation", this::test_texturePathValidation);
+        addTest("drop_in_pack_icons", this::test_dropInPackIcons);
+        addTest("download_metadata_checks", this::test_downloadMetadataChecks);
+        addTest("download_checks_size_and_sha1", this::test_downloadChecksSizeAndSha1);
+        addTest("market_names_show_variants", this::test_marketNamesShowVariants);
+        addTest("icons_served_over_http", this::test_iconsServedOverHttp);
     }
 
     private TestResult test_portValidation() {
@@ -264,6 +305,288 @@ public class WebInterfaceTestSuite extends TestSuite {
             s.WEB_INTERFACE_ENABLED.set(enabledBefore);
             StockMarketWebInterface.apply(backend);
         }
+    }
+
+    // ------------------------------------------------------------------ SM-363: names
+
+    /**
+     * SM-363: an enchanted book shows its enchantment, the normal and the long Swiftness potion differ (their
+     * durations), and markets with the same item name (two scratch paper markets) get their market number.
+     */
+    private TestResult test_marketNamesShowVariants() {
+        if (!isMaster())
+            return skip("master only");
+        MinecraftServer server = getServer();
+        if (server == null)
+            return skip("no server");
+        StockMarketModSettings.Integrations s = backend.SERVER_SETTINGS.INTEGRATIONS;
+        boolean enabledBefore = Boolean.TRUE.equals(s.WEB_INTERFACE_ENABLED.get());
+        int portBefore = s.WEB_INTERFACE_PORT.get();
+        TestFixture fixture = new TestFixture("WebNames");
+        fixture.setBackend(backend);
+        try {
+            Holder<Enchantment> sharpness = server.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.SHARPNESS);
+            ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+            ItemEnchantments.Mutable enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+            enchantments.set(sharpness, 5);
+            book.set(DataComponents.STORED_ENCHANTMENTS, enchantments.toImmutable());
+            short bookId = fixture.createMarket("book", book).getItemID().getShort();
+            short swift = fixture.createMarket("swift", PotionContents.createItemStack(Items.POTION, Potions.SWIFTNESS)).getItemID().getShort();
+            short longSwift = fixture.createMarket("long_swift", PotionContents.createItemStack(Items.POTION, Potions.LONG_SWIFTNESS)).getItemID().getShort();
+            short paperA = fixture.createMarket("paper_a").getItemID().getShort();
+            short paperB = fixture.createMarket("paper_b").getItemID().getShort();
+
+            int port = freePort();
+            s.WEB_INTERFACE_ENABLED.set(true);
+            s.WEB_INTERFACE_PORT.set(port);
+            StockMarketWebInterface.apply(backend);
+            HttpResponse<String> response = get(port, "/api/markets");
+            TestResult r = assertEquals("markets status", 200, response.statusCode());
+            if (!r.passed()) return r;
+            Map<Integer, String> names = new HashMap<>();
+            for (JsonElement m : JsonParser.parseString(response.body()).getAsJsonObject().getAsJsonArray("markets"))
+                names.put(m.getAsJsonObject().get("id").getAsInt(), m.getAsJsonObject().get("name").getAsString());
+            String sharpnessV = Enchantment.getFullname(sharpness, 5).getString();
+            r = assertTrue("book name shows " + sharpnessV + ": " + names.get((int) bookId), String.valueOf(names.get((int) bookId)).contains(sharpnessV));
+            if (!r.passed()) return r;
+            r = assertTrue("swiftness and long swiftness differ: " + names.get((int) swift) + " / " + names.get((int) longSwift),
+                    names.get((int) swift) != null && !names.get((int) swift).equals(names.get((int) longSwift)));
+            if (!r.passed()) return r;
+            r = assertTrue("scratch paper gets its market number: " + names.get((int) paperA), String.valueOf(names.get((int) paperA)).endsWith(" #" + paperA));
+            if (!r.passed()) return r;
+            r = assertTrue("second scratch paper too: " + names.get((int) paperB), String.valueOf(names.get((int) paperB)).endsWith(" #" + paperB));
+            if (!r.passed()) return r;
+            return assertEquals("all market names differ", names.size(), new HashSet<>(names.values()).size());
+        } catch (Exception e) {
+            return fail("unexpected exception: " + e);
+        } finally {
+            s.WEB_INTERFACE_ENABLED.set(enabledBefore);
+            s.WEB_INTERFACE_PORT.set(portBefore);
+            StockMarketWebInterface.apply(backend);
+            fixture.cleanup();
+        }
+    }
+
+    // ------------------------------------------------------------------ SM-363: icons
+
+    /** Texture references from model files map to texture PNG paths only; anything that could leave the folder is refused. */
+    private TestResult test_texturePathValidation() {
+        for (String bad : new String[]{null, "", "../x", "minecraft:../x", "minecraft:a/../b", "minecraft:a//b", "minecraft:.x/y",
+                "..:x", ".minecraft:x", "#layer0", "Minecraft:block/stone", "minecraft:/abs", "c:/x", "minecraft:a\\b", "minecraft:a/b/"}) {
+            TestResult r = assertNull("refused: " + bad, WebIconTextures.textureResourcePath(bad));
+            if (!r.passed()) return r;
+        }
+        TestResult r = assertEquals("namespaced", "assets/minecraft/textures/block/stone.png", WebIconTextures.textureResourcePath("minecraft:block/stone"));
+        if (!r.passed()) return r;
+        r = assertEquals("no namespace = minecraft", "assets/minecraft/textures/block/stone.png", WebIconTextures.textureResourcePath("block/stone"));
+        if (!r.passed()) return r;
+        return assertEquals("sub folders", "assets/banksystem/textures/item/money/money.png", WebIconTextures.textureResourcePath("banksystem:item/money/money"));
+    }
+
+    /**
+     * A generated pack in a scratch folder: a plain item texture, a texture found through a model chain with a
+     * #reference, and refused cases (a model pointing out of the folder, a model loop, a "PNG" that is not one).
+     */
+    private TestResult test_dropInPackIcons() {
+        Path dir = null;
+        try {
+            dir = writeTestPack();
+            WebIconTextures.usePacks(dir);
+            TestResult r = assertTrue("plain item texture", Arrays.equals(PNG_A, WebIconTextures.findIcon("smtest:plain")));
+            if (!r.passed()) return r;
+            r = assertTrue("texture through the model and its parent", Arrays.equals(PNG_B, WebIconTextures.findIcon("smtest:modelled")));
+            if (!r.passed()) return r;
+            r = assertTrue("#reference resolved", Arrays.equals(PNG_A, WebIconTextures.findIcon("smtest:referenced")));
+            if (!r.passed()) return r;
+            r = assertNull("model pointing out of the folder refused", WebIconTextures.findIcon("smtest:escape"));
+            if (!r.passed()) return r;
+            r = assertNull("model loop ends", WebIconTextures.findIcon("smtest:loop"));
+            if (!r.passed()) return r;
+            r = assertNull("not a PNG", WebIconTextures.findIcon("smtest:fake"));
+            if (!r.passed()) return r;
+            return assertNull("bad item name", WebIconTextures.findIcon("smtest:../plain"));
+        } catch (IOException e) {
+            return fail("could not write the test pack: " + e);
+        } finally {
+            WebIconTextures.reopenPacks();
+            deleteTree(dir);
+        }
+    }
+
+    /**
+     * Over HTTP: a pack texture and a mod texture found through its item model (banksystem:money ->
+     * item/money/money.png) are served as PNG; the refused pack entries answer 404, a bad name 400. In singleplayer
+     * also a vanilla block item through its model (oak stairs -> planks).
+     */
+    private TestResult test_iconsServedOverHttp() {
+        if (!isMaster())
+            return skip("master only");
+        MinecraftServer server = getServer();
+        StockMarketModSettings.Integrations s = backend.SERVER_SETTINGS.INTEGRATIONS;
+        boolean enabledBefore = Boolean.TRUE.equals(s.WEB_INTERFACE_ENABLED.get());
+        int portBefore = s.WEB_INTERFACE_PORT.get();
+        Path dir = null;
+        try {
+            int port = freePort();
+            s.WEB_INTERFACE_ENABLED.set(true);
+            s.WEB_INTERFACE_PORT.set(port);
+            StockMarketWebInterface.apply(backend);
+            dir = writeTestPack();
+            WebIconTextures.usePacks(dir); // after the start, which opened the config folder's packs
+            HttpResponse<byte[]> icon = getBytes(port, "/api/icon?item=smtest:plain");
+            TestResult r = assertTrue("pack texture served: " + icon.statusCode(), icon.statusCode() == 200 && Arrays.equals(PNG_A, icon.body()));
+            if (!r.passed()) return r;
+            r = assertEquals("served as PNG", "image/png", icon.headers().firstValue("Content-Type").orElse(""));
+            if (!r.passed()) return r;
+            r = assertEquals("BankSystem money through its item model", 200, getBytes(port, "/api/icon?item=banksystem:money").statusCode());
+            if (!r.passed()) return r;
+            r = assertEquals("model escaping the folder", 404, getBytes(port, "/api/icon?item=smtest:escape").statusCode());
+            if (!r.passed()) return r;
+            r = assertEquals("not a PNG", 404, getBytes(port, "/api/icon?item=smtest:fake").statusCode());
+            if (!r.passed()) return r;
+            r = assertEquals("traversal in the item name", 400, getBytes(port, "/api/icon?item=smtest:..%2F..%2Fplain").statusCode());
+            if (!r.passed()) return r;
+            if (server != null && !server.isDedicatedServer()) {
+                r = assertEquals("singleplayer: oak stairs through the block model", 200, getBytes(port, "/api/icon?item=minecraft:oak_stairs").statusCode());
+                if (!r.passed()) return r;
+            }
+            return pass("icons served");
+        } catch (Exception e) {
+            return fail("unexpected exception: " + e);
+        } finally {
+            s.WEB_INTERFACE_ENABLED.set(enabledBefore);
+            s.WEB_INTERFACE_PORT.set(portBefore);
+            StockMarketWebInterface.apply(backend);
+            WebIconTextures.reopenPacks();
+            deleteTree(dir);
+        }
+    }
+
+    // ------------------------------------------------------------------ SM-363: texture download
+
+    /** Only https URLs on Mojang hosts with a 40-digit SHA-1 and a sane size are accepted from the manifest files. */
+    private TestResult test_downloadMetadataChecks() {
+        String sha = "0123456789abcdef0123456789abcdef01234567";
+        JsonObject manifest = JsonParser.parseString("{\"versions\":["
+                + "{\"id\":\"1.21.1\",\"url\":\"https://piston-meta.mojang.com/v1/packages/" + sha + "/1.21.1.json\",\"sha1\":\"" + sha.toUpperCase() + "\"},"
+                + "{\"id\":\"plain_http\",\"url\":\"http://piston-meta.mojang.com/x.json\",\"sha1\":\"" + sha + "\"},"
+                + "{\"id\":\"other_host\",\"url\":\"https://mojang.com.example.org/x.json\",\"sha1\":\"" + sha + "\"},"
+                + "{\"id\":\"lookalike\",\"url\":\"https://evilmojang.com/x.json\",\"sha1\":\"" + sha + "\"},"
+                + "{\"id\":\"bad_sha\",\"url\":\"https://piston-meta.mojang.com/x.json\",\"sha1\":\"xyz\"}]}").getAsJsonObject();
+        WebIconTextures.Download v = WebIconTextures.versionJson(manifest, "1.21.1");
+        TestResult r = assertTrue("1.21.1 found: " + v, v != null && v.url().endsWith("/1.21.1.json") && v.sha1().equals(sha));
+        if (!r.passed()) return r;
+        for (String id : new String[]{"plain_http", "other_host", "lookalike", "bad_sha", "9.9.9"}) {
+            r = assertNull("refused: " + id, WebIconTextures.versionJson(manifest, id));
+            if (!r.passed()) return r;
+        }
+        String client = "{\"downloads\":{\"client\":{\"sha1\":\"" + sha + "\",\"size\":%d,\"url\":\"%s\"}}}";
+        WebIconTextures.Download jar = WebIconTextures.clientJar(JsonParser.parseString(String.format(client, 26836906, "https://piston-data.mojang.com/v1/objects/" + sha + "/client.jar")).getAsJsonObject());
+        r = assertTrue("client jar accepted: " + jar, jar != null && jar.size() == 26836906);
+        if (!r.passed()) return r;
+        r = assertNull("empty size refused", WebIconTextures.clientJar(JsonParser.parseString(String.format(client, 0, "https://piston-data.mojang.com/c.jar")).getAsJsonObject()));
+        if (!r.passed()) return r;
+        r = assertNull("oversized refused", WebIconTextures.clientJar(JsonParser.parseString(String.format(client, 1L << 40, "https://piston-data.mojang.com/c.jar")).getAsJsonObject()));
+        if (!r.passed()) return r;
+        return assertNull("non-Mojang host refused", WebIconTextures.clientJar(JsonParser.parseString(String.format(client, 100, "https://example.org/c.jar")).getAsJsonObject()));
+    }
+
+    /**
+     * The jar download against a local HTTP server (no internet): the right size and SHA-1 pass and the file matches;
+     * a wrong SHA-1, a smaller announced size and an HTTP error fail.
+     */
+    private TestResult test_downloadChecksSizeAndSha1() {
+        byte[] body = new byte[100_000];
+        new Random(5).nextBytes(body);
+        HttpServer local = null;
+        Path dir = null;
+        try {
+            local = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+            local.createContext("/client.jar", ex -> {
+                ex.sendResponseHeaders(200, body.length);
+                ex.getResponseBody().write(body);
+                ex.close();
+            });
+            local.start();
+            String url = "http://127.0.0.1:" + local.getAddress().getPort();
+            dir = Files.createTempDirectory("sm-web-download");
+            Path file = dir.resolve("client.jar");
+            String sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-1").digest(body));
+            HttpClient http = HttpClient.newHttpClient();
+            WebIconTextures.downloadTo(http, new WebIconTextures.Download(url + "/client.jar", sha, body.length), file);
+            TestResult r = assertEquals("stored file has the SHA-1", sha, WebIconTextures.sha1(file));
+            if (!r.passed()) return r;
+            for (WebIconTextures.Download bad : List.of(
+                    new WebIconTextures.Download(url + "/client.jar", "0".repeat(40), body.length),
+                    new WebIconTextures.Download(url + "/client.jar", sha, body.length - 1),
+                    new WebIconTextures.Download(url + "/missing.jar", sha, body.length))) {
+                try {
+                    WebIconTextures.downloadTo(http, bad, dir.resolve("bad.jar"));
+                    return fail("accepted: " + bad);
+                } catch (IOException expected) {
+                    // refused
+                }
+            }
+            return pass("size and SHA-1 checked");
+        } catch (Exception e) {
+            return fail("unexpected exception: " + e);
+        } finally {
+            if (local != null)
+                local.stop(0);
+            deleteTree(dir);
+        }
+    }
+
+    // ------------------------------------------------------------------ SM-363 helpers
+
+    /** Two different "PNGs": the PNG signature plus one byte, enough for the signature check. */
+    private static final byte[] PNG_A = fakePng('A');
+    private static final byte[] PNG_B = fakePng('B');
+
+    private static byte[] fakePng(char c) {
+        return new byte[]{(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', (byte) c};
+    }
+
+    /** Writes a scratch folder with one pack zip (namespace smtest) for the icon tests. */
+    private static Path writeTestPack() throws IOException {
+        Path dir = Files.createTempDirectory("sm-web-pack");
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(dir.resolve("test-pack.zip")))) {
+            entry(zip, "assets/smtest/textures/item/plain.png", PNG_A);
+            entry(zip, "assets/smtest/textures/item/sub/deep.png", PNG_B);
+            entry(zip, "assets/smtest/models/item/modelled.json", "{\"parent\":\"smtest:item/base\"}");
+            entry(zip, "assets/smtest/models/item/base.json", "{\"parent\":\"item/generated\",\"textures\":{\"layer0\":\"smtest:item/sub/deep\"}}");
+            entry(zip, "assets/smtest/models/item/referenced.json", "{\"textures\":{\"layer0\":\"#side\",\"side\":\"smtest:item/plain\"}}");
+            entry(zip, "assets/smtest/models/item/escape.json", "{\"textures\":{\"layer0\":\"smtest:../../../secret\"}}");
+            entry(zip, "secret.png", PNG_A);
+            entry(zip, "assets/smtest/models/item/loop.json", "{\"parent\":\"smtest:item/loop\"}");
+            entry(zip, "assets/smtest/textures/item/fake.png", "not a png");
+        }
+        return dir;
+    }
+
+    private static void entry(ZipOutputStream zip, String name, String text) throws IOException {
+        entry(zip, name, text.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void entry(ZipOutputStream zip, String name, byte[] bytes) throws IOException {
+        zip.putNextEntry(new ZipEntry(name));
+        zip.write(bytes);
+        zip.closeEntry();
+    }
+
+    private static void deleteTree(@Nullable Path dir) {
+        if (dir == null)
+            return;
+        try (Stream<Path> files = Files.walk(dir)) {
+            files.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+        } catch (IOException ignored) {
+            // a temp folder
+        }
+    }
+
+    private HttpResponse<byte[]> getBytes(int port, String path) {
+        return await(HttpClient.newHttpClient().sendAsync(HttpRequest.newBuilder(uri(port, path)).GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray()), WAIT_MS);
     }
 
     // ------------------------------------------------------------------ helpers
