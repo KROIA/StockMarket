@@ -9,9 +9,10 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Asynchronous access to one market. On the master this is the market itself ({@link IServerMarket}) and every
- * future is already complete. On a slave or a client it is a proxy that sends each call to the master and
- * completes the future with the answer.
+ * Asynchronous access to one market. On the master this is the market itself ({@link IServerMarket}): called on the
+ * server thread, every future is already complete; called from any other thread, the call runs on the server thread
+ * and the future completes after that (don't wait on it from a thread the server thread is waiting for). On a slave
+ * or a client it is a proxy that sends each call to the master and completes the future with the answer.
  * <p>
  * Prices and volumes are raw backend values unless the method name says {@code Real}.
  *

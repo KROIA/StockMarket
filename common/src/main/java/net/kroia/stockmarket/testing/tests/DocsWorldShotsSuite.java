@@ -243,7 +243,8 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
             if (!(level.getBlockEntity(chart.getKey()) instanceof StockMarketDisplayBlockEntity display))
                 return "no Stock Market Display at " + chart.getKey();
             display.setConfig(StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, fixture.market(chart.getValue()));
-            // the stored chart view fits the builder's prices, and a market change keeps it (SM-364): drop it
+            // the stored chart view fits the builder's prices: drop it also when the item number happens to be the
+            // same (no market change, so setConfig keeps the view)
             display.applyViewport(null);
         }
         // the main blocks of the 2x1 and the 2x2 Bank Display
@@ -608,7 +609,7 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
                     new Promise(resolve => {
                       const start = Date.now();
                       const tick = () => {
-                        const li = document.querySelector('li[title="minecraft:diamond"]');
+                        const li = document.querySelector('li[data-item="minecraft:diamond"]');
                         if (li) { li.click(); resolve(true); }
                         else if (Date.now() - start > 20000) resolve(false);
                         else setTimeout(tick, 200);

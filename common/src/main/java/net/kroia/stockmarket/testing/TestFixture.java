@@ -201,7 +201,19 @@ public class TestFixture {
      * @return the synthetic ItemID (never null)
      */
     public ItemID scratchItemID(String name) {
-        ItemStack stack = new ItemStack(Items.PAPER);
+        return scratchItemID(name, new ItemStack(Items.PAPER));
+    }
+
+    /**
+     * Like {@link #scratchItemID(String)}, but on a copy of {@code base} (count 1) with its components, e.g. an
+     * enchanted book or a potion (SM-363 name tests). The marker keeps it distinct from real items.
+     *
+     * @param name resource name, unique within the suite
+     * @param base the stack to copy; not modified
+     * @return the synthetic ItemID (never null)
+     */
+    public ItemID scratchItemID(String name, ItemStack base) {
+        ItemStack stack = base.copyWithCount(1);
         CompoundTag nbt = new CompoundTag();
         nbt.putString(MARKER_KEY, label + "/" + name);
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
@@ -259,7 +271,19 @@ public class TestFixture {
      * @throws RuntimeException if the market could not be created
      */
     public IServerMarket createMarket(String name) {
-        ItemID itemID = scratchItemID(name);
+        return createMarket(name, new ItemStack(Items.PAPER));
+    }
+
+    /**
+     * Allocates a scratch market on a synthetic ItemID made from {@code base} ({@link #scratchItemID(String, ItemStack)}).
+     *
+     * @param name market name, unique within the suite
+     * @param base the stack the item is made from; not modified
+     * @return the created market
+     * @throws RuntimeException if the market could not be created
+     */
+    public IServerMarket createMarket(String name, ItemStack base) {
+        ItemID itemID = scratchItemID(name, base);
         IServerMarket market = marketManager().createMarket(itemID);
         if (market == null)
             throw new RuntimeException("TestFixture[" + label + "]: could not create scratch market '" + name + "'");
