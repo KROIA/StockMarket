@@ -214,7 +214,9 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                 GuiNode tradeNode = openTradeChart(a);
                 if (tradeNode == null) return skip("needs the ModUtilities GuiLocator (no chart node on the trade screen)");
                 CandlestickChart tradeChart = (CandlestickChart) tradeNode.handle();
-                if (!waitForPriceInView(client, a, tradeChart, DISPLAY_PRICE_HIGH))
+                // 90%: the temporary market's own trading moves the set price a little right away; this only tells
+                // the set price from the market's creation price
+                if (!waitForPriceInView(client, a, tradeChart, DISPLAY_PRICE_HIGH * 9 / 10))
                     return fail("market A's trade screen chart never had its price in view: " + tradeChartState(client, a, tradeChart));
                 for (int i = 0; i < 5; i++)
                     Gui.scroll(tradeNode, 1);
