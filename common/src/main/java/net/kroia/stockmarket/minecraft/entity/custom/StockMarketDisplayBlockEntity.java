@@ -15,6 +15,7 @@ import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -22,6 +23,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
@@ -100,10 +103,37 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
         setConfig(type, itemID, null);
     }
 
+    /** SM-376: how far (blocks) a player may stand from a display's screen to change its config or chart view. */
+    public static final double MAX_INTERACT_DISTANCE = 8.0;
+
+    /**
+     * SM-376: true if {@code position} is within {@link #MAX_INTERACT_DISTANCE} blocks of the nearest block centre
+     * of this display's whole screen (its group), not only of the top-left controller block, so a large screen can
+     * be set up from its far corner. A block in no group counts alone (same as the old controller-only check).
+     *
+     * @param position the player's position
+     */
+    public boolean isWithinReach(Vec3 position) {
+        BlockPos topLeft = getControllerPos() != null ? getControllerPos() : getBlockPos();
+        // the group's "right" as in ModUtilities' AbstractDisplayBlockEntity.getRightDirection (package-private there)
+        Direction right = getBlockState().getValue(HorizontalDirectionalBlock.FACING).getCounterClockWise();
+        BlockPos bottomRight = topLeft.relative(right, Math.max(1, getGroupWidth()) - 1)
+                .below(Math.max(1, getGroupHeight()) - 1);
+        // deflate(0.5): the box of the block centres
+        return AABB.encapsulatingFullBlocks(topLeft, bottomRight).deflate(0.5).distanceToSqr(position)
+                <= MAX_INTERACT_DISTANCE * MAX_INTERACT_DISTANCE;
+    }
+
     /**
      * Sets the display configuration. Propagates the config to all displays in
-     * the group so they stay connected, then recalculates groups if the type
-     * changed and rebuilds the GUI.
+     * the group so they stay connected, then recalculates groups if the channel
+     * (type, market or pair) changed and rebuilds the GUI. SM-360: a display
+     * switched to the market of a touching display joins it right away, as on
+     * the first setup, instead of on the next block change nearby.
+     * <p>
+     * SM-364: a change of type or market drops the stored chart view (price range,
+     * zoom, timeframe), so the new market's chart fits its own candles instead of
+     * showing the old market's price range.
      *
      * @param type         the display type
      * @param itemID       the primary market item
@@ -111,13 +141,18 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
      */
     public void setConfig(DisplayType type, ItemID itemID, ItemID secondItemID) {
         DisplayType oldType = this.displayType;
+        String oldChannel = getChannelId();
+        boolean changed = oldType != type || !itemIDEquals(this.selectedItemID, itemID)
+                || !itemIDEquals(this.secondItemID, secondItemID);
         this.displayType = type;
         this.selectedItemID = itemID;
         this.secondItemID = secondItemID;
+        // Before recalculateGroups: its transfer state (saveCustomData) would carry the old view.
+        if (changed) pendingViewport = null;
 
         if (level != null && !level.isClientSide()) {
             propagateConfigToGroup();
-            if (oldType != type) {
+            if (!oldChannel.equals(getChannelId())) {
                 net.minecraft.core.Direction facing = getBlockState().getValue(HorizontalDirectionalBlock.FACING);
                 AbstractDisplayBlockEntity.recalculateGroups(level, getBlockPos(), facing);
             }
@@ -206,9 +241,11 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     @Override
     protected void wireCallbacks(Gui gui) {
-        // Save viewport from old chart before discarding it
+        // Save viewport from old chart before discarding it. Only a connected chart has a real
+        // view (SM-364): the server-side chart never connects (its view is the constructor
+        // default), and afterLoad disconnects the old market's chart before a market change.
         if (chart instanceof DisplayCandlestickChart dcc) {
-            pendingViewport = dcc.getViewportState();
+            if (dcc.isConnected()) pendingViewport = dcc.getViewportState();
             dcc.disconnect();
         }
         chart = null;
@@ -264,9 +301,11 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
         } else {
             secondItemID = null;
         }
-        if (tag.contains("viewport")) {
-            pendingViewport = NbtCompat.getCompound(tag, "viewport");
-        }
+        // No "viewport" means no stored view (mirrors saveCustomData), e.g. after a market change (SM-364)
+        CompoundTag view = tag.contains("viewport") ? NbtCompat.getCompound(tag, "viewport") : null;
+        // SM-379: worlds from before SM-364 can hold the untouched default view (price range 0-500) of a chart
+        // that never got data; drop exactly that one so the chart fits its market. A view a player set stays.
+        pendingViewport = view != null && CandlestickChart.isUntouchedDefaultViewport(view) ? null : view;
     }
 
     //@Override // mc<=1.21.5
