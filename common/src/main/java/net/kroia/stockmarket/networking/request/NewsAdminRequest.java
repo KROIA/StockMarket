@@ -386,7 +386,9 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
      * @param text               full language-code → newspaper text map (insertion-ordered)
      * @param announceMinMs      inclusive lower bound of the announce-delay sampling range (ms)
      * @param announceMaxMs      inclusive upper bound of the announce-delay sampling range (ms)
-     * @param peakFactor         peak multiplicative influence (0.5 = +50% at peak, negative = drop)
+     * @param peakFactor         peak multiplicative influence (0.5 = +50% at peak, negative = drop),
+     *                           scaled by the scheduler's impactStrengthMultiplier like the
+     *                           activation does (SM-382)
      * @param rampUpSeconds      seconds the impact ramps linearly from 0 to peak
      * @param durationSeconds    seconds the impact holds at peak
      * @param reversal           reversal mode JSON name ({@code "ramp"}, {@code "exponential"}
@@ -493,10 +495,14 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
          * One step of a {@link SequenceInfo} (T-099).
          *
          * @param name          the step name (UI display, chains' {@code onStep} anchor)
-         * @param durationMinMs inclusive lower duration bound in ms (== max when fixed)
-         * @param durationMaxMs inclusive upper duration bound in ms (== min when fixed)
+         * @param durationMinMs inclusive lower duration bound in ms (== max when fixed),
+         *                      already scaled by the scheduler's impactDurationMultiplier
+         *                      (SM-366) so it matches the live countdown
+         * @param durationMaxMs inclusive upper duration bound in ms (== min when fixed),
+         *                      scaled like {@code durationMinMs}
          * @param targetFactor  the signed influence level the step reaches at its end
-         *                      ({@code 0.3} = +30%)
+         *                      ({@code 0.3} = +30%), scaled by the scheduler's
+         *                      impactStrengthMultiplier like the activation does (SM-382)
          * @param curve         the interpolation curve's JSON name ({@code "linear"},
          *                      {@code "instant"}, {@code "exponential"}, {@code "hold"})
          * @param permanent     true if this (always last) step bakes its final value
@@ -951,8 +957,12 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
                 + resolved.size() + " market(s)", List.of());
     }
 
-    /** LIST: loaded definitions (+ markers) and active events rendered to display lines. */
-    private OutputData handleList(NewsPlugin plugin) {
+    /**
+     * LIST: loaded definitions (+ markers) and active events rendered to display lines.
+     * The message stays English for the command output (a dedicated server has no mod lang
+     * files); the GUI shows {@link #listStatusText} instead (SM-377). Public for the offline tests.
+     */
+    public static OutputData handleList(NewsPlugin plugin) {
         List<String> lines = new ArrayList<>();
 
         Map<String, NewsEventDefinition> definitions = plugin.getLibrary().getDefinitions();
@@ -993,6 +1003,18 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
 
         return success(plugin, definitions.size() + " definition(s), "
                 + activeEvents.size() + " active event(s)", lines);
+    }
+
+    /**
+     * SM-377: the GUI's status line for a LIST reply, "N definition(s), M active event(s)" in the
+     * client's language, from the counts of the reply's id lists.
+     *
+     * @param reply a successful LIST reply
+     * @return the translatable status line
+     */
+    public static Component listStatusText(OutputData reply) {
+        return Component.translatable("gui.stockmarket.news_plugin.list_status",
+                reply.definitionIds().size(), reply.activeEventIds().size());
     }
 
     /** STOP: stop one active event or {@value #STOP_ALL}; audited like TRIGGER. */
@@ -1519,7 +1541,7 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
      * Builds the standard success response: message + lines plus the id lists and the
      * structured {@link EventDetails} snapshot for the GUI (fresh on every successful op).
      */
-    private OutputData success(NewsPlugin plugin, String message, List<String> lines) {
+    private static OutputData success(NewsPlugin plugin, String message, List<String> lines) {
         return new OutputData(true, message, lines, definitionIds(plugin), activeEventIds(plugin),
                 buildEventDetails(plugin, plugin.getMarketInterfaces()));
     }
@@ -1574,17 +1596,22 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
         // T-099 NPE fix: getImpact() is null for sequences[]-authored events (T-094) —
         // only legacy impact events render the classic (byte-identical) Impact line;
         // sequence events render their authored sequence/step breakdown instead.
+        // SM-366: durations are shown as they run, i.e. stretched by the scheduler's multiplier.
+        double durationMultiplier = plugin.getLibrary().getSchedulerConfig().getImpactDurationMultiplier();
+        // SM-382: targets and peaks likewise, scaled by the strength multiplier (the authored
+        // factor stays in the parentheses, as written in the JSON).
+        double strengthMultiplier = plugin.getLibrary().getSchedulerConfig().getImpactStrengthMultiplier();
         NewsImpactEnvelope impact = definition.getImpact();
         if (impact != null) {
             boolean permanent = impact.getReversal() == NewsImpactEnvelope.ReversalMode.NONE;
             lines.add("  Impact: " + impact.getType().jsonName()
-                    + ", peak " + NewsUiFormatting.formatFactorPercent(1.0 + impact.getPeakFactor())
+                    + ", peak " + NewsUiFormatting.formatFactorPercent(1.0 + impact.getPeakFactor() * strengthMultiplier)
                     + " (peakFactor " + impact.getPeakFactor() + ")"
-                    + ", rampUp " + (impact.getRampUpMillis() / 1000L) + " s"
-                    + ", hold " + (impact.getHoldMillis() / 1000L) + " s"
+                    + ", rampUp " + (Math.round(impact.getRampUpMillis() * durationMultiplier) / 1000L) + " s"
+                    + ", hold " + (Math.round(impact.getHoldMillis() * durationMultiplier) / 1000L) + " s"
                     + ", reversal " + impact.getReversal().jsonName()
                     + (permanent ? " (permanent shift bakes into the default price)"
-                            : " (" + (impact.getReversalMillis() / 1000L) + " s)"));
+                            : " (" + (Math.round(impact.getReversalMillis() * durationMultiplier) / 1000L) + " s)"));
         } else {
             List<NewsEventDefinition.SequenceDefinition> sequences = definition.getSequences();
             lines.add("  Sequences (" + sequences.size() + ", one picked by weight at activation):");
@@ -1595,9 +1622,9 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
                 for (NewsEventDefinition.StepDefinition step : sequence.getSteps()) {
                     StringBuilder line = new StringBuilder("        ").append(index++)
                             .append(". '").append(step.getName()).append("' ")
-                            .append(formatStepDuration(step))
+                            .append(formatStepDuration(step, durationMultiplier))
                             .append(" -> ").append(NewsUiFormatting.formatFactorPercent(
-                                    1.0 + step.getTargetFactor()))
+                                    1.0 + step.getTargetFactor() * strengthMultiplier))
                             .append(" (targetFactor ").append(step.getTargetFactor()).append(")")
                             .append(", curve ").append(step.getCurve().jsonName());
                     if (step.isPermanent()) line.append(" [permanent]");
@@ -1640,9 +1667,9 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
 
         // What a trigger would do right now: matched ∩ subscribed ∩ news-enabled markets.
         // The peak factor is the envelope's for legacy events (unchanged rendering) and
-        // the largest-magnitude step target across all sequences otherwise.
-        double peakFactor = impact != null ? impact.getPeakFactor()
-                : definitionPeakFactor(definition);
+        // the largest-magnitude step target across all sequences otherwise; scaled (SM-382).
+        double peakFactor = (impact != null ? impact.getPeakFactor()
+                : definitionPeakFactor(definition)) * strengthMultiplier;
         Map<ItemID, Float> resolved = plugin.resolveAdminTriggerMarkets(definition, markets, null);
         lines.add("  Would impact " + resolved.size() + " subscribed market(s) when triggered:");
         for (Map.Entry<ItemID, Float> entry : resolved.entrySet()) {
@@ -1687,6 +1714,11 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
             subscribedIds.add(marketInterface.market.getMarketID());
         }
 
+        // SM-366: show the effective step durations (activation stretches them by this).
+        double durationMultiplier = plugin.getLibrary().getSchedulerConfig().getImpactDurationMultiplier();
+        // SM-382: and the effective step targets / peak (activation scales them by this).
+        double strengthMultiplier = plugin.getLibrary().getSchedulerConfig().getImpactStrengthMultiplier();
+
         List<EventDetails> details = new ArrayList<>(plugin.getLibrary().getDefinitionCount());
         for (NewsEventDefinition definition : plugin.getLibrary().getDefinitions().values()) {
             String id = definition.getId();
@@ -1720,13 +1752,13 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
             String reversal;
             long reversalSeconds;
             if (impact != null) {
-                peakFactor = impact.getPeakFactor();
+                peakFactor = impact.getPeakFactor() * strengthMultiplier;
                 rampUpSeconds = impact.getRampUpMillis() / 1000L;
                 durationSeconds = impact.getHoldMillis() / 1000L;
                 reversal = impact.getReversal().jsonName();
                 reversalSeconds = impact.getReversalMillis() / 1000L;
             } else {
-                peakFactor = definitionPeakFactor(definition);
+                peakFactor = definitionPeakFactor(definition) * strengthMultiplier;
                 rampUpSeconds = 0L;
                 durationSeconds = 0L;
                 reversal = "sequence";
@@ -1763,7 +1795,7 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
                     marketImpacts,
                     pictureFileName,
                     pictureHash,
-                    buildSequenceInfos(definition, subscribedIds),
+                    buildSequenceInfos(definition, subscribedIds, durationMultiplier, strengthMultiplier),
                     requirementStatus,
                     chainLines));
         }
@@ -1782,10 +1814,15 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
      * @param definition    the definition to snapshot
      * @param subscribedIds the currently subscribed market ids (per-step matcher
      *                      resolution candidates)
+     * @param durationMultiplier the scheduler's impactDurationMultiplier; the shipped
+     *                      step durations are scaled by it (SM-366)
+     * @param strengthMultiplier the scheduler's impactStrengthMultiplier; the shipped
+     *                      step targets are scaled by it (SM-382)
      * @return one entry per sequence, in JSON order (never empty for a loaded event)
      */
     private static List<EventDetails.SequenceInfo> buildSequenceInfos(
-            NewsEventDefinition definition, Set<ItemID> subscribedIds) {
+            NewsEventDefinition definition, Set<ItemID> subscribedIds, double durationMultiplier,
+            double strengthMultiplier) {
         List<EventDetails.SequenceInfo> sequences =
                 new ArrayList<>(definition.getSequences().size());
         for (NewsEventDefinition.SequenceDefinition sequence : definition.getSequences()) {
@@ -1802,8 +1839,9 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
                     }
                 }
                 steps.add(new EventDetails.StepInfo(step.getName(),
-                        step.getDurationMinMs(), step.getDurationMaxMs(),
-                        step.getTargetFactor(), step.getCurve().jsonName(),
+                        Math.round(step.getDurationMinMs() * durationMultiplier),
+                        Math.round(step.getDurationMaxMs() * durationMultiplier),
+                        step.getTargetFactor() * strengthMultiplier, step.getCurve().jsonName(),
                         step.isPermanent(), stepMarkets));
             }
             sequences.add(new EventDetails.SequenceInfo(sequence.getName(),
@@ -1859,12 +1897,14 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
     }
 
     /**
-     * Formats a step's duration for {@link #renderEventInfo}: {@code "10 s"} for fixed
-     * durations, {@code "10..30 s"} for ranges (whole seconds — authoring granularity).
+     * Formats a step's effective duration for {@link #renderEventInfo}: {@code "10 s"} for
+     * fixed durations, {@code "10..30 s"} for ranges (whole seconds), scaled by the
+     * scheduler's impactDurationMultiplier like the activation does (SM-366).
      */
-    private static String formatStepDuration(NewsEventDefinition.StepDefinition step) {
-        long minSeconds = step.getDurationMinMs() / 1000L;
-        long maxSeconds = step.getDurationMaxMs() / 1000L;
+    private static String formatStepDuration(NewsEventDefinition.StepDefinition step,
+                                             double durationMultiplier) {
+        long minSeconds = Math.round(step.getDurationMinMs() * durationMultiplier) / 1000L;
+        long maxSeconds = Math.round(step.getDurationMaxMs() * durationMultiplier) / 1000L;
         return minSeconds == maxSeconds ? minSeconds + " s" : minSeconds + ".." + maxSeconds + " s";
     }
 

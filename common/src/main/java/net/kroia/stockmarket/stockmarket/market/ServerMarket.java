@@ -247,7 +247,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public CompletableFuture<Long> getDefaultPriceAsync()
     {
-        return CompletableFuture.completedFuture(settings.defaultPrice);
+        return ServerMarketManager.onServerThread(() -> settings.defaultPrice);
     }
 
 
@@ -260,7 +260,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
     @Override
     public CompletableFuture<Long> getCurrentMarketPriceAsync() {
-        return CompletableFuture.completedFuture(currentMarketPrice);
+        return ServerMarketManager.onServerThread(() -> currentMarketPrice);
     }
 
 
@@ -275,7 +275,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
     @Override
     public CompletableFuture<Long> getCurrentTimeAsync() {
-        return CompletableFuture.completedFuture(getCurrentTime());
+        return ServerMarketManager.onServerThread(() -> getCurrentTime());
     }
 
 
@@ -290,7 +290,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
     @Override
     public CompletableFuture<Long> getRawVolumeAsync(long price) {
-        return CompletableFuture.completedFuture(getRawVolume(price));
+        return ServerMarketManager.onServerThread(() -> getRawVolume(price));
     }
 
 
@@ -313,7 +313,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public CompletableFuture<Long> getRawVolumeAsync(long startPrice, long endPrice)
     {
-        return CompletableFuture.completedFuture(getRawVolume(startPrice, endPrice));
+        return ServerMarketManager.onServerThread(() -> getRawVolume(startPrice, endPrice));
     }
 
 
@@ -328,7 +328,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public CompletableFuture<Float> getRealVolumeAsync(double price)
     {
-        return CompletableFuture.completedFuture(getRealVolume(price));
+        return ServerMarketManager.onServerThread(() -> getRealVolume(price));
     }
 
 
@@ -344,7 +344,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public CompletableFuture<Float> getRealVolumeAsync(double startPrice, double endPrice)
     {
-        return CompletableFuture.completedFuture(getRealVolume(startPrice, endPrice));
+        return ServerMarketManager.onServerThread(() -> getRealVolume(startPrice, endPrice));
     }
 
 
@@ -384,7 +384,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
     @Override
     public CompletableFuture<Boolean> putOrderAsync(Order order) {
-        return CompletableFuture.completedFuture(putOrder(order));
+        return ServerMarketManager.onServerThread(() -> putOrder(order));
     }
 
 
@@ -524,7 +524,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
     @Override
     public CompletableFuture<List<Order>> getLimitOrdersAsync() {
-        return CompletableFuture.completedFuture(getLimitOrders());
+        return ServerMarketManager.onServerThread(() -> getLimitOrders());
     }
 
 
@@ -538,7 +538,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
     @Override
     public CompletableFuture<Boolean> isUnderMaintenanceAsync() {
-        return CompletableFuture.completedFuture(settings.maintenance);
+        return ServerMarketManager.onServerThread(() -> settings.maintenance);
     }
 
 
@@ -579,7 +579,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
     @Override
     public CompletableFuture<Boolean> setMaintenanceAsync(boolean maintenance) {
-        return CompletableFuture.completedFuture(setMaintenance(maintenance));
+        return ServerMarketManager.onServerThread(() -> setMaintenance(maintenance));
     }
 
     @Override
@@ -597,7 +597,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public CompletableFuture<Boolean> setTradingHoursAsync(int openMinute, int closeMinute)
     {
-        return CompletableFuture.completedFuture(setTradingHours(openMinute, closeMinute));
+        return ServerMarketManager.onServerThread(() -> setTradingHours(openMinute, closeMinute));
     }
 
     @Override
@@ -611,7 +611,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public CompletableFuture<Boolean> setTradingOverrideAsync(boolean open)
     {
-        return CompletableFuture.completedFuture(setTradingOverride(open));
+        return ServerMarketManager.onServerThread(() -> setTradingOverride(open));
     }
 
     /**
@@ -665,7 +665,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAsync() {
-        return CompletableFuture.completedFuture(getCurrentMarketPriceStruct());
+        return ServerMarketManager.onServerThread(() -> getCurrentMarketPriceStruct());
     }
 
 
@@ -686,7 +686,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAndResetAsync() {
-        return CompletableFuture.completedFuture(getCurrentMarketPriceStructAndReset());
+        return ServerMarketManager.onServerThread(() -> getCurrentMarketPriceStructAndReset());
     }
 
 
@@ -734,8 +734,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public CompletableFuture<Boolean> resetNetPlayerItemFlowAsync()
     {
-        resetNetPlayerItemFlow();
-        return CompletableFuture.completedFuture(true);
+        return ServerMarketManager.onServerThread(() -> { resetNetPlayerItemFlow(); return true; });
     }
 
     /**
@@ -767,8 +766,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public CompletableFuture<Boolean> resetVirtualOrderbookAsync()
     {
-        resetVirtualOrderbook();
-        return CompletableFuture.completedFuture(true);
+        return ServerMarketManager.onServerThread(() -> { resetVirtualOrderbook(); return true; });
     }
 
     /**
@@ -789,13 +787,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public CompletableFuture<Boolean> clearVirtualOrderbookAsync()
     {
-        clearVirtualOrderbook();
-        return CompletableFuture.completedFuture(true);
+        return ServerMarketManager.onServerThread(() -> { clearVirtualOrderbook(); return true; });
     }
     @Override
     public CompletableFuture<MarketSettings> getSettingsAsync()
     {
-        return CompletableFuture.completedFuture(getSettings());
+        return ServerMarketManager.onServerThread(() -> getSettings());
     }
 
 
@@ -848,8 +845,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public CompletableFuture<Boolean> setSettingsAsync(MarketSettings settings)
     {
-        setSettings(settings);
-        return CompletableFuture.completedFuture(true);
+        return ServerMarketManager.onServerThread(() -> { setSettings(settings); return true; });
     }
 
 
