@@ -198,7 +198,7 @@ public class StockMarketCommands {
 
                 )
                 .then(Commands.literal("devTestScreen")
-                        .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_DEVTEST, StockMarketPermissions.FALLBACK_LEVEL) && StockMarketMod.ENABLE_DEV_FEATURES)
+                        .requires(source -> StockMarketMod.ENABLE_DEV_FEATURES && PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_DEVTEST, StockMarketPermissions.FALLBACK_LEVEL))
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -209,7 +209,7 @@ public class StockMarketCommands {
                 )
                 // Dev-only: export recipe images to PNG files
                 .then(Commands.literal("exportrecipes")
-                        .requires(source -> PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_EXPORTRECIPES, StockMarketPermissions.FALLBACK_LEVEL) && StockMarketMod.ENABLE_DEV_FEATURES)
+                        .requires(source -> StockMarketMod.ENABLE_DEV_FEATURES && PermissionCompat.hasPermission(source, StockMarketPermissions.COMMAND_EXPORTRECIPES, StockMarketPermissions.FALLBACK_LEVEL))
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();

@@ -253,11 +253,14 @@ public class PresetEditorTab extends StockMarketGuiElement {
         categoryButtons.clear();
 
         for (MarketPresetCategory category : cachedCategories) {
-            Button btn = new Button(category.getCategory(), () -> onCategorySelected(category.getCategory()));
+            // SM-373: show the translated name; selection, rename, save and delete keep the stored name
+            Button btn = new Button(MarketPresetCategory.displayName(category.getCategory()),
+                    () -> onCategorySelected(category.getCategory()));
             btn.setHeight(defaultElementHeight);
             categoryButtons.add(btn);
             categoryListView.addChild(btn);
         }
+        layoutChangedInternal(); // SM-365: the category column is measured from the button texts
 
         // Auto-select first category if available
         if (!cachedCategories.isEmpty()) {
@@ -746,13 +749,12 @@ public class PresetEditorTab extends StockMarketGuiElement {
             rebuildItemGrid();
         }
 
-        // Highlight the selected category button
-        for (Button btn : categoryButtons) {
-            if (btn.getText().equals(selectedCategory)) {
-                btn.setBackgroundColor(0xFF4a6fa5);
-            } else {
-                btn.setBackgroundColor(Button.DEFAULT_BACKGROUND_COLOR);
-            }
+        // Highlight the selected category button. The buttons show translated names (SM-373),
+        // so compare the stored name of the category built at the same index.
+        for (int i = 0; i < categoryButtons.size(); i++) {
+            boolean selected = i < cachedCategories.size()
+                    && cachedCategories.get(i).getCategory().equals(selectedCategory);
+            categoryButtons.get(i).setBackgroundColor(selected ? 0xFF4a6fa5 : Button.DEFAULT_BACKGROUND_COLOR);
         }
     }
 
@@ -762,8 +764,14 @@ public class PresetEditorTab extends StockMarketGuiElement {
         int height = getHeight() - 2 * padding;
         int eh = defaultElementHeight;
 
-        // 2-column layout: [categories + buttons | content]
-        int catWidth = width / 6;
+        // 2-column layout: [categories + buttons | content]. SM-365: the left column is as wide as
+        // its longest (translated) button text, at most a fifth of the tab.
+        int catTextWidth = 0;
+        for (Button btn : categoryButtons) catTextWidth = Math.max(catTextWidth, btn.getTextWidth(btn.getText()));
+        for (Button btn : List.of(newCategoryButton, renameCategoryButton, deleteCategoryButton, categoryNameConfirmButton))
+            catTextWidth = Math.max(catTextWidth, btn.getTextWidth(btn.getText()));
+        // + list frame, scrollbar and layout padding (8) and a few px so the text does not touch the edge
+        int catWidth = Math.min(width / 5, catTextWidth + 16);
         int rightWidth = width - catWidth - spacing;
         int rightX = padding + catWidth + spacing;
 
@@ -827,7 +835,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
             // open — an acceptable trade for guaranteed no-CME.
         } else {
             // Normal mode: search bar + item grid + [add item | + from inventory] + save
-            int searchLabelWidth = 50;
+            int searchLabelWidth = searchLabel.getTextWidth(searchLabel.getText()) + 4; // SM-365: measured
             searchLabel.setBounds(rightX, padding, searchLabelWidth, 15);
             searchField.setBounds(searchLabel.getRight() + spacing, padding, rightWidth - searchLabelWidth - spacing, 15);
 
@@ -872,6 +880,8 @@ public class PresetEditorTab extends StockMarketGuiElement {
         private final Button removeButton;
         private final MarketPreset originalPreset;
         private final String presetKey;
+        /** True while the row is too narrow for the full checkbox labels (SM-365): the tooltips then name them. */
+        private boolean checkboxesCut = false;
 
         PresetEntryWidget(ItemStack stack, MarketPreset preset, float currentPrice, float currentAbundance, long currentMaxOrder) {
             super();
@@ -922,8 +932,8 @@ public class PresetEditorTab extends StockMarketGuiElement {
             orderbookEnabledCheckBox = new CheckBox(Component.translatable(
                     "gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.orderbook_enabled").getString(),
                     this::onOrderbookEnabledChanged);
-            orderbookEnabledCheckBox.setHoverTooltipSupplier(() ->
-                    Component.translatable("gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.orderbook_enabled.tooltip").getString());
+            orderbookEnabledCheckBox.setHoverTooltipSupplier(() -> checkboxTooltip(orderbookEnabledCheckBox,
+                    "gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.orderbook_enabled.tooltip"));
             orderbookEnabledCheckBox.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
             // Anchor the tooltip's TOP-RIGHT corner at the mouse so it renders to the LEFT
             // of the cursor — the checkboxes sit near the right edge of the row and a
@@ -937,8 +947,8 @@ public class PresetEditorTab extends StockMarketGuiElement {
             // setChecked fires the change listener → writeBack() reads both boxes.
             orderbookEnabledCheckBox.setChecked(preset.isOrderbookEnabled());
             ignoreAutosubscribeCheckBox.setChecked(preset.isIgnorePluginAutosubscribe());
-            ignoreAutosubscribeCheckBox.setHoverTooltipSupplier(() ->
-                    Component.translatable("gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.ignore_plugin_autosubscribe.tooltip").getString());
+            ignoreAutosubscribeCheckBox.setHoverTooltipSupplier(() -> checkboxTooltip(ignoreAutosubscribeCheckBox,
+                    "gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.ignore_plugin_autosubscribe.tooltip"));
             ignoreAutosubscribeCheckBox.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
             ignoreAutosubscribeCheckBox.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
 
@@ -1019,39 +1029,35 @@ public class PresetEditorTab extends StockMarketGuiElement {
             int iconSize = 16;
             int fieldHeight = h - 2;
             int removeBtnSize = 16;
-            int baseCheckboxWidth = 20;
 
-            // Task 1 shrink pass: item name / price / abundance were dominating the row,
-            // leaving the two flag checkboxes squashed against each other. Halve the name
-            // label and cut the price / abundance text boxes to 1/3 and 1/4 of their
-            // previous share, then hand the freed pixels to the checkbox slots so their
-            // hit targets grow proportionally.
-            //
-            // "Previous share" for the text boxes is what the old formula would have
-            // produced (see the pre-shrink baseline in fieldWidthOld below); computing it
-            // explicitly avoids drift if the surrounding widths change again later.
-            // Bumped from w/8 → w/5: gives the item name a bit more breathing room
-            // now that the two checkbox labels are longer ("Virtual Orderbook" /
-            // "No Plugin Autosubscribe") and the checkbox widths shrunk accordingly.
-            int nameLabelWidth = w / 5;
-            int priceLabelWidth = 50;
-            int abundanceLabelWidth = 65;
-            int maxOrderLabelWidth = 55;
+            // SM-365: every width comes from its text's font width in the active language, so the
+            // labels fit at any GUI scale and window size. The item name gets what is left (it
+            // scrolls when too long, and the icon shows the name on hover).
+            int priceLabelWidth = textSlot(priceLabel.getText());
+            int abundanceLabelWidth = textSlot(abundanceLabel.getText());
+            int maxOrderLabelWidth = textSlot(maxOrderLabel.getText());
+            int priceFieldWidth = textSlot("000000.00");
+            int abundanceFieldWidth = textSlot("000000");
+            int maxOrderFieldWidth = abundanceFieldWidth;
+            // CheckBox gives its label: width - box (height - 4) - 5 px (same rule as PluginManagementScreen)
+            int boxOnly = (fieldHeight - 4) + 5;
+            int orderbookCheckboxWidth = textSlot(orderbookEnabledCheckBox.getText()) + boxOnly + 4;
+            int autosubCheckboxWidth = textSlot(ignoreAutosubscribeCheckBox.getText()) + boxOnly + 4;
 
-            int fieldWidthOld = (w - iconSize - (w / 4) - priceLabelWidth - abundanceLabelWidth
-                    - 2 * baseCheckboxWidth - removeBtnSize - 8 * spacing) / 2;
-            int priceFieldWidth = Math.max(20, fieldWidthOld / 3);         // 1/3 of previous
-            int abundanceFieldWidth = Math.max(20, fieldWidthOld / 4);     // 1/4 of previous
-            int maxOrderFieldWidth = Math.max(30, fieldWidthOld / 4);
-
-            int reservedFixed = iconSize + nameLabelWidth + priceLabelWidth + priceFieldWidth
-                    + abundanceLabelWidth + abundanceFieldWidth + maxOrderLabelWidth + maxOrderFieldWidth
-                    + removeBtnSize + 10 * spacing;
-            int checkboxTotal = Math.max(2 * baseCheckboxWidth, w - reservedFixed);
-            // 40/60 split: "Virtual Orderbook" is shorter than "No Plugin Autosubscribe",
-            // so give the ignore-autosubscribe box the larger slot.
-            int orderbookCheckboxWidth = Math.max(baseCheckboxWidth, Math.round(checkboxTotal * 0.4f));
-            int autosubCheckboxWidth = Math.max(baseCheckboxWidth, checkboxTotal - orderbookCheckboxWidth);
+            int reservedFixed = iconSize + priceLabelWidth + priceFieldWidth + abundanceLabelWidth
+                    + abundanceFieldWidth + maxOrderLabelWidth + maxOrderFieldWidth + removeBtnSize + 10 * spacing;
+            int minNameWidth = 40;
+            int nameLabelWidth = w - reservedFixed - orderbookCheckboxWidth - autosubCheckboxWidth;
+            checkboxesCut = nameLabelWidth < minNameWidth;
+            if (checkboxesCut) {
+                // Too narrow for both full checkbox labels: they share what is left in proportion
+                // and their tooltips start with the full label.
+                nameLabelWidth = minNameWidth;
+                int needed = orderbookCheckboxWidth + autosubCheckboxWidth;
+                int checkboxTotal = Math.max(2 * boxOnly, w - reservedFixed - nameLabelWidth);
+                orderbookCheckboxWidth = Math.max(boxOnly, checkboxTotal * orderbookCheckboxWidth / needed);
+                autosubCheckboxWidth = Math.max(boxOnly, checkboxTotal - orderbookCheckboxWidth);
+            }
 
             itemView.setBounds(padding, (h - iconSize) / 2, iconSize, iconSize);
             nameLabel.setBounds(itemView.getRight() + spacing, 1, nameLabelWidth, fieldHeight);
@@ -1077,6 +1083,17 @@ public class PresetEditorTab extends StockMarketGuiElement {
                     autosubCheckboxWidth, fieldHeight);
 
             removeButton.setBounds(ignoreAutosubscribeCheckBox.getRight() + spacing, (h - removeBtnSize) / 2, removeBtnSize, removeBtnSize);
+        }
+
+        /** Width that shows {@code text} in full in a Label: font width plus its padding and 2 px. */
+        private int textSlot(String text) {
+            return getTextWidth(text) + 4;
+        }
+
+        /** Checkbox tooltip: the full label first when {@link #checkboxesCut} cut it, then the description. */
+        private String checkboxTooltip(CheckBox box, String descriptionKey) {
+            String description = Component.translatable(descriptionKey).getString();
+            return checkboxesCut ? box.getText() + "\n" + description : description;
         }
     }
 

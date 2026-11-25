@@ -2,7 +2,6 @@ architectury {
     common rootProject.enabled_platforms.split(',')
 }
 repositories {
-    maven { url 'https://maven.quiltmc.org/repository/release/' }
     maven {
         // location of the maven that hosts JEI files since January 2023
         name = "Jared's maven"

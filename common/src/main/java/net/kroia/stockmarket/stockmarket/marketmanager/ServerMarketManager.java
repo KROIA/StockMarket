@@ -37,6 +37,7 @@ import java.time.LocalTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.IntFunction;
+import java.util.function.Supplier;
 
 public class ServerMarketManager implements ServerSaveableChunked, IServerMarketManager
 {
@@ -88,6 +89,25 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
     }
 
+    /**
+     * SM-369: runs master work on the server thread. The master's async methods read and change the same maps the
+     * tick loop iterates, so a call from another thread (a plugin's worker, a GUI thread, an HTTP handler) must not
+     * run them in place.
+     *
+     * @param work the synchronous call to run
+     * @param <T>  the result type
+     * @return a future that is already complete when called on the server thread (or with no server running);
+     *         otherwise it completes once the server thread has run {@code work}. Never wait on this future from the
+     *         server thread inside a task the server thread is still running.
+     */
+    public static <T> CompletableFuture<T> onServerThread(Supplier<T> work)
+    {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (server == null || server.isSameThread())
+            return CompletableFuture.completedFuture(work.get());
+        return server.submit(work);
+    }
+
     @Override
     public ItemID getTradingCurrencyID()
     {
@@ -99,7 +119,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
     @Override
     public CompletableFuture<ItemID> getTradingCurrencyIDAsync() {
-        return CompletableFuture.completedFuture(getTradingCurrencyID());
+        return onServerThread(() -> getTradingCurrencyID());
     }
 
 
@@ -118,7 +138,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
     @Override
     public CompletableFuture<List<ItemID>> getAvailableMarketIDsAsync() {
-        return CompletableFuture.completedFuture(getAvailableMarketIDs());
+        return onServerThread(() -> getAvailableMarketIDs());
     }
 
 
@@ -133,7 +153,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
     @Override
     public CompletableFuture<Boolean> marketExistsAsync(@NotNull ItemID marketID) {
-        return CompletableFuture.completedFuture(marketExists(marketID));
+        return onServerThread(() -> marketExists(marketID));
     }
 
 
@@ -197,7 +217,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
     @Override
     public CompletableFuture<@Nullable IAsyncMarket> createMarketAsync(@NotNull ItemID marketID) {
-        return CompletableFuture.completedFuture(createMarket(marketID));
+        return onServerThread(() -> createMarket(marketID));
     }
 
     /**
@@ -295,7 +315,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
     @Override
     public CompletableFuture<Boolean> deleteMarketAsync(@NotNull ItemID marketID) {
-        return CompletableFuture.completedFuture(deleteMarket(marketID));
+        return onServerThread(() -> deleteMarket(marketID));
     }
 
     /**
@@ -388,7 +408,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
     @Override
     public CompletableFuture<@Nullable IAsyncMarket> getMarketAsync(@NotNull ItemID marketID) {
-        return CompletableFuture.completedFuture(getMarket(marketID));
+        return onServerThread(() -> getMarket(marketID));
     }
 
 
@@ -477,7 +497,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     @Override
     public void onPlayerJoinAsync(UUID playerUUID, String playerName)
     {
-        onPlayerJoin(playerUUID, playerName);
+        onServerThread(() -> { onPlayerJoin(playerUUID, playerName); return null; });
     }
 
 
@@ -533,7 +553,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
     @Override
     public CompletableFuture<Boolean> setStockmarketAdminModeAsync(UUID playerUUID, boolean isAdmin) {
-        return CompletableFuture.completedFuture(setStockmarketAdminMode(playerUUID, isAdmin));
+        return onServerThread(() -> setStockmarketAdminMode(playerUUID, isAdmin));
     }
 
 
@@ -556,10 +576,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
     @Override
     public CompletableFuture<Boolean> isStockmarketAdminAsync(UUID playerUUID) {
-        User user = userMap.get(playerUUID);
-        if (user == null)
-            return CompletableFuture.completedFuture(false);
-        return CompletableFuture.completedFuture(user.isStockMarketAdmin());
+        return onServerThread(() -> isStockmarketAdmin(playerUUID));
     }
 
 
@@ -574,7 +591,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
     @Override
     public CompletableFuture<PlayerPreferences> getPlayerPreferencesAsync(UUID playerUUID) {
-        return CompletableFuture.completedFuture(getPlayerPreferences(playerUUID));
+        return onServerThread(() -> getPlayerPreferences(playerUUID));
     }
 
     @Override
@@ -588,7 +605,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
     @Override
     public CompletableFuture<Boolean> updatePlayerPreferencesAsync(UUID playerUUID, PlayerPreferences preferences) {
-        return CompletableFuture.completedFuture(updatePlayerPreferences(playerUUID, preferences));
+        return onServerThread(() -> updatePlayerPreferences(playerUUID, preferences));
     }
 
 
