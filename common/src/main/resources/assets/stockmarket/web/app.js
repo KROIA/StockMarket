@@ -65,6 +65,7 @@
       return g ? 'Day ' + g.gd + ' ' + g.gh : new Date(t * 1000).toLocaleString();
     } },
   });
+  window.smChart = chart; // only for the automated browser check of the per-market chart view (SM-383); the page never reads it
   const candleSeries = chart.addSeries(LC.CandlestickSeries, {
     upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
   });
