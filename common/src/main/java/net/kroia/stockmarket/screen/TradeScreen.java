@@ -345,6 +345,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         marketClosedLabel.setAlignment(Label.Alignment.CENTER);
         marketClosedLabel.setTextColor(UI_Colors.sellColorRed);
         marketClosedLabel.setTextFontScale(1.5f);
+        marketClosedLabel.setEllipsisEnabled(true); // SM-367: a long maintenance reason ends in "..." instead of overflowing
         marketClosedLabel.setEnabled(false);
 
         // T-158: trading hours + clock, always visible (same layout for every market).

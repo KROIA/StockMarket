@@ -207,6 +207,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         haveNameLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         haveNameLabel.setTextFontScale(0.6f);
         haveNameLabel.setAlignment(Label.Alignment.CENTER);
+        haveNameLabel.setEllipsisEnabled(true); // SM-368: long item names end in "..."
         addChild(haveNameLabel);
 
         // "I WANT" side
@@ -225,6 +226,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         wantNameLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         wantNameLabel.setTextFontScale(0.6f);
         wantNameLabel.setAlignment(Label.Alignment.CENTER);
+        wantNameLabel.setEllipsisEnabled(true); // SM-368: long item names end in "..."
         addChild(wantNameLabel);
 
         // Rate label

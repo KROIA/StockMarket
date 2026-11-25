@@ -4,6 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.client.ClientCompat;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemView;
+import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.geometry.Rectangle;
@@ -236,18 +237,42 @@ public class TradeScreenGuiTestSuite extends TestSuite {
             if (Gui.findAll(n -> n.handle() instanceof GuiElement).isEmpty())
                 return skip("needs the ModUtilities GuiLocator (no GuiElement nodes on the trade screen)");
             String closed = Gui.onClient(() -> Component.translatable("gui.stockmarket.trade_screen.market_closed").getString());
-            boolean shown = false;
-            for (int t = 0; t < OPEN_TICKS && !shown; t++) { // Gui.findAll belongs on the test thread
+            List<GuiNode> shown = List.of();
+            for (int t = 0; t < OPEN_TICKS && shown.isEmpty(); t++) { // Gui.findAll belongs on the test thread
                 Gui.waitTicks(1);
-                shown = !Gui.findAll(n -> n.visible() && closed.equals(n.text())).isEmpty();
+                shown = Gui.findAll(n -> n.visible() && n.handle() instanceof Label && closed.equals(n.text()));
             }
-            if (!shown) return fail("no '" + closed + "' label within " + OPEN_TICKS + " ticks of closing market " + id
+            if (shown.isEmpty()) return fail("no '" + closed + "' label within " + OPEN_TICKS + " ticks of closing market " + id
                     + "; trading area: " + describeTradingArea());
             List<Layout.Problem> scale2 = Gui.layoutProblems(1920, 1080, 2);
             TestResult r = assertTrue("market closed, 1920x1080 @2: " + scale2, scale2.isEmpty());
             if (!r.passed()) return r;
             List<Layout.Problem> scale3 = Gui.layoutProblems(1920, 1080, 3);
-            return assertTrue("market closed, 1920x1080 @3: " + scale3, scale3.isEmpty());
+            r = assertTrue("market closed, 1920x1080 @3: " + scale3, scale3.isEmpty());
+            if (!r.passed()) return r;
+            // a long maintenance reason ends in "..." instead of running out of the label
+            String problem = ellipsisProblem((Label) shown.get(0).handle());
+            if (problem != null) return fail("market-closed label: " + problem);
+            List<Layout.Problem> longText = Gui.layoutProblems(1920, 1080, 3);
+            return assertTrue("market closed with a long reason, 1920x1080 @3: " + longText, longText.isEmpty());
+        });
+    }
+
+    /**
+     * MU-177 (SM-367, SM-368): puts a long text on {@code label}, which must show it cut to its width with "..." at
+     * the end.
+     *
+     * @return what is wrong with the shown text, or null
+     */
+    private static @Nullable String ellipsisProblem(Label label) {
+        return Gui.onClient(() -> {
+            label.setText("A text far too long for this label to show in one piece ".repeat(6));
+            String shown = label.getDisplayedText();
+            int inner = label.getWidth() - 2 * label.getPadding();
+            if (!shown.endsWith("...")) return "long text shown as '" + shown + "', no ellipsis";
+            if (label.getTextWidth(shown) > inner)
+                return "'" + shown + "' is " + label.getTextWidth(shown) + " px wide, the label only " + inner;
+            return null;
         });
     }
 
@@ -348,7 +373,16 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                 if (panelRate == null) return fail("no rate text '" + prefix + "..." + suffix + "' within " + OPEN_TICKS
                         + " ticks; trading area: " + describeTradingArea());
                 if (selectorRate == null) return fail("no pair selector rate '..." + selectorSuffix + "'");
-                return assertEquals("trade panel rate vs pair selector rate", selectorRate, panelRate);
+                TestResult r = assertEquals("trade panel rate vs pair selector rate", selectorRate, panelRate);
+                if (!r.passed()) return r;
+                // the selector's item-name labels cut a long name with "..." (the trade panel's own name label does not)
+                String wantName = Gui.onClient(() -> want.getStack().getHoverName().getString());
+                List<GuiNode> nameLabels = Gui.findAll(n -> n.visible() && n.handle() instanceof Label l
+                        && l.isEllipsisEnabled() && wantName.equals(n.text()));
+                if (nameLabels.isEmpty()) return fail("no item-name label '" + wantName + "' with ellipsis in the pair selector");
+                String problem = ellipsisProblem((Label) nameLabels.get(0).handle());
+                return problem == null ? pass("rates match (" + panelRate + "), long item names end in '...'")
+                        : fail("pair selector item name: " + problem);
             } finally {
                 Gui.close();
                 Gui.onClient(() -> {

@@ -42,9 +42,6 @@ public class CandlestickChart extends StockMarketGuiElement {
     /** SM-367: date line under a time label, shown where the day changes. */
     public static final SimpleDateFormat dateFormat  = new SimpleDateFormat("dd. MMM", Locale.getDefault());
     public static final SimpleDateFormat timeFormat  = new SimpleDateFormat("HH:mm", Locale.getDefault());
-    /** SM-367: opaque current-price badge with dark text, so the price under it stays readable. */
-    private static final int colorBadge = ColorUtilities.setAlpha(colorCurrentPrice, 1.0f);
-    private static final int colorBadgeText = 0xFF202020;
     /** Top of the current-price badge while it is not shown. */
     private static final int NO_BADGE = Integer.MIN_VALUE;
     /** Minimum horizontal gap between two time labels. */
@@ -632,8 +629,9 @@ public class CandlestickChart extends StockMarketGuiElement {
         int textWidth = getTextWidth(priceLabel);
         int textHeight = getTextHeight();
         int labelX = canvasRect.x + canvasRect.width + 2;
-        drawRect(labelX, labelY, textWidth + 6, textHeight, colorBadge);
-        drawText(priceLabel, labelX + 3, labelY, colorBadgeText, getTextFontScale());
+        // semi-transparent marker colour with white text; no grid label lies under it (see above)
+        drawRect(labelX, labelY, textWidth + 6, textHeight, colorCurrentPrice);
+        drawText(priceLabel, labelX + 3, labelY, 0xFFFFFFFF, getTextFontScale());
         drawnTextBoxes.add(new Rectangle(labelX, labelY, textWidth + 6, textHeight));
     }
 
