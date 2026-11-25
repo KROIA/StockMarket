@@ -104,6 +104,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
     private final ListView listView;
     private final List<PluginEntryWidget> entryWidgets = new ArrayList<>();
     private List<PluginSyncData> allPlugins = new ArrayList<>();
+    /** Text width the entries wrap their description to (SM-365); 0 until the first layout. */
+    private int descriptionWrapWidth = 0;
     /**
      * Instance ID of the selected plugin entry (target of the Left/Right market
      * navigation), or null. Stored by UUID so the selection survives list rebuilds.
@@ -311,6 +313,14 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         candlestickChart.setBounds(padding, contentTop, chartWidth, contentHeight);
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), contentTop, histogramWidth, contentHeight);
         listView.setBounds(orderbookVolumeHistogram.getRight() + spacing, contentTop, listWidth, contentHeight);
+        // SM-365: the entries wrap their description to this width; they get it when built, so a new
+        // width rebuilds them (here in init, never inside a layoutChanged). Entry = container - 2 (layout
+        // padding), description label = entry - 2 * padding, its text = label - 2 (label padding).
+        int wrapWidth = listView.getContainerWidth() - 2 - 2 * padding - 2;
+        if (wrapWidth != descriptionWrapWidth) {
+            descriptionWrapWidth = wrapWidth;
+            if (!allPlugins.isEmpty()) applyFilter();
+        }
 
         // Restart data streams (e.g. after returning from PluginDetailScreen)
         for (PluginEntryWidget entry : entryWidgets) {
@@ -519,6 +529,12 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
             // Description labels (split on newlines for multiline support)
             String desc = data.getDescription() != null ? data.getDescription() : "";
+            // SM-365: word-wrapped to the text width the list gives the entries (0 until the screen is laid out)
+            if (parentScreen.descriptionWrapWidth > 0) {
+                Label probe = new Label();
+                probe.setTextFontScale(descriptionFontScale);
+                desc = GuiElement.wrapText(desc, parentScreen.descriptionWrapWidth, probe::getTextWidth);
+            }
             for (String line : desc.split("\n")) {
                 Label lineLabel = new Label(line);
                 lineLabel.setTextFontScale(descriptionFontScale);

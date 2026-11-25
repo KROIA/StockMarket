@@ -489,7 +489,13 @@ public class DocsScreenshotSuite extends TestSuite {
         scrollTo(Gui.find(n -> "Ore".equals(n.text()), "Ore category"));
         click(n -> "Ore".equals(n.text()), "Ore category", true);
         Gui.waitTicks(20);
-        return null;
+        return clippedText(); // SM-365: the preset rows cut their checkbox labels
+    }
+
+    /** SM-365: the clipped texts (TEXT layout problems) on the open screen, or null when every text fits. */
+    private static @Nullable String clippedText() {
+        List<Layout.Problem> text = Gui.layoutProblems().stream().filter(p -> p.kind() == Layout.Kind.TEXT).toList();
+        return text.isEmpty() ? null : "clipped text: " + text.stream().limit(6).map(Layout.Problem::message).toList();
     }
 
     private @Nullable String modSettings() {
@@ -525,7 +531,7 @@ public class DocsScreenshotSuite extends TestSuite {
         List<GuiNode> diamonds = Gui.findAll(n -> n.visible() && shows(n, Items.DIAMOND));
         if (!diamonds.isEmpty()) Gui.click(diamonds.get(diamonds.size() - 1));
         Gui.waitTicks(DATA_TICKS);
-        return null;
+        return clippedText(); // SM-365: the news plugin's description ran past its entry
     }
 
     /** Plugin Management with the entry whose name contains {@code keyword} scrolled to the top, selected, diamond on the chart. */
@@ -569,7 +575,11 @@ public class DocsScreenshotSuite extends TestSuite {
         if (diamonds.isEmpty()) return "no diamond market in the per-market news settings";
         Gui.click(diamonds.get(diamonds.size() - 1)); // the per-market list is the right-hand panel
         Gui.waitTicks(20);
-        return null;
+        // SM-365: the status line ("<n> definition(s), <m> active event(s)") was cut to the label's width before
+        // the first layout. It is shortened with "…" on purpose, so the TEXT layout check cannot see it.
+        GuiNode status = Gui.findAll(n -> n.visible() && n.text().contains("definition(s)")).stream().findFirst().orElse(null);
+        if (status == null) return "no news status line with the definition count";
+        return status.text().endsWith("…") ? "news status line cut: " + status.text() : null;
     }
 
     private @Nullable String newsTab(String tab) {

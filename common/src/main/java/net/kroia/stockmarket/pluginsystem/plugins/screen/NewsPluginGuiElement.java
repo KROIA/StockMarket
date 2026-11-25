@@ -459,6 +459,8 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
      * mentions the id again.
      */
     private final Map<String, Long> cooldownEndByEventId = new HashMap<>();
+    /** Last admin result for the status label, kept in full so each layout can re-fit it (SM-365). */
+    private String statusMessage = "";
 
     /**
      * Creates the news plugin GUI element. Market data and settings are populated
@@ -473,6 +475,10 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
 
         adminStatusLabel = new Label("");
         adminStatusLabel.setTextColor(COLOR_NEUTRAL_GRAY);
+        // SM-365: full text on hover while the label shows it truncated
+        adminStatusLabel.setHoverTooltipSupplier(
+                () -> adminStatusLabel.getText().equals(statusMessage) ? null : statusMessage);
+        adminStatusLabel.setHoverTooltipFontScale(hoverToolTipFontSize);
 
         eventListView = new VerticalListView();
         LayoutVertical eventLayout = new LayoutVertical(0, spacing, true, false);
@@ -998,11 +1004,23 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
      * @return true if the message had to be truncated (full text should go to a dialog)
      */
     private boolean showStatus(String message, boolean success) {
-        int available = Math.max(0, adminStatusLabel.getWidth() - 2 * adminStatusLabel.getPadding());
-        String shown = NewsUiText.truncate(adminStatusLabel, message, available, 1.0f);
-        adminStatusLabel.setText(shown);
+        statusMessage = message;
         adminStatusLabel.setTextColor(success ? COLOR_STATUS_OK : COLOR_STATUS_ERROR);
-        return !shown.equals(message);
+        return fitStatusText();
+    }
+
+    /**
+     * Fits {@link #statusMessage} to the status label's current width (SM-365). Runs on every
+     * status and again on every layout, so a message that arrived while the label still had its
+     * default width is shown in full once the label is laid out.
+     *
+     * @return true if the message had to be truncated
+     */
+    private boolean fitStatusText() {
+        int available = Math.max(0, adminStatusLabel.getWidth() - 2 * adminStatusLabel.getPadding());
+        String shown = NewsUiText.truncate(adminStatusLabel, statusMessage, available, 1.0f);
+        adminStatusLabel.setText(shown);
+        return !shown.equals(statusMessage);
     }
 
     /**
@@ -1199,6 +1217,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         stopAllButton.setBounds(reloadButton.getRight() + spacing, 0, btnW, eh);
         adminStatusLabel.setBounds(stopAllButton.getRight() + spacing, 0,
                 leftW - 2 * btnW - 2 * spacing, eh);
+        fitStatusText(); // SM-365: the first reply can arrive before this layout, at the default label width
 
         // Left column, row 2: the tab area (Active / All events / Scheduler)
         tabElement.setBounds(0, reloadButton.getBottom() + spacing,
