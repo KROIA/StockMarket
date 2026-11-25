@@ -150,17 +150,6 @@ public class PriceHistoryData
      */
     private boolean truncated;
 
-
-    public PriceHistoryData(long currentServerTime, ItemID itemID, int itemScaleFactor)
-    {
-        this.itemID = itemID;
-        this.itemScaleFactor = itemScaleFactor;
-        candles = new ArrayList<>();
-        currentMarketPrice = 0;
-        this.oldestAvailableTimestamp = NO_OLDER_DATA;
-        this.truncated = false;
-        startNewCandle(currentServerTime);
-    }
     /**
      * Legacy 4-arg constructor. Kept for backward compatibility with existing
      * callers (tests, {@code CrossRateMarket}, {@code ClientMarket}) that don't
@@ -218,12 +207,6 @@ public class PriceHistoryData
     {
         candles.addAll(other.candles);
         candles.sort(Comparator.comparingLong(a -> a.openTimestamp));
-    }
-    public void clear(long currentServerTime)
-    {
-        candles.clear();
-        currentMarketPrice = 0;
-        startNewCandle(currentServerTime);
     }
     public void loadFrom(PriceHistoryData other)
     {

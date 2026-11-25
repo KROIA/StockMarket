@@ -1071,25 +1071,6 @@ public class CandlestickChart extends StockMarketGuiElement {
     }
 
     /**
-     * Looks up a previously saved viewport state by key and returns it as a
-     * CompoundTag, or null if no state is saved for that key. Allows subclasses
-     * to read another chart's viewport (e.g. copying the TradeScreen's viewport
-     * as initial state for a display chart).
-     */
-    protected static CompoundTag lookupSavedViewport(String viewportKey) {
-        ViewportState state = savedViewports.get(viewportKey);
-        if (state == null) return null;
-        CompoundTag tag = new CompoundTag();
-        tag.putDouble("viewX", state.viewX);
-        tag.putDouble("viewY", state.viewY);
-        tag.putDouble("viewW", state.viewWidth);
-        tag.putDouble("viewH", state.viewHeight);
-        tag.putDouble("zoom", state.zoomLevel);
-        tag.putLong("candleDeltaMs", state.candleDeltaMs);
-        return tag;
-    }
-
-    /**
      * Saves the current viewport state (position, zoom, candle time index)
      * into the static map, keyed by the current provider's viewport key.
      * <p>
@@ -1165,8 +1146,11 @@ public class CandlestickChart extends StockMarketGuiElement {
         double maxPrice = data.toRealPrice(data.getMaxPrice(firstIndexInclusive, lastIndexInclusive));
         double minPrice = data.toRealPrice(data.getMinPrice(firstIndexInclusive, lastIndexInclusive));
         double priceDifference = maxPrice - minPrice;
-        chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1);
-        chartviewRect.height = (maxPrice + priceDifference * 0.1) - chartviewRect.y;
+        // SM-386: a flat range (one candle, or a price that never moved) gets 10% of the price around it instead
+        // of a zero-height view
+        double margin = (priceDifference > 0 ? priceDifference : Math.max(maxPrice, 1)) * 0.1;
+        chartviewRect.y = Math.max(0, minPrice - margin);
+        chartviewRect.height = (maxPrice + margin) - chartviewRect.y;
         autoWidenVertical = true;
     }
 
