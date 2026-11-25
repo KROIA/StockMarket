@@ -92,10 +92,13 @@ public class CandlestickChart extends StockMarketGuiElement {
     private final Rectangle canvasScissorRect = new Rectangle(1, 1, 0, 0);
     private final Rectangle volumeRect = new Rectangle(1, 1, 0, 0);
     private final Rectangle volumeScissorRect = new Rectangle(1, 1, 0, 0);
-    private double zoomLevel = 200;
+    /** The view a chart starts with, before any data or input (SM-379: see {@link #isUntouchedDefaultViewport}). */
+    private static final double DEFAULT_VIEW_X = 200, DEFAULT_VIEW_Y = 0, DEFAULT_VIEW_W = 200, DEFAULT_VIEW_H = 500,
+            DEFAULT_ZOOM = 200;
+    private double zoomLevel = DEFAULT_ZOOM;
     /** Minimum visible candle count (horizontal zoom floor); shared by live zoom and viewport restore. */
     private static final double MIN_ZOOM_CANDLES = 5.0;
-    private final RectangleF chartviewRect = new RectangleF(200, 0, 200, 500);
+    private final RectangleF chartviewRect = new RectangleF(DEFAULT_VIEW_X, DEFAULT_VIEW_Y, DEFAULT_VIEW_W, DEFAULT_VIEW_H);
     private final Point lastDragMousePos = new Point();
     private int maxPriceLabelTextWidth = 0;
     /** Top of the last price label drawn this frame (labels go upwards), to skip one that would touch it. */
@@ -1018,6 +1021,23 @@ public class CandlestickChart extends StockMarketGuiElement {
         tag.putDouble("zoom", zoomLevel);
         tag.putLong("candleDeltaMs", ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx]);
         return tag;
+    }
+
+    /**
+     * SM-379: true if {@code tag} is the view of a chart nobody touched and that never got data (the start
+     * values, price range 0-500, first timeframe of either timebase), as displays saved it before SM-364.
+     * A view a player set never matches all of these exactly.
+     *
+     * @param tag a view from {@link #serializeViewport()}
+     */
+    public static boolean isUntouchedDefaultViewport(CompoundTag tag) {
+        long delta = NbtCompat.getLong(tag, "candleDeltaMs");
+        return NbtCompat.getDouble(tag, "viewX") == DEFAULT_VIEW_X
+                && NbtCompat.getDouble(tag, "viewY") == DEFAULT_VIEW_Y
+                && NbtCompat.getDouble(tag, "viewW") == DEFAULT_VIEW_W
+                && NbtCompat.getDouble(tag, "viewH") == DEFAULT_VIEW_H
+                && NbtCompat.getDouble(tag, "zoom") == DEFAULT_ZOOM
+                && (delta == ClientMarket.candleTimeDeltasFor(false)[0] || delta == ClientMarket.candleTimeDeltasFor(true)[0]);
     }
 
     /**

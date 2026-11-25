@@ -64,6 +64,7 @@ public class PortSmokeTestSuite extends TestSuite {
         addTest("display_market_change_drops_viewport", this::test_displayMarketChangeDropsViewport); // SM-364
         addTest("display_client_market_change_drops_viewport", this::test_displayClientMarketChangeDropsViewport); // SM-364
         addTest("display_market_change_regroups", this::test_displayMarketChangeRegroups); // SM-360
+        addTest("display_load_drops_untouched_default_view", this::test_displayLoadDropsUntouchedDefaultView); // SM-379
     }
 
     // ── Recipes ──
@@ -346,6 +347,57 @@ public class PortSmokeTestSuite extends TestSuite {
     private static @Nullable CompoundTag savedViewport(BlockEntity be, HolderLookup.Provider registries) {
         CompoundTag tag = be.saveWithoutMetadata(registries);
         return tag.contains("viewport") ? NbtCompat.getCompound(tag, "viewport") : null;
+    }
+
+    /**
+     * SM-379: a display saved before SM-364 can hold the untouched default view of its never-connected server
+     * chart (price range 0-500). Loading drops exactly that view, so the chart fits its market, and keeps a view a
+     * player set, also one that differs from the default in a single value.
+     */
+    private TestResult test_displayLoadDropsUntouchedDefaultView() {
+        MinecraftServer server = getServer();
+        if (server == null) return skip("no server");
+        ServerLevel level = server.overworld();
+        BlockPos pos = displayRow(level)[0];
+        BlockState before = level.getBlockState(pos);
+        BlockState display = StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get().defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH);
+        try {
+            level.setBlock(pos, display, Block.UPDATE_ALL);
+            StockMarketDisplayBlockEntity ctrl = display(level, pos);
+            TestResult r = assertTrue("1x1 display must be its own controller", ctrl != null && ctrl.isController());
+            if (!r.passed()) return r;
+            ctrl.setConfig(StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, ItemID.of(new ItemStack(Items.DIAMOND)));
+            // the server's chart never connects: its view is exactly what old worlds stored
+            r = assertTrue("server chart of the configured display", ctrl.getChart() instanceof DisplayCandlestickChart);
+            if (!r.passed()) return r;
+            CompoundTag untouched = ((DisplayCandlestickChart) ctrl.getChart()).getViewportState();
+            CompoundTag nearDefault = untouched.copy();
+            nearDefault.putDouble("viewH", 480);
+            CompoundTag tag = ctrl.saveWithoutMetadata(level.registryAccess());
+
+            r = assertNull("view loaded from the untouched default " + untouched, loadedViewport(tag, untouched, pos, display, level));
+            if (!r.passed()) return r;
+            r = assertEquals("view loaded from a player's view", testViewport(), loadedViewport(tag, testViewport(), pos, display, level));
+            if (!r.passed()) return r;
+            r = assertEquals("view loaded from the default with another price range", nearDefault,
+                    loadedViewport(tag, nearDefault, pos, display, level));
+            if (!r.passed()) return r;
+            return pass("the untouched default view is dropped on load, player views are kept");
+        } finally {
+            level.setBlock(pos, before, Block.UPDATE_ALL);
+        }
+    }
+
+    /** @return the view a fresh display block entity keeps after loading {@code tag} with {@code view} stored */
+    private static @Nullable CompoundTag loadedViewport(CompoundTag tag, CompoundTag view, BlockPos pos, BlockState state,
+                                                        ServerLevel level) {
+        CompoundTag withView = tag.copy();
+        withView.put("viewport", view.copy());
+        StockMarketDisplayBlockEntity copy = new StockMarketDisplayBlockEntity(pos, state);
+        copy.loadWithComponents(withView, level.registryAccess()); // mc<=1.21.5
+        //copy.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), withView)); // mc>=1.21.6
+        return savedViewport(copy, level.registryAccess());
     }
 
     /**

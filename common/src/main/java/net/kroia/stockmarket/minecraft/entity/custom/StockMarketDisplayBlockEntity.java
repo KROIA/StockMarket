@@ -302,7 +302,10 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
             secondItemID = null;
         }
         // No "viewport" means no stored view (mirrors saveCustomData), e.g. after a market change (SM-364)
-        pendingViewport = tag.contains("viewport") ? NbtCompat.getCompound(tag, "viewport") : null;
+        CompoundTag view = tag.contains("viewport") ? NbtCompat.getCompound(tag, "viewport") : null;
+        // SM-379: worlds from before SM-364 can hold the untouched default view (price range 0-500) of a chart
+        // that never got data; drop exactly that one so the chart fits its market. A view a player set stays.
+        pendingViewport = view != null && CandlestickChart.isUntouchedDefaultViewport(view) ? null : view;
     }
 
     @Override // mc<=1.21.5
