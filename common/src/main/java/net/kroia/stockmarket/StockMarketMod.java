@@ -7,7 +7,7 @@ import org.slf4j.Logger;
 
 public final class StockMarketMod {
     public static final String MOD_ID = "stockmarket";
-    public static final String VERSION = "2.2.1";
+    public static final String VERSION = "2.2.2";
     public static final Logger LOGGER = LogUtils.getLogger();
 
     // Dev-only code (unit tests, test commands, dev test screen) is switched by enable_dev_features in

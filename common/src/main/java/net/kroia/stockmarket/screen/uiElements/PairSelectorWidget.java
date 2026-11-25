@@ -116,10 +116,6 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     private long lastBalanceRefreshMs = 0;
     private static final long BALANCE_REFRESH_INTERVAL_MS = 2000;
 
-    // Timer for periodic rate refresh
-    private long lastRateRefreshMs = 0;
-    private static final long RATE_REFRESH_INTERVAL_MS = 500;
-
     /** Enum to track which side the dropdown is selecting for. */
     private enum Side { HAVE, WANT }
 
@@ -211,6 +207,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         haveNameLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         haveNameLabel.setTextFontScale(0.6f);
         haveNameLabel.setAlignment(Label.Alignment.CENTER);
+        haveNameLabel.setEllipsisEnabled(true); // SM-368: long item names end in "..."
         addChild(haveNameLabel);
 
         // "I WANT" side
@@ -229,6 +226,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         wantNameLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         wantNameLabel.setTextFontScale(0.6f);
         wantNameLabel.setAlignment(Label.Alignment.CENTER);
+        wantNameLabel.setEllipsisEnabled(true); // SM-368: long item names end in "..."
         addChild(wantNameLabel);
 
         // Rate label
@@ -765,8 +763,10 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     /**
      * Recalculates and updates the cross-rate label from the two market prices.
      * Rate = wantPrice / havePrice (how many "have" items per 1 "want" item).
+     * SM-368: called by the trade screen every tick, together with the trade panel's rate, so both
+     * show the same value (this widget used to refresh on its own 500 ms timer and lag behind).
      */
-    private void updateRate() {
+    public void updateRate() {
         if (haveMarketID == null || wantMarketID == null) {
             rateLabel.setText(Component.translatable("gui.stockmarket.pair_selector.rate_unknown").getString());
             return;
@@ -840,12 +840,6 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     @Override
     protected void render() {
         long now = System.currentTimeMillis();
-
-        // Periodic rate refresh (~500ms)
-        if (now - lastRateRefreshMs > RATE_REFRESH_INTERVAL_MS) {
-            lastRateRefreshMs = now;
-            updateRate();
-        }
 
         // Periodic balance refresh (~2s)
         if (now - lastBalanceRefreshMs > BALANCE_REFRESH_INTERVAL_MS) {

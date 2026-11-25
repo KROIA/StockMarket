@@ -22,8 +22,6 @@ import org.jetbrains.annotations.NotNull;
  */
 public class UpdateDisplayViewportPacket extends StockMarketNetworkPacket {
 
-    private static final double MAX_INTERACT_DISTANCE_SQR = 64.0;
-
     public static final Type<UpdateDisplayViewportPacket> TYPE =
             //new Type<>(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "update_display_viewport_packet")); // mc<=1.21.10
             new Type<>(Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "update_display_viewport_packet")); // mc>=1.21.11
@@ -54,11 +52,12 @@ public class UpdateDisplayViewportPacket extends StockMarketNetworkPacket {
     @Override
     protected void handleOnServer(NetworkManager.PacketContext context) {
         ServerPlayer player = (ServerPlayer) context.getPlayer();
-        if (player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > MAX_INTERACT_DISTANCE_SQR)
-            return;
+        if (!player.level().isLoaded(pos)) return; // never load a chunk for a client-sent position
 
         BlockEntity blockEntity = player.level().getBlockEntity(pos);
-        if (blockEntity instanceof StockMarketDisplayBlockEntity displayEntity) {
+        // SM-376: reach is measured to the whole screen, not only its top-left block
+        if (blockEntity instanceof StockMarketDisplayBlockEntity displayEntity
+                && displayEntity.isWithinReach(player.position())) {
             displayEntity.applyViewport(viewport);
         }
     }

@@ -2,6 +2,8 @@ package net.kroia.stockmarket.testing.tests;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
@@ -16,8 +18,10 @@ import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 public class MarketPresetTestSuite extends TestSuite {
@@ -48,6 +52,8 @@ public class MarketPresetTestSuite extends TestSuite {
         addTest("json_round_trip", this::test_jsonRoundTrip);
         addTest("json_round_trip_preserves_values", this::test_jsonRoundTripPreservesValues);
         addTest("category_names_unique", this::test_categoryNamesUnique);
+        // SM-373: every default category name is translated in every shipped language
+        addTest("default_categories_translated", this::test_defaultCategoriesTranslated);
         addTest("preset_replacement_in_category", this::test_presetReplacementInCategory);
         // T-166 max order volume
         addTest("max_order_volume_derived_default", this::test_maxOrderVolume_derivedDefault);
@@ -235,6 +241,30 @@ public class MarketPresetTestSuite extends TestSuite {
             }
         }
         return pass("All default category names are unique");
+    }
+
+    /**
+     * SM-373: each default category has the lang key {@link MarketPresetCategory#displayName} looks up,
+     * with a non-empty value, in en_us, de_de, de_ch and zh_cn. Without it the GUI shows the stored
+     * (English) name.
+     */
+    private TestResult test_defaultCategoriesTranslated() {
+        List<MarketPresetCategory> categories = DefaultPresets.generate(null);
+        for (String lang : List.of("en_us", "de_de", "de_ch", "zh_cn")) {
+            // classpath, like DiscordIntegrationTestSuite: works offline and in a Loom dev run
+            try (var in = MarketPresetTestSuite.class.getResourceAsStream("/assets/stockmarket/lang/" + lang + ".json")) {
+                if (in == null) return fail("missing lang file " + lang + ".json");
+                JsonObject root = JsonParser.parseString(new String(in.readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject();
+                for (MarketPresetCategory cat : categories) {
+                    String key = "gui.stockmarket.preset_category." + cat.getCategory().toLowerCase(Locale.ROOT);
+                    if (!root.has(key) || root.get(key).getAsString().isBlank())
+                        return fail(lang + " lacks " + key);
+                }
+            } catch (Exception e) {
+                return fail("cannot read " + lang + ".json: " + e);
+            }
+        }
+        return pass(categories.size() + " default categories translated in 4 languages");
     }
 
     /**
