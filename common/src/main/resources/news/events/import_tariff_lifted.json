@@ -1,0 +1,52 @@
+{
+  "id": "import_tariff_lifted",
+  "picture": "import_tariff_lifted.png",
+  "headline": {
+    "en_us": "Trade council lifts the import tariff on foreign metals",
+    "zh_cn": "贸易议会取消外国金属进口关税",
+    "de_de": "Handelsrat hebt den Einfuhrzoll auf ausländische Metalle auf"
+  },
+  "text": {
+    "en_us": "Under pressure from smiths and builders the trade council has torn up its import tariff treaty. Foreign iron and gold cross the border without a surcharge again, and analysts expect the premium to fade slowly until prices are back at their old level.",
+    "zh_cn": "在铁匠与建筑商的压力下，贸易议会废止了进口关税协定。外国铁与金再度免附加费入境，分析师预计溢价将逐步消退，直至价格回到原来的水平。",
+    "de_de": "Auf Druck der Schmiede und Baumeister hat der Handelsrat seinen Einfuhrzoll-Vertrag aufgekündigt. Ausländisches Eisen und Gold überqueren die Grenze wieder ohne Aufschlag, und Analysten erwarten, dass der Zuschlag langsam schwindet, bis die Preise wieder auf ihrem alten Niveau liegen."
+  },
+  "category": "politics",
+  "weight": 10,
+  "undoes": "import_tariff_treaty",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
+  },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": -0.18,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:iron_ingot",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 0.8
+    }
+  ]
+}
