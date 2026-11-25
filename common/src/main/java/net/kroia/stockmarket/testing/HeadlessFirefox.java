@@ -13,8 +13,10 @@ import java.net.http.WebSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -61,18 +63,25 @@ public final class HeadlessFirefox {
     }
 
     /**
-     * Opens {@code url}, runs {@code script} (a JavaScript expression; a promise is awaited, at most 60 s) and returns
-     * its value as text.
+     * Opens {@code url} and runs the {@code scripts} one after another (JavaScript expressions; a promise is awaited,
+     * at most 60 s each). Before each script after the first the page is loaded again, like a reload: it starts
+     * fresh with what it stored in the browser.
      *
-     * @throws IllegalStateException if the script throws or its promise rejects
+     * @return each script's value as text, in order
+     * @throws IllegalStateException if a script throws or its promise rejects
      */
-    public static String evaluate(Path firefox, String url, String script) throws Exception {
+    public static List<String> evaluate(Path firefox, String url, String... scripts) throws Exception {
         return withPage(firefox, url, (bidi, context) -> {
-            JsonObject done = evaluate(bidi, context, script);
-            if (!"success".equals(done.get("type").getAsString()))
-                throw new IllegalStateException("page script failed: " + done);
-            JsonElement value = done.getAsJsonObject("result").get("value");
-            return value == null ? "" : value.isJsonPrimitive() ? value.getAsString() : value.toString();
+            List<String> values = new ArrayList<>();
+            for (int i = 0; i < scripts.length; i++) {
+                if (i > 0) navigate(bidi, context, url);
+                JsonObject done = evaluate(bidi, context, scripts[i]);
+                if (!"success".equals(done.get("type").getAsString()))
+                    throw new IllegalStateException("page script " + (i + 1) + " failed: " + done);
+                JsonElement value = done.getAsJsonObject("result").get("value");
+                values.add(value == null ? "" : value.isJsonPrimitive() ? value.getAsString() : value.toString());
+            }
+            return values;
         });
     }
 
@@ -86,6 +95,11 @@ public final class HeadlessFirefox {
     /** What to do with the open page: {@code context} is its browsing context id. */
     private interface PageAction<T> {
         T run(Bidi bidi, String context) throws Exception;
+    }
+
+    /** Loads {@code url} in the page and waits until it has loaded. */
+    private static void navigate(Bidi bidi, String context, String url) throws Exception {
+        bidi.call("browsingContext.navigate", json("context", context, "url", url, "wait", "complete"));
     }
 
     private static JsonObject evaluate(Bidi bidi, String context, String script) throws Exception {
@@ -108,7 +122,7 @@ public final class HeadlessFirefox {
             bidi.call("session.new", json("capabilities", new JsonObject()));
             String context = bidi.call("browsingContext.create", json("type", "tab")).get("context").getAsString();
             bidi.call("browsingContext.setViewport", json("context", context, "viewport", json("width", 1920, "height", 1080)));
-            bidi.call("browsingContext.navigate", json("context", context, "url", url, "wait", "complete"));
+            navigate(bidi, context, url);
             T result = action.run(bidi, context);
             bidi.call("session.end", new JsonObject());
             return result;

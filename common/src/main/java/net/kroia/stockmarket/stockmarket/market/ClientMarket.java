@@ -233,7 +233,11 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
             // widget's one-shot auto-fit locks onto that zero spike.
             if (!initialHistoryLoaded || gameTime) // T-218: game-time candles rotate in onServerCandle
                 return;
-            if(timer.check())
+            // SM-386: no candle at price 0 while no price is known yet; an empty history (nothing stored, no
+            // price in the answer) opens its first candle as soon as the stream brings a price
+            if (history.getCurrentMarketPrice() <= 0)
+                return;
+            if(timer.check() || history.getCandles().isEmpty())
             {
                 // Boundary crossed: promote the previous live candle into the
                 // cache's immutable list BEFORE opening the new one, so the
