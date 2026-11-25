@@ -1,0 +1,56 @@
+{
+  "id": "sugarcane_plantation_blight",
+  "picture": "sugarcane_plantation_blight.png",
+  "headline": {
+    "en_us": "Blight spreads through the river plantations",
+    "zh_cn": "枯萎病在河畔种植园蔓延",
+    "de_de": "Fäule breitet sich in den Flussplantagen aus"
+  },
+  "text": {
+    "en_us": "A creeping blight has taken hold in the great sugar-cane plantations along the river deltas, and field after field is being burned to stop it. With the flood of cane thinning out, the trade council expects sugar cane, sugar and paper to recover slowly to the prices they had before the boom.",
+    "zh_cn": "一种蔓延缓慢的枯萎病侵袭了大河三角洲的大片甘蔗种植园，一块又一块田地被焚烧以阻止其扩散。随着甘蔗洪流逐渐消退，贸易议会预计甘蔗、糖与纸的价格将缓慢回升至繁荣之前的水平。",
+    "de_de": "Eine schleichende Fäule hat die großen Zuckerrohrplantagen in den Flussdeltas erfasst, und Feld um Feld wird abgebrannt, um sie aufzuhalten. Da die Rohrschwemme abebbt, erwartet der Handelsrat, dass sich Zuckerrohr, Zucker und Papier langsam auf ihre Preise von vor dem Boom erholen."
+  },
+  "category": "economy",
+  "weight": 10,
+  "undoes": "sugarcane_plantation_boom",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
+  },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": 0.25,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:sugar_cane",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:sugar",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:paper",
+      "weightFactor": 0.4
+    }
+  ]
+}

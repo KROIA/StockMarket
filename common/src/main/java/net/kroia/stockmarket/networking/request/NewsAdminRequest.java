@@ -976,6 +976,8 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
             if (cooldownMs > 0) {
                 line.append(" [cooldown ").append(NewsUiFormatting.formatRemainingTime(cooldownMs)).append("]");
             }
+            NewsPlugin.ShiftStatus shift = plugin.shiftStatus(definition); // MU-181
+            if (shift != null) line.append(" [").append(shift.text()).append("]");
             lines.add(line.toString());
         }
         // Disabled ids whose definition is currently absent (file removed) stay visible
@@ -1657,6 +1659,10 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
                         + "] " + requirement.describe());
             }
         }
+        NewsPlugin.ShiftStatus shift = plugin.shiftStatus(definition); // MU-181
+        if (shift != null) {
+            lines.add("  Permanent shift: [" + (shift.open() ? "open" : "BLOCKED") + "] " + shift.text());
+        }
         List<NewsEventDefinition.ChainDefinition> chains = definition.getChains();
         if (!chains.isEmpty()) {
             lines.add("  Chains (" + chains.size() + "):");
@@ -1771,6 +1777,10 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
             for (NewsRequirement requirement : definition.getRequirements()) {
                 requirementStatus.add(new EventDetails.RequirementStatus(
                         requirement.describe(), requirement.test(registry, nowEpochMs)));
+            }
+            NewsPlugin.ShiftStatus shift = plugin.shiftStatus(definition); // MU-181
+            if (shift != null) {
+                requirementStatus.add(new EventDetails.RequirementStatus(shift.text(), shift.open()));
             }
             List<String> chainLines = new ArrayList<>(definition.getChains().size());
             for (NewsEventDefinition.ChainDefinition chain : definition.getChains()) {

@@ -12,22 +12,40 @@
     "de_de": "Nach Jahren goldgedeckten Handels hat der Rat beschlossen, den Handel zwischen den Dörfern von den Goldreserven zu lösen. Die strukturelle Nachfrage, die den Goldpreis stützte, ist damit Geschichte, und Analysten erwarten, dass sich der alte Aufschlag dauerhaft abbaut."
   },
   "category": "politics",
-  "weight": 2,
-  "cooldownSeconds": 86400,
-  "impact": {
-    "type": "crash",
-    "peakFactor": -0.2,
-    "rampUpSeconds": 300,
-    "durationSeconds": 1500,
-    "reversal": "none"
+  "weight": 10,
+  "undoes": "gold_reserve_standard",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
   },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": -0.2,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
   "markets": [
-    { "item": "minecraft:gold_ingot", "weightFactor": 1.0 }
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 1.0
+    }
   ],
-  "requires": [
-    { "type": "firedBefore", "eventId": "gold_reserve_standard", "minSecondsAgo": 10800 },
-    { "type": "notFired",    "eventId": "end_of_gold_standard" },
-    { "type": "keyEquals",   "key": "era", "value": "gold_standard" }
-  ],
-  "records": { "era": "fiat" }
+  "records": {
+    "era": "fiat"
+  }
 }

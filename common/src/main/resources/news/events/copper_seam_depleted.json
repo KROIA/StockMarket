@@ -1,0 +1,56 @@
+{
+  "id": "copper_seam_depleted",
+  "picture": "copper_seam_depleted.png",
+  "headline": {
+    "en_us": "The great coastal copper seam runs dry",
+    "zh_cn": "沿海大铜矿脉已告枯竭",
+    "de_de": "Die große Kupferader an der Küste ist erschöpft"
+  },
+  "text": {
+    "en_us": "The copper seam in the coastal cliffs that kept the foundries busy is giving out, its last galleries yielding little but bare rock. With the flood of raw ore drying up, traders expect ingots, blocks and raw copper to recover slowly to the prices they fetched before the find.",
+    "zh_cn": "曾让铸造厂忙碌不停的沿海崖壁铜矿脉正在枯竭，最后几条坑道几乎只挖出光秃的岩石。随着粗矿洪流逐渐断绝，商人预计铜锭、铜块与粗铜的价格将缓慢回升至发现矿脉之前的水平。",
+    "de_de": "Die Kupferader in den Küstenklippen, die die Gießereien auslastete, versiegt; ihre letzten Stollen liefern kaum mehr als nackten Fels. Da die Flut an Roherz nachlässt, erwarten Händler, dass sich Barren, Blöcke und Rohkupfer langsam wieder auf die Preise von vor dem Fund erholen."
+  },
+  "category": "commodities",
+  "weight": 10,
+  "undoes": "copper_seam_discovery",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
+  },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": 0.25,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:copper_ingot",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:copper_block",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:raw_copper",
+      "weightFactor": 0.8
+    }
+  ]
+}
