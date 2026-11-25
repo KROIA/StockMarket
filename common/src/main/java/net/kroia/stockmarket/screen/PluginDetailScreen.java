@@ -46,7 +46,8 @@ public class PluginDetailScreen extends StockMarketGuiScreen {
         nameLabel = new Label(pluginData.getName());
         nameLabel.setAlignment(Label.Alignment.CENTER);
 
-        descriptionLabel = new Label(pluginData.getDescription() != null ? pluginData.getDescription() : "");
+        descriptionLabel = new Label(net.kroia.stockmarket.pluginsystem.registry.PluginRegistry.displayDescription(
+                pluginData.getPluginTypeID(), pluginData.getDescription())); // SM-377
 
         addElement(nameLabel);
         addElement(descriptionLabel);

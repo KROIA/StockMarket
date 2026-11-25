@@ -12,8 +12,9 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Asynchronous access to the market manager, from {@link IMarketManager#getAsync()}. On the master it is the
- * {@link IServerMarketManager} itself and every future is already complete; on a slave every call is a request to
- * the master.
+ * {@link IServerMarketManager} itself: called on the server thread, every future is already complete; called from
+ * any other thread, the call runs on the server thread and the future completes after that (don't wait on it from a
+ * thread the server thread is waiting for). On a slave every call is a request to the master.
  *
  * <h2>Request failures (2.2.0)</h2>
  * A future that waits for the master's answer can fail with one of ModUtilities' request exceptions:

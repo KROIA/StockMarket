@@ -1,12 +1,14 @@
 package net.kroia.stockmarket.stockmarket.market.preset;
 
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.locale.Language;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 // One JSON file's worth of presets, representing a category of items
 public class MarketPresetCategory {
@@ -30,6 +32,20 @@ public class MarketPresetCategory {
     }
 
     public String getCategory() { return category; }
+
+    /**
+     * Name to show for a category in the GUI. The stored name stays the identifier
+     * (file name, network, commands); only the display is translated. Default categories
+     * have a lang key {@code gui.stockmarket.preset_category.<lowercase name>}; custom
+     * categories have none and are shown as typed.
+     *
+     * @param category the stored category name
+     * @return the translated name, or {@code category} when no lang key exists
+     */
+    public static String displayName(String category) {
+        return Language.getInstance().getOrDefault(
+                "gui.stockmarket.preset_category." + category.toLowerCase(Locale.ROOT), category);
+    }
     public void setCategory(String name) { this.category = name; }
     public List<MarketPreset> getPresets() { return presets; }
 

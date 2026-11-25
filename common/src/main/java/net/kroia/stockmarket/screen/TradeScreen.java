@@ -345,6 +345,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         marketClosedLabel.setAlignment(Label.Alignment.CENTER);
         marketClosedLabel.setTextColor(UI_Colors.sellColorRed);
         marketClosedLabel.setTextFontScale(1.5f);
+        marketClosedLabel.setEllipsisEnabled(true); // SM-367: a long maintenance reason ends in "..." instead of overflowing
         marketClosedLabel.setEnabled(false);
 
         // T-158: trading hours + clock, always visible (same layout for every market).
@@ -609,6 +610,8 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         // Update cross-rate and inter-market trading panel when in pair mode
         if (isPairMode && pairHaveMarketID != null && pairWantMarketID != null) {
+            // SM-368: the selector's rate is read in the same tick as the panel's, so both match
+            pairSelectorWidget.updateRate();
             ClientMarket haveM = getMarket(pairHaveMarketID);
             ClientMarket wantM = getMarket(pairWantMarketID);
             if (haveM != null && wantM != null) {
@@ -692,7 +695,12 @@ public class TradeScreen extends StockMarketGuiScreen {
             Component bannerText = !reason.isEmpty() ? Component.translatable(reason)
                     : state == MarketSettings.TradingState.MAINTENANCE ? Texts.MAINTENANCE : Texts.MARKET_CLOSED;
             marketClosedLabel.setText(bannerText.getString());
-            marketClosedLabel.setEnabled(!open);
+            if (marketClosedLabel.isEnabled() == open) {
+                marketClosedLabel.setEnabled(!open);
+                // SM-367: the label has its own row while it shows; before init() there is no layout yet
+                if (getWidth() > 0)
+                    updateLayout(null);
+            }
         }
 
         String hoursText = "";
@@ -1275,12 +1283,17 @@ public class TradeScreen extends StockMarketGuiScreen {
         int hoursRowY = selectorTop + selectorHeight + spacing;
         tradingHoursLabel.setBounds(rightPanelX, hoursRowY, rightPanelWidth, hoursRowHeight);
         int tradingPanelTop = hoursRowY + hoursRowHeight + spacing;
+        // SM-367: while it shows, the market-closed/maintenance label gets its own row above the trading
+        // panel (it used to cover the panel's tab row); updateTradingStatusUI re-runs this layout when it
+        // appears or goes.
+        int closedRowHeight = marketClosedLabel.isEnabled() ? marketClosedLabel.getTextHeight() + 2 * marketClosedLabel.getPadding() : 0;
+        marketClosedLabel.setBounds(rightPanelX, tradingPanelTop, rightPanelWidth, closedRowHeight);
+        if (closedRowHeight > 0)
+            tradingPanelTop += closedRowHeight + spacing;
         tradingPanel.setBounds(rightPanelX, tradingPanelTop, rightPanelWidth, height - (tradingPanelTop - padding));
         // Inter-market trading panel same bounds as regular trading panel
         interMarketTradingPanel.setBounds(tradingPanel.getLeft(), tradingPanel.getTop(),
                 tradingPanel.getWidth(), tradingPanel.getHeight());
-        // Market closed label overlays the trading panel area
-        marketClosedLabel.setBounds(tradingPanel.getLeft(), tradingPanel.getTop(), tradingPanel.getWidth(), 20);
         // T-123 / T-125 banner: three stacked labels centered horizontally
         // across the (now-hidden) trading panel. Split into three rows because
         // ModUtilities' Label is single-line only and the full trust-explanation
@@ -1393,6 +1406,8 @@ public class TradeScreen extends StockMarketGuiScreen {
                 // Set pair direction on the overlay so order markers display at the correct rate
                 orderMarkerOverlay.setPairDirection(pairHaveMarketID, pairWantMarketID);
                 pendingOrdersPanel.setPairDirection(pairHaveMarketID);
+                // SM-368: a pair restored from the preferences never went through onPairSelected
+                applyPairItemNames();
             }
         } else {
             pendingOrdersPanel.setPairDirection(null);
@@ -1484,13 +1499,20 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
         }
 
-        // Update inter-market trading panel item names
+        applyPairItemNames();
+    }
+
+    /**
+     * Gives the inter-market trading panel the names of the pair's items (its rate and estimated-cost
+     * texts end in them). SM-368: also called when pair mode opens with a pair restored from the
+     * preferences, which used to leave the names empty ("Rate: 9.50 /").
+     */
+    private void applyPairItemNames() {
+        // prefer company displayName if this ItemID is a stamped share (T-147)
         if (pairHaveMarketID != null) {
-            // prefer company displayName if this ItemID is a stamped share (T-147)
             interMarketTradingPanel.setHaveItemName(ShareVisualHelpers.getDisplayName(pairHaveMarketID, pairHaveMarketID.getStack().getHoverName()).getString());
         }
         if (pairWantMarketID != null) {
-            // prefer company displayName if this ItemID is a stamped share (T-147)
             interMarketTradingPanel.setWantItemName(ShareVisualHelpers.getDisplayName(pairWantMarketID, pairWantMarketID.getStack().getHoverName()).getString());
         }
     }
