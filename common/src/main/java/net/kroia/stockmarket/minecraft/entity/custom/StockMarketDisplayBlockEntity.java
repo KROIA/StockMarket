@@ -15,6 +15,7 @@ import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -22,6 +23,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
@@ -98,6 +101,27 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
      */
     public void setConfig(DisplayType type, ItemID itemID) {
         setConfig(type, itemID, null);
+    }
+
+    /** SM-376: how far (blocks) a player may stand from a display's screen to change its config or chart view. */
+    public static final double MAX_INTERACT_DISTANCE = 8.0;
+
+    /**
+     * SM-376: true if {@code position} is within {@link #MAX_INTERACT_DISTANCE} blocks of the nearest block centre
+     * of this display's whole screen (its group), not only of the top-left controller block, so a large screen can
+     * be set up from its far corner. A block in no group counts alone (same as the old controller-only check).
+     *
+     * @param position the player's position
+     */
+    public boolean isWithinReach(Vec3 position) {
+        BlockPos topLeft = getControllerPos() != null ? getControllerPos() : getBlockPos();
+        // the group's "right" as in ModUtilities' AbstractDisplayBlockEntity.getRightDirection (package-private there)
+        Direction right = getBlockState().getValue(HorizontalDirectionalBlock.FACING).getCounterClockWise();
+        BlockPos bottomRight = topLeft.relative(right, Math.max(1, getGroupWidth()) - 1)
+                .below(Math.max(1, getGroupHeight()) - 1);
+        // deflate(0.5): the box of the block centres
+        return AABB.encapsulatingFullBlocks(topLeft, bottomRight).deflate(0.5).distanceToSqr(position)
+                <= MAX_INTERACT_DISTANCE * MAX_INTERACT_DISTANCE;
     }
 
     /**

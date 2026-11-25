@@ -13,6 +13,7 @@ import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.entity.custom.StockMarketDisplayBlockEntity;
+import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPacket;
 import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.screen.ManagementScreen;
 import net.kroia.stockmarket.screen.TradeScreen;
@@ -99,6 +100,57 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         addTest("management_no_duplicate_markets", this::test_management_no_duplicate_markets);
         addTest("display_chart_configure_button", this::test_display_chart_configure_button); // SM-360
         addTest("display_sneak_use_opens_setup", this::test_display_sneak_use_opens_setup); // SM-360
+        addTest("display_config_from_far_corner", this::test_display_config_from_far_corner); // SM-376
+    }
+
+    /**
+     * SM-376: a player next to the far end of a long screen, more than 8 blocks from its top-left (controller)
+     * block, can still set it up: the config packet the setup screen sends is applied. The server used to measure
+     * the distance to the controller only and drop the packet silently. Also checks that a spot 9 blocks beyond the
+     * screen stays out of reach. Needs the integrated server (sp) to build the screen next to the player.
+     */
+    private TestResult test_display_config_from_far_corner() {
+        MinecraftServer server = Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer());
+        if (server == null) return skip("needs the integrated server (singleplayer) to place a display");
+        // 11x1 above the player, facing NORTH (its right is WEST): the controller is the east end, 10 blocks away
+        BlockPos westEnd = Gui.onClient(() -> Minecraft.getInstance().player.blockPosition().above(3));
+        BlockPos[] row = new BlockPos[11];
+        for (int i = 0; i < row.length; i++) row[i] = westEnd.east(i);
+        BlockPos controller = row[row.length - 1];
+        BlockState display = StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get().defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH);
+        BlockState[] before = await(server.submit(() -> {
+            BlockState[] states = new BlockState[row.length];
+            for (int i = 0; i < row.length; i++) states[i] = server.overworld().getBlockState(row[i]);
+            return states;
+        }), WAIT_MS);
+        try {
+            ItemID diamond = await(server.submit(() -> {
+                for (BlockPos p : row) server.overworld().setBlock(p, display, Block.UPDATE_ALL);
+                return ItemID.of(new ItemStack(Items.DIAMOND));
+            }), WAIT_MS);
+            String problem = await(server.submit(() -> {
+                if (!(server.overworld().getBlockEntity(controller) instanceof StockMarketDisplayBlockEntity c)
+                        || !c.isController() || c.getGroupWidth() != row.length)
+                    return "no 11x1 screen with its controller at " + controller;
+                if (c.isWithinReach(Vec3.atCenterOf(westEnd.west(9))))
+                    return "a spot 9 blocks beyond the screen counts as in reach";
+                return null;
+            }), WAIT_MS);
+            if (problem != null) return fail(problem);
+
+            Gui.onClient(() -> UpdateStockMarketDisplayConfigPacket.sendToServer(controller,
+                    StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART.getId(), diamond.getShort(), (short) -1));
+            boolean applied = Gui.waitUntil(() -> Minecraft.getInstance().level != null
+                    && Minecraft.getInstance().level.getBlockEntity(controller) instanceof StockMarketDisplayBlockEntity d
+                    && diamond.equals(d.getSelectedItemID()), OPEN_TICKS);
+            return assertTrue("config sent from below the west end " + westEnd + " applied to the screen (controller "
+                    + controller + ")", applied);
+        } finally {
+            await(server.submit(() -> {
+                for (int i = 0; i < row.length; i++) server.overworld().setBlock(row[i], before[i], Block.UPDATE_ALL);
+            }), WAIT_MS);
+        }
     }
 
     /**
