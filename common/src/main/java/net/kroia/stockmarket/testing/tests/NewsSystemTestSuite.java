@@ -747,8 +747,8 @@ public class NewsSystemTestSuite extends TestSuite {
             NewsEventDefinition endOfGold = library.getDefinition("end_of_gold_standard");
             r = assertNotNull("end_of_gold_standard must be loaded", endOfGold);
             if (!r.passed()) return r;
-            return assertEquals("end_of_gold_standard must gate on the gold-standard era",
-                    3, endOfGold.getRequirements().size());
+            return assertEquals("end_of_gold_standard must be the gold standard's counterpart (MU-181)",
+                    "gold_reserve_standard", endOfGold.getUndoesEventId());
         } catch (IOException e) {
             return fail("temp dir setup failed: " + e);
         } finally {

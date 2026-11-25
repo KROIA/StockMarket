@@ -1,0 +1,48 @@
+{
+  "id": "shulker_raids_resume",
+  "picture": "shulker_raids_resume.png",
+  "headline": {
+    "en_us": "End raids resume - shulker shells return to market",
+    "zh_cn": "末地突袭重启——潜影壳重返市场",
+    "de_de": "End-Raubzüge laufen wieder - Shulker-Schalen kehren auf den Markt zurück"
+  },
+  "text": {
+    "en_us": "Fresh raiding parties have pushed back into the End cities, and the first crates of shulker shells are reaching the traders after a long drought. Merchants expect the shortage to ease, with the price sinking slowly back to its old level as supply recovers.",
+    "zh_cn": "新的突袭队重新深入末地城，久旱之后第一批潜影壳终于运抵商人手中。商人预计短缺将会缓解，随着供给恢复，价格将缓慢回落至往日水平。",
+    "de_de": "Neue Raubzüge sind wieder in die End-Städte vorgedrungen, und nach langer Durststrecke erreichen die ersten Kisten mit Shulker-Schalen die Händler. Kaufleute erwarten, dass die Knappheit nachlässt und der Preis mit dem wachsenden Angebot langsam auf sein altes Niveau sinkt."
+  },
+  "category": "commodities",
+  "weight": 10,
+  "undoes": "shulker_shell_shortage",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
+  },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": -0.3,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:shulker_shell",
+      "weightFactor": 1.0
+    }
+  ]
+}

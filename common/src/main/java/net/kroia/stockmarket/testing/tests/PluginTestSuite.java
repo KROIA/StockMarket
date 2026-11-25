@@ -13,6 +13,8 @@ import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
 import net.kroia.stockmarket.pluginsystem.plugins.TargetPriceBot;
+import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
+import net.kroia.stockmarket.news.NewsWorldRegistry;
 import net.kroia.stockmarket.stockmarket.market.OrderLedger;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
@@ -76,7 +78,9 @@ public class PluginTestSuite extends TestSuite {
         /** T-213 G2 (push up, then sell back): the longest block, about 30 min. */
         T213_G2,
         /** T-213 G3 (timber supplier) and G4 (idle days). */
-        T213_G3G4
+        T213_G3G4,
+        /** MU-181: markets recover from old permanent news shifts through the counterparts (simulated months). */
+        NEWS_RECOVERY
     }
 
     /** The gate topic of this instance, null for the regular plugin suite. */
@@ -113,6 +117,11 @@ public class PluginTestSuite extends TestSuite {
     /** Topic: T-213 G3 and G4 gate rows (see {@link Gate#T213_G3G4}). */
     public static final class T213GateG3G4TestSuite extends PluginTestSuite {
         public T213GateG3G4TestSuite() { super(Gate.T213_G3G4); }
+    }
+
+    /** Topic: MU-181 news recovery simulation (see {@link Gate#NEWS_RECOVERY}). */
+    public static final class NewsRecoveryGateTestSuite extends PluginTestSuite {
+        public NewsRecoveryGateTestSuite() { super(Gate.NEWS_RECOVERY); }
     }
 
     @Override
@@ -277,6 +286,14 @@ public class PluginTestSuite extends TestSuite {
             case T213_G3G4 -> {
                 addTest("t213_gate_G3_supplier", () -> test_t213Supplier("t213_gate_G3_supplier"));
                 addTest("t213_gate_G4_idle", this::test_t213Idle);
+            }
+            case NEWS_RECOVERY -> {
+                // (a) like amethyst: at the 1-raw-unit price floor, normal 10, 18 old firings of one falling event
+                addTest("news_recovery_floor_market",
+                        () -> test_newsRecovery("floor_market", 0.01, 10, new int[]{18}, new double[]{0.3}));
+                // (b) like iron: at 1900, normal 15, three different raising events
+                addTest("news_recovery_three_events",
+                        () -> test_newsRecovery("three_events", 1900, 15, new int[]{8, 3, 1}, new double[]{-0.24, -0.18, -0.28}));
             }
         }
     }
@@ -3769,6 +3786,12 @@ public class PluginTestSuite extends TestSuite {
         /** Volume distribution plugin refilling the book, only with {@link #harnessRefill}. */
         final DefaultOrderbookVolumeDistributionPlugin refill;
         boolean botEnabled = true;
+        /** The harness's fixed distribution calculator (centred on the start default price). */
+        final DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc;
+        /** MU-181: news plugin run every tick (update stage, then finalize stage); null = none. */
+        NewsPlugin news;
+        /** MU-181: simulated news milliseconds per tick (the news clock runs compressed). */
+        long newsMsPerTick;
         final IServerBankAccount account;
         final UUID player;
         final IServerBank items, money;
@@ -3801,8 +3824,8 @@ public class PluginTestSuite extends TestSuite {
             market.test_setCurrentMarketPrice(settings.defaultPrice);
             market.resetNetPlayerItemFlow();
             cache = new MarketCache(market);
-            cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
-                    harnessCalc(price, DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(price, abundance, volumeScale)));
+            calc = harnessCalc(price, DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(price, abundance, volumeScale));
+            cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(calc);
             market.test_resetVirtualOrderBookVolume();
             markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
             NetFlowPlugin.Settings vs = NetFlowPlugin.Settings.createDefault();
@@ -3826,7 +3849,9 @@ public class PluginTestSuite extends TestSuite {
         void tick() {
             if (refill != null) refill.update(markets);
             vol.update(markets);
+            if (news != null) news.advanceTime(newsMsPerTick, markets);
             if (botEnabled) bot.update(markets);
+            if (news != null) news.finalize(markets);
             cache.apply();
             market.update();
         }
@@ -4966,5 +4991,118 @@ public class PluginTestSuite extends TestSuite {
             if (!r.passed()) return r;
         }
         return pass("missing flag loads off, true/false load as saved");
+    }
+
+    // ── MU-181 news recovery simulation ─────────────────────────────────────
+
+    /** MU-181 simulation: news time per harness tick (one simulated minute). */
+    private static final long NEWS_SIM_MS_PER_TICK = 60_000L;
+    /** MU-181 simulation: ticks per simulated day. */
+    private static final int NEWS_SIM_TICKS_PER_DAY = 1440;
+    /** MU-181 simulation: the run gives up after this many simulated days. */
+    private static final int NEWS_SIM_MAX_DAYS = 400;
+    /** MU-181 simulation: days run after the last reversal so the bot can settle. */
+    private static final int NEWS_SIM_SETTLE_DAYS = 5;
+    /** MU-181 simulation: the shipped scheduler settings. */
+    private static final String NEWS_SIM_SCHEDULER = "\"minSecondsBetweenEvents\":7200,\"maxSecondsBetweenEvents\":16200,"
+            + "\"maxActiveEventsGlobal\":3,\"maxActiveEventsPerMarket\":1,\"historyMaxEntries\":1000,"
+            + "\"impactDurationMultiplier\":3.0,\"impactStrengthMultiplier\":0.5";
+
+    /** One simulated day: end-of-day price and default price, remaining shifts, items traded that day. */
+    private record NewsSimDay(int day, double price, double defaultPrice, int counter, double volume) {
+        @Override
+        public String toString() {
+            return String.format(Locale.ROOT, "day %d: price %.4g default %.4g counter %d volume %.4g",
+                    day, price, defaultPrice, counter, volume);
+        }
+    }
+
+    /**
+     * MU-181 recovery simulation on a T207Env market (bot, NetFlow, book refill whose calculator follows the default
+     * price as in production) with the full NewsPlugin at the shipped scheduler settings. Each made-up permanent
+     * event has weight 0 (it does not fire again during the run) and a counterpart at the shipped delays and ramp
+     * (8-24 h authored, x3 = 1-3 days); the world history holds the event's firings, so the one-time migration sets
+     * the counters and the normal price (the preset price). The counterparts then fire by their real eligibility
+     * rules. Time is compressed: one tick is one simulated minute of news time, so simulated days are real
+     * simulated days for the news side; the market side still runs one bot step per tick.
+     * <p>
+     * Passes when every counter reached 0 and the price ends within 5 % of the normal price. The message holds the
+     * trajectory (about 12 rows: price, counter, items traded that day); the full one goes to the log.
+     *
+     * @param name    row name (log tag)
+     * @param price   start default and market price
+     * @param normal  the normal price (preset default price)
+     * @param firings per permanent event its recorded firings
+     * @param factors per permanent event its counterpart's targetFactor (+ = raises the price back)
+     */
+    private TestResult test_newsRecovery(String name, double price, double normal, int[] firings, double[] factors) {
+        java.nio.file.Path dir = null;
+        harnessRefill = true;
+        try (T207Env env = new T207Env(price, 50, 3_200, 2000, 3)) {
+            dir = NewsPluginTestSuite.createTempDir();
+            NewsWorldRegistry registry = new NewsWorldRegistry();
+            List<String> events = new java.util.ArrayList<>();
+            for (int i = 0; i < firings.length; i++) {
+                String id = "recovery_event_" + i;
+                events.add(NewsPluginTestSuite.eventJson(id, "\"weight\":0,\"impact\":{\"type\":\"trend\","
+                        + "\"peakFactor\":0.3,\"rampUpSeconds\":10,\"durationSeconds\":10,\"reversal\":\"none\"}"));
+                events.add("{\"id\":\"" + id + "_undo\",\"headline\":\"H\",\"text\":\"T\",\"weight\":10,"
+                        + "\"undoes\":\"" + id + "\",\"sequences\":[{\"name\":\"reversal\",\"steps\":[{\"name\":\"reversal\","
+                        + "\"durationSeconds\":{\"min\":28800,\"max\":86400},\"targetFactor\":" + factors[i]
+                        + ",\"curve\":\"linear\",\"permanent\":true}]}],\"markets\":[{\"item\":\"minecraft:diamond\"}]}");
+                for (int f = 0; f < firings[i]; f++) registry.recordFire(id, 1000L + f, 0);
+            }
+            NewsPluginTestSuite.TestNewsPlugin news = NewsPluginTestSuite.pluginWithFile(dir,
+                    NewsPluginTestSuite.fileJson(NEWS_SIM_SCHEDULER, events.toArray(String[]::new)));
+            news.setLoggerEnabled(false);
+            news.setRegistrySupplier(() -> registry);
+            news.presetPrices.put(itemID, normal);
+            for (int i = 0; i < firings.length; i++)
+                news.resolutions.put("recovery_event_" + i, NewsPluginTestSuite.weights(itemID, 1f));
+            // the book follows the default price as in production (the refill plugin's own calculator)
+            env.cache.getPluginOrderBook().unregisterDefaultVolumeDistributionCalculator(env.calc);
+            env.cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(env.refill.test_getCalculator(itemID));
+            env.news = news;
+            env.newsMsPerTick = NEWS_SIM_MS_PER_TICK;
+
+            List<NewsSimDay> days = new java.util.ArrayList<>();
+            int zeroDay = -1, normalDay = -1;
+            for (int day = 1; day <= NEWS_SIM_MAX_DAYS; day++) {
+                long volumeRaw = 0;
+                for (int t = 0; t < NEWS_SIM_TICKS_PER_DAY; t++) {
+                    news.epochMs += NEWS_SIM_MS_PER_TICK;
+                    env.tick();
+                    // one candle per tick: the per-tick fill stays exact in the candle's float
+                    volumeRaw += (long) env.market.getCurrentMarketPriceStructAndReset().tradedVolume();
+                }
+                int counter = registry.totalShiftCount(itemID);
+                NewsSimDay row = new NewsSimDay(day, env.price(),
+                        MarketManager.convertToRealAmountStatic(env.settings.defaultPrice), counter, volumeRaw / (double) env.sf);
+                days.add(row);
+                if (counter == 0 && zeroDay < 0) zeroDay = day;
+                if (counter == 0 && normalDay < 0 && Math.abs(row.price() / normal - 1) <= 0.05) normalDay = day;
+                if (zeroDay > 0 && day >= zeroDay + NEWS_SIM_SETTLE_DAYS) break;
+            }
+            NewsSimDay last = days.get(days.size() - 1);
+            StringBuilder full = new StringBuilder();
+            for (NewsSimDay d : days) full.append("\n ").append(d);
+            StockMarketMod.LOGGER.info("[MU-181 news recovery {}] counter 0 on day {}, within 5 % of normal {} on day {}:{}",
+                    name, zeroDay, normal, normalDay, full);
+            StringBuilder out = new StringBuilder(String.format(Locale.ROOT,
+                    "%s: start %.4g normal %.4g firings %s; counter 0 on day %d, within 5 %% of normal on day %d",
+                    name, price, normal, java.util.Arrays.toString(firings), zeroDay, normalDay));
+            int step = Math.max(1, days.size() / 12);
+            for (int i = 0; i < days.size(); i++)
+                if (i % step == 0 || i == days.size() - 1 || days.get(i).day() == zeroDay)
+                    out.append("\n ").append(days.get(i));
+            if (last.counter() != 0) return fail("counter still " + last.counter() + " after " + last.day() + " days; " + out);
+            if (Math.abs(last.price() / normal - 1) > 0.05) return fail("price not back within 5 % of normal; " + out);
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+            NewsPluginTestSuite.deleteRecursively(dir);
+        }
     }
 }

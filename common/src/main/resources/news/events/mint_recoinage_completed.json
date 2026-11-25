@@ -1,0 +1,52 @@
+{
+  "id": "mint_recoinage_completed",
+  "picture": "mint_recoinage_completed.png",
+  "headline": {
+    "en_us": "The mint completes the great recoinage",
+    "zh_cn": "铸币厂完成全国通货重铸",
+    "de_de": "Die Münze schließt die große Umprägung ab"
+  },
+  "text": {
+    "en_us": "The royal mint has struck the last of the new heavy coins, and its furnaces are cooling for the first time since the reform began. With the mint's hunger for gold and iron finally sated, analysts expect both metals to slide slowly back to the prices they held before the recoinage.",
+    "zh_cn": "皇家铸币厂已打制完最后一批新式重币，熔炉自改革以来首次冷却。随着铸币厂对金与铁的需求终于得到满足，分析师预计这两种金属的价格将缓慢回落至重铸之前的水平。",
+    "de_de": "Die königliche Münze hat die letzten der neuen schweren Münzen geschlagen, und ihre Öfen kühlen zum ersten Mal seit Beginn der Reform ab. Da der Metallhunger der Münze endlich gestillt ist, erwarten Analysten, dass Gold und Eisen langsam auf ihre Preise von vor der Umprägung zurückgleiten."
+  },
+  "category": "politics",
+  "weight": 10,
+  "undoes": "mint_recoinage_reform",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
+  },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": -0.28,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:iron_ingot",
+      "weightFactor": 0.6
+    }
+  ]
+}

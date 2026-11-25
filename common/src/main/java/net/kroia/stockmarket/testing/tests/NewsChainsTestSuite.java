@@ -11,7 +11,6 @@ import net.kroia.stockmarket.news.NewsEventDefinition;
 import net.kroia.stockmarket.news.NewsEventLibrary;
 import net.kroia.stockmarket.news.NewsHistory;
 import net.kroia.stockmarket.news.NewsRecord;
-import net.kroia.stockmarket.news.NewsRequirement;
 import net.kroia.stockmarket.news.NewsWorldRegistry;
 import net.kroia.stockmarket.news.ServerNewsPublisher;
 import net.kroia.stockmarket.news.ValidationReport;
@@ -114,11 +113,13 @@ public class NewsChainsTestSuite extends TestSuite {
         // sameMarkets
         addTest("same_markets_chain_uses_source_markets", this::test_sameMarkets_usesSourceMarkets);
 
-        // SM-341: luxury tax fires once until repealed; the repeal undoes the exact bake
-        addTest("luxury_tax_blocked_while_active", this::test_luxuryTax_blockedWhileActive);
-        addTest("luxury_repeal_needs_tax_and_two_days", this::test_luxuryRepeal_needsTaxAndTwoDays);
-        addTest("luxury_repeal_restores_default_price_exactly", this::test_luxuryRepeal_restoresDefaultPriceExactly);
-        addTest("luxury_tax_can_fire_again_after_repeal", this::test_luxuryTax_canFireAgainAfterRepeal);
+        // MU-181: permanent events are counted; their counterpart slowly reverts them
+        addTest("permanent_blocked_while_counter_above_zero", this::test_permanent_blockedWhileCounterAboveZero);
+        addTest("counterpart_waits_for_delay_and_counter", this::test_counterpart_waitsForDelayAndCounter);
+        addTest("counterpart_reverts_step_by_step_to_normal", this::test_counterpart_revertsStepByStepToNormal);
+        addTest("migration_counts_unreverted_firings", this::test_migration_countsUnrevertedFirings);
+        addTest("permanent_without_counterpart_fires_once", this::test_permanentWithoutCounterpart_firesOnce);
+        addTest("shipped_permanent_events_have_counterparts", this::test_shippedPermanentEvents_haveCounterparts);
     }
 
     // ========================================================================
@@ -1119,47 +1120,117 @@ public class NewsChainsTestSuite extends TestSuite {
     }
 
     // ========================================================================
-    // SM-341: luxury_goods_tax / luxury_tax_repealed (shipped defaults)
+    // MU-181: permanent shift counters and counterparts (made-up events)
     // ========================================================================
 
-    private static final String TAX = "luxury_goods_tax";
-    private static final String REPEAL = "luxury_tax_repealed";
-    private static final long TWO_DAYS_MS = 172_800_000L;
+    private static final String PERM = "perm_event";
+    private static final String UNDO = "perm_event_undo";
+    /** No random scheduler fires during the long test advances. */
+    private static final String QUIET_SCHEDULER =
+            "\"minSecondsBetweenEvents\":9999999,\"maxSecondsBetweenEvents\":9999999";
+    /** Long enough for every test event (20 s) to finish and bake. */
+    private static final long BAKE_ADVANCE_MS = 600_000L;
 
-    /** Loads the shipped default events (an empty folder gets the shipped file). */
-    private static NewsEventLibrary shippedLibrary(Path dir) {
-        NewsEventLibrary library = new NewsEventLibrary();
-        library.reload(dir);
-        return library;
+    /** A permanent made-up event (legacy reversal none, -50 %) on the diamond matcher. */
+    private static String permanentEventJson(String id) {
+        return NewsPluginTestSuite.eventJson(id, "\"impact\":{\"type\":\"trend\",\"peakFactor\":-0.5,"
+                + "\"rampUpSeconds\":10,\"durationSeconds\":10,\"reversal\":\"none\"}");
     }
 
-    /** What a publish does to the registry: fire record + the event's records{}. */
-    private static void publishToRegistry(NewsEventLibrary library, NewsWorldRegistry registry,
-                                          String eventId, long epochMs) {
-        registry.recordFire(eventId, epochMs, 1);
-        library.getDefinition(eventId).getRecords().forEach(registry::putValue);
+    /** The counterpart of {@link #PERM}: first reversal after 100 s, the next ones 50 s apart. */
+    private static String counterpartJson() {
+        return "{\"id\":\"" + UNDO + "\",\"headline\":\"H\",\"text\":\"T\",\"undoes\":\"" + PERM + "\","
+                + "\"undoDelaySeconds\":100,\"undoRepeatDelaySeconds\":50,"
+                + "\"sequences\":[{\"name\":\"reversal\",\"steps\":[{\"name\":\"reversal\","
+                + "\"durationSeconds\":20,\"targetFactor\":0.3,\"permanent\":true}]}],"
+                + "\"markets\":[{\"item\":\"minecraft:diamond\"}]}";
     }
 
-    private static boolean eligible(NewsEventLibrary library, NewsWorldRegistry registry,
-                                    String eventId, long epochMs) {
-        return NewsRequirement.allMet(library.getDefinition(eventId).getRequirements(), registry, epochMs);
+    /** A plugin with the given made-up events, a quiet scheduler and a fresh registry. */
+    private static NewsPluginTestSuite.TestNewsPlugin shiftPlugin(Path dir, NewsWorldRegistry registry,
+                                                                  String... events) throws IOException {
+        var plugin = pluginWithFile(dir, NewsPluginTestSuite.fileJson(QUIET_SCHEDULER, events));
+        plugin.resolutions.put(PERM, NewsPluginTestSuite.weights(M1, 1.0f));
+        plugin.setRegistrySupplier(() -> registry);
+        return plugin;
     }
 
-    /** The tax is eligible on a fresh world and blocked once it fired (cut still in force). */
-    private TestResult test_luxuryTax_blockedWhileActive() {
+    /** Fires one event (bypassing eligibility like an admin trigger) and lets it bake. */
+    private TestResult fireAndBake(NewsPluginTestSuite.TestNewsPlugin plugin, String eventId,
+                                          List<MarketInterface> mkts) {
+        if (plugin.activate(plugin.getLibrary().getDefinition(eventId),
+                NewsPluginTestSuite.weights(M1, 1.0f)) == null) {
+            return fail(eventId + " did not activate");
+        }
+        plugin.advanceTime(BAKE_ADVANCE_MS, mkts);
+        return plugin.isEventActive(eventId) ? fail(eventId + " did not bake and retire") : pass("baked");
+    }
+
+    private static boolean isEligible(NewsPluginTestSuite.TestNewsPlugin plugin, String eventId,
+                                      List<MarketInterface> mkts) {
+        for (NewsPlugin.EligibleEvent candidate : plugin.computeEligibleEvents(mkts)) {
+            if (candidate.definition().getId().equals(eventId)) return true;
+        }
+        return false;
+    }
+
+    /** A second firing is blocked while the counter is above 0 and allowed again at 0. */
+    private TestResult test_permanent_blockedWhileCounterAboveZero() {
         Path dir = null;
         try {
             dir = createTempDir();
-            NewsEventLibrary library = shippedLibrary(dir);
             NewsWorldRegistry registry = new NewsWorldRegistry();
-            long t = 1_000_000_000_000L;
-            TestResult r = assertTrue("tax eligible on a fresh world", eligible(library, registry, TAX, t));
+            var plugin = shiftPlugin(dir, registry, permanentEventJson(PERM), counterpartJson());
+            var mkts = markets(new NewsPluginTestSuite.TestMarket(M1, 100));
+            TestResult r = assertTrue("fresh permanent event is eligible", isEligible(plugin, PERM, mkts));
             if (!r.passed()) return r;
-            publishToRegistry(library, registry, TAX, t);
-            r = assertFalse("tax blocked right after it fired", eligible(library, registry, TAX, t + 1));
+            r = fireAndBake(plugin, PERM, mkts);
             if (!r.passed()) return r;
-            return assertFalse("tax still blocked weeks later without a repeal",
-                    eligible(library, registry, TAX, t + 10 * TWO_DAYS_MS));
+            r = assertEquals("one firing counted", 1, registry.pendingUndos(PERM, null));
+            if (!r.passed()) return r;
+            r = assertFalse("second firing blocked while the counter is 1", isEligible(plugin, PERM, mkts));
+            if (!r.passed()) return r;
+            r = fireAndBake(plugin, UNDO, mkts);
+            if (!r.passed()) return r;
+            r = assertEquals("counter back to 0", 0, registry.pendingUndos(PERM, null));
+            if (!r.passed()) return r;
+            return assertTrue("eligible again at counter 0", isEligible(plugin, PERM, mkts));
+        } catch (IOException e) {
+            return fail("setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** The counterpart is ineligible at counter 0 and before its delay, eligible after it. */
+    private TestResult test_counterpart_waitsForDelayAndCounter() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsWorldRegistry registry = new NewsWorldRegistry();
+            var plugin = shiftPlugin(dir, registry, permanentEventJson(PERM), counterpartJson());
+            var mkts = markets(new NewsPluginTestSuite.TestMarket(M1, 100));
+            TestResult r = assertFalse("counterpart ineligible at counter 0", isEligible(plugin, UNDO, mkts));
+            if (!r.passed()) return r;
+            r = fireAndBake(plugin, PERM, mkts);
+            if (!r.passed()) return r;
+            r = assertEquals("fresh firing arms the 100 s first-reversal delay", 1_000_000L + 100_000L,
+                    registry.getUndoEligibleAtMs(PERM));
+            if (!r.passed()) return r;
+            r = assertFalse("counterpart ineligible before the delay", isEligible(plugin, UNDO, mkts));
+            if (!r.passed()) return r;
+            NewsPlugin.ShiftStatus status = plugin.shiftStatus(plugin.getLibrary().getDefinition(UNDO));
+            r = assertTrue("status shows the pending reversal and the wait, got " + status,
+                    status != null && !status.open() && status.text().contains("1 reversal pending")
+                            && status.text().contains("next eligible in 2 min"));
+            if (!r.passed()) return r;
+            registry.setUndoEligibleAtMs(PERM, 1_000_000L); // the delay has passed
+            r = assertTrue("counterpart eligible after the delay", isEligible(plugin, UNDO, mkts));
+            if (!r.passed()) return r;
+            r = fireAndBake(plugin, UNDO, mkts);
+            if (!r.passed()) return r;
+            return assertFalse("counterpart ineligible again once the counter is 0",
+                    isEligible(plugin, UNDO, mkts));
         } catch (IOException e) {
             return fail("setup failed: " + e);
         } finally {
@@ -1168,119 +1239,58 @@ public class NewsChainsTestSuite extends TestSuite {
     }
 
     /**
-     * The repeal needs the tax and 2 days since its MOST RECENT firing: firedBefore's
-     * minSecondsAgo measures from lastFiredEpochMs, so the second cycle waits again.
+     * Three firings shift the market three times; each reversal takes one off, moves the
+     * default price to base * (normal / base)^(1 / remaining) and the last lands exactly on
+     * the normal price. The counters survive a registry save/load.
      */
-    private TestResult test_luxuryRepeal_needsTaxAndTwoDays() {
+    private TestResult test_counterpart_revertsStepByStepToNormal() {
         Path dir = null;
         try {
             dir = createTempDir();
-            NewsEventLibrary library = shippedLibrary(dir);
             NewsWorldRegistry registry = new NewsWorldRegistry();
-            long t = 1_000_000_000_000L;
-            TestResult r = assertFalse("repeal blocked before any tax", eligible(library, registry, REPEAL, t));
+            var plugin = shiftPlugin(dir, registry, permanentEventJson(PERM), counterpartJson());
+            NewsPluginTestSuite.TestMarket market = new NewsPluginTestSuite.TestMarket(M1, 100);
+            var mkts = markets(market);
+            for (int i = 0; i < 3; i++) {
+                TestResult r = fireAndBake(plugin, PERM, mkts);
+                if (!r.passed()) return r;
+            }
+            TestResult r = assertTrue("three shifts down from 100, got " + market.defaultPrice,
+                    registry.shiftCount(PERM, M1) == 3 && market.defaultPrice < 100);
             if (!r.passed()) return r;
-            publishToRegistry(library, registry, TAX, t);
-            r = assertFalse("repeal blocked 1 ms before 2 days",
-                    eligible(library, registry, REPEAL, t + TWO_DAYS_MS - 1));
-            if (!r.passed()) return r;
-            r = assertTrue("repeal eligible after 2 days", eligible(library, registry, REPEAL, t + TWO_DAYS_MS));
-            if (!r.passed()) return r;
-
-            // Second cycle: repeal, tax again later -> the repeal waits 2 days again.
-            publishToRegistry(library, registry, REPEAL, t + TWO_DAYS_MS);
-            r = assertFalse("repeal blocked once the tax is repealed",
-                    eligible(library, registry, REPEAL, t + 3 * TWO_DAYS_MS));
-            if (!r.passed()) return r;
-            long t2 = t + 5 * TWO_DAYS_MS;
-            publishToRegistry(library, registry, TAX, t2);
-            r = assertFalse("second repeal blocked right after the second tax",
-                    eligible(library, registry, REPEAL, t2 + 1000));
-            if (!r.passed()) return r;
-            return assertTrue("second repeal eligible 2 days after the second tax",
-                    eligible(library, registry, REPEAL, t2 + TWO_DAYS_MS));
-        } catch (IOException e) {
-            return fail("setup failed: " + e);
-        } finally {
-            deleteRecursively(dir);
-        }
-    }
-
-    /**
-     * Shipped file (impactStrengthMultiplier 0.5, impactDurationMultiplier 3): the tax bake
-     * lowers diamond/emerald/gold and stores the absolute change per market; the change
-     * survives a registry save/load; the repeal adds it back exactly (even after the
-     * default price moved in between), clears it, and leaves a market the tax did not hit
-     * untouched.
-     */
-    private TestResult test_luxuryRepeal_restoresDefaultPriceExactly() {
-        Path dir = null;
-        try {
-            dir = createTempDir();
-            NewsPluginTestSuite.TestNewsPlugin plugin = new NewsPluginTestSuite.TestNewsPlugin();
-            plugin.getLibrary().reload(dir);
-            plugin.test_setLibraryLoaded(true);
-            NewsWorldRegistry registry = new NewsWorldRegistry();
-            plugin.setRegistrySupplier(() -> registry);
-            ItemID m4 = new ItemID((short) 4);
-
-            NewsPluginTestSuite.TestMarket diamond = new NewsPluginTestSuite.TestMarket(M1, 160);
-            NewsPluginTestSuite.TestMarket emerald = new NewsPluginTestSuite.TestMarket(M2, 100);
-            NewsPluginTestSuite.TestMarket gold = new NewsPluginTestSuite.TestMarket(M3, 50);
-            NewsPluginTestSuite.TestMarket other = new NewsPluginTestSuite.TestMarket(m4, 70);
-            var mkts = markets(diamond, emerald, gold, other);
-
-            Map<ItemID, Float> taxWeights = new LinkedHashMap<>();
-            taxWeights.put(M1, 1.0f);
-            taxWeights.put(M2, 0.8f);
-            taxWeights.put(M3, 0.6f);
-            TestResult r = assertNotNull("tax activates",
-                    plugin.activate(plugin.getLibrary().getDefinition(TAX), taxWeights));
-            if (!r.passed()) return r;
-            plugin.advanceTime(3 * 3900 * 1000L + 1, mkts); // (1200 + 2700) s x 3 -> bake
-            r = assertTrue("tax bake: diamond 160 x (1 - 0.2 x 0.5) = 144, got " + diamond.defaultPrice,
-                    Math.abs(diamond.defaultPrice - 144.0) < 1e-9);
-            if (!r.passed()) return r;
-            Double diamondDelta = registry.getBakeDelta(TAX, M1);
-            r = assertTrue("stored diamond delta -16, got " + diamondDelta,
-                    diamondDelta != null && Math.abs(diamondDelta + 16.0) < 1e-9);
-            if (!r.passed()) return r;
-            r = assertTrue("no delta for a market the tax did not hit", registry.getBakeDelta(TAX, m4) == null);
+            r = assertEquals("normal price is the price before the first shift", 100.0, registry.getNormalPrice(M1));
             if (!r.passed()) return r;
 
-            // Registry save/load (world restart) keeps the deltas.
             CompoundTag saved = new CompoundTag();
             registry.save(saved);
             NewsWorldRegistry reloaded = new NewsWorldRegistry();
             reloaded.load(saved);
             plugin.setRegistrySupplier(() -> reloaded);
+            r = assertTrue("save/load keeps count, normal price and timer",
+                    reloaded.shiftCount(PERM, M1) == 3 && reloaded.getNormalPrice(M1) == 100.0
+                            && reloaded.getUndoEligibleAtMs(PERM) == registry.getUndoEligibleAtMs(PERM));
+            if (!r.passed()) return r;
 
-            // Something else moves diamond meanwhile: the repeal still returns the tax's own 16.
-            diamond.defaultPrice = 150.0;
-
-            Map<ItemID, Float> repealWeights = new LinkedHashMap<>(taxWeights);
-            repealWeights.put(m4, 1.0f);
-            r = assertNotNull("repeal activates",
-                    plugin.activate(plugin.getLibrary().getDefinition(REPEAL), repealWeights));
+            for (int remaining = 3; remaining >= 1; remaining--) {
+                double base = market.defaultPrice;
+                double expected = NewsPlugin.reversalTarget(base, 100.0, remaining);
+                r = fireAndBake(plugin, UNDO, mkts);
+                if (!r.passed()) return r;
+                r = assertEquals("counter after a reversal", remaining - 1, reloaded.shiftCount(PERM, M1));
+                if (!r.passed()) return r;
+                r = assertTrue("reversal moves " + base + " toward 100: expected " + expected
+                                + ", got " + market.defaultPrice,
+                        Math.abs(market.defaultPrice - expected) < 1e-9 && market.defaultPrice > base);
+                if (!r.passed()) return r;
+                if (remaining > 1) {
+                    r = assertEquals("each reversal arms the 50 s repeat delay", 1_000_000L + 50_000L,
+                            reloaded.getUndoEligibleAtMs(PERM));
+                    if (!r.passed()) return r;
+                }
+            }
+            r = assertEquals("lands exactly on the normal price", 100.0, market.defaultPrice);
             if (!r.passed()) return r;
-            plugin.advanceTime(3 * 3900 * 1000L + 1, mkts);
-            r = assertTrue("diamond gets +16 back (150 -> 166), got " + diamond.defaultPrice,
-                    Math.abs(diamond.defaultPrice - 166.0) < 1e-9);
-            if (!r.passed()) return r;
-            r = assertTrue("emerald back to exactly 100, got " + emerald.defaultPrice,
-                    Math.abs(emerald.defaultPrice - 100.0) < 1e-9);
-            if (!r.passed()) return r;
-            r = assertTrue("gold back to exactly 50, got " + gold.defaultPrice,
-                    Math.abs(gold.defaultPrice - 50.0) < 1e-9);
-            if (!r.passed()) return r;
-            r = assertTrue("untaxed market untouched (70), got " + other.defaultPrice,
-                    Math.abs(other.defaultPrice - 70.0) < 1e-9);
-            if (!r.passed()) return r;
-            r = assertTrue("deltas cleared after the repeal",
-                    reloaded.getBakeDelta(TAX, M1) == null && reloaded.getBakeDelta(TAX, M2) == null
-                            && reloaded.getBakeDelta(TAX, M3) == null);
-            if (!r.passed()) return r;
-            return assertTrue("the repeal stores no delta of its own", reloaded.getBakeDelta(REPEAL, M1) == null);
+            return assertTrue("normal price forgotten at counter 0", reloaded.getNormalPrice(M1) == null);
         } catch (IOException e) {
             return fail("setup failed: " + e);
         } finally {
@@ -1288,18 +1298,100 @@ public class NewsChainsTestSuite extends TestSuite {
         }
     }
 
-    /** After the repeal the tax is eligible again (tax/repeal cycle). */
-    private TestResult test_luxuryTax_canFireAgainAfterRepeal() {
+    /**
+     * Migration of an old world: 3 recorded firings and no reversal give counter 3 on every
+     * market the event resolves to, with the preset price (else the current default) as
+     * normal; reversals already fired are subtracted; it runs only once.
+     */
+    private TestResult test_migration_countsUnrevertedFirings() {
         Path dir = null;
         try {
             dir = createTempDir();
-            NewsEventLibrary library = shippedLibrary(dir);
             NewsWorldRegistry registry = new NewsWorldRegistry();
-            long t = 1_000_000_000_000L;
-            publishToRegistry(library, registry, TAX, t);
-            publishToRegistry(library, registry, REPEAL, t + TWO_DAYS_MS);
-            return assertTrue("tax eligible again after the repeal",
-                    eligible(library, registry, TAX, t + TWO_DAYS_MS + 1));
+            for (int i = 0; i < 3; i++) registry.recordFire(PERM, 1000L + i, 1);
+            var plugin = shiftPlugin(dir, registry, permanentEventJson(PERM), counterpartJson());
+            Map<ItemID, Float> resolved = new LinkedHashMap<>();
+            resolved.put(M1, 1.0f);
+            resolved.put(M2, 0.5f);
+            plugin.resolutions.put(PERM, resolved);
+            plugin.presetPrices.put(M1, 80.0);
+            var mkts = markets(new NewsPluginTestSuite.TestMarket(M1, 20),
+                    new NewsPluginTestSuite.TestMarket(M2, 50));
+            plugin.advanceTime(0, mkts);
+            TestResult r = assertTrue("counter 3 on both markets",
+                    registry.shiftCount(PERM, M1) == 3 && registry.shiftCount(PERM, M2) == 3
+                            && registry.pendingUndos(PERM, null) == 3);
+            if (!r.passed()) return r;
+            r = assertEquals("normal price from the preset", 80.0, registry.getNormalPrice(M1));
+            if (!r.passed()) return r;
+            r = assertEquals("normal price falls back to the current default", 50.0, registry.getNormalPrice(M2));
+            if (!r.passed()) return r;
+            plugin.advanceTime(0, mkts);
+            r = assertTrue("migration runs once", registry.isShiftsMigrated() && registry.shiftCount(PERM, M1) == 3);
+            if (!r.passed()) return r;
+
+            NewsWorldRegistry withReversal = new NewsWorldRegistry();
+            for (int i = 0; i < 3; i++) withReversal.recordFire(PERM, 1000L + i, 1);
+            withReversal.recordFire(UNDO, 2000L, 1);
+            plugin.setRegistrySupplier(() -> withReversal);
+            plugin.advanceTime(0, mkts);
+            return assertEquals("a fired reversal is subtracted", 2, withReversal.shiftCount(PERM, M1));
+        } catch (IOException e) {
+            return fail("setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** A custom permanent event without a counterpart warns on load, fires once and stays blocked. */
+    private TestResult test_permanentWithoutCounterpart_firesOnce() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsWorldRegistry registry = new NewsWorldRegistry();
+            var plugin = shiftPlugin(dir, registry, permanentEventJson(PERM));
+            var mkts = markets(new NewsPluginTestSuite.TestMarket(M1, 100));
+            TestResult r = assertTrue("load warns that it fires once: " + plugin.getLibrary().getLastReport(),
+                    plugin.getLibrary().getLastReport().toString().contains("fires once and then stays blocked"));
+            if (!r.passed()) return r;
+            r = assertTrue("eligible on a fresh world", isEligible(plugin, PERM, mkts));
+            if (!r.passed()) return r;
+            r = fireAndBake(plugin, PERM, mkts);
+            if (!r.passed()) return r;
+            r = assertFalse("blocked after its one firing", isEligible(plugin, PERM, mkts));
+            if (!r.passed()) return r;
+            NewsPlugin.ShiftStatus status = plugin.shiftStatus(plugin.getLibrary().getDefinition(PERM));
+            return assertTrue("status says it stays blocked, got " + status,
+                    status != null && !status.open() && status.text().contains("no counterpart"));
+        } catch (IOException e) {
+            return fail("setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** Every shipped permanent event has exactly one shipped counterpart (the chosen pairs included). */
+    private TestResult test_shippedPermanentEvents_haveCounterparts() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsEventLibrary library = new NewsEventLibrary();
+            library.reload(dir);
+            int permanent = 0;
+            for (NewsEventDefinition definition : library.getDefinitions().values()) {
+                if (!definition.isCountedPermanent()) continue;
+                permanent++;
+                TestResult r = assertEquals(definition.getId() + " has one counterpart",
+                        1, library.getCounterparts(definition.getId()).size());
+                if (!r.passed()) return r;
+            }
+            TestResult r = assertEquals("end_of_gold_standard reverts the gold standard", "gold_reserve_standard",
+                    library.getDefinition("end_of_gold_standard").getUndoesEventId());
+            if (!r.passed()) return r;
+            r = assertEquals("luxury_tax_repealed reverts the luxury tax", "luxury_goods_tax",
+                    library.getDefinition("luxury_tax_repealed").getUndoesEventId());
+            if (!r.passed()) return r;
+            return assertEquals("11 shipped permanent events", 11, permanent);
         } catch (IOException e) {
             return fail("setup failed: " + e);
         } finally {
