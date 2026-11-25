@@ -11,11 +11,14 @@ import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
+import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.minecraft.compat.StockMarketWebInterface;
 import net.kroia.stockmarket.minecraft.compat.WebIconTextures;
 import net.kroia.stockmarket.networking.request.ModSettingsRequest;
+import net.kroia.stockmarket.testing.HeadlessFirefox;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.kroia.stockmarket.util.StockMarketPermissions;
@@ -45,6 +48,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -55,6 +59,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -69,6 +75,8 @@ import java.util.zip.ZipOutputStream;
  * <p>
  * SM-363 (no internet needed): texture lookup through item models in a generated pack, the download's metadata,
  * size and SHA-1 checks (against a local HTTP server), icons over HTTP, and market names with variant details.
+ * <p>
+ * SM-383: the chart's per-market view in headless Firefox (skipped without Firefox).
  */
 public class WebInterfaceTestSuite extends TestSuite {
 
@@ -106,6 +114,7 @@ public class WebInterfaceTestSuite extends TestSuite {
         addTest("download_checks_size_and_sha1", this::test_downloadChecksSizeAndSha1);
         addTest("market_names_show_variants", this::test_marketNamesShowVariants);
         addTest("icons_served_over_http", this::test_iconsServedOverHttp);
+        addTest("chart_view_per_market_in_browser", this::test_chartViewPerMarket);
     }
 
     private TestResult test_portValidation() {
@@ -460,6 +469,132 @@ public class WebInterfaceTestSuite extends TestSuite {
             WebIconTextures.reopenPacks();
             deleteTree(dir);
         }
+    }
+
+    // ------------------------------------------------------------------ SM-383: chart view in a real browser
+
+    /**
+     * Drives the page in headless Firefox: what a user does by clicking the market list, the chart object read
+     * through the page's {@code window.smChart} handle. The script resolves to "ok: ..." or the reason it failed.
+     * {@code %1$d} / {@code %2$d}: market ids A (low prices) and B (100x higher).
+     */
+    private static final String CHART_VIEW_SCRIPT = """
+            (async () => {
+              const A = %1$d, B = %2$d, chart = window.smChart;
+              if (!chart) return 'no window.smChart on the page';
+              const sleep = ms => new Promise(r => setTimeout(r, ms));
+              const until = async (cond, ms) => { const end = Date.now() + ms; while (Date.now() < end && !cond()) await sleep(100); return cond(); };
+              const markets = await (await fetch('api/markets')).json();
+              const tf = markets.timeframes[Math.min(1, markets.timeframes.length - 1)]; // the page's default timeframe
+              const range = async id => {
+                const d = await (await fetch(`api/history?market=${id}&tf=${tf}&max=500`)).json();
+                if (d.candles.length < 20) throw new Error(`market ${id} has only ${d.candles.length} candles`);
+                return { lo: Math.min(...d.candles.map(c => c.l)), hi: Math.max(...d.candles.map(c => c.h)) };
+              };
+              const ra = await range(A), rb = await range(B);
+              if (ra.hi >= rb.lo) return `price ranges overlap: A ${ra.lo}..${ra.hi}, B ${rb.lo}..${rb.hi}`;
+              const row = id => {
+                const m = markets.markets.find(x => x.id === id);
+                return m && [...document.querySelectorAll('#markets li')].find(li => li.querySelector('.name').textContent === (m.name || m.itemId));
+              };
+              const scale = () => chart.priceScale('right');
+              const vis = () => scale().getVisibleRange();
+              const bars = () => chart.timeScale().getVisibleLogicalRange();
+              const fmt = r => r ? `${r.from}..${r.to}` : 'none';
+              const near = (x, y, tol) => Math.abs(x - y) <= tol;
+              // centred on a market: all its candles in view and not much more (autoScale adds ~45 %% margins)
+              const centred = r => { const v = vis(); return !!v && v.from <= r.lo && v.to >= r.hi && v.to - v.from <= 3 * (r.hi - r.lo); };
+
+              if (!await until(() => row(A) && row(B), 15000)) return 'market A or B not in the list';
+              row(A).click();
+              if (!await until(() => centred(ra), 10000)) return `A not in view: visible ${fmt(vis())}, A ${ra.lo}..${ra.hi}`;
+              // what a drag leaves behind: the price axis on an odd range (autoScale off) and the time axis zoomed in
+              const span = ra.hi - ra.lo, odd = { from: ra.lo - 0.37 * span, to: ra.hi + 1.91 * span };
+              scale().setVisibleRange(odd);
+              chart.timeScale().setVisibleLogicalRange({ from: 3.5, to: 13.5 });
+              await sleep(300);
+              const zoomPrice = vis(), zoomBars = bars();
+              if (scale().options().autoScale || !near(zoomPrice.from, odd.from, span * 0.01) || !near(zoomPrice.to, odd.to, span * 0.01))
+                return `zoom not applied: ${fmt(zoomPrice)}, wanted ${fmt(odd)}, autoScale ${scale().options().autoScale}`;
+
+              row(B).click();
+              if (!await until(() => centred(rb), 10000))
+                return `B not recentred: visible ${fmt(vis())}, B ${rb.lo}..${rb.hi}, autoScale ${scale().options().autoScale}`;
+
+              row(A).click();
+              const back = () => { const p = vis(), t = bars(); return !!p && !!t && near(p.from, zoomPrice.from, span * 0.01)
+                && near(p.to, zoomPrice.to, span * 0.01) && near(t.from, zoomBars.from, 0.5) && near(t.to, zoomBars.to, 0.5); };
+              if (!await until(back, 10000))
+                return `A's zoom not back: price ${fmt(vis())}, wanted ${fmt(zoomPrice)}; bars ${fmt(bars())}, wanted ${fmt(zoomBars)}`;
+              return `ok: B centred on ${rb.lo}..${rb.hi}; A back at price ${fmt(zoomPrice)}, bars ${fmt(zoomBars)}`;
+            })()""";
+
+    /**
+     * SM-383 in a real browser: two markets with far-apart prices and four hours of history each. A zoomed market A,
+     * then a click on B: the price axis is recentred on B. A click back on A: A's price and time range are back.
+     * Skips without Firefox ({@link HeadlessFirefox#PROPERTY}) and on slaves (no web interface there).
+     */
+    private TestResult test_chartViewPerMarket() {
+        if (!isMaster())
+            return skip("master only");
+        Path firefox = HeadlessFirefox.find();
+        if (firefox == null)
+            return skip("no Firefox (-D" + HeadlessFirefox.PROPERTY + ")");
+        StockMarketModSettings.Integrations s = backend.SERVER_SETTINGS.INTEGRATIONS;
+        boolean enabledBefore = Boolean.TRUE.equals(s.WEB_INTERFACE_ENABLED.get());
+        int portBefore = s.WEB_INTERFACE_PORT.get();
+        TestFixture fixture = new TestFixture("WebChartView");
+        fixture.setBackend(backend);
+        List<Short> ids = new ArrayList<>();
+        try {
+            long price = 10_000;
+            for (String name : new String[]{"chart_a", "chart_b"}) {
+                IServerMarket market = fixture.createMarket(name);
+                short id = market.getItemID().getShort();
+                ids.add(id);
+                market.test_setCurrentMarketPrice(price); // the newest candle closes at the live price
+                market.getCurrentMarketPriceStructAndReset(); // the live candle forgets the creation price (its low/high)
+                await(backend.MARKET_PRICE_HISTORY_MANAGER.save(chartHistory(id, price)), WAIT_MS);
+                price *= 100;
+            }
+            int port = freePort();
+            s.WEB_INTERFACE_ENABLED.set(true);
+            s.WEB_INTERFACE_PORT.set(port);
+            StockMarketWebInterface.apply(backend);
+            TestResult r = assertEquals("running on the port", port, StockMarketWebInterface.getRunningPort());
+            if (!r.passed()) return r;
+            String script = String.format(CHART_VIEW_SCRIPT, ids.get(0), ids.get(1));
+            // off the server thread: the page's API calls are answered while await() runs the server's tasks
+            CompletableFuture<String> run = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return HeadlessFirefox.evaluate(firefox, "http://127.0.0.1:" + port + "/", script);
+                } catch (Exception e) {
+                    throw new CompletionException(e);
+                }
+            });
+            String result = await(run, 150_000);
+            return result.startsWith("ok") ? pass(result) : fail(result);
+        } catch (Exception e) {
+            return fail("unexpected exception: " + e);
+        } finally {
+            s.WEB_INTERFACE_ENABLED.set(enabledBefore);
+            s.WEB_INTERFACE_PORT.set(portBefore);
+            StockMarketWebInterface.apply(backend);
+            for (short id : ids)
+                backend.MARKET_PRICE_HISTORY_MANAGER.removeHistory(Optional.empty(), Optional.of(new EqualityFilter(id)));
+            fixture.cleanup();
+        }
+    }
+
+    /** 240 one-minute candles up to the last full minute, a zigzag of +-5 % around {@code price} (raw), oldest first. */
+    private static List<MarketPriceStruct> chartHistory(short id, long price) {
+        long minute = 60_000L, end = (System.currentTimeMillis() / minute - 1) * minute;
+        List<MarketPriceStruct> rows = new ArrayList<>();
+        for (int i = 0; i < 240; i++) {
+            long open = price + price * (i % 20 - 10) / 200;
+            rows.add(new MarketPriceStruct(id, open, open - price / 100, open + price / 100, end - (239L - i) * minute, 1f));
+        }
+        return rows;
     }
 
     // ------------------------------------------------------------------ SM-363: texture download
