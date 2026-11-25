@@ -1,8 +1,5 @@
 package net.kroia.stockmarket.testing.tests;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.BankStatus;
@@ -26,6 +23,7 @@ import net.kroia.stockmarket.screen.TradeScreen;
 import net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
+import net.kroia.stockmarket.testing.HeadlessFirefox;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.gui.Gui;
@@ -50,27 +48,18 @@ import org.lwjgl.glfw.GLFW;
 
 import java.awt.Rectangle;
 import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.WebSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -85,13 +74,12 @@ import java.util.stream.Stream;
  * (6, -60, -13) of the cell's superflat world: display blocks store their main block by absolute coordinates. The
  * file is taken from {@code -Dstockmarket.docs.structure} or found in a parent folder of the game dir (the mods
  * workspace). The camera spots start from the table of images.md and are tuned on the pictures. The web picture needs Firefox
- * ({@code -Dstockmarket.docs.firefox}, default its Windows install path); without it that shot is skipped.
+ * ({@link HeadlessFirefox}); without it that shot is skipped.
  */
 public class DocsWorldShotsSuite extends DocsScreenshotSuite {
 
     private static final String STRUCTURE = "Docs/planning/structures/home-hero.nbt";
     private static final String STRUCTURE_PROPERTY = "stockmarket.docs.structure";
-    private static final String FIREFOX_PROPERTY = "stockmarket.docs.firefox";
     /** The news popup is shot with the HUD on (it is part of the HUD). */
     private static final Screenshots.Scene HUD = new Screenshots.Scene(SCENE.windowWidth(), SCENE.windowHeight(), SCENE.guiScale(), SCENE.dayTime(), false);
     /** News event started for the popup: copper, a market no other docs event touches. */
@@ -592,15 +580,15 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
     /** The web interface on a free port, diamond selected, shot by headless Firefox at 1920x1080. */
     private TestResult test_webInterface() {
         if (fixture == null) return skip(String.valueOf(fixtureProblem));
-        Path firefox = Paths.get(System.getProperty(FIREFOX_PROPERTY, "C:/Program Files/Mozilla Firefox/firefox.exe"));
-        if (!Files.isRegularFile(firefox)) return skip("no Firefox at " + firefox + " (-D" + FIREFOX_PROPERTY + ")");
+        Path firefox = HeadlessFirefox.find();
+        if (firefox == null) return skip("no Firefox (-D" + HeadlessFirefox.PROPERTY + ")");
         StockMarketModBackend.ServerInstances b = StockMarketModBackend.getServerInstances();
         StockMarketModSettings.Integrations settings = b.SERVER_SETTINGS.INTEGRATIONS;
         boolean enabledBefore = Boolean.TRUE.equals(settings.WEB_INTERFACE_ENABLED.get());
         int portBefore = settings.WEB_INTERFACE_PORT.get();
         try {
             writeRecentTrades(b);
-            int port = freePort();
+            int port = HeadlessFirefox.freePort();
             settings.WEB_INTERFACE_ENABLED.set(true);
             settings.WEB_INTERFACE_PORT.set(port);
             StockMarketWebInterface.apply(b);
@@ -616,7 +604,7 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
                       };
                       tick();
                     })""";
-            byte[] png = firefoxShot(firefox, "http://127.0.0.1:" + port + "/", selectDiamond, 5_000);
+            byte[] png = HeadlessFirefox.screenshot(firefox, "http://127.0.0.1:" + port + "/", selectDiamond, 5_000);
             String root = System.getProperty(Screenshots.ROOT_PROPERTY);
             Path base = root != null ? Paths.get(root)
                     : Gui.onClient(() -> Minecraft.getInstance().gameDirectory.toPath()).resolve("screenshots").resolve("testkit");
@@ -649,130 +637,5 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
                     now - (12 - i) * 150_000L));
         }
         await(b.ORDER_RECORD_MANAGER.save(trades), WAIT_MS);
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
-
-    /**
-     * Opens {@code url} in headless Firefox at 1920x1080 over WebDriver BiDi, runs {@code script} (a JavaScript
-     * expression giving a promise of true), waits {@code settleMs} and returns the PNG. Only the Firefox started
-     * here (own profile, {@code --no-remote}) and its child processes are ended afterwards.
-     */
-    static byte[] firefoxShot(Path firefox, String url, String script, long settleMs) throws Exception {
-        int port = freePort();
-        Path profile = Files.createTempDirectory("sm-docs-firefox");
-        // US number and date format whatever the PC's region (the page formats with the browser's locale)
-        Files.writeString(profile.resolve("user.js"), String.join("\n",
-                "user_pref(\"intl.locale.requested\", \"en-US\");",
-                "user_pref(\"intl.accept_languages\", \"en-US, en\");",
-                "user_pref(\"intl.regional_prefs.use_os_locales\", false);",
-                "user_pref(\"javascript.use_us_english_locale\", true);", ""));
-        Process process = new ProcessBuilder(firefox.toString(), "--headless", "--no-remote", "--profile", profile.toString(),
-                "--remote-debugging-port", String.valueOf(port))
-                .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
-        try (Bidi bidi = Bidi.connect(port)) {
-            bidi.call("session.new", json("capabilities", new JsonObject()));
-            String context = bidi.call("browsingContext.create", json("type", "tab")).get("context").getAsString();
-            bidi.call("browsingContext.setViewport", json("context", context, "viewport", json("width", 1920, "height", 1080)));
-            bidi.call("browsingContext.navigate", json("context", context, "url", url, "wait", "complete"));
-            JsonObject done = bidi.call("script.evaluate", json("expression", script, "target", json("context", context), "awaitPromise", true));
-            if (!"success".equals(done.get("type").getAsString()) || !done.getAsJsonObject("result").get("value").getAsBoolean())
-                throw new IllegalStateException("page script did not succeed: " + done);
-            Thread.sleep(settleMs);
-            String data = bidi.call("browsingContext.captureScreenshot", json("context", context)).get("data").getAsString();
-            bidi.call("session.end", new JsonObject());
-            return Base64.getDecoder().decode(data);
-        } finally {
-            process.descendants().forEach(ProcessHandle::destroy);
-            process.destroy();
-            if (!process.waitFor(10, TimeUnit.SECONDS)) {
-                process.descendants().forEach(ProcessHandle::destroyForcibly);
-                process.destroyForcibly();
-            }
-            try (Stream<Path> files = Files.walk(profile)) {
-                files.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
-            } catch (IOException ignored) {
-                // a leftover temp profile is harmless
-            }
-        }
-    }
-
-    /** A JSON object from key/value pairs (String, Number, Boolean or JsonElement values). */
-    private static JsonObject json(Object... pairs) {
-        JsonObject o = new JsonObject();
-        for (int i = 0; i < pairs.length; i += 2) {
-            String key = (String) pairs[i];
-            Object value = pairs[i + 1];
-            if (value instanceof JsonElement e) o.add(key, e);
-            else if (value instanceof Number n) o.addProperty(key, n);
-            else if (value instanceof Boolean bool) o.addProperty(key, bool);
-            else o.addProperty(key, String.valueOf(value));
-        }
-        return o;
-    }
-
-    /** A minimal WebDriver BiDi connection: numbered commands, each answered by the message with its id. */
-    private static final class Bidi implements AutoCloseable, WebSocket.Listener {
-        private final Map<Integer, CompletableFuture<JsonObject>> pending = new ConcurrentHashMap<>();
-        private final AtomicInteger ids = new AtomicInteger();
-        private final StringBuilder message = new StringBuilder();
-        private WebSocket socket;
-
-        /** Connects to the browser started with {@code --remote-debugging-port port}, waiting up to 30 s for it. */
-        static Bidi connect(int port) throws Exception {
-            Bidi bidi = new Bidi();
-            HttpClient http = HttpClient.newHttpClient();
-            Exception last = null;
-            for (int i = 0; i < 60 && bidi.socket == null; i++) {
-                Thread.sleep(500);
-                try {
-                    bidi.socket = http.newWebSocketBuilder().buildAsync(URI.create("ws://127.0.0.1:" + port + "/session"), bidi).get(5, TimeUnit.SECONDS);
-                } catch (Exception e) {
-                    last = e; // the browser is not listening yet
-                }
-            }
-            if (bidi.socket == null) throw new IOException("no WebDriver BiDi on port " + port, last);
-            return bidi;
-        }
-
-        /** Sends a command and returns its result; throws on an error answer or after 60 s. */
-        JsonObject call(String method, JsonObject params) throws Exception {
-            int id = ids.incrementAndGet();
-            CompletableFuture<JsonObject> answer = new CompletableFuture<>();
-            pending.put(id, answer);
-            socket.sendText(json("id", id, "method", method, "params", params).toString(), true).get(10, TimeUnit.SECONDS);
-            JsonObject reply = answer.get(60, TimeUnit.SECONDS);
-            if (reply.has("error")) throw new IOException(method + ": " + reply.get("error") + " " + reply.get("message"));
-            return reply.getAsJsonObject("result");
-        }
-
-        @Override
-        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-            message.append(data);
-            if (last) {
-                JsonObject m = JsonParser.parseString(message.toString()).getAsJsonObject();
-                message.setLength(0);
-                if (m.has("id") && !m.get("id").isJsonNull()) {
-                    CompletableFuture<JsonObject> answer = pending.remove(m.get("id").getAsInt());
-                    if (answer != null) answer.complete(m);
-                }
-            }
-            webSocket.request(1);
-            return null;
-        }
-
-        @Override
-        public void onError(WebSocket webSocket, Throwable error) {
-            pending.values().forEach(f -> f.completeExceptionally(error));
-        }
-
-        @Override
-        public void close() {
-            if (socket != null) socket.abort();
-        }
     }
 }
