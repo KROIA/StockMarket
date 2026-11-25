@@ -1,0 +1,56 @@
+{
+  "id": "metals_embargo_lifted",
+  "picture": "metals_embargo_lifted.png",
+  "headline": {
+    "en_us": "Trade council ends the embargo on foreign metals",
+    "zh_cn": "贸易议会解除外国金属禁运",
+    "de_de": "Handelsrat beendet das Embargo auf ausländische Metalle"
+  },
+  "text": {
+    "en_us": "The embargo on foreign metals has been lifted after the home foundries failed to keep up with demand. Cheap imports are rolling across the border again, and traders expect domestic iron, copper and gold to ease slowly back to their pre-embargo prices.",
+    "zh_cn": "由于本土铸造厂无法满足需求，对外国金属的禁运已被解除。廉价进口货再度源源过境，商人预计国内铁、铜与金的价格将缓慢回落至禁运前的水平。",
+    "de_de": "Das Embargo auf ausländische Metalle ist aufgehoben, nachdem die heimischen Gießereien mit der Nachfrage nicht Schritt halten konnten. Billige Einfuhren rollen wieder über die Grenze, und Händler erwarten, dass heimisches Eisen, Kupfer und Gold langsam auf ihre Preise von vor dem Embargo sinken."
+  },
+  "category": "politics",
+  "weight": 10,
+  "undoes": "metals_export_embargo",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
+  },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": -0.24,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:iron_ingot",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:copper_ingot",
+      "weightFactor": 0.8
+    },
+    {
+      "item": "minecraft:gold_ingot",
+      "weightFactor": 0.6
+    }
+  ]
+}

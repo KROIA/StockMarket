@@ -1,0 +1,52 @@
+{
+  "id": "deepslate_quarry_closed",
+  "picture": "deepslate_quarry_closed.png",
+  "headline": {
+    "en_us": "Deep quarry shuts down - deepslate supply shrinks",
+    "zh_cn": "深部采石场关闭——深板岩供应萎缩",
+    "de_de": "Tiefer Steinbruch stillgelegt - Tiefengestein wird knapper"
+  },
+  "text": {
+    "en_us": "The vast quarry sunk into the deep stone layers has been shut after flooding in its lowest galleries, and the trade council has declined to pay for the repairs. With the endless stream of cobbled deepslate gone, analysts expect its price to drift slowly back to where it stood before the quarry opened.",
+    "zh_cn": "直抵深层岩的巨大采石场因最深处坑道进水而关闭，贸易议会拒绝出资修复。源源不断的深板岩圆石就此断流，分析师预计其价格将缓慢回到采石场开工前的水平。",
+    "de_de": "Der gewaltige Steinbruch in den tiefen Gesteinsschichten wurde nach einem Wassereinbruch in seinen untersten Sohlen stillgelegt, und der Handelsrat verweigert das Geld für die Reparatur. Da der endlose Strom an Bruch-Tiefengestein versiegt, erwarten Analysten, dass sein Preis langsam auf das Niveau von vor der Eröffnung des Steinbruchs zurückkehrt."
+  },
+  "category": "economy",
+  "weight": 10,
+  "undoes": "deepslate_quarry_expansion",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
+  },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": 0.2,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:cobbled_deepslate",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:deepslate",
+      "weightFactor": 0.8
+    }
+  ]
+}
