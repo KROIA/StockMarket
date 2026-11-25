@@ -5,7 +5,6 @@ plugins {
     //id 'com.gradleup.shadow' // mc>=26.1
 }
 repositories {
-    maven { url 'https://maven.quiltmc.org/repository/release/' }
     maven {
         // location of the maven that hosts JEI files since January 2023
         name = "Jared's maven"
