@@ -21,12 +21,15 @@ import net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.TestMarket;
 import net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.TestNewsPlugin;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,6 +113,9 @@ public class NewsAdminTestSuite extends TestSuite {
         // T-099: INFO/EventDetails for sequence events (getImpact() NPE fix) + legacy parity
         addTest("info_and_details_render_sequence_event", this::test_infoAndDetails_renderSequenceEvent);
         addTest("info_legacy_rendering_unchanged", this::test_infoLegacyRenderingUnchanged);
+        addTest("info_and_details_apply_duration_multiplier", this::test_infoAndDetails_applyDurationMultiplier);
+        addTest("info_and_details_apply_strength_multiplier", this::test_infoAndDetails_applyStrengthMultiplier); // SM-382
+        addTest("list_status_line_counts", this::test_list_statusLineCounts); // SM-377
         addTest("event_details_requirement_status_tracks_registry", this::test_eventDetails_requirementStatusTracksRegistry);
 
         // T-099: wire appends (NewsRecord sequence fields, ActiveEventInfo step fields)
@@ -1171,6 +1177,147 @@ public class NewsAdminTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return assertEquals("implicit sequence has the 3 normalization steps",
                     3, d.sequences().get(0).steps().size());
+        } catch (IOException e) {
+            return fail("temp dir failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * SM-366: INFO and the details snapshot show the effective step durations, i.e. the
+     * authored ones stretched by the scheduler's impactDurationMultiplier exactly like
+     * the activation does (fixed 10 s -> 30 s, range 20..40 s -> 60..120 s; legacy
+     * envelope 10/20/10 s -> 30/60/30 s).
+     */
+    private TestResult test_infoAndDetails_applyDurationMultiplier() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            String sequence = "{\"name\":\"path\",\"steps\":["
+                    + "{\"name\":\"spike\",\"durationSeconds\":10,\"targetFactor\":0.4,\"curve\":\"instant\"},"
+                    + "{\"name\":\"fade\",\"durationSeconds\":{\"min\":20,\"max\":40},\"targetFactor\":0.0,\"curve\":\"linear\"}]}";
+            TestNewsPlugin plugin = pluginWithFile(dir, fileJson("\"impactDurationMultiplier\":3",
+                    sequenceEventJson("seq", "", sequence), eventJson("legacy", "")));
+            plugin.resolutions.put("seq", weights(M1, 1.0f));
+            plugin.resolutions.put("legacy", weights(M1, 1.0f));
+            List<MarketInterface> markets = markets(new TestMarket(M1, 100));
+
+            String seqInfo = String.join("\n", NewsAdminRequest.renderEventInfo(plugin,
+                    plugin.getLibrary().getDefinition("seq"), markets));
+            TestResult r = assertTrue("fixed step shown x3: " + seqInfo, seqInfo.contains("'spike' 30 s"));
+            if (!r.passed()) return r;
+            r = assertTrue("ranged step shown x3: " + seqInfo, seqInfo.contains("'fade' 60..120 s"));
+            if (!r.passed()) return r;
+            String legacyInfo = String.join("\n", NewsAdminRequest.renderEventInfo(plugin,
+                    plugin.getLibrary().getDefinition("legacy"), markets));
+            r = assertTrue("legacy envelope shown x3: " + legacyInfo,
+                    legacyInfo.contains("rampUp 30 s, hold 60 s, reversal ramp (30 s)"));
+            if (!r.passed()) return r;
+
+            EventDetails d = NewsAdminRequest.buildEventDetails(plugin, markets).stream()
+                    .filter(e -> e.id().equals("seq")).findFirst().orElse(null);
+            r = assertNotNull("'seq' details entry exists", d);
+            if (!r.passed()) return r;
+            List<EventDetails.StepInfo> steps = d.sequences().get(0).steps();
+            r = assertEquals("fixed step min x3", 30_000L, steps.get(0).durationMinMs());
+            if (!r.passed()) return r;
+            r = assertEquals("fixed step max x3", 30_000L, steps.get(0).durationMaxMs());
+            if (!r.passed()) return r;
+            r = assertEquals("ranged step min x3", 60_000L, steps.get(1).durationMinMs());
+            if (!r.passed()) return r;
+            return assertEquals("ranged step max x3", 120_000L, steps.get(1).durationMaxMs());
+        } catch (IOException e) {
+            return fail("temp dir failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * SM-382: INFO and the details snapshot show the effective step targets and peaks, i.e. the
+     * authored ones scaled by the scheduler's impactStrengthMultiplier exactly like the activation
+     * does (multiplier 2: step target 0.4 -> +80%, legacy peakFactor 0.5 -> +100%, also in the
+     * impacted-markets peak); the authored factor stays in the parentheses.
+     */
+    private TestResult test_infoAndDetails_applyStrengthMultiplier() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            String sequence = "{\"name\":\"path\",\"steps\":["
+                    + "{\"name\":\"spike\",\"durationSeconds\":10,\"targetFactor\":0.4,\"curve\":\"instant\"},"
+                    + "{\"name\":\"fade\",\"durationSeconds\":20,\"targetFactor\":0.0,\"curve\":\"linear\"}]}";
+            TestNewsPlugin plugin = pluginWithFile(dir, fileJson("\"impactStrengthMultiplier\":2",
+                    sequenceEventJson("seq", "", sequence), eventJson("legacy", "")));
+            plugin.resolutions.put("seq", weights(M1, 1.0f));
+            plugin.resolutions.put("legacy", weights(M1, 1.0f));
+            List<MarketInterface> markets = markets(new TestMarket(M1, 100));
+
+            String seqInfo = String.join("\n", NewsAdminRequest.renderEventInfo(plugin,
+                    plugin.getLibrary().getDefinition("seq"), markets));
+            TestResult r = assertTrue("step target shown x2: " + seqInfo,
+                    seqInfo.contains("'spike' 10 s -> +80.0% (targetFactor 0.4)"));
+            if (!r.passed()) return r;
+            r = assertTrue("market peak shown x2: " + seqInfo, seqInfo.contains("(peak +80.0%)"));
+            if (!r.passed()) return r;
+            String legacyInfo = String.join("\n", NewsAdminRequest.renderEventInfo(plugin,
+                    plugin.getLibrary().getDefinition("legacy"), markets));
+            r = assertTrue("legacy peak shown x2: " + legacyInfo,
+                    legacyInfo.contains("peak +100.0% (peakFactor 0.5)"));
+            if (!r.passed()) return r;
+            r = assertTrue("legacy market peak shown x2: " + legacyInfo, legacyInfo.contains("(peak +100.0%)"));
+            if (!r.passed()) return r;
+
+            List<EventDetails> all = NewsAdminRequest.buildEventDetails(plugin, markets);
+            EventDetails seq = all.stream().filter(e -> e.id().equals("seq")).findFirst().orElse(null);
+            EventDetails legacy = all.stream().filter(e -> e.id().equals("legacy")).findFirst().orElse(null);
+            r = assertTrue("'seq' and 'legacy' details entries exist", seq != null && legacy != null);
+            if (!r.passed()) return r;
+            r = assertEquals("step target x2", 0.8, seq.sequences().get(0).steps().get(0).targetFactor());
+            if (!r.passed()) return r;
+            r = assertEquals("sequence event peak x2", 0.8, seq.peakFactor());
+            if (!r.passed()) return r;
+            r = assertEquals("legacy peak x2", 1.0, legacy.peakFactor());
+            if (!r.passed()) return r;
+            return assertEquals("legacy implicit sequence's peak step x2", 1.0,
+                    legacy.sequences().get(0).steps().stream()
+                            .mapToDouble(EventDetails.StepInfo::targetFactor).max().orElse(0));
+        } catch (IOException e) {
+            return fail("temp dir failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * SM-377: a LIST reply carries one id per definition and per active event, and the GUI's
+     * status line is the lang key with exactly those two counts (key and args are checked: no
+     * language is loaded offline).
+     */
+    private TestResult test_list_statusLineCounts() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            TestNewsPlugin plugin = pluginWithFile(dir,
+                    fileJson("", eventJson("a", ""), eventJson("b", ""), eventJson("c", "")));
+            TestResult r = assertNotNull("'a' activates",
+                    plugin.activate(plugin.getLibrary().getDefinition("a"), weights(M1, 1.0f)));
+            if (!r.passed()) return r;
+
+            NewsAdminRequest.OutputData reply = NewsAdminRequest.handleList(plugin);
+            r = assertTrue("LIST succeeds: " + reply.message(), reply.success());
+            if (!r.passed()) return r;
+            r = assertEquals("one id per definition", 3, reply.definitionIds().size());
+            if (!r.passed()) return r;
+            r = assertEquals("one id per active event", 1, reply.activeEventIds().size());
+            if (!r.passed()) return r;
+
+            Component status = NewsAdminRequest.listStatusText(reply);
+            if (!(status.getContents() instanceof TranslatableContents text))
+                return fail("status line is not translatable: " + status);
+            r = assertEquals("status line key", "gui.stockmarket.news_plugin.list_status", text.getKey());
+            if (!r.passed()) return r;
+            return assertEquals("status line args", List.of(3, 1), Arrays.asList(text.getArgs()));
         } catch (IOException e) {
             return fail("temp dir failed: " + e);
         } finally {
