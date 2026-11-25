@@ -243,7 +243,8 @@ public class DocsWorldShotsSuite extends DocsScreenshotSuite {
             if (!(level.getBlockEntity(chart.getKey()) instanceof StockMarketDisplayBlockEntity display))
                 return "no Stock Market Display at " + chart.getKey();
             display.setConfig(StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, fixture.market(chart.getValue()));
-            // the stored chart view fits the builder's prices, and a market change keeps it (SM-364): drop it
+            // the stored chart view fits the builder's prices: drop it also when the item number happens to be the
+            // same (no market change, so setConfig keeps the view)
             display.applyViewport(null);
         }
         // the main blocks of the 2x1 and the 2x2 Bank Display

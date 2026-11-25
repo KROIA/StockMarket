@@ -13,6 +13,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Objects;
 
 /**
  * Fullscreen chart screen opened from a configured display block.
@@ -58,21 +61,39 @@ public class DisplayChartScreen extends StockMarketGuiScreen {
     @Override
     public void onClose() {
         if (chart != null) {
-            syncViewportToDisplay();
-            // Send viewport to server for NBT persistence
-            UpdateDisplayViewportPacket.sendToServer(controllerPos, chart.getViewportState());
+            // SM-364: skip the write-back once the display shows another market (re-pointed meanwhile,
+            // e.g. by another player), or this market's view would hide the new market's candles.
+            if (displayShowingThisMarket() != null) {
+                syncViewportToDisplay();
+                // Send viewport to server for NBT persistence
+                UpdateDisplayViewportPacket.sendToServer(controllerPos, chart.getViewportState());
+            }
             chart.disconnect();
         }
         super.onClose();
     }
 
     private void syncViewportToDisplay() {
-        if (chart == null) return;
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) return;
-        BlockEntity be = mc.level.getBlockEntity(controllerPos);
-        if (be instanceof StockMarketDisplayBlockEntity entity) {
+        StockMarketDisplayBlockEntity entity = displayShowingThisMarket();
+        if (entity != null) {
             entity.applyViewport(chart.getViewportState());
         }
+    }
+
+    /**
+     * @return the client's display controller at {@link #controllerPos} if it still shows this screen's
+     *         market (and pair), else null (no chart, no world, no display there, or another market)
+     */
+    private @Nullable StockMarketDisplayBlockEntity displayShowingThisMarket() {
+        if (chart == null) return null;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return null;
+        BlockEntity be = mc.level.getBlockEntity(controllerPos);
+        if (be instanceof StockMarketDisplayBlockEntity entity
+                && Objects.equals(entity.getSelectedItemID(), itemID)
+                && Objects.equals(entity.getSecondItemID(), secondItemID)) {
+            return entity;
+        }
+        return null;
     }
 }

@@ -104,6 +104,10 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
      * Sets the display configuration. Propagates the config to all displays in
      * the group so they stay connected, then recalculates groups if the type
      * changed and rebuilds the GUI.
+     * <p>
+     * SM-364: a change of type or market drops the stored chart view (price range,
+     * zoom, timeframe), so the new market's chart fits its own candles instead of
+     * showing the old market's price range.
      *
      * @param type         the display type
      * @param itemID       the primary market item
@@ -111,9 +115,13 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
      */
     public void setConfig(DisplayType type, ItemID itemID, ItemID secondItemID) {
         DisplayType oldType = this.displayType;
+        boolean changed = oldType != type || !itemIDEquals(this.selectedItemID, itemID)
+                || !itemIDEquals(this.secondItemID, secondItemID);
         this.displayType = type;
         this.selectedItemID = itemID;
         this.secondItemID = secondItemID;
+        // Before recalculateGroups: its transfer state (saveCustomData) would carry the old view.
+        if (changed) pendingViewport = null;
 
         if (level != null && !level.isClientSide()) {
             propagateConfigToGroup();
@@ -206,9 +214,11 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     @Override
     protected void wireCallbacks(Gui gui) {
-        // Save viewport from old chart before discarding it
+        // Save viewport from old chart before discarding it. Only a connected chart has a real
+        // view (SM-364): the server-side chart never connects (its view is the constructor
+        // default), and afterLoad disconnects the old market's chart before a market change.
         if (chart instanceof DisplayCandlestickChart dcc) {
-            pendingViewport = dcc.getViewportState();
+            if (dcc.isConnected()) pendingViewport = dcc.getViewportState();
             dcc.disconnect();
         }
         chart = null;
@@ -264,9 +274,8 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
         } else {
             secondItemID = null;
         }
-        if (tag.contains("viewport")) {
-            pendingViewport = NbtCompat.getCompound(tag, "viewport");
-        }
+        // No "viewport" means no stored view (mirrors saveCustomData), e.g. after a market change (SM-364)
+        pendingViewport = tag.contains("viewport") ? NbtCompat.getCompound(tag, "viewport") : null;
     }
 
     @Override // mc<=1.21.5
