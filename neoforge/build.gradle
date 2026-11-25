@@ -60,7 +60,6 @@ dependencies {
 
     modImplementation("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version") // mc<=1.21.11
     //implementation("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version") // mc>=26.1
-    include("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version")
 
     modImplementation("com.github.KROIA.BankSystem:banksystem-neoforge:$rootProject.banksystem_version") // mc<=1.21.11
     //implementation("com.github.KROIA.BankSystem:banksystem-neoforge:$rootProject.banksystem_version") // mc>=26.1
