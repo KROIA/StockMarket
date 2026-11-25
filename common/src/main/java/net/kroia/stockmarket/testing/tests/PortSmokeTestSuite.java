@@ -63,6 +63,7 @@ public class PortSmokeTestSuite extends TestSuite {
         addTest("display_block_entity_save_load", this::test_displaySaveLoad);
         addTest("display_market_change_drops_viewport", this::test_displayMarketChangeDropsViewport); // SM-364
         addTest("display_client_market_change_drops_viewport", this::test_displayClientMarketChangeDropsViewport); // SM-364
+        addTest("display_market_change_regroups", this::test_displayMarketChangeRegroups); // SM-360
     }
 
     // ── Recipes ──
@@ -281,6 +282,44 @@ public class PortSmokeTestSuite extends TestSuite {
             r = assertNotNull("controller GUI rebuilt on load", copy.getGui());
             if (!r.passed()) return r;
             return pass("display block entity round trip kept type, items and group");
+        } finally {
+            level.setBlock(row[0], before[0], Block.UPDATE_ALL);
+            level.setBlock(row[1], before[1], Block.UPDATE_ALL);
+        }
+    }
+
+    /**
+     * SM-360: two touching 1x1 displays show diamond and iron; switching the iron one to diamond (same display type)
+     * merges them into one 2x1 group right away. setConfig used to regroup only when the display type changed.
+     */
+    private TestResult test_displayMarketChangeRegroups() {
+        MinecraftServer server = getServer();
+        if (server == null) return skip("no server");
+        ServerLevel level = server.overworld();
+        BlockPos[] row = displayRow(level);
+        BlockState[] before = {level.getBlockState(row[0]), level.getBlockState(row[1])};
+        BlockState display = StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get().defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH);
+        ItemID diamond = ItemID.of(new ItemStack(Items.DIAMOND));
+        try {
+            level.setBlock(row[0], display, Block.UPDATE_ALL);
+            display(level, row[0]).setConfig(StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, diamond);
+            level.setBlock(row[1], display, Block.UPDATE_ALL);
+            display(level, row[1]).setConfig(StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART,
+                    ItemID.of(new ItemStack(Items.IRON_INGOT)));
+            StockMarketDisplayBlockEntity iron = display(level, row[1]);
+            TestResult r = assertTrue("diamond and iron displays must be two 1x1 controllers",
+                    iron.isController() && iron.getGroupWidth() == 1 && display(level, row[0]).getGroupWidth() == 1);
+            if (!r.passed()) return r;
+
+            iron.setConfig(StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, diamond);
+            StockMarketDisplayBlockEntity left = display(level, row[0]);
+            StockMarketDisplayBlockEntity right = display(level, row[1]);
+            r = assertTrue("after the switch to diamond: one 2x1 group with the controller at the left end, got width "
+                            + left.getGroupWidth() + ", controller of the right block " + right.getControllerPos(),
+                    left.isController() && left.getGroupWidth() == 2 && row[0].equals(right.getControllerPos()));
+            if (!r.passed()) return r;
+            return pass("a market change merged the display with its same-market neighbour");
         } finally {
             level.setBlock(row[0], before[0], Block.UPDATE_ALL);
             level.setBlock(row[1], before[1], Block.UPDATE_ALL);

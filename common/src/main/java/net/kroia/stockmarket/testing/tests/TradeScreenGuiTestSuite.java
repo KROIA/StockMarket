@@ -1,15 +1,20 @@
 package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.gui.client.ClientCompat;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
+import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
+import net.kroia.stockmarket.minecraft.entity.custom.StockMarketDisplayBlockEntity;
 import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.screen.ManagementScreen;
 import net.kroia.stockmarket.screen.TradeScreen;
+import net.kroia.stockmarket.screen.custom.DisplayChartScreen;
+import net.kroia.stockmarket.screen.custom.DisplayConfigScreen;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.InterMarketTradingPanel;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
@@ -22,9 +27,19 @@ import net.kroia.testkit.gui.Gui;
 import net.kroia.testkit.gui.GuiNode;
 import net.kroia.testkit.gui.Layout;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.RemotePlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -65,6 +80,101 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         addTest("layout_full_hd_scale_2_and_3", this::test_layout);
         addTest("plus10_button_raises_quantity", this::test_plus10);
         addTest("management_no_duplicate_markets", this::test_management_no_duplicate_markets);
+        addTest("display_chart_configure_button", this::test_display_chart_configure_button); // SM-360
+        addTest("display_sneak_use_opens_setup", this::test_display_sneak_use_opens_setup); // SM-360
+    }
+
+    /**
+     * SM-360: the full-screen display chart has a "Configure Display" button (top right, layout clean at Full HD
+     * @2 and @3) that opens the display setup with the chart's market preselected. The screen is opened at a
+     * position far above the player with no display there, so nothing is written back to a display.
+     */
+    private TestResult test_display_chart_configure_button() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null) return skip("not in a world");
+        return withTemporaryMarket(client, id -> {
+            BlockPos pos = Gui.onClient(() -> Minecraft.getInstance().player.blockPosition().above(200));
+            Gui.onClient(() -> ClientCompat.setScreen(new DisplayChartScreen(pos, id, null, pos.asLong(), null)));
+            Gui.waitForScreen(DisplayChartScreen.class, OPEN_TICKS);
+            Gui.waitTicks(1); // first layout
+            if (Gui.findAll(n -> n.handle() instanceof GuiElement).isEmpty())
+                return skip("needs the ModUtilities GuiLocator (no GuiElement nodes on the display chart screen)");
+            List<Layout.Problem> scale2 = Gui.layoutProblems(1920, 1080, 2);
+            TestResult r = assertTrue("1920x1080 @2: " + scale2, scale2.isEmpty());
+            if (!r.passed()) return r;
+            List<Layout.Problem> scale3 = Gui.layoutProblems(1920, 1080, 3);
+            r = assertTrue("1920x1080 @3: " + scale3, scale3.isEmpty());
+            if (!r.passed()) return r;
+
+            String title = Gui.onClient(() -> Component.translatable("gui.stockmarket.display_config_screen.title").getString());
+            List<GuiNode> buttons = Gui.findAll(n -> n.visible() && n.handle() instanceof Button && title.equals(n.text()));
+            r = assertEquals("visible '" + title + "' buttons on the chart screen", 1, buttons.size());
+            if (!r.passed()) return r;
+            Gui.click(buttons.get(0));
+            Gui.waitForScreen(DisplayConfigScreen.class, OPEN_TICKS);
+            return assertSetupPreselects(id);
+        });
+    }
+
+    /**
+     * SM-360: on a configured display, right-click opens the chart and sneak + right-click (vanilla only lets an
+     * empty-handed sneak reach the block) opens the setup with the display's market preselected. Calls the
+     * display block's use directly with a stand-in player whose sneak flag is set. Needs the integrated server
+     * (sp) to place the display next to the player.
+     */
+    private TestResult test_display_sneak_use_opens_setup() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null) return skip("not in a world");
+        MinecraftServer server = Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer());
+        if (server == null) return skip("needs the integrated server (singleplayer) to place a display");
+        return withTemporaryMarket(client, id -> {
+            BlockPos pos = Gui.onClient(() -> Minecraft.getInstance().player.blockPosition().above(3));
+            BlockState display = StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get().defaultBlockState()
+                    .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH);
+            BlockState before = await(server.submit(() -> server.overworld().getBlockState(pos)), WAIT_MS);
+            try {
+                await(server.submit(() -> {
+                    ServerLevel level = server.overworld();
+                    level.setBlock(pos, display, Block.UPDATE_ALL);
+                    if (level.getBlockEntity(pos) instanceof StockMarketDisplayBlockEntity d)
+                        d.setConfig(StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, id);
+                }), WAIT_MS);
+                if (!Gui.waitUntil(() -> Minecraft.getInstance().level != null
+                        && Minecraft.getInstance().level.getBlockEntity(pos) instanceof StockMarketDisplayBlockEntity d
+                        && d.isActive() && id.equals(d.getSelectedItemID()), OPEN_TICKS))
+                    return fail("the configured display at " + pos + " did not reach the client");
+
+                Gui.onClient(() -> useDisplay(pos, true));
+                Gui.waitForScreen(DisplayConfigScreen.class, DATA_TICKS);
+                TestResult r = assertSetupPreselects(id);
+                if (!r.passed()) return r;
+                Gui.close();
+
+                Gui.onClient(() -> useDisplay(pos, false));
+                Gui.waitForScreen(DisplayChartScreen.class, DATA_TICKS);
+                return pass("sneak + right-click opened the setup, right-click the chart");
+            } finally {
+                Gui.close();
+                await(server.submit(() -> { server.overworld().setBlock(pos, before, Block.UPDATE_ALL); }), WAIT_MS);
+            }
+        });
+    }
+
+    /** Right-clicks the display at {@code pos} with empty hands as a stand-in player; call on the client thread. */
+    private static void useDisplay(BlockPos pos, boolean sneaking) {
+        Minecraft mc = Minecraft.getInstance();
+        RemotePlayer player = new RemotePlayer(mc.level, mc.player.getGameProfile());
+        player.setShiftKeyDown(sneaking);
+        mc.level.getBlockState(pos).useWithoutItem(mc.level, player,
+                new BlockHitResult(Vec3.atCenterOf(pos), Direction.SOUTH, pos, false));
+    }
+
+    /** The open display setup screen shows {@code id} as the selected market. */
+    private TestResult assertSetupPreselects(ItemID id) {
+        String selected = Gui.onClient(() -> Component.translatable("gui.stockmarket.display_config_screen.selected",
+                id.getStack().getHoverName().getString()).getString());
+        return assertTrue("setup screen shows '" + selected + "'",
+                !Gui.findAll(n -> n.visible() && "Label".equals(n.type()) && selected.equals(n.text())).isEmpty());
     }
 
     /** Opens the trade screen on the client thread (its constructor touches client state) and waits for it. */

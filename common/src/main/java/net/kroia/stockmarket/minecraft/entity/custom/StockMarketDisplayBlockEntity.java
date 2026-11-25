@@ -102,8 +102,10 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     /**
      * Sets the display configuration. Propagates the config to all displays in
-     * the group so they stay connected, then recalculates groups if the type
-     * changed and rebuilds the GUI.
+     * the group so they stay connected, then recalculates groups if the channel
+     * (type, market or pair) changed and rebuilds the GUI. SM-360: a display
+     * switched to the market of a touching display joins it right away, as on
+     * the first setup, instead of on the next block change nearby.
      * <p>
      * SM-364: a change of type or market drops the stored chart view (price range,
      * zoom, timeframe), so the new market's chart fits its own candles instead of
@@ -115,6 +117,7 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
      */
     public void setConfig(DisplayType type, ItemID itemID, ItemID secondItemID) {
         DisplayType oldType = this.displayType;
+        String oldChannel = getChannelId();
         boolean changed = oldType != type || !itemIDEquals(this.selectedItemID, itemID)
                 || !itemIDEquals(this.secondItemID, secondItemID);
         this.displayType = type;
@@ -125,7 +128,7 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
         if (level != null && !level.isClientSide()) {
             propagateConfigToGroup();
-            if (oldType != type) {
+            if (!oldChannel.equals(getChannelId())) {
                 net.minecraft.core.Direction facing = getBlockState().getValue(HorizontalDirectionalBlock.FACING);
                 AbstractDisplayBlockEntity.recalculateGroups(level, getBlockPos(), facing);
             }
