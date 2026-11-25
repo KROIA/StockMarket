@@ -85,7 +85,24 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
 
     @Override
     protected PriceHistoryData getDefaultResponse() {
-        return new PriceHistoryData(0, ItemID.INVALID_ID, 100);
+        return noStoredHistory(ItemID.INVALID_ID, 100, 0);
+    }
+
+    /**
+     * SM-386: the answer when no candles are stored for a market (or none may be shown): the market's current
+     * price as its only candle, the live one so far, or no candle at all while the price is unknown. Never a
+     * candle at price 0, which drew a spike down to 0 and squashed a new market's chart to 0..0. Nothing older
+     * exists ({@link PriceHistoryData#NO_OLDER_DATA}), so the client stops paging back.
+     *
+     * @param item            the market
+     * @param itemScaleFactor price fraction scale factor
+     * @param currentPrice    the market's current raw price, or 0 to answer without a candle
+     */
+    private static PriceHistoryData noStoredHistory(ItemID item, int itemScaleFactor, long currentPrice) {
+        List<PriceHistoryData.Candle> candles = new ArrayList<>();
+        if (currentPrice > 0)
+            candles.add(new PriceHistoryData.Candle(System.currentTimeMillis(), currentPrice, currentPrice, currentPrice));
+        return new PriceHistoryData(item, itemScaleFactor, candles, currentPrice);
     }
 
     /** Waits on the DB executor (up to three history reads), see {@link #DB_READ_TIMEOUT_MS}. */
@@ -97,7 +114,7 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
     public CompletableFuture<PriceHistoryData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender)
     {
         if(needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender))
-            return CompletableFuture.completedFuture(new PriceHistoryData(System.currentTimeMillis() , input.item, getItemFractionScaleFactor()));
+            return CompletableFuture.completedFuture(noStoredHistory(input.item, getItemFractionScaleFactor(), 0));
         CompletableFuture<PriceHistoryData> future = new CompletableFuture<>();
         // [HistoryPerf] timing: t0 = request accepted, DB = until both queries finished
         // (includes waiting in the single-thread DB executor queue).
@@ -191,11 +208,8 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
             if(data == null)
             {
                 warn("MarketPriceHistoryRequest failed to fetch data for item: " + input.item);
-                PriceHistoryData empty = new PriceHistoryData(System.currentTimeMillis(), input.item, getItemFractionScaleFactor());
                 // When no rows exist for this market, tell the client there is no earlier data.
-                empty.setOldestAvailableTimestamp(PriceHistoryData.NO_OLDER_DATA);
-                empty.setTruncated(false);
-                future.complete(empty);
+                future.complete(noStoredHistory(input.item, getItemFractionScaleFactor(), getCurrentMarketPrice(input.item)));
                 return;
             }
 
