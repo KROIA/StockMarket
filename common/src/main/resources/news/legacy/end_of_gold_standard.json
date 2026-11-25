@@ -1,0 +1,33 @@
+{
+  "id": "end_of_gold_standard",
+  "picture": "end_of_gold_standard.png",
+  "headline": {
+    "en_us": "Trade council abandons the gold standard!",
+    "zh_cn": "贸易议会放弃金本位！",
+    "de_de": "Handelsrat schafft den Goldstandard ab!"
+  },
+  "text": {
+    "en_us": "After years of gold-backed trade the council has voted to untie inter-village commerce from its gold reserves. The structural demand that propped up the gold price is gone, and analysts expect the old premium to unwind for good.",
+    "zh_cn": "在多年以黄金支撑贸易之后，议会投票决定将村庄间商贸与黄金储备脱钩。曾经支撑金价的结构性需求已然消失，分析师预计旧有的溢价将彻底回吐。",
+    "de_de": "Nach Jahren goldgedeckten Handels hat der Rat beschlossen, den Handel zwischen den Dörfern von den Goldreserven zu lösen. Die strukturelle Nachfrage, die den Goldpreis stützte, ist damit Geschichte, und Analysten erwarten, dass sich der alte Aufschlag dauerhaft abbaut."
+  },
+  "category": "politics",
+  "weight": 2,
+  "cooldownSeconds": 86400,
+  "impact": {
+    "type": "crash",
+    "peakFactor": -0.2,
+    "rampUpSeconds": 300,
+    "durationSeconds": 1500,
+    "reversal": "none"
+  },
+  "markets": [
+    { "item": "minecraft:gold_ingot", "weightFactor": 1.0 }
+  ],
+  "requires": [
+    { "type": "firedBefore", "eventId": "gold_reserve_standard", "minSecondsAgo": 10800 },
+    { "type": "notFired",    "eventId": "end_of_gold_standard" },
+    { "type": "keyEquals",   "key": "era", "value": "gold_standard" }
+  ],
+  "records": { "era": "fiat" }
+}
