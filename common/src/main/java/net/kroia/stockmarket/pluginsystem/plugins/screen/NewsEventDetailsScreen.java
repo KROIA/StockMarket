@@ -251,8 +251,8 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
      * column x positions are shared across every sequence, the running step is
      * live-highlighted, multi-sequence headers are collapsible; T-111 tightens
      * the Name column and adds a per-row live countdown cell right after
-     * Duration), <b>one</b> live timer — Event remaining (best-effort sum of
-     * the remaining authored step durations, drawn from the owner's runtime
+     * Duration), <b>one</b> live timer — Event remaining (the server's
+     * live remaining time of the instance, drawn from the owner's runtime
      * stream every frame — T-113 dropped the redundant Phase-remaining label
      * since the per-row Remaining column of T-111 covers the current phase),
      * one row per impacted market, and — when non-empty — the trigger-
@@ -384,8 +384,7 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
         private final int builtWidth;
         /**
          * T-113: y position of the single live timer ({@code Event remaining} —
-         * whole-event countdown, best-effort sum of remaining authored step
-         * durations). Drawn dynamically in {@code render()}. The former
+         * whole-event countdown, the server's live remaining time). Drawn dynamically in {@code render()}. The former
          * {@code Phase remaining} label was dropped in T-113 because the per-row
          * {@code Remaining} column added by T-111 already shows the current
          * step's countdown.
@@ -568,8 +567,8 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                 y = addSequenceBlock(textW, y, metaH);
             }
 
-            // T-113: single live timer — event remaining (best-effort sum of
-            // the picked sequence's remaining step durations). The former Phase-
+            // T-113: single live timer — event remaining (live server value,
+            // SM-366). The former Phase-
             // remaining label was dropped because the per-row Remaining column
             // added by T-111 already shows the current step's countdown.
             eventLineY = y;
@@ -1151,10 +1150,7 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                         ? NewsPluginGuiElement.COLOR_UP_GREEN : 0xFFFFFFFF);
             }
 
-            // T-105/T-113: split timers — Event remaining (best-effort sum of
-            // remaining authored step durations for the picked sequence). See
-            // computeEventRemainingMs for the authored-min conservative estimate
-            // rationale.
+            // T-105/T-113: split timers — Event remaining (live server value, SM-366).
             drawSplitTimers(live);
 
             // Impact rows, left-clustered: icon | ±peak % | ×weight | name (T-085).
@@ -1177,10 +1173,9 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
          * "Phase remaining" label was dropped because the per-row Remaining
          * column added by T-111 already shows the current step's countdown).
          * <p>
-         * <b>Event remaining</b> — best-effort sum of the remaining authored
-         * step durations for the sequence identified by the running step (see
-         * {@link #computeEventRemainingMs}); "—" when the event is not
-         * currently running. Value is drawn in the current phase's color so
+         * <b>Event remaining</b> — the running instance's remaining time as
+         * streamed by the server ({@code ActiveEventInfo.remainingMs}, SM-366);
+         * "—" when the event is not currently running. Value is drawn in the current phase's color so
          * operators can spot at a glance which phase is active without needing
          * a separate label.
          *
@@ -1196,17 +1191,11 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                 eventRemainingText = Texts.TIME_DASH.getString();
                 eventRemainingColor = NewsPluginGuiElement.COLOR_NEUTRAL_GRAY;
             } else {
-                long eventMs = computeEventRemainingMs(live);
-                if (eventMs < 0) {
-                    // Sequence could not be resolved (structurally identical
-                    // sequences, name mismatch, etc.) — fall back to "—" rather
-                    // than pretend a number.
-                    eventRemainingText = Texts.TIME_DASH.getString();
-                    eventRemainingColor = NewsPluginGuiElement.COLOR_NEUTRAL_GRAY;
-                } else {
-                    eventRemainingText = NewsUiFormatting.formatRemainingTime(eventMs);
-                    eventRemainingColor = NewsPluginGuiElement.phaseColor(live.phaseName());
-                }
+                // SM-366: the server's own remaining time of the running instance
+                // (rolled, multiplier-stretched durations) — the client cannot
+                // rebuild it from the authored step bounds.
+                eventRemainingText = NewsUiFormatting.formatRemainingTime(live.remainingMs());
+                eventRemainingColor = NewsPluginGuiElement.phaseColor(live.phaseName());
             }
             drawTimerLine(Texts.EVENT_REMAINING.getString(), eventRemainingText,
                     eventRemainingColor, eventLineY);
@@ -1223,42 +1212,6 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                     NewsPluginGuiElement.COLOR_NEUTRAL_GRAY, META_SCALE);
             int labelW = (int) Math.ceil(getTextWidth(label) * META_SCALE);
             drawText(value, INNER_PAD + labelW + spacing, y, valueColor, META_SCALE);
-        }
-
-        /**
-         * Best-effort estimate of the whole-event time remaining (T-105) — the
-         * running step's actual remaining ms (rolled at activation, part of
-         * the stream) plus the authored <b>minimum</b> duration of every
-         * subsequent non-permanent step. The permanent last step of a
-         * sequence (if any) contributes 0 ms — it fires instantly at the end
-         * of the previous step and then retires the event. The activation-
-         * time rolled durations of the subsequent steps are <b>not</b> on
-         * the wire (T-100 completion notes flag this), so we deliberately
-         * pick the minimum bound for a conservative (never-overshooting)
-         * estimate.
-         *
-         * @param live the current runtime info (already known non-null with
-         *             {@code stepRemainingMs >= 0})
-         * @return the estimated remaining ms, or −1 if the picked sequence
-         *         could not be resolved
-         */
-        private long computeEventRemainingMs(NewsPlugin.RuntimeStreamData.ActiveEventInfo live) {
-            int seqIndex = resolveRunningSequence(live);
-            if (seqIndex < 0) {
-                return -1;
-            }
-            List<NewsAdminRequest.EventDetails.StepInfo> steps =
-                    details.sequences().get(seqIndex).steps();
-            long remaining = Math.max(0, live.stepRemainingMs());
-            for (int i = live.stepIndex() + 1; i < steps.size(); i++) {
-                NewsAdminRequest.EventDetails.StepInfo step = steps.get(i);
-                if (step.permanent()) {
-                    // Permanent last step: 0 ms, event retires immediately.
-                    continue;
-                }
-                remaining += Math.max(0, step.durationMinMs());
-            }
-            return remaining;
         }
     }
 }

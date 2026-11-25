@@ -110,6 +110,7 @@ public class NewsAdminTestSuite extends TestSuite {
         // T-099: INFO/EventDetails for sequence events (getImpact() NPE fix) + legacy parity
         addTest("info_and_details_render_sequence_event", this::test_infoAndDetails_renderSequenceEvent);
         addTest("info_legacy_rendering_unchanged", this::test_infoLegacyRenderingUnchanged);
+        addTest("info_and_details_apply_duration_multiplier", this::test_infoAndDetails_applyDurationMultiplier);
         addTest("event_details_requirement_status_tracks_registry", this::test_eventDetails_requirementStatusTracksRegistry);
 
         // T-099: wire appends (NewsRecord sequence fields, ActiveEventInfo step fields)
@@ -1171,6 +1172,56 @@ public class NewsAdminTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return assertEquals("implicit sequence has the 3 normalization steps",
                     3, d.sequences().get(0).steps().size());
+        } catch (IOException e) {
+            return fail("temp dir failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * SM-366: INFO and the details snapshot show the effective step durations, i.e. the
+     * authored ones stretched by the scheduler's impactDurationMultiplier exactly like
+     * the activation does (fixed 10 s -> 30 s, range 20..40 s -> 60..120 s; legacy
+     * envelope 10/20/10 s -> 30/60/30 s).
+     */
+    private TestResult test_infoAndDetails_applyDurationMultiplier() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            String sequence = "{\"name\":\"path\",\"steps\":["
+                    + "{\"name\":\"spike\",\"durationSeconds\":10,\"targetFactor\":0.4,\"curve\":\"instant\"},"
+                    + "{\"name\":\"fade\",\"durationSeconds\":{\"min\":20,\"max\":40},\"targetFactor\":0.0,\"curve\":\"linear\"}]}";
+            TestNewsPlugin plugin = pluginWithFile(dir, fileJson("\"impactDurationMultiplier\":3",
+                    sequenceEventJson("seq", "", sequence), eventJson("legacy", "")));
+            plugin.resolutions.put("seq", weights(M1, 1.0f));
+            plugin.resolutions.put("legacy", weights(M1, 1.0f));
+            List<MarketInterface> markets = markets(new TestMarket(M1, 100));
+
+            String seqInfo = String.join("\n", NewsAdminRequest.renderEventInfo(plugin,
+                    plugin.getLibrary().getDefinition("seq"), markets));
+            TestResult r = assertTrue("fixed step shown x3: " + seqInfo, seqInfo.contains("'spike' 30 s"));
+            if (!r.passed()) return r;
+            r = assertTrue("ranged step shown x3: " + seqInfo, seqInfo.contains("'fade' 60..120 s"));
+            if (!r.passed()) return r;
+            String legacyInfo = String.join("\n", NewsAdminRequest.renderEventInfo(plugin,
+                    plugin.getLibrary().getDefinition("legacy"), markets));
+            r = assertTrue("legacy envelope shown x3: " + legacyInfo,
+                    legacyInfo.contains("rampUp 30 s, hold 60 s, reversal ramp (30 s)"));
+            if (!r.passed()) return r;
+
+            EventDetails d = NewsAdminRequest.buildEventDetails(plugin, markets).stream()
+                    .filter(e -> e.id().equals("seq")).findFirst().orElse(null);
+            r = assertNotNull("'seq' details entry exists", d);
+            if (!r.passed()) return r;
+            List<EventDetails.StepInfo> steps = d.sequences().get(0).steps();
+            r = assertEquals("fixed step min x3", 30_000L, steps.get(0).durationMinMs());
+            if (!r.passed()) return r;
+            r = assertEquals("fixed step max x3", 30_000L, steps.get(0).durationMaxMs());
+            if (!r.passed()) return r;
+            r = assertEquals("ranged step min x3", 60_000L, steps.get(1).durationMinMs());
+            if (!r.passed()) return r;
+            return assertEquals("ranged step max x3", 120_000L, steps.get(1).durationMaxMs());
         } catch (IOException e) {
             return fail("temp dir failed: " + e);
         } finally {
