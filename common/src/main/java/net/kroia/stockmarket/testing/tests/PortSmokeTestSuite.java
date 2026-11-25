@@ -395,8 +395,8 @@ public class PortSmokeTestSuite extends TestSuite {
         CompoundTag withView = tag.copy();
         withView.put("viewport", view.copy());
         StockMarketDisplayBlockEntity copy = new StockMarketDisplayBlockEntity(pos, state);
-        copy.loadWithComponents(withView, level.registryAccess()); // mc<=1.21.5
-        //copy.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), withView)); // mc>=1.21.6
+        //copy.loadWithComponents(withView, level.registryAccess()); // mc<=1.21.5
+        copy.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), withView)); // mc>=1.21.6
         return savedViewport(copy, level.registryAccess());
     }
 
@@ -496,13 +496,13 @@ public class PortSmokeTestSuite extends TestSuite {
             StockMarketDisplayBlockEntity copy = new StockMarketDisplayBlockEntity(pos, state);
             copy.setLevel(level);
             try {
-                copy.loadWithComponents(diamondTag, level.registryAccess()); // mc<=1.21.5
-                //copy.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), diamondTag)); // mc>=1.21.6
+                //copy.loadWithComponents(diamondTag, level.registryAccess()); // mc<=1.21.5
+                copy.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), diamondTag)); // mc>=1.21.6
                 CompoundTag saved = savedViewport(copy, level.registryAccess());
                 if (!view.equals(saved)) return "client view after loading diamond: expected " + view + ", got " + saved;
 
-                copy.loadWithComponents(ironTag, level.registryAccess()); // mc<=1.21.5
-                //copy.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), ironTag)); // mc>=1.21.6
+                //copy.loadWithComponents(ironTag, level.registryAccess()); // mc<=1.21.5
+                copy.loadWithComponents(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), ironTag)); // mc>=1.21.6
                 if (!(copy.getChart() instanceof DisplayCandlestickChart chart) || !iron.equals(chart.getTargetMarketID()))
                     return "no iron chart on the client after the market change: " + copy.getChart();
                 saved = savedViewport(copy, level.registryAccess());
