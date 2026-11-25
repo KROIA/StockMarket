@@ -56,7 +56,7 @@ public final class StockMarketClientIntegration {
      *   <li>It unsubscribes on {@code close()} and when it is removed from its GUI ({@code setRoot(null)}),
      *       and reconnects lazily on the next render if it is shown again.</li>
      *   <li>Its zoom and position are stored separately from the trade screen's; the first time it
-     *       starts from the player's trade screen view of that market.</li>
+     *       fits itself to the market's prices.</li>
      * </ul>
      * <b>The host MUST call {@code ((AutoCloseable) chart).close()} in its screen's {@code removed()}</b>,
      * otherwise the price stream subscription leaks for the rest of the session. Calling it more than

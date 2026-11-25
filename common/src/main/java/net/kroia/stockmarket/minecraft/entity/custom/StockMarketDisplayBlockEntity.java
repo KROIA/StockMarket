@@ -241,20 +241,30 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     @Override
     protected void wireCallbacks(Gui gui) {
-        // Save viewport from old chart before discarding it. Only a connected chart has a real
-        // view (SM-364): the server-side chart never connects (its view is the constructor
-        // default), and afterLoad disconnects the old market's chart before a market change.
-        if (chart instanceof DisplayCandlestickChart dcc) {
-            if (dcc.isConnected()) pendingViewport = dcc.getViewportState();
-            dcc.disconnect();
-        }
-        chart = null;
+        CandlestickChart found = null;
         for (var el : gui.getElements()) {
             if (el instanceof CandlestickChart c) {
-                chart = c;
+                found = c;
                 break;
             }
         }
+        if (found != chart) {
+            // The GUI was rebuilt: save the old chart's view before discarding it. Only a connected chart has
+            // a real view (SM-364): the server-side chart never connects (its view is the constructor
+            // default), and afterLoad disconnects the old market's chart before a market change.
+            if (chart instanceof DisplayCandlestickChart dcc) {
+                if (dcc.isConnected()) pendingViewport = dcc.getViewportState();
+                dcc.disconnect();
+            }
+            chart = found;
+        } else if (chart instanceof DisplayCandlestickChart dcc && dcc.isConnected()) {
+            // SM-389: a data load that kept the GUI leaves its connected chart alone. Re-applying the chart's own
+            // view switched its auto-widen off for good, and before its first fit froze the default 0-500 range.
+            return;
+        }
+        // SM-389: the untouched default view (a chart that never fitted) is not handed on; the chart fits itself
+        if (pendingViewport != null && CandlestickChart.isUntouchedDefaultViewport(pendingViewport))
+            pendingViewport = null;
         // Pass saved viewport to new chart (applied once it connects to market)
         if (chart instanceof DisplayCandlestickChart dcc && pendingViewport != null) {
             dcc.setInitialViewport(pendingViewport);
