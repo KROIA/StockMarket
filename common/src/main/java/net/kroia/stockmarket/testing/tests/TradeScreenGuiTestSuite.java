@@ -6,7 +6,9 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.entity.custom.StockMarketDisplayBlockEntity;
@@ -17,9 +19,12 @@ import net.kroia.stockmarket.screen.custom.DisplayChartScreen;
 import net.kroia.stockmarket.screen.custom.DisplayConfigScreen;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.InterMarketTradingPanel;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
+import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
@@ -42,6 +47,9 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
@@ -78,6 +86,8 @@ public class TradeScreenGuiTestSuite extends TestSuite {
     @Override
     public void registerTests() {
         addTest("layout_full_hd_scale_2_and_3", this::test_layout);
+        addTest("layout_market_closed", this::test_layoutMarketClosed); // SM-367
+        addTest("chart_texts_do_not_overlap", this::test_chartTexts); // SM-367
         addTest("plus10_button_raises_quantity", this::test_plus10);
         addTest("management_no_duplicate_markets", this::test_management_no_duplicate_markets);
         addTest("display_chart_configure_button", this::test_display_chart_configure_button); // SM-360
@@ -202,6 +212,125 @@ public class TradeScreenGuiTestSuite extends TestSuite {
             return assertTrue("1920x1080 @3: " + scale3, scale3.isEmpty());
         } finally {
             Gui.close();
+        }
+    }
+
+    /**
+     * SM-367: with the market closed, the "Market Closed" label has its own row above the trading panel (it used
+     * to cover the panel's tab row), so the layout check finds nothing at 1920x1080 with GUI scale 2 and 3. The
+     * temporary market is closed with {@code /stockmarket close} (master only, see {@link #withTemporaryMarket}).
+     */
+    private TestResult test_layoutMarketClosed() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null) return skip("not in a world");
+        return withTemporaryMarket(client, id -> {
+            Gui.sendCommand("stockmarket close " + id.getShort());
+            Gui.onClient(() -> TradeScreen.openScreen(id));
+            Gui.waitForScreen(TradeScreen.class, OPEN_TICKS);
+            if (Gui.findAll(n -> n.handle() instanceof GuiElement).isEmpty())
+                return skip("needs the ModUtilities GuiLocator (no GuiElement nodes on the trade screen)");
+            String closed = Gui.onClient(() -> Component.translatable("gui.stockmarket.trade_screen.market_closed").getString());
+            boolean shown = false;
+            for (int t = 0; t < OPEN_TICKS && !shown; t++) { // Gui.findAll belongs on the test thread
+                Gui.waitTicks(1);
+                shown = !Gui.findAll(n -> n.visible() && closed.equals(n.text())).isEmpty();
+            }
+            if (!shown) return fail("no '" + closed + "' label within " + OPEN_TICKS + " ticks of closing market " + id
+                    + "; trading area: " + describeTradingArea());
+            List<Layout.Problem> scale2 = Gui.layoutProblems(1920, 1080, 2);
+            TestResult r = assertTrue("market closed, 1920x1080 @2: " + scale2, scale2.isEmpty());
+            if (!r.passed()) return r;
+            List<Layout.Problem> scale3 = Gui.layoutProblems(1920, 1080, 3);
+            return assertTrue("market closed, 1920x1080 @3: " + scale3, scale3.isEmpty());
+        });
+    }
+
+    /**
+     * SM-367: the chart's own texts (price labels, current-price badge, time and date labels) never overlap and
+     * stay inside the chart. The layout check cannot see them (the chart paints them itself), so the chart reports
+     * the boxes it drew ({@link CandlestickChart#getDrawnTextBoxes()}). Runs on fixed candles (no market needed) at
+     * the trade screen's chart size and at the news mini chart's size, with GUI scale 2 and 3. The current price
+     * sits just under a grid line, so the badge must push that line's label aside, and the shown candles cross
+     * midnight, so a date row is drawn.
+     */
+    private TestResult test_chartTexts() {
+        int oldScale = Gui.guiScale();
+        try {
+            for (int scale : new int[]{2, 3}) {
+                Gui.setGuiScale(scale);
+                for (boolean mini : new boolean[]{false, true}) {
+                    ChartScreen screen = Gui.onClient(() -> new ChartScreen(mini, 157.95));
+                    Gui.open(screen);
+                    Gui.waitTicks(10);
+                    String problem = Gui.onClient(() -> textBoxProblem(screen.chart));
+                    if (problem != null)
+                        return fail("GUI scale " + scale + (mini ? ", mini chart: " : ", trade chart: ") + problem);
+                }
+            }
+            return pass("no overlapping chart texts at GUI scale 2 and 3");
+        } finally {
+            Gui.close();
+            Gui.setGuiScale(oldScale);
+        }
+    }
+
+    /** @return why the chart's drawn texts are wrong (too few, outside the chart, overlapping), or null */
+    private static @Nullable String textBoxProblem(CandlestickChart chart) {
+        List<Rectangle> boxes = chart.getDrawnTextBoxes();
+        if (boxes.size() < 5) return "only " + boxes.size() + " chart texts drawn";
+        for (int i = 0; i < boxes.size(); i++) {
+            Rectangle a = boxes.get(i);
+            if (a.x < 0 || a.y < 0 || a.x + a.width > chart.getWidth() || a.y + a.height > chart.getHeight())
+                return "text " + box(a) + " outside the " + chart.getWidth() + "x" + chart.getHeight() + " chart";
+            for (int j = i + 1; j < boxes.size(); j++) {
+                Rectangle b = boxes.get(j);
+                if (a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height)
+                    return "texts " + box(a) + " and " + box(b) + " overlap";
+            }
+        }
+        return null;
+    }
+
+    private static String box(Rectangle r) {
+        return "[" + r.x + "," + r.y + " " + r.width + "x" + r.height + "]";
+    }
+
+    /**
+     * A screen with one chart on fixed 5-minute candles (18:00 to 04:00 local time, prices 150-160).
+     * {@code mini} gives the chart the news mini chart's size, otherwise the trade screen's.
+     */
+    static final class ChartScreen extends StockMarketGuiScreen {
+        final CandlestickChart chart = new CandlestickChart();
+        private final boolean mini;
+
+        /** @param currentPrice the live price (close of the newest candle) */
+        ChartScreen(boolean mini, double currentPrice) {
+            super(Component.literal("Chart test"));
+            this.mini = mini;
+            addElement(chart);
+            long start = LocalDate.of(2026, 11, 24).atTime(18, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+            List<PriceHistoryData.Candle> candles = new ArrayList<>();
+            for (int i = 0; i < 120; i++) {
+                long open = 15500 + Math.round(450 * Math.sin(i / 9.0));
+                long close = 15500 + Math.round(450 * Math.sin((i + 1) / 9.0));
+                candles.add(new PriceHistoryData.Candle(start + i * 300_000L, open,
+                        Math.max(open, close) + 20, Math.min(open, close) - 20, 10 + i % 7));
+            }
+            PriceHistoryData data = new PriceHistoryData(ItemID.INVALID_ID, 100, candles, Math.round(currentPrice * 100));
+            String key = "test:chart:" + System.identityHashCode(data); // own viewport, nothing restored from an earlier run
+            chart.setPriceDataProvider(new IPriceDataProvider() {
+                @Override public PriceHistoryData getPriceHistoryData(long candleTimeDelta) { return data; }
+                @Override public double getCurrentMarketRealPrice() { return data.getCurrentMarketRealPrice(); }
+                @Override public ItemID getItemID() { return ItemID.INVALID_ID; }
+                @Override public String getViewportKey() { return key; }
+            });
+        }
+
+        @Override
+        protected void updateLayout(net.kroia.modutilities.gui.Gui gui) {
+            int w = getWidth() - 8, h = getHeight() - 8;
+            if (mini) chart.setBounds(4, 4, Math.max(160, w / 4), 90); // NewsPluginGuiElement: height max(90, 30%)
+            else chart.setBounds(4, 4, w * 3 / 4 - w / 10, h * 2 / 3); // TradeScreen.updateLayout
         }
     }
 

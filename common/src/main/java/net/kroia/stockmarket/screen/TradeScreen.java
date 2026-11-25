@@ -692,7 +692,12 @@ public class TradeScreen extends StockMarketGuiScreen {
             Component bannerText = !reason.isEmpty() ? Component.translatable(reason)
                     : state == MarketSettings.TradingState.MAINTENANCE ? Texts.MAINTENANCE : Texts.MARKET_CLOSED;
             marketClosedLabel.setText(bannerText.getString());
-            marketClosedLabel.setEnabled(!open);
+            if (marketClosedLabel.isEnabled() == open) {
+                marketClosedLabel.setEnabled(!open);
+                // SM-367: the label has its own row while it shows; before init() there is no layout yet
+                if (getWidth() > 0)
+                    updateLayout(null);
+            }
         }
 
         String hoursText = "";
@@ -1275,12 +1280,17 @@ public class TradeScreen extends StockMarketGuiScreen {
         int hoursRowY = selectorTop + selectorHeight + spacing;
         tradingHoursLabel.setBounds(rightPanelX, hoursRowY, rightPanelWidth, hoursRowHeight);
         int tradingPanelTop = hoursRowY + hoursRowHeight + spacing;
+        // SM-367: while it shows, the market-closed/maintenance label gets its own row above the trading
+        // panel (it used to cover the panel's tab row); updateTradingStatusUI re-runs this layout when it
+        // appears or goes.
+        int closedRowHeight = marketClosedLabel.isEnabled() ? marketClosedLabel.getTextHeight() + 2 * marketClosedLabel.getPadding() : 0;
+        marketClosedLabel.setBounds(rightPanelX, tradingPanelTop, rightPanelWidth, closedRowHeight);
+        if (closedRowHeight > 0)
+            tradingPanelTop += closedRowHeight + spacing;
         tradingPanel.setBounds(rightPanelX, tradingPanelTop, rightPanelWidth, height - (tradingPanelTop - padding));
         // Inter-market trading panel same bounds as regular trading panel
         interMarketTradingPanel.setBounds(tradingPanel.getLeft(), tradingPanel.getTop(),
                 tradingPanel.getWidth(), tradingPanel.getHeight());
-        // Market closed label overlays the trading panel area
-        marketClosedLabel.setBounds(tradingPanel.getLeft(), tradingPanel.getTop(), tradingPanel.getWidth(), 20);
         // T-123 / T-125 banner: three stacked labels centered horizontally
         // across the (now-hidden) trading panel. Split into three rows because
         // ModUtilities' Label is single-line only and the full trust-explanation
