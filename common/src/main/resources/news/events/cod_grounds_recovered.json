@@ -1,0 +1,52 @@
+{
+  "id": "cod_grounds_recovered",
+  "picture": "cod_grounds_recovered.png",
+  "headline": {
+    "en_us": "Cod grounds recover after years of rest",
+    "zh_cn": "休渔多年后鳕鱼场重现生机",
+    "de_de": "Dorschgründe erholen sich nach Jahren der Schonung"
+  },
+  "text": {
+    "en_us": "After seasons of strict catch limits the great cod grounds are teeming again, and the fleets are returning with full holds for the first time in years. Fishmongers say the breeding stock has rebuilt itself, and the prices of fresh and cooked cod are expected to ease slowly back to their old level.",
+    "zh_cn": "经过数季严格的限捕，大鳕鱼场再度鱼群密布，船队多年来首次满载而归。鱼贩说繁殖种群已经恢复，鲜鳕鱼与熟鳕鱼的价格预计将缓慢回落至往日水平。",
+    "de_de": "Nach mehreren Saisons strenger Fangquoten wimmeln die großen Dorschgründe wieder vor Fisch, und die Flotten kehren zum ersten Mal seit Jahren mit vollen Laderäumen zurück. Fischhändler sagen, der Laichbestand habe sich erholt, und die Preise für frischen wie gebratenen Dorsch dürften langsam auf ihr altes Niveau sinken."
+  },
+  "category": "disaster",
+  "weight": 10,
+  "undoes": "cod_overfishing_crisis",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
+  },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": -0.3,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "item": "minecraft:cod",
+      "weightFactor": 1.0
+    },
+    {
+      "item": "minecraft:cooked_cod",
+      "weightFactor": 0.6
+    }
+  ]
+}
