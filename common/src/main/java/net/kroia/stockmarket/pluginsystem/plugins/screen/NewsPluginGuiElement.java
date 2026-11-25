@@ -940,12 +940,17 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
                         }
                         return;
                     }
-                    boolean truncated = showStatus(response.message(), response.success());
+                    // SM-377: the LIST summary is built here in the client's language from the
+                    // counts the reply carries (the server's message is the English one for commands)
+                    String message = input.op() == NewsAdminRequest.Op.LIST && response.success()
+                            ? NewsAdminRequest.listStatusText(response).getString()
+                            : response.message();
+                    boolean truncated = showStatus(message, response.success());
                     if (printLinesToChat) {
                         Minecraft mc = Minecraft.getInstance();
-                        mc.gui.getChat().addMessage(Component.literal(response.message())); // mc<=1.21.11
-                        //mc.gui.getChat().addClientSystemMessage(Component.literal(response.message())); // mc>=26.1 mc<=26.1
-                        //mc.gui.hud.getChat().addClientSystemMessage(Component.literal(response.message())); // mc>=26.2
+                        mc.gui.getChat().addMessage(Component.literal(message)); // mc<=1.21.11
+                        //mc.gui.getChat().addClientSystemMessage(Component.literal(message)); // mc>=26.1 mc<=26.1
+                        //mc.gui.hud.getChat().addClientSystemMessage(Component.literal(message)); // mc>=26.2
                         for (String line : response.lines()) {
                             mc.gui.getChat().addMessage(Component.literal(line)); // mc<=1.21.11
                             //mc.gui.getChat().addClientSystemMessage(Component.literal(line)); // mc>=26.1 mc<=26.1
@@ -987,7 +992,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
                             && net.kroia.modutilities.gui.client.ClientCompat.screen() == screenAtSend
                             && screenAtSend != null) {
                         List<String> dialogLines = new ArrayList<>();
-                        dialogLines.add(response.message());
+                        dialogLines.add(message);
                         if (!printLinesToChat) {
                             dialogLines.addAll(response.lines());
                         }

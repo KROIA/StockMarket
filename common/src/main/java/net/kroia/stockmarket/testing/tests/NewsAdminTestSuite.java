@@ -21,12 +21,15 @@ import net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.TestMarket;
 import net.kroia.stockmarket.testing.tests.NewsPluginTestSuite.TestNewsPlugin;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +115,7 @@ public class NewsAdminTestSuite extends TestSuite {
         addTest("info_legacy_rendering_unchanged", this::test_infoLegacyRenderingUnchanged);
         addTest("info_and_details_apply_duration_multiplier", this::test_infoAndDetails_applyDurationMultiplier);
         addTest("info_and_details_apply_strength_multiplier", this::test_infoAndDetails_applyStrengthMultiplier); // SM-382
+        addTest("list_status_line_counts", this::test_list_statusLineCounts); // SM-377
         addTest("event_details_requirement_status_tracks_registry", this::test_eventDetails_requirementStatusTracksRegistry);
 
         // T-099: wire appends (NewsRecord sequence fields, ActiveEventInfo step fields)
@@ -1278,6 +1282,42 @@ public class NewsAdminTestSuite extends TestSuite {
             return assertEquals("legacy implicit sequence's peak step x2", 1.0,
                     legacy.sequences().get(0).steps().stream()
                             .mapToDouble(EventDetails.StepInfo::targetFactor).max().orElse(0));
+        } catch (IOException e) {
+            return fail("temp dir failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * SM-377: a LIST reply carries one id per definition and per active event, and the GUI's
+     * status line is the lang key with exactly those two counts (key and args are checked: no
+     * language is loaded offline).
+     */
+    private TestResult test_list_statusLineCounts() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            TestNewsPlugin plugin = pluginWithFile(dir,
+                    fileJson("", eventJson("a", ""), eventJson("b", ""), eventJson("c", "")));
+            TestResult r = assertNotNull("'a' activates",
+                    plugin.activate(plugin.getLibrary().getDefinition("a"), weights(M1, 1.0f)));
+            if (!r.passed()) return r;
+
+            NewsAdminRequest.OutputData reply = NewsAdminRequest.handleList(plugin);
+            r = assertTrue("LIST succeeds: " + reply.message(), reply.success());
+            if (!r.passed()) return r;
+            r = assertEquals("one id per definition", 3, reply.definitionIds().size());
+            if (!r.passed()) return r;
+            r = assertEquals("one id per active event", 1, reply.activeEventIds().size());
+            if (!r.passed()) return r;
+
+            Component status = NewsAdminRequest.listStatusText(reply);
+            if (!(status.getContents() instanceof TranslatableContents text))
+                return fail("status line is not translatable: " + status);
+            r = assertEquals("status line key", "gui.stockmarket.news_plugin.list_status", text.getKey());
+            if (!r.passed()) return r;
+            return assertEquals("status line args", List.of(3, 1), Arrays.asList(text.getArgs()));
         } catch (IOException e) {
             return fail("temp dir failed: " + e);
         } finally {

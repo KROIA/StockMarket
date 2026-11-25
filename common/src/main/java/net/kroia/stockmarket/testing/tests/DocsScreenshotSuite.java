@@ -41,6 +41,7 @@ import net.kroia.testkit.gui.Screenshots;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -60,6 +61,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * SM-358: the 22 plain StockMarket screens of the documentation site, taken as scripted screenshots
@@ -531,6 +534,11 @@ public class DocsScreenshotSuite extends TestSuite {
         List<GuiNode> diamonds = Gui.findAll(n -> n.visible() && shows(n, Items.DIAMOND));
         if (!diamonds.isEmpty()) Gui.click(diamonds.get(diamonds.size() - 1));
         Gui.waitTicks(DATA_TICKS);
+        // SM-377: the built-in description comes from its lang key (first wrapped line shown)
+        String description = Gui.onClient(() -> Component.translatable("gui.stockmarket.plugin_description.news").getString());
+        if (description.startsWith("gui.")) return "news plugin description key not translated: " + description;
+        if (Gui.findAll(n -> n.visible() && n.text().length() > 10 && description.startsWith(n.text())).isEmpty())
+            return "news plugin entry does not show its translated description: " + description;
         return clippedText(); // SM-365: the news plugin's description ran past its entry
     }
 
@@ -579,7 +587,14 @@ public class DocsScreenshotSuite extends TestSuite {
         // the first layout. It is shortened with "…" on purpose, so the TEXT layout check cannot see it.
         GuiNode status = Gui.findAll(n -> n.visible() && n.text().contains("definition(s)")).stream().findFirst().orElse(null);
         if (status == null) return "no news status line with the definition count";
-        return status.text().endsWith("…") ? "news status line cut: " + status.text() : null;
+        if (status.text().endsWith("…")) return "news status line cut: " + status.text();
+        // SM-377: the line is built on the client from the lang key with the two counts
+        Matcher counts = Pattern.compile("(\\d+)\\D+(\\d+)").matcher(status.text());
+        if (!counts.find()) return "news status line without its two counts: " + status.text();
+        String expected = Gui.onClient(() -> Component.translatable("gui.stockmarket.news_plugin.list_status",
+                Integer.parseInt(counts.group(1)), Integer.parseInt(counts.group(2))).getString());
+        return status.text().equals(expected) ? null
+                : "news status line '" + status.text() + "' is not the lang-key text '" + expected + "'";
     }
 
     private @Nullable String newsTab(String tab) {

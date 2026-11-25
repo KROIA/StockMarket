@@ -957,8 +957,12 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
                 + resolved.size() + " market(s)", List.of());
     }
 
-    /** LIST: loaded definitions (+ markers) and active events rendered to display lines. */
-    private OutputData handleList(NewsPlugin plugin) {
+    /**
+     * LIST: loaded definitions (+ markers) and active events rendered to display lines.
+     * The message stays English for the command output (a dedicated server has no mod lang
+     * files); the GUI shows {@link #listStatusText} instead (SM-377). Public for the offline tests.
+     */
+    public static OutputData handleList(NewsPlugin plugin) {
         List<String> lines = new ArrayList<>();
 
         Map<String, NewsEventDefinition> definitions = plugin.getLibrary().getDefinitions();
@@ -999,6 +1003,18 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
 
         return success(plugin, definitions.size() + " definition(s), "
                 + activeEvents.size() + " active event(s)", lines);
+    }
+
+    /**
+     * SM-377: the GUI's status line for a LIST reply, "N definition(s), M active event(s)" in the
+     * client's language, from the counts of the reply's id lists.
+     *
+     * @param reply a successful LIST reply
+     * @return the translatable status line
+     */
+    public static Component listStatusText(OutputData reply) {
+        return Component.translatable("gui.stockmarket.news_plugin.list_status",
+                reply.definitionIds().size(), reply.activeEventIds().size());
     }
 
     /** STOP: stop one active event or {@value #STOP_ALL}; audited like TRIGGER. */
@@ -1525,7 +1541,7 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
      * Builds the standard success response: message + lines plus the id lists and the
      * structured {@link EventDetails} snapshot for the GUI (fresh on every successful op).
      */
-    private OutputData success(NewsPlugin plugin, String message, List<String> lines) {
+    private static OutputData success(NewsPlugin plugin, String message, List<String> lines) {
         return new OutputData(true, message, lines, definitionIds(plugin), activeEventIds(plugin),
                 buildEventDetails(plugin, plugin.getMarketInterfaces()));
     }

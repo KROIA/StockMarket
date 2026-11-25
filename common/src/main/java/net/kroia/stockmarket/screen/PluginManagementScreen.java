@@ -528,7 +528,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             }
 
             // Description labels (split on newlines for multiline support)
-            String desc = data.getDescription() != null ? data.getDescription() : "";
+            String desc = PluginRegistry.displayDescription(data.getPluginTypeID(), data.getDescription()); // SM-377
             // SM-365: word-wrapped to the text width the list gives the entries (0 until the screen is laid out)
             if (parentScreen.descriptionWrapWidth > 0) {
                 Label probe = new Label();
@@ -1112,7 +1112,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 PluginRegistryObject regObj = entry.getValue();
                 String typeID = regObj.getPluginTypeID();
                 String displayName = regObj.getPluginName();
-                String description = regObj.getPluginDescription();
+                String description = PluginRegistry.displayDescription(typeID, regObj.getPluginDescription()); // SM-377
 
                 Button typeButton = new Button(displayName, () -> onPluginTypeSelected(typeID));
                 typeButton.setHeight(StockMarketGuiElement.defaultElementHeight);
