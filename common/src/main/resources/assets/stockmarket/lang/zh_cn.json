@@ -530,7 +530,7 @@
   "gui.stockmarket.plugin_gui.defaults.tooltip": "用插件的默认值填写表单。\n按下“应用”（此市场）或“应用到全部”后才会生效。",
   "gui.stockmarket.plugin_gui.apply_all_confirm_title": "应用到所有市场？",
   "gui.stockmarket.plugin_gui.apply_all_confirm_message": "这将用当前显示的数值覆盖订阅插件“%1$s”的全部 %2$s 个市场的设置。\n各市场原有的设置将会丢失。",
-  "gui.stockmarket.volatility_plugin.scale.tooltip": "随机价格波动相对于均衡价格的幅度。\n0.3 时价格通常偏离约 +-4%，\n90% 的时间在 +-12% 以内，极少达到约 +-26%。\n0 = 无随机波动。默认值：0.3",
+  "gui.stockmarket.volatility_plugin.scale.tooltip": "随机价格波动相对于均衡价格的幅度。\n0.3 时价格通常偏离约 +-10%，\n90% 的时间在 +-23% 以内，几乎不会超过 +-42%。\n价格主要以持续数天的趋势变动，每小时约 +-2%。\n0 = 无随机波动。默认值：0.3",
   "gui.stockmarket.net_flow_plugin.flow_enabled.tooltip": "启用后，玩家的净交易会永久改变均衡价格：\n卖出物品会压低价格，买入会推高价格。\n禁用时，价格围绕默认价格波动。",
   "gui.stockmarket.net_flow_plugin.flow_sensitivity.tooltip": "玩家需要净卖出多少物品（按该物品自然丰度的每单位计），\n才能使均衡价格下降 e 倍（约 2.72 倍）。\n数值越高 = 市场越迟钝。\n<= 0 时禁用流向影响。默认值：2000",
   "gui.stockmarket.net_flow_plugin.min_price_mult.tooltip": "均衡价格的下限，以默认价格的倍数表示\n（0.05 = 永不低于默认价格的 5%）。\n必须介于 0 和 1 之间，否则使用默认值。\n默认值：0.05",
