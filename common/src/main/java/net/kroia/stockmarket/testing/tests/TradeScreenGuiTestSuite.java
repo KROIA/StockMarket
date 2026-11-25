@@ -175,9 +175,13 @@ public class TradeScreenGuiTestSuite extends TestSuite {
      * SM-360 + SM-364 the way a player does it. A display shows market A (high price). The player right-clicks it
      * (chart screen), clicks "Configure Display", picks market B (1/100 of A's price) with the setup's search box
      * and list, and clicks Apply. The display then shows B, and its chart in the world has B's price in view and
-     * no longer A's (SM-364: it used to keep A's price range, so the new market's candles were off the chart). Two
-     * temporary markets ({@link #withTemporaryMarket}); needs the integrated server (sp) to place the display in front
-     * of the player at eye level, where its chart is drawn.
+     * no longer A's (SM-364: it used to keep A's price range, so the new market's candles were off the chart).
+     * <p>
+     * SM-387: before the display is placed, the player zooms into A's trade screen chart, so its saved view no
+     * longer reaches A's later price. A new display chart used to start from that view, which never widens to new
+     * prices; now it fits itself and has A's later price in view. Two temporary markets
+     * ({@link #withTemporaryMarket}); needs the integrated server (sp) to place the display in front of the player at
+     * eye level, where its chart is drawn.
      */
     private TestResult test_display_reconfigure_through_ui() {
         StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
@@ -191,7 +195,6 @@ public class TradeScreenGuiTestSuite extends TestSuite {
             BlockPos pos = feet.south(2).above(), between = feet.south().above();
             BlockState[] before = await(server.submit(() -> new BlockState[]{
                     server.overworld().getBlockState(pos), server.overworld().getBlockState(between)}), WAIT_MS);
-            Gui.onClient(() -> { forgetSavedChartViews(a); forgetSavedChartViews(b); });
             try {
                 String problem = await(server.submit(() -> {
                     StockMarketModBackend.ServerInstances backend = StockMarketModBackend.getServerInstances();
@@ -202,6 +205,26 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                     high.getCurrentMarketPriceStructAndReset(); // the live candle forgets the creation price
                     low.test_setCurrentMarketPrice(DISPLAY_PRICE_HIGH / 100);
                     low.getCurrentMarketPriceStructAndReset();
+                    return null;
+                }), WAIT_MS);
+                if (problem != null) return fail(problem);
+
+                // SM-387: zoom into A's trade screen chart (5 wheel steps up around its middle); closing the screen
+                // saves that view, which no longer reaches A's later price (+10%)
+                GuiNode tradeNode = openTradeChart(a);
+                if (tradeNode == null) return skip("needs the ModUtilities GuiLocator (no chart node on the trade screen)");
+                CandlestickChart tradeChart = (CandlestickChart) tradeNode.handle();
+                if (!waitForPriceInView(client, a, tradeChart, DISPLAY_PRICE_HIGH))
+                    return fail("market A's trade screen chart never had its price in view: " + tradeChartState(client, a, tradeChart));
+                for (int i = 0; i < 5; i++)
+                    Gui.scroll(tradeNode, 1);
+                double laterPrice = Gui.onClient(() -> client.MARKET_MANAGER.getMarket(a).getCurrentMarketRealPrice()) * 11 / 10;
+                if (Gui.onClient(tradeChart::getMaxVisiblePrice) >= laterPrice)
+                    return fail("zooming did not narrow market A's trade screen chart below " + laterPrice + ": "
+                            + tradeChartState(client, a, tradeChart));
+                Gui.close();
+
+                problem = await(server.submit(() -> {
                     ServerLevel level = server.overworld();
                     level.removeBlock(between, false);
                     level.setBlock(pos, displayFacingNorth(), Block.UPDATE_ALL);
@@ -224,7 +247,7 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                     if (high != null) high.test_setCurrentMarketPrice(DISPLAY_PRICE_HIGH * 11 / 10);
                 }), WAIT_MS);
 
-                // A in the world: its second price arrived and is on the chart
+                // A in the world: its second price arrived and is on the chart (SM-387: not the trade screen's view)
                 boolean showsA = Gui.waitUntil(() -> {
                     ClientMarket m = client.MARKET_MANAGER.getMarket(a);
                     return m != null && m.getCurrentMarketPrice() > DISPLAY_PRICE_HIGH
@@ -383,26 +406,6 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         PriceHistoryData.Candle newest = h.getCandles().getLast();
         return h.getCandles().size() + " (lowest " + h.toRealPrice(lowest) + ", newest " + h.toRealPrice(newest.low)
                 + ".." + h.toRealPrice(newest.high) + ")";
-    }
-
-    /**
-     * SM-387 workaround, test only: forgets the chart views this client saved for {@code market} (its trade screen
-     * view, keyed by the item name, and display views, keyed "..._&lt;item short&gt;"). A display chart without a view
-     * of its own copies the trade screen's view and never widens it, so the 0..0 view an earlier test's chart of
-     * the same temporary item fitted to SM-386's fake 0 candle stayed on the display. Drop this once SM-387 is
-     * fixed. Reflection because CandlestickChart has no API to clear saved views. Client thread.
-     */
-    @SuppressWarnings("unchecked")
-    private static void forgetSavedChartViews(ItemID market) {
-        try {
-            java.lang.reflect.Field field = CandlestickChart.class.getDeclaredField("savedViewports");
-            field.setAccessible(true);
-            String suffix = "_" + market.getShort();
-            ((java.util.Map<String, ?>) field.get(null)).keySet()
-                    .removeIf(key -> key.equals(market.getName()) || key.endsWith(suffix));
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("cannot clear CandlestickChart.savedViewports (SM-387 workaround)", e);
-        }
     }
 
     /** Diagnostic: a private field of {@link CandlestickChart} (test-only reflection), or "?" if it cannot be read. */
@@ -650,27 +653,51 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
         if (client == null) return skip("not in a world");
         return withTemporaryMarket(client, NO_HISTORY_ITEM, id -> {
-            Gui.onClient(() -> TradeScreen.openScreen(id)); // preselects the market
-            Gui.waitForScreen(TradeScreen.class, OPEN_TICKS);
-            Gui.waitTicks(1); // first layout
-            List<GuiNode> charts = shownTopFirst(CandlestickChart.class, null);
-            if (charts.isEmpty()) return skip("needs the ModUtilities GuiLocator (no chart node on the trade screen)");
-            CandlestickChart chart = (CandlestickChart) charts.get(0).handle();
-            // the history answer is in, the price has arrived and the chart has it in view
-            boolean shown = Gui.waitUntil(() -> {
-                ClientMarket m = client.MARKET_MANAGER.getMarket(id);
-                return m != null && m.getCurrentMarketPrice() > 0
-                        && chartField(chart, "data") instanceof PriceHistoryData h && !h.getCandles().isEmpty()
-                        && chart.getMinVisiblePrice() <= m.getCurrentMarketRealPrice()
-                        && m.getCurrentMarketRealPrice() <= chart.getMaxVisiblePrice();
-            }, OPEN_TICKS * 2);
-            String state = Gui.onClient(() -> "chart " + chart.getMinVisiblePrice() + ".." + chart.getMaxVisiblePrice()
-                    + ", price " + client.MARKET_MANAGER.getMarket(id).getCurrentMarketRealPrice()
-                    + ", candles " + candleSummary(chart));
+            GuiNode node = openTradeChart(id);
+            if (node == null) return skip("needs the ModUtilities GuiLocator (no chart node on the trade screen)");
+            CandlestickChart chart = (CandlestickChart) node.handle();
+            boolean shown = waitForPriceInView(client, id, chart, 1);
+            String state = tradeChartState(client, id, chart);
             if (!shown) return fail("the new market's chart never had its price in view: " + state);
             boolean zeroCandle = Gui.onClient(() -> chartField(chart, "data") instanceof PriceHistoryData h
                     && h.getCandles().stream().anyMatch(c -> c.low <= 0 || c.open <= 0));
             return assertTrue("no candle at price 0 on the new market's chart: " + state, !zeroCandle);
+        });
+    }
+
+    /** Opens the trade screen on {@code market}. @return its chart's node, or null without the ModUtilities GuiLocator */
+    private static @Nullable GuiNode openTradeChart(ItemID market) {
+        Gui.onClient(() -> TradeScreen.openScreen(market)); // preselects the market
+        Gui.waitForScreen(TradeScreen.class, OPEN_TICKS);
+        Gui.waitTicks(1); // first layout
+        List<GuiNode> charts = shownTopFirst(CandlestickChart.class, null);
+        return charts.isEmpty() ? null : charts.get(0);
+    }
+
+    /**
+     * Waits until {@code chart} has candles and {@code market}'s price, at least {@code minRawPrice}, in view: the
+     * history answer is in, the price has arrived and the chart fitted its range.
+     *
+     * @return true once that is so, false after {@code 2 * OPEN_TICKS}
+     */
+    private static boolean waitForPriceInView(StockMarketModBackend.ClientInstances client, ItemID market,
+                                              CandlestickChart chart, long minRawPrice) {
+        return Gui.waitUntil(() -> {
+            ClientMarket m = client.MARKET_MANAGER.getMarket(market);
+            return m != null && m.getCurrentMarketPrice() >= minRawPrice
+                    && chartField(chart, "data") instanceof PriceHistoryData h && !h.getCandles().isEmpty()
+                    && chart.getMinVisiblePrice() <= m.getCurrentMarketRealPrice()
+                    && m.getCurrentMarketRealPrice() <= chart.getMaxVisiblePrice();
+        }, OPEN_TICKS * 2);
+    }
+
+    /** Diagnostic: a chart's price range, the market's client price and the chart's candles. */
+    private static String tradeChartState(StockMarketModBackend.ClientInstances client, ItemID market, CandlestickChart chart) {
+        return Gui.onClient(() -> {
+            ClientMarket m = client.MARKET_MANAGER.getMarket(market);
+            return "chart " + chart.getMinVisiblePrice() + ".." + chart.getMaxVisiblePrice() + ", price "
+                    + (m == null ? "unknown" : m.getCurrentMarketRealPrice()) + ", autoWiden "
+                    + chartField(chart, "autoWidenVertical") + ", candles " + candleSummary(chart);
         });
     }
 
