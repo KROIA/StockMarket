@@ -163,6 +163,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new PluginTestSuite.T213GateG1TestSuite());
         TestRegistry.register(new PluginTestSuite.T213GateG2TestSuite());
         TestRegistry.register(new PluginTestSuite.T213GateG3G4TestSuite());
+        TestRegistry.register(new PluginTestSuite.NewsRecoveryGateTestSuite());
         // SM-336 long-run market simulation (observation tool; every test skips without -Dstockmarket.longrun)
         TestRegistry.register(new LongRunMarketTestSuite());
         // Admin flag sync against a real LuckPerms (skip without it), then "LuckPerms removed" phase 1/2.
