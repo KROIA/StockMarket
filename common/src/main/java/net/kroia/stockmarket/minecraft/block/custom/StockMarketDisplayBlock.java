@@ -67,7 +67,12 @@ public class StockMarketDisplayBlock extends AbstractDisplayBlock {
             return InteractionResult.PASS;
 
         if (level.isClientSide()) {
-            if (ctrl.getDisplayType() == StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART
+            // SM-360: sneak + right-click opens the setup of a configured display, like the Bank Display (BS-295).
+            // Vanilla calls useWithoutItem while sneaking only when both hands are empty. Same sneak rule as
+            // BankSystemDisplayBlock.opensSetupScreen(ctrl, player); that helper takes a BankSystemDisplayBlockEntity,
+            // so it can't be called with this block's entity.
+            if (!player.isSecondaryUseActive()
+                    && ctrl.getDisplayType() == StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART
                     && ctrl.getSelectedItemID() != null) {
                 ClientScreenHelper.openChartScreen(ctrl);
             } else {

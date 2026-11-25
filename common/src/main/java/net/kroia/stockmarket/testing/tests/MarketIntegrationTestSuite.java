@@ -25,6 +25,8 @@ import net.kroia.stockmarket.testing.TestFixture;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public class MarketIntegrationTestSuite extends TestSuite {
@@ -71,6 +73,8 @@ public class MarketIntegrationTestSuite extends TestSuite {
         addTest("slave_forwarded_legit_calls_allowed", this::test_slaveForwarded_legitCallsAllowed);
         addTest("untrusted_slave_market_settings_refused", this::test_untrustedSlave_marketSettingsRefused);
         addTest("is_admin_query_refused", this::test_isAdminQuery_refused);
+        // SM-369: master async calls from another thread run on the server thread
+        addTest("async_calls_run_on_server_thread", this::test_asyncCalls_runOnServerThread);
         // SM-269: no player order is dropped without a refund
         addTest("delete_market_in_maintenance_refunds_resting_order", this::test_deleteMarket_inMaintenance_refundsRestingOrder);
         addTest("maintenance_buffered_order_never_reaches_book", this::test_maintenance_bufferedOrderNeverReachesBook);
@@ -644,6 +648,32 @@ public class MarketIntegrationTestSuite extends TestSuite {
             if (!wasTrusted)
                 bank.untrustSlaveServer(trustedSlaveID);
         }
+    }
+
+    // ---- SM-369: the master's async calls never run off the server thread ----
+
+    /**
+     * SM-369: called on the server thread, a master async call returns a future that is already done. Called from
+     * another thread, it only queues the work: the future stays open until the server thread runs its tasks, then
+     * gives the same answer as the sync call.
+     */
+    private TestResult test_asyncCalls_runOnServerThread() {
+        ServerMarketManager manager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        TestResult r = assertTrue("server-thread call is already done", manager.getAvailableMarketIDsAsync().isDone());
+        if (!r.passed()) return r;
+        // The other thread only starts the calls and hands the futures back; it never waits on the server thread,
+        // so blocking here for it is safe. The server thread runs no task meanwhile, so the calls must still be open.
+        CompletableFuture<List<ItemID>> ids = CompletableFuture.supplyAsync(manager::getAvailableMarketIDsAsync)
+                .orTimeout(5, TimeUnit.SECONDS).join();
+        CompletableFuture<Long> price = CompletableFuture.supplyAsync(serverMarket::getCurrentMarketPriceAsync)
+                .orTimeout(5, TimeUnit.SECONDS).join();
+        r = assertFalse("foreign-thread manager call waits for the server thread", ids.isDone());
+        if (!r.passed()) return r;
+        r = assertFalse("foreign-thread market call waits for the server thread", price.isDone());
+        if (!r.passed()) return r;
+        r = assertEquals("manager answer once the server ran it", manager.getAvailableMarketIDs(), await(ids, 15_000));
+        if (!r.passed()) return r;
+        return assertEquals("market answer once the server ran it", serverMarket.getCurrentMarketPrice(), await(price, 15_000));
     }
 
     /**
