@@ -347,6 +347,10 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         SettingRow port = new SettingRow(group, group.WEB_INTERFACE_PORT);
         editorValues.add(port::editorValue);
         web.addChild(port);
+        // SM-363: read by every apply (this SET included), so not restart-required either.
+        SettingRow download = new SettingRow(group, group.WEB_INTERFACE_DOWNLOAD_TEXTURES);
+        editorValues.add(download::editorValue);
+        web.addChild(download);
     }
 
     /**

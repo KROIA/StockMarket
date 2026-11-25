@@ -15,41 +15,47 @@ import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
  */
 public class Plugins {
 
+    /**
+     * SM-377: lang-key prefix of the built-in plugins' descriptions, shown in the client's
+     * language; the English literals below stay as the plain fallback text.
+     */
+    private static final String DESCRIPTION_KEY_PREFIX = "gui.stockmarket.plugin_description.";
+
     /** T-213: net-flow price model (equilibrium from the players' net item flow); runs before the VolatilityPlugin. */
     public static final PluginRegistryObject NET_FLOW_PLUGIN = PluginRegistry.registerPlugin(
             NetFlowPlugin.class.getName(),
             "NetFlowPlugin",
             "Moves the equilibrium price with the players' net item flow (selling lowers it, buying raises it).",
             NetFlowPlugin::new
-    );
+    ).withDescriptionKey(DESCRIPTION_KEY_PREFIX + "net_flow");
 
     public static final PluginRegistryObject VOLATILITY_PLUGIN = PluginRegistry.registerPlugin(
             VolatilityPlugin.class.getName(),
             "VolatilityPlugin",
             "Adds a random walk around the equilibrium price (from the NetFlowPlugin, else the default price).",
             VolatilityPlugin::new
-    );
+    ).withDescriptionKey(DESCRIPTION_KEY_PREFIX + "volatility");
 
     public static final PluginRegistryObject TARGET_PRICE_BOT_PLUGIN = PluginRegistry.registerPlugin(
             TargetPriceBot.class.getName(),
             "TargetPriceBot",
             "A bot that tries to move the price towards a target price using a PID controller.",
             TargetPriceBot::new
-    );
+    ).withDescriptionKey(DESCRIPTION_KEY_PREFIX + "target_price_bot");
 
     public static final PluginRegistryObject DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN = PluginRegistry.registerPlugin(
             DefaultOrderbookVolumeDistributionPlugin.class.getName(),
             "DefaultOrderbookVolumeDistributionPlugin",
             "Automatically fills the orderbook with a reasonable volume distribution.",
             DefaultOrderbookVolumeDistributionPlugin::new
-    );
+    ).withDescriptionKey(DESCRIPTION_KEY_PREFIX + "default_orderbook_volume_distribution");
 
     public static final PluginRegistryObject NEWS_PLUGIN = PluginRegistry.registerPlugin(
             NewsPlugin.class.getName(),
             "NewsPlugin",
             "Randomly publishes news events (defined in config/StockMarket/news/) that temporarily or permanently move market prices.",
             NewsPlugin::new
-    );
+    ).withDescriptionKey(DESCRIPTION_KEY_PREFIX + "news");
 
     public static void serverSetup() {
     }

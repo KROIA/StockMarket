@@ -18,8 +18,6 @@ import org.jetbrains.annotations.NotNull;
 
 public class UpdateStockMarketDisplayConfigPacket extends StockMarketNetworkPacket {
 
-    private static final double MAX_INTERACT_DISTANCE_SQR = 64.0;
-
     public static final Type<UpdateStockMarketDisplayConfigPacket> TYPE =
             //new Type<>(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "update_stockmarket_display_config_packet")); // mc<=1.21.10
             new Type<>(Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "update_stockmarket_display_config_packet")); // mc>=1.21.11
@@ -56,11 +54,12 @@ public class UpdateStockMarketDisplayConfigPacket extends StockMarketNetworkPack
     @Override
     protected void handleOnServer(NetworkManager.PacketContext context) {
         ServerPlayer player = (ServerPlayer) context.getPlayer();
-        if (player.distanceToSqr(this.pos.getX() + 0.5, this.pos.getY() + 0.5, this.pos.getZ() + 0.5) > MAX_INTERACT_DISTANCE_SQR)
-            return;
+        if (!player.level().isLoaded(this.pos)) return; // never load a chunk for a client-sent position
 
         BlockEntity blockEntity = player.level().getBlockEntity(this.pos);
-        if (blockEntity instanceof StockMarketDisplayBlockEntity displayEntity) {
+        // SM-376: reach is measured to the whole screen, not only its top-left block
+        if (blockEntity instanceof StockMarketDisplayBlockEntity displayEntity
+                && displayEntity.isWithinReach(player.position())) {
             StockMarketDisplayBlockEntity.DisplayType type =
                     StockMarketDisplayBlockEntity.DisplayType.fromId(this.displayType);
             ItemID itemID = (this.itemIdShort >= 0) ? new ItemID(this.itemIdShort) : null;
