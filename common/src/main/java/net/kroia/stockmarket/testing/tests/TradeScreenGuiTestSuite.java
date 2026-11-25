@@ -10,10 +10,10 @@ import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IPriceDataProvider;
+import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.entity.custom.StockMarketDisplayBlockEntity;
-import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPacket;
 import net.kroia.stockmarket.networking.packet.MarketChangedPacket;
 import net.kroia.stockmarket.screen.ManagementScreen;
 import net.kroia.stockmarket.screen.TradeScreen;
@@ -22,6 +22,9 @@ import net.kroia.stockmarket.screen.custom.DisplayConfigScreen;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.InterMarketTradingPanel;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
+import net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
@@ -48,12 +51,14 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
@@ -98,59 +103,245 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         addTest("pair_rate_shows_item_names", this::test_pairRateNames); // SM-368
         addTest("plus10_button_raises_quantity", this::test_plus10);
         addTest("management_no_duplicate_markets", this::test_management_no_duplicate_markets);
+        addTest("management_create_from_presets", this::test_management_create_from_presets); // SM-362
         addTest("display_chart_configure_button", this::test_display_chart_configure_button); // SM-360
         addTest("display_sneak_use_opens_setup", this::test_display_sneak_use_opens_setup); // SM-360
         addTest("display_config_from_far_corner", this::test_display_config_from_far_corner); // SM-376
+        addTest("display_reconfigure_through_ui", this::test_display_reconfigure_through_ui); // SM-360, SM-364
     }
 
     /**
      * SM-376: a player next to the far end of a long screen, more than 8 blocks from its top-left (controller)
-     * block, can still set it up: the config packet the setup screen sends is applied. The server used to measure
-     * the distance to the controller only and drop the packet silently. Also checks that a spot 9 blocks beyond the
-     * screen stays out of reach. Needs the integrated server (sp) to build the screen next to the player.
+     * block, can still set it up. Done the way a player does it: right-click the west end of an unconfigured 11x1
+     * screen, pick a temporary market ({@link #withTemporaryMarket}) in the setup screen and click Apply; the screen
+     * then shows that market. The server used to measure the distance to the controller only and drop the setup
+     * silently. Also checks that a spot 9 blocks beyond the screen stays out of reach. Needs the integrated server
+     * (sp) to build the screen next to the player.
      */
     private TestResult test_display_config_from_far_corner() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null) return skip("not in a world");
         MinecraftServer server = Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer());
         if (server == null) return skip("needs the integrated server (singleplayer) to place a display");
-        // 11x1 above the player, facing NORTH (its right is WEST): the controller is the east end, 10 blocks away
-        BlockPos westEnd = Gui.onClient(() -> Minecraft.getInstance().player.blockPosition().above(3));
-        BlockPos[] row = new BlockPos[11];
-        for (int i = 0; i < row.length; i++) row[i] = westEnd.east(i);
-        BlockPos controller = row[row.length - 1];
-        BlockState display = StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get().defaultBlockState()
-                .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH);
-        BlockState[] before = await(server.submit(() -> {
-            BlockState[] states = new BlockState[row.length];
-            for (int i = 0; i < row.length; i++) states[i] = server.overworld().getBlockState(row[i]);
-            return states;
-        }), WAIT_MS);
-        try {
-            ItemID diamond = await(server.submit(() -> {
-                for (BlockPos p : row) server.overworld().setBlock(p, display, Block.UPDATE_ALL);
-                return ItemID.of(new ItemStack(Items.DIAMOND));
+        return withTemporaryMarket(client, id -> {
+            // 11x1 above the player, facing NORTH (its right is WEST): the controller is the east end, 10 blocks away
+            BlockPos westEnd = Gui.onClient(() -> Minecraft.getInstance().player.blockPosition().above(3));
+            BlockPos[] row = new BlockPos[11];
+            for (int i = 0; i < row.length; i++) row[i] = westEnd.east(i);
+            BlockPos controller = row[row.length - 1];
+            BlockState[] before = await(server.submit(() -> {
+                BlockState[] states = new BlockState[row.length];
+                for (int i = 0; i < row.length; i++) states[i] = server.overworld().getBlockState(row[i]);
+                return states;
             }), WAIT_MS);
-            String problem = await(server.submit(() -> {
-                if (!(server.overworld().getBlockEntity(controller) instanceof StockMarketDisplayBlockEntity c)
-                        || !c.isController() || c.getGroupWidth() != row.length)
-                    return "no 11x1 screen with its controller at " + controller;
-                if (c.isWithinReach(Vec3.atCenterOf(westEnd.west(9))))
-                    return "a spot 9 blocks beyond the screen counts as in reach";
-                return null;
-            }), WAIT_MS);
-            if (problem != null) return fail(problem);
+            try {
+                String problem = await(server.submit(() -> {
+                    for (BlockPos p : row) server.overworld().setBlock(p, displayFacingNorth(), Block.UPDATE_ALL);
+                    if (!(server.overworld().getBlockEntity(controller) instanceof StockMarketDisplayBlockEntity c)
+                            || !c.isController() || c.getGroupWidth() != row.length)
+                        return "no 11x1 screen with its controller at " + controller;
+                    if (c.isWithinReach(Vec3.atCenterOf(westEnd.west(9))))
+                        return "a spot 9 blocks beyond the screen counts as in reach";
+                    return null;
+                }), WAIT_MS);
+                if (problem != null) return fail(problem);
+                if (!Gui.waitUntil(() -> Minecraft.getInstance().level.getBlockEntity(westEnd) instanceof StockMarketDisplayBlockEntity d
+                        && d.isActive() && d.getControllerEntity() != null, OPEN_TICKS))
+                    return fail("the 11x1 screen did not reach the client");
 
-            Gui.onClient(() -> UpdateStockMarketDisplayConfigPacket.sendToServer(controller,
-                    StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART.getId(), diamond.getShort(), (short) -1));
-            boolean applied = Gui.waitUntil(() -> Minecraft.getInstance().level != null
-                    && Minecraft.getInstance().level.getBlockEntity(controller) instanceof StockMarketDisplayBlockEntity d
-                    && diamond.equals(d.getSelectedItemID()), OPEN_TICKS);
-            return assertTrue("config sent from below the west end " + westEnd + " applied to the screen (controller "
-                    + controller + ")", applied);
-        } finally {
-            await(server.submit(() -> {
-                for (int i = 0; i < row.length; i++) server.overworld().setBlock(row[i], before[i], Block.UPDATE_ALL);
-            }), WAIT_MS);
-        }
+                problem = rightClickDisplay(westEnd, DisplayConfigScreen.class);
+                if (problem == null) problem = chooseMarketInSetup(id);
+                if (problem != null) return fail(problem);
+                boolean applied = Gui.waitUntil(() -> Minecraft.getInstance().level.getBlockEntity(controller) instanceof StockMarketDisplayBlockEntity d
+                        && id.equals(d.getSelectedItemID()), OPEN_TICKS);
+                return assertTrue("market chosen below the west end " + westEnd + " shown by the screen (controller "
+                        + controller + ")", applied);
+            } finally {
+                Gui.close();
+                await(server.submit(() -> {
+                    for (int i = 0; i < row.length; i++) server.overworld().setBlock(row[i], before[i], Block.UPDATE_ALL);
+                }), WAIT_MS);
+            }
+        });
+    }
+
+    /** Raw price of the market a display shows first in {@link #test_display_reconfigure_through_ui}; the second gets 1/100 of it. */
+    private static final long DISPLAY_PRICE_HIGH = 500_000;
+
+    /**
+     * SM-360 + SM-364 the way a player does it. A display shows market A (high price). The player right-clicks it
+     * (chart screen), clicks "Configure Display", picks market B (1/100 of A's price) with the setup's search box
+     * and list, and clicks Apply. The display then shows B, and its chart in the world has B's price in view and
+     * no longer A's (SM-364: it used to keep A's price range, so the new market's candles were off the chart). Two
+     * temporary markets ({@link #withTemporaryMarket}); needs the integrated server (sp) to place the display.
+     */
+    private TestResult test_display_reconfigure_through_ui() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null) return skip("not in a world");
+        MinecraftServer server = Gui.onClient(() -> Minecraft.getInstance().getSingleplayerServer());
+        if (server == null) return skip("needs the integrated server (singleplayer) to place a display");
+        return withTemporaryMarket(client, a -> withTemporaryMarket(client, PAIR_ITEM, b -> {
+            BlockPos pos = Gui.onClient(() -> Minecraft.getInstance().player.blockPosition().above(3));
+            BlockState before = await(server.submit(() -> server.overworld().getBlockState(pos)), WAIT_MS);
+            try {
+                String problem = await(server.submit(() -> {
+                    StockMarketModBackend.ServerInstances backend = StockMarketModBackend.getServerInstances();
+                    IServerMarket high = backend == null ? null : backend.MARKET_MANAGER.getServerMarketManager().getMarket(a);
+                    IServerMarket low = backend == null ? null : backend.MARKET_MANAGER.getServerMarketManager().getMarket(b);
+                    if (high == null || low == null) return "the temporary markets are not on the server";
+                    high.test_setCurrentMarketPrice(DISPLAY_PRICE_HIGH);
+                    high.getCurrentMarketPriceStructAndReset(); // the live candle forgets the creation price
+                    low.test_setCurrentMarketPrice(DISPLAY_PRICE_HIGH / 100);
+                    low.getCurrentMarketPriceStructAndReset();
+                    ServerLevel level = server.overworld();
+                    level.setBlock(pos, displayFacingNorth(), Block.UPDATE_ALL);
+                    if (!(level.getBlockEntity(pos) instanceof StockMarketDisplayBlockEntity d)) return "no display at " + pos;
+                    d.setConfig(StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART, a);
+                    return null;
+                }), WAIT_MS);
+                if (problem != null) return fail(problem);
+                if (!Gui.waitUntil(() -> Minecraft.getInstance().level.getBlockEntity(pos) instanceof StockMarketDisplayBlockEntity d
+                        && d.isActive() && a.equals(d.getSelectedItemID()), OPEN_TICKS))
+                    return fail("the display configured for " + a + " did not reach the client");
+                Gui.close();
+                if (!aimAt(pos)) return fail("the crosshair does not reach the display at " + pos);
+
+                // A in the world: its new price arrived and is on the chart
+                boolean showsA = Gui.waitUntil(() -> {
+                    ClientMarket m = client.MARKET_MANAGER.getMarket(a);
+                    return m != null && m.getCurrentMarketPrice() >= DISPLAY_PRICE_HIGH / 2
+                            && inView(chartRange(pos, a), m.getCurrentMarketRealPrice());
+                }, OPEN_TICKS * 2);
+                if (!showsA) return fail("the display's chart does not show market A's price: " + chartState(client, pos, a));
+                double priceA = Gui.onClient(() -> client.MARKET_MANAGER.getMarket(a).getCurrentMarketRealPrice());
+
+                problem = rightClickDisplay(pos, DisplayChartScreen.class);
+                if (problem == null)
+                    problem = clickShown(Button.class, Gui.onClient(() -> Component.translatable("gui.stockmarket.display_config_screen.title").getString()));
+                if (problem != null) return fail(problem);
+                Gui.waitForScreen(DisplayConfigScreen.class, OPEN_TICKS);
+                TestResult r = assertSetupPreselects(a);
+                if (!r.passed()) return r;
+                problem = chooseMarketInSetup(b);
+                if (problem != null) return fail(problem);
+
+                if (!Gui.waitUntil(() -> Minecraft.getInstance().level.getBlockEntity(pos) instanceof StockMarketDisplayBlockEntity d
+                        && b.equals(d.getSelectedItemID()), OPEN_TICKS))
+                    return fail("the display did not switch to market B " + b + " after Apply");
+                boolean showsB = Gui.waitUntil(() -> {
+                    ClientMarket m = client.MARKET_MANAGER.getMarket(b);
+                    double[] range = chartRange(pos, b);
+                    return m != null && inView(range, m.getCurrentMarketRealPrice()) && !inView(range, priceA);
+                }, OPEN_TICKS * 2);
+                return assertTrue("after the switch the display's chart shows market B's price and not A's (" + priceA
+                        + "): " + chartState(client, pos, b), showsB);
+            } finally {
+                Gui.close();
+                await(server.submit(() -> { server.overworld().setBlock(pos, before, Block.UPDATE_ALL); }), WAIT_MS);
+            }
+        }));
+    }
+
+    /** A Stock Market Display block facing north (its screen side), as the display tests place it above the player. */
+    private static BlockState displayFacingNorth() {
+        return StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get().defaultBlockState()
+                .setValue(HorizontalDirectionalBlock.FACING, Direction.NORTH);
+    }
+
+    /**
+     * Turns the player towards the north-facing display block at {@code pos} (above the player, see
+     * {@link #displayFacingNorth}) and waits until the crosshair is on it. Only the client's view turns, like
+     * moving the mouse.
+     *
+     * @return true once the crosshair is on {@code pos}
+     */
+    private static boolean aimAt(BlockPos pos) {
+        Vec3 target = new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.94); // inside the thin panel (z 14..16 of 16)
+        Gui.onClient(() -> {
+            var player = Minecraft.getInstance().player;
+            Vec3 d = target.subtract(player.getEyePosition());
+            player.setYRot((float) Math.toDegrees(Math.atan2(-d.x, d.z)));
+            player.setXRot((float) -Math.toDegrees(Math.atan2(d.y, Math.sqrt(d.x * d.x + d.z * d.z))));
+        });
+        return Gui.waitUntil(() -> Minecraft.getInstance().hitResult instanceof BlockHitResult hit
+                && hit.getType() == HitResult.Type.BLOCK && pos.equals(hit.getBlockPos()), DATA_TICKS);
+    }
+
+    /**
+     * A real right-click (use key) on the display block at {@code pos}: closes any screen, aims, uses, and waits
+     * for {@code screen} to open.
+     *
+     * @return null, or what went wrong
+     */
+    private static @Nullable String rightClickDisplay(BlockPos pos, Class<? extends net.minecraft.client.gui.screens.Screen> screen) {
+        Gui.close();
+        if (!aimAt(pos)) return "the crosshair does not reach the display at " + pos;
+        if (!Gui.useItem()) return "right-clicking the display at " + pos + " did nothing";
+        Gui.waitForScreen(screen, OPEN_TICKS);
+        Gui.waitTicks(1); // first layout
+        return null;
+    }
+
+    /**
+     * In the open display setup screen: clicks the market search box, types the market's name, clicks its row in
+     * the market list, then Apply, like a player choosing a market.
+     *
+     * @return null, or what was missing
+     */
+    private static @Nullable String chooseMarketInSetup(ItemID market) {
+        Gui.waitTicks(1); // first layout
+        String name = Gui.onClient(() -> market.getStack().getHoverName().getString());
+        List<GuiNode> boxes = shownTopFirst(TextBox.class, null);
+        if (boxes.isEmpty()) return "no search box on the display setup screen";
+        Gui.click(boxes.get(0)); // the market search; the pair search is further down
+        Gui.type(name);
+        List<GuiNode> rows = shownTopFirst(Button.class, name);
+        if (rows.isEmpty()) return "no '" + name + "' row in the setup screen's market list after searching for it";
+        Gui.click(rows.get(0)); // the market list; the pair list is further down
+        return clickShown(Button.class, Gui.onClient(() -> Component.translatable("gui.stockmarket.display_config_screen.apply").getString()));
+    }
+
+    /** Clicks the topmost shown element of {@code type} that reads {@code text}. @return null, or what was missing */
+    private static @Nullable String clickShown(Class<?> type, String text) {
+        List<GuiNode> found = shownTopFirst(type, text);
+        if (found.isEmpty()) return "no shown " + type.getSimpleName() + " '" + text + "' on " + Gui.onClient(() -> String.valueOf(ClientCompat.screen()));
+        Gui.click(found.get(0));
+        return null;
+    }
+
+    /** @return the shown elements of {@code type} (reading {@code text}, if not null), topmost first */
+    private static List<GuiNode> shownTopFirst(Class<?> type, @Nullable String text) {
+        List<GuiNode> found = new ArrayList<>(Gui.findAll(n -> n.visible() && type.isInstance(n.handle())
+                && (text == null || text.equals(n.text()))));
+        found.sort(Comparator.comparingInt(GuiNode::y));
+        return found;
+    }
+
+    /**
+     * @return {lowest, highest} price the in-world chart of the display at {@code pos} has in view, or null while it
+     * shows another market or is not connected yet. Client thread.
+     */
+    private static double @Nullable [] chartRange(BlockPos pos, ItemID market) {
+        if (!(Minecraft.getInstance().level.getBlockEntity(pos) instanceof StockMarketDisplayBlockEntity d)
+                || !(d.getChart() instanceof DisplayCandlestickChart chart)
+                || !chart.isConnected() || !market.equals(chart.getTargetMarketID()))
+            return null;
+        return new double[]{chart.getMinVisiblePrice(), chart.getMaxVisiblePrice()};
+    }
+
+    /** @return true if {@code price} lies in {@code range} ({@link #chartRange}); false for no range or NaN */
+    private static boolean inView(double @Nullable [] range, double price) {
+        return range != null && price >= range[0] && price <= range[1];
+    }
+
+    /** Diagnostic: the display's chart range and the market's client price. */
+    private static String chartState(StockMarketModBackend.ClientInstances client, BlockPos pos, ItemID market) {
+        return Gui.onClient(() -> {
+            double[] range = chartRange(pos, market);
+            ClientMarket m = client.MARKET_MANAGER.getMarket(market);
+            return "chart " + (range == null ? "not connected to " + market : range[0] + ".." + range[1])
+                    + ", price " + (m == null ? "unknown" : m.getCurrentMarketRealPrice() + " (raw " + m.getCurrentMarketPrice() + ")");
+        });
     }
 
     /**
@@ -572,6 +763,97 @@ public class TradeScreenGuiTestSuite extends TestSuite {
             Gui.waitTicks(DATA_TICKS); // both answers arrive
             return assertEquals("grid icons of market " + id + " after two overlapping refreshes", 1, marketIcons());
         });
+    }
+
+    /**
+     * SM-362 the way the user found it: Management screen, "Create Markets" tab, click up to two presets whose
+     * market does not exist yet (from the first category that has any), "Create selected", then the "Overview" tab:
+     * each new market is in the Overview grid exactly once (the grid used to list it once per overlapping refresh).
+     * The created markets are deleted afterwards. A temporary market ({@link #withTemporaryMarket}) supplies the
+     * admin flag; master only.
+     */
+    private TestResult test_management_create_from_presets() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null) return skip("not in a world");
+        return withTemporaryMarket(client, admin -> {
+            List<ItemStack> picked = new ArrayList<>();
+            try {
+                Gui.onClient(ManagementScreen::openScreen);
+                Gui.waitForScreen(ManagementScreen.class, OPEN_TICKS);
+                if (Gui.findAll(n -> n.handle() instanceof GuiElement).isEmpty())
+                    return skip("needs the ModUtilities GuiLocator (no GuiElement nodes on the management screen)");
+                Gui.waitTicks(1); // first layout
+                String problem = clickShown(Label.class, Gui.onClient(() -> Component.translatable("gui.stockmarket.create_market_tab.title").getString()));
+                if (problem != null) return fail(problem);
+                List<MarketPresetCategory> categories = await(Gui.onClient(() -> client.PRESET_MANAGER.getCategoriesAsync()), WAIT_MS);
+                for (MarketPresetCategory category : categories) {
+                    String name = Gui.onClient(() -> MarketPresetCategory.displayName(category.getCategory()));
+                    if (!Gui.waitUntil(() -> !shownTopFirst(Button.class, name).isEmpty(), OPEN_TICKS))
+                        return fail("no category button '" + name + "' on the Create Markets tab");
+                    clickShown(Button.class, name);
+                    Gui.waitTicks(2); // the grid is rebuilt
+                    for (GuiNode next; picked.size() < 2 && (next = newPreset(client, picked)) != null; ) {
+                        GuiNode preset = next;
+                        picked.add(Gui.onClient(() -> ((ItemView) preset.handle()).getItemStack().copy()));
+                        Gui.click(preset);
+                        Gui.waitTicks(1);
+                    }
+                    if (!picked.isEmpty()) break;
+                }
+                if (picked.isEmpty()) return skip("every preset already has a market");
+
+                problem = clickShown(Button.class, Gui.onClient(() -> Component.translatable("gui.stockmarket.create_market_tab.create_all").getString()));
+                if (problem != null) return fail(problem);
+                if (!Gui.waitUntil(() -> picked.stream().allMatch(stack -> marketOf(client, stack) != null), OPEN_TICKS))
+                    return fail("not all picked presets became markets: " + picked);
+                Gui.waitTicks(DATA_TICKS); // the market-list refreshes of the creation arrive
+                problem = clickShown(Label.class, Gui.onClient(() -> Component.translatable("gui.stockmarket.management_screen.tab_overview").getString()));
+                if (problem != null) return fail(problem);
+                Gui.waitTicks(DATA_TICKS);
+                for (ItemStack stack : picked) {
+                    List<GuiNode> icons = Gui.findAll(n -> "MarketItemView".equals(n.type()));
+                    int count = Gui.onClient(() -> (int) icons.stream()
+                            .filter(n -> ItemStack.isSameItemSameComponents(((ItemView) n.handle()).getItemStack(), stack)).count());
+                    TestResult r = assertEquals("Overview grid entries of the new market " + stack, 1, count);
+                    if (!r.passed()) return r;
+                }
+                return pass("each of the " + picked.size() + " markets created from presets is listed once");
+            } finally {
+                Gui.close();
+                for (ItemStack stack : picked) {
+                    ItemID created = Gui.onClient(() -> marketOf(client, stack));
+                    if (created == null) continue;
+                    try {
+                        await(Gui.onClient(() -> client.MARKET_MANAGER.requestDeleteMarket(created)), WAIT_MS);
+                    } catch (RuntimeException ignored) {
+                        // best effort, like the temporary market's cleanup
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * @return the first shown preset in the Create Markets grid whose market does not exist and that is not in
+     * {@code picked} yet, or null
+     */
+    private static @Nullable GuiNode newPreset(StockMarketModBackend.ClientInstances client, List<ItemStack> picked) {
+        for (GuiNode n : shownTopFirst(ItemView.class, null)) {
+            if (!"SelectableItemView".equals(n.type())) continue;
+            boolean fresh = Gui.onClient(() -> {
+                ItemStack stack = ((ItemView) n.handle()).getItemStack();
+                return marketOf(client, stack) == null && picked.stream().noneMatch(p -> ItemStack.isSameItemSameComponents(p, stack));
+            });
+            if (fresh) return n;
+        }
+        return null;
+    }
+
+    /** @return the market of exactly this item (components included, as the Create tab compares), or null. Client thread. */
+    private static @Nullable ItemID marketOf(StockMarketModBackend.ClientInstances client, ItemStack stack) {
+        for (ItemID id : client.MARKET_MANAGER.getAvailableMarkets())
+            if (ItemStack.isSameItemSameComponents(id.getStack(), stack)) return id;
+        return null;
     }
 
     /**
