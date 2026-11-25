@@ -179,7 +179,7 @@ public class PriceHistoryTestSuite extends TestSuite {
      * New candle added with current market price.
      */
     private TestResult test_startNewCandle_addsToList() {
-        PriceHistoryData data = new PriceHistoryData(0L, DUMMY_ITEM, SCALE_FACTOR);
+        PriceHistoryData data = new PriceHistoryData(DUMMY_ITEM, SCALE_FACTOR, new ArrayList<>(), 0);
         int sizeBefore = data.getCandles().size();
         data.setCurrentMarketPrice(200);
         data.startNewCandle(1000L);
