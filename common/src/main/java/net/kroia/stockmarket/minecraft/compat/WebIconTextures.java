@@ -328,7 +328,8 @@ public final class WebIconTextures {
      * @return true when done (jar present and current, or not needed)
      */
     private static boolean download() {
-        String version = SharedConstants.getCurrentVersion().getName();
+        String version = SharedConstants.getCurrentVersion().getName(); // mc<=1.21.5
+        //String version = SharedConstants.getCurrentVersion().name(); // mc>=1.21.6
         Path jar = packDir().resolve("minecraft-client-" + version + ".jar");
         Path part = jar.resolveSibling(jar.getFileName() + ".part");
         try {
