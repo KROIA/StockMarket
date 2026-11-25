@@ -83,6 +83,8 @@ public class TradeScreenGuiTestSuite extends TestSuite {
     private static final ItemStack ITEM = new ItemStack(Items.DEAD_BUSH);
     /** Second temporary market, the "want" side of the pair-mode test. */
     private static final ItemStack PAIR_ITEM = new ItemStack(Items.FERN);
+    /** SM-386: a market no other test creates, so it has no stored prices when its chart opens. */
+    private static final ItemStack NO_HISTORY_ITEM = new ItemStack(Items.LARGE_FERN);
 
     @Override
     public TestCategory getCategory() {
@@ -100,6 +102,7 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         addTest("layout_market_closed", this::test_layoutMarketClosed); // SM-367
         addTest("chart_texts_do_not_overlap", this::test_chartTexts); // SM-367
         addTest("chart_widens_to_new_price", this::test_chartWidensToNewPrice); // SM-368
+        addTest("new_market_chart_has_no_zero_candle", this::test_newMarketChartHasNoZeroCandle); // SM-386
         addTest("pair_rate_shows_item_names", this::test_pairRateNames); // SM-368
         addTest("plus10_button_raises_quantity", this::test_plus10);
         addTest("management_no_duplicate_markets", this::test_management_no_duplicate_markets);
@@ -214,8 +217,8 @@ public class TradeScreenGuiTestSuite extends TestSuite {
                 if (!aimAt(pos)) return fail("the crosshair does not reach the display at " + pos);
                 if (!Gui.waitUntil(() -> chartRange(pos, a) != null, OPEN_TICKS))
                     return fail("the display's chart did not connect to market A: " + chartState(client, pos, a));
-                // A second, different price once the chart is connected: A's live candle then spans a real range. A
-                // single flat candle fits to a zero-height view (CandlestickChart#applyVerticalFitToRange has no minimum).
+                // A second, different price once the chart is connected: the chart follows a price that moved after
+                // it fitted its range.
                 await(server.submit(() -> {
                     IServerMarket high = StockMarketModBackend.getServerInstances().MARKET_MANAGER.getServerMarketManager().getMarket(a);
                     if (high != null) high.test_setCurrentMarketPrice(DISPLAY_PRICE_HIGH * 11 / 10);
@@ -367,14 +370,19 @@ public class TradeScreenGuiTestSuite extends TestSuite {
             if (!(Minecraft.getInstance().level.getBlockEntity(pos) instanceof StockMarketDisplayBlockEntity d)
                     || !(d.getChart() instanceof DisplayCandlestickChart chart))
                 return state + ", no display chart at " + pos;
-            Object data = chartField(chart, "data");
-            String candles = data instanceof PriceHistoryData h && !h.getCandles().isEmpty()
-                    ? h.getCandles().size() + " (newest " + h.toRealPrice(h.getCandles().getLast().low) + ".."
-                            + h.toRealPrice(h.getCandles().getLast().high) + ")"
-                    : data == null ? "no data" : "0";
             return state + ", canvas height " + chart.getCanvasBounds().height + ", view " + chart.getViewportState()
-                    + ", autoWiden " + chartField(chart, "autoWidenVertical") + ", candles " + candles;
+                    + ", autoWiden " + chartField(chart, "autoWidenVertical") + ", candles " + candleSummary(chart);
         });
+    }
+
+    /** Diagnostic: the chart's candle count, the lowest price of them all and the newest candle's range. Client thread. */
+    private static String candleSummary(CandlestickChart chart) {
+        if (!(chartField(chart, "data") instanceof PriceHistoryData h)) return "no data";
+        if (h.getCandles().isEmpty()) return "0";
+        long lowest = h.getCandles().stream().mapToLong(c -> Math.min(c.low, c.open)).min().getAsLong();
+        PriceHistoryData.Candle newest = h.getCandles().getLast();
+        return h.getCandles().size() + " (lowest " + h.toRealPrice(lowest) + ", newest " + h.toRealPrice(newest.low)
+                + ".." + h.toRealPrice(newest.high) + ")";
     }
 
     /**
@@ -630,6 +638,40 @@ public class TradeScreenGuiTestSuite extends TestSuite {
         } finally {
             Gui.close();
         }
+    }
+
+    /**
+     * SM-386: the trade screen chart of a market with no stored prices yet (created just now, {@link #NO_HISTORY_ITEM})
+     * has no candle at price 0. The history answer for such a market used to hold one candle at price 0: the chart
+     * fitted its range to 0..0 and then drew a spike from 0 up to the price. Now, once the price is in view, every
+     * candle lies at a real price. Runs where {@link #withTemporaryMarket} can create the market (sp, mp).
+     */
+    private TestResult test_newMarketChartHasNoZeroCandle() {
+        StockMarketModBackend.ClientInstances client = StockMarketModBackend.getClientInstances();
+        if (client == null) return skip("not in a world");
+        return withTemporaryMarket(client, NO_HISTORY_ITEM, id -> {
+            Gui.onClient(() -> TradeScreen.openScreen(id)); // preselects the market
+            Gui.waitForScreen(TradeScreen.class, OPEN_TICKS);
+            Gui.waitTicks(1); // first layout
+            List<GuiNode> charts = shownTopFirst(CandlestickChart.class, null);
+            if (charts.isEmpty()) return skip("needs the ModUtilities GuiLocator (no chart node on the trade screen)");
+            CandlestickChart chart = (CandlestickChart) charts.get(0).handle();
+            // the history answer is in, the price has arrived and the chart has it in view
+            boolean shown = Gui.waitUntil(() -> {
+                ClientMarket m = client.MARKET_MANAGER.getMarket(id);
+                return m != null && m.getCurrentMarketPrice() > 0
+                        && chartField(chart, "data") instanceof PriceHistoryData h && !h.getCandles().isEmpty()
+                        && chart.getMinVisiblePrice() <= m.getCurrentMarketRealPrice()
+                        && m.getCurrentMarketRealPrice() <= chart.getMaxVisiblePrice();
+            }, OPEN_TICKS * 2);
+            String state = Gui.onClient(() -> "chart " + chart.getMinVisiblePrice() + ".." + chart.getMaxVisiblePrice()
+                    + ", price " + client.MARKET_MANAGER.getMarket(id).getCurrentMarketRealPrice()
+                    + ", candles " + candleSummary(chart));
+            if (!shown) return fail("the new market's chart never had its price in view: " + state);
+            boolean zeroCandle = Gui.onClient(() -> chartField(chart, "data") instanceof PriceHistoryData h
+                    && h.getCandles().stream().anyMatch(c -> c.low <= 0 || c.open <= 0));
+            return assertTrue("no candle at price 0 on the new market's chart: " + state, !zeroCandle);
+        });
     }
 
     /**

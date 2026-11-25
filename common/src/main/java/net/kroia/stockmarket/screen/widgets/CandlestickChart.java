@@ -1165,8 +1165,11 @@ public class CandlestickChart extends StockMarketGuiElement {
         double maxPrice = data.toRealPrice(data.getMaxPrice(firstIndexInclusive, lastIndexInclusive));
         double minPrice = data.toRealPrice(data.getMinPrice(firstIndexInclusive, lastIndexInclusive));
         double priceDifference = maxPrice - minPrice;
-        chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1);
-        chartviewRect.height = (maxPrice + priceDifference * 0.1) - chartviewRect.y;
+        // SM-386: a flat range (one candle, or a price that never moved) gets 10% of the price around it instead
+        // of a zero-height view
+        double margin = (priceDifference > 0 ? priceDifference : Math.max(maxPrice, 1)) * 0.1;
+        chartviewRect.y = Math.max(0, minPrice - margin);
+        chartviewRect.height = (maxPrice + margin) - chartviewRect.y;
         autoWidenVertical = true;
     }
 
