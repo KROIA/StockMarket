@@ -157,6 +157,8 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new net.kroia.stockmarket.testing.tests.CrossServerTradeScenarioSuite()); // TK-6 (master + slaveA + slaveB setups only)
         TestRegistry.register(new net.kroia.stockmarket.testing.tests.ScreenTradeScenarioSuite()); // SM-352 (mp-clients and slave2-clients setups only)
         TestRegistry.register(new net.kroia.stockmarket.testing.tests.InterMarketRoundTripTestSuite()); // SM-335 inter-market round-trip exploit scenarios
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.NewsInGameCheckTestSuite()); // MU-181/SM-366/SM-382 news admin output (master + player)
+        TestRegistry.register(new net.kroia.stockmarket.testing.tests.LangTextInGameTestSuite()); // SM-372/SM-373/SM-374 translated texts
         // The long market simulation gates, one topic each; autotest-out/test-selection.json keeps them off
         TestRegistry.register(new PluginTestSuite.T207GateTestSuite());
         TestRegistry.register(new PluginTestSuite.T208GateTestSuite());
