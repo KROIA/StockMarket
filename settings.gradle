@@ -12,6 +12,5 @@ rootProject.name = 'stockmarket'
 include 'common'
 include 'fabric'
 include 'neoforge'
-//include 'quilt'
 
 
