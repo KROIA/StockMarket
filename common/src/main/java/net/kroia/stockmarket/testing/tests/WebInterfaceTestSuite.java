@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.testing.tests;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -17,6 +18,7 @@ import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.minecraft.compat.StockMarketWebInterface;
 import net.kroia.stockmarket.minecraft.compat.WebIconTextures;
+import net.kroia.stockmarket.minecraft.item.StockMarketItems;
 import net.kroia.stockmarket.networking.request.ModSettingsRequest;
 import net.kroia.stockmarket.testing.HeadlessFirefox;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
@@ -76,7 +78,8 @@ import java.util.zip.ZipOutputStream;
  * SM-363 (no internet needed): texture lookup through item models in a generated pack, the download's metadata,
  * size and SHA-1 checks (against a local HTTP server), icons over HTTP, and market names with variant details.
  * <p>
- * SM-383: the chart's per-market view in headless Firefox (skipped without Firefox).
+ * In headless Firefox (skipped without Firefox): SM-363, the market list's icons and variant names as shown;
+ * SM-383, the chart's per-market view, also after a page reload.
  */
 public class WebInterfaceTestSuite extends TestSuite {
 
@@ -115,6 +118,7 @@ public class WebInterfaceTestSuite extends TestSuite {
         addTest("market_names_show_variants", this::test_marketNamesShowVariants);
         addTest("icons_served_over_http", this::test_iconsServedOverHttp);
         addTest("chart_view_per_market_in_browser", this::test_chartViewPerMarket);
+        addTest("icons_and_names_in_browser", this::test_iconsAndNamesInBrowser);
     }
 
     private TestResult test_portValidation() {
@@ -334,12 +338,7 @@ public class WebInterfaceTestSuite extends TestSuite {
         TestFixture fixture = new TestFixture("WebNames");
         fixture.setBackend(backend);
         try {
-            Holder<Enchantment> sharpness = server.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.SHARPNESS);
-            ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
-            ItemEnchantments.Mutable enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
-            enchantments.set(sharpness, 5);
-            book.set(DataComponents.STORED_ENCHANTMENTS, enchantments.toImmutable());
-            short bookId = fixture.createMarket("book", book).getItemID().getShort();
+            short bookId = fixture.createMarket("book", sharpnessBook(server)).getItemID().getShort();
             short swift = fixture.createMarket("swift", PotionContents.createItemStack(Items.POTION, Potions.SWIFTNESS)).getItemID().getShort();
             short longSwift = fixture.createMarket("long_swift", PotionContents.createItemStack(Items.POTION, Potions.LONG_SWIFTNESS)).getItemID().getShort();
             short paperA = fixture.createMarket("paper_a").getItemID().getShort();
@@ -355,7 +354,7 @@ public class WebInterfaceTestSuite extends TestSuite {
             Map<Integer, String> names = new HashMap<>();
             for (JsonElement m : JsonParser.parseString(response.body()).getAsJsonObject().getAsJsonArray("markets"))
                 names.put(m.getAsJsonObject().get("id").getAsInt(), m.getAsJsonObject().get("name").getAsString());
-            String sharpnessV = Enchantment.getFullname(sharpness, 5).getString();
+            String sharpnessV = sharpnessName(server);
             r = assertTrue("book name shows " + sharpnessV + ": " + names.get((int) bookId), String.valueOf(names.get((int) bookId)).contains(sharpnessV));
             if (!r.passed()) return r;
             r = assertTrue("swiftness and long swiftness differ: " + names.get((int) swift) + " / " + names.get((int) longSwift),
@@ -374,6 +373,115 @@ public class WebInterfaceTestSuite extends TestSuite {
             StockMarketWebInterface.apply(backend);
             fixture.cleanup();
         }
+    }
+
+    /** @return an enchanted book holding Sharpness V */
+    private static ItemStack sharpnessBook(MinecraftServer server) {
+        ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+        ItemEnchantments.Mutable enchantments = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+        enchantments.set(sharpness(server), 5);
+        book.set(DataComponents.STORED_ENCHANTMENTS, enchantments.toImmutable());
+        return book;
+    }
+
+    /** @return "Sharpness V" in the server's language, what the book's market name has to show */
+    private static String sharpnessName(MinecraftServer server) {
+        return Enchantment.getFullname(sharpness(server), 5).getString();
+    }
+
+    private static Holder<Enchantment> sharpness(MinecraftServer server) {
+        return server.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.SHARPNESS);
+    }
+
+    /**
+     * Checks the market list in the browser. {@code %s}: a JSON array of {id, has (text the row's name must
+     * contain, optional), icon (true: the row must show the item's picture, false: the letter badge)}. Resolves to
+     * "ok: ..." or the reason it failed.
+     */
+    private static final String ICONS_SCRIPT = """
+            (async () => {
+              const want = %s;
+              const sleep = ms => new Promise(r => setTimeout(r, ms));
+              const until = async (cond, ms) => { const end = Date.now() + ms; while (Date.now() < end && !cond()) await sleep(100); return cond(); };
+              const markets = (await (await fetch('api/markets')).json()).markets;
+              const label = id => { const m = markets.find(x => x.id === id); return m ? (m.name || m.itemId) : null; };
+              const row = id => [...document.querySelectorAll('#markets li')].find(li => li.querySelector('.name').textContent === label(id));
+              if (!await until(() => want.every(w => row(w.id)), 15000))
+                return 'not in the market list: ' + want.filter(w => !row(w.id)).map(w => `${w.id} (${label(w.id)})`).join(', ');
+              // what the row's icon box shows: the item's picture once loaded, else the letter badge
+              const shows = id => { const box = row(id).querySelector('.icon'), img = box.querySelector('img');
+                return img ? (img.complete && img.naturalWidth > 0 ? 'icon' : 'loading') : box.textContent ? 'badge' : 'empty'; };
+              const seen = [];
+              for (const w of want) {
+                const name = row(w.id).querySelector('.name').textContent, expected = w.icon ? 'icon' : 'badge';
+                if (w.has && !name.includes(w.has)) return `market ${w.id} reads '${name}', without '${w.has}'`;
+                if (!await until(() => shows(w.id) === expected, 10000)) return `'${name}' shows ${shows(w.id)}, expected ${expected}`;
+                seen.push(`${name}: ${expected}`);
+              }
+              const names = want.map(w => row(w.id).querySelector('.name').textContent);
+              if (new Set(names).size !== names.length) return 'two markets read the same: ' + names.join(' / ');
+              return 'ok: ' + seen.join(', ');
+            })()""";
+
+    /**
+     * SM-363 as the user sees it, in headless Firefox. In the market list, the Sharpness V book shows its
+     * enchantment and the normal and long Swiftness potions read differently. Each row shows the item's picture
+     * where the server has its texture: the mod's own items always, vanilla items in singleplayer; on a dedicated
+     * server a vanilla item shows its picture only with a texture pack or the opt-in download, else the letter
+     * badge. Skips without Firefox ({@link HeadlessFirefox#PROPERTY}) and on slaves (no web interface there).
+     */
+    private TestResult test_iconsAndNamesInBrowser() {
+        if (!isMaster())
+            return skip("master only");
+        Path firefox = HeadlessFirefox.find();
+        if (firefox == null)
+            return skip("no Firefox (-D" + HeadlessFirefox.PROPERTY + ")");
+        MinecraftServer server = getServer();
+        if (server == null)
+            return skip("no server");
+        StockMarketModSettings.Integrations s = backend.SERVER_SETTINGS.INTEGRATIONS;
+        boolean enabledBefore = Boolean.TRUE.equals(s.WEB_INTERFACE_ENABLED.get());
+        int portBefore = s.WEB_INTERFACE_PORT.get();
+        TestFixture fixture = new TestFixture("WebIconsBrowser");
+        fixture.setBackend(backend);
+        try {
+            boolean singleplayer = !server.isDedicatedServer();
+            JsonArray want = new JsonArray();
+            expectRow(want, fixture.createMarket("book", sharpnessBook(server)), sharpnessName(server), singleplayer);
+            expectRow(want, fixture.createMarket("swift", PotionContents.createItemStack(Items.POTION, Potions.SWIFTNESS)), null, singleplayer);
+            expectRow(want, fixture.createMarket("long_swift", PotionContents.createItemStack(Items.POTION, Potions.LONG_SWIFTNESS)), null, singleplayer);
+            expectRow(want, fixture.createMarket("newspaper", new ItemStack(StockMarketItems.NEWSPAPER.get())), null, true);
+            int port = freePort();
+            s.WEB_INTERFACE_ENABLED.set(true);
+            s.WEB_INTERFACE_PORT.set(port);
+            StockMarketWebInterface.apply(backend);
+            TestResult r = assertEquals("running on the port", port, StockMarketWebInterface.getRunningPort());
+            if (!r.passed()) return r;
+            String result = runInBrowser(firefox, port, String.format(ICONS_SCRIPT, want)).get(0);
+            return result.startsWith("ok") ? pass(result) : fail(result);
+        } catch (Exception e) {
+            return fail("unexpected exception: " + e);
+        } finally {
+            s.WEB_INTERFACE_ENABLED.set(enabledBefore);
+            s.WEB_INTERFACE_PORT.set(portBefore);
+            StockMarketWebInterface.apply(backend);
+            fixture.cleanup();
+        }
+    }
+
+    /**
+     * Adds what the market list must show for {@code market} to {@code want} ({@link #ICONS_SCRIPT}).
+     *
+     * @param has  text its name must contain, or null
+     * @param icon true if its row must show the item's picture; false: the picture if the server has the texture,
+     *             else the letter badge
+     */
+    private static void expectRow(JsonArray want, IServerMarket market, @Nullable String has, boolean icon) {
+        JsonObject row = new JsonObject();
+        row.addProperty("id", market.getItemID().getShort());
+        if (has != null) row.addProperty("has", has);
+        row.addProperty("icon", icon || WebIconTextures.findIcon(market.getItemID().getName()) != null);
+        want.add(row);
     }
 
     // ------------------------------------------------------------------ SM-363: icons
@@ -526,13 +634,40 @@ public class WebInterfaceTestSuite extends TestSuite {
                 && near(p.to, zoomPrice.to, span * 0.01) && near(t.from, zoomBars.from, 0.5) && near(t.to, zoomBars.to, 0.5); };
               if (!await until(back, 10000))
                 return `A's zoom not back: price ${fmt(vis())}, wanted ${fmt(zoomPrice)}; bars ${fmt(bars())}, wanted ${fmt(zoomBars)}`;
+              sessionStorage.setItem('smtest.zoom', JSON.stringify({ price: zoomPrice, bars: zoomBars, span })); // for the reload step
               return `ok: B centred on ${rb.lo}..${rb.hi}; A back at price ${fmt(zoomPrice)}, bars ${fmt(zoomBars)}`;
             })()""";
 
     /**
+     * Second step of the SM-383 browser check, on the page loaded again: a click on market A brings back the zoom the
+     * first step left it with (the page keeps each market's view in the browser). {@code %1$d}: market A's id.
+     */
+    private static final String CHART_RELOAD_SCRIPT = """
+            (async () => {
+              const A = %1$d, chart = window.smChart;
+              if (!chart) return 'no window.smChart on the page after the reload';
+              const want = JSON.parse(sessionStorage.getItem('smtest.zoom') || 'null');
+              if (!want) return 'the first step left no zoom to compare with';
+              const sleep = ms => new Promise(r => setTimeout(r, ms));
+              const until = async (cond, ms) => { const end = Date.now() + ms; while (Date.now() < end && !cond()) await sleep(100); return cond(); };
+              const m = (await (await fetch('api/markets')).json()).markets.find(x => x.id === A);
+              const row = () => m && [...document.querySelectorAll('#markets li')].find(li => li.querySelector('.name').textContent === (m.name || m.itemId));
+              if (!await until(() => row(), 15000)) return 'market A not in the list after the reload';
+              row().click();
+              const vis = () => chart.priceScale('right').getVisibleRange(), bars = () => chart.timeScale().getVisibleLogicalRange();
+              const fmt = r => r ? `${r.from}..${r.to}` : 'none';
+              const near = (x, y, tol) => Math.abs(x - y) <= tol;
+              const back = () => { const p = vis(), t = bars(); return !!p && !!t && near(p.from, want.price.from, want.span * 0.01)
+                && near(p.to, want.price.to, want.span * 0.01) && near(t.from, want.bars.from, 0.5) && near(t.to, want.bars.to, 0.5); };
+              if (!await until(back, 10000))
+                return `A's zoom lost over the reload: price ${fmt(vis())}, wanted ${fmt(want.price)}; bars ${fmt(bars())}, wanted ${fmt(want.bars)}`;
+              return `ok: A's zoom kept over the reload (price ${fmt(want.price)}, bars ${fmt(want.bars)})`;
+            })()""";
+
+    /**
      * SM-383 in a real browser: two markets with far-apart prices and four hours of history each. A zoomed market A,
-     * then a click on B: the price axis is recentred on B. A click back on A: A's price and time range are back.
-     * Skips without Firefox ({@link HeadlessFirefox#PROPERTY}) and on slaves (no web interface there).
+     * then a click on B: the price axis is recentred on B. A click back on A: A's price and time range are back, also
+     * after the page is loaded again (the page keeps the views in the browser). Skips without Firefox ({@link HeadlessFirefox#PROPERTY}) and on slaves (no web interface there).
      */
     private TestResult test_chartViewPerMarket() {
         if (!isMaster())
@@ -563,17 +698,11 @@ public class WebInterfaceTestSuite extends TestSuite {
             StockMarketWebInterface.apply(backend);
             TestResult r = assertEquals("running on the port", port, StockMarketWebInterface.getRunningPort());
             if (!r.passed()) return r;
-            String script = String.format(CHART_VIEW_SCRIPT, ids.get(0), ids.get(1));
-            // off the server thread: the page's API calls are answered while await() runs the server's tasks
-            CompletableFuture<String> run = CompletableFuture.supplyAsync(() -> {
-                try {
-                    return HeadlessFirefox.evaluate(firefox, "http://127.0.0.1:" + port + "/", script);
-                } catch (Exception e) {
-                    throw new CompletionException(e);
-                }
-            });
-            String result = await(run, 150_000);
-            return result.startsWith("ok") ? pass(result) : fail(result);
+            List<String> results = runInBrowser(firefox, port, String.format(CHART_VIEW_SCRIPT, ids.get(0), ids.get(1)),
+                    String.format(CHART_RELOAD_SCRIPT, ids.get(0)));
+            for (String result : results)
+                if (!result.startsWith("ok")) return fail(result);
+            return pass(String.join("; ", results));
         } catch (Exception e) {
             return fail("unexpected exception: " + e);
         } finally {
@@ -584,6 +713,22 @@ public class WebInterfaceTestSuite extends TestSuite {
                 backend.MARKET_PRICE_HISTORY_MANAGER.removeHistory(Optional.empty(), Optional.of(new EqualityFilter(id)));
             fixture.cleanup();
         }
+    }
+
+    /**
+     * Runs {@code scripts} in headless Firefox on the web page at {@code port} ({@link HeadlessFirefox#evaluate}: the
+     * page is loaded again before each script after the first) and returns their values. Off the server thread: the
+     * page's API calls are answered while {@link #await} runs the server's tasks.
+     */
+    private List<String> runInBrowser(Path firefox, int port, String... scripts) {
+        CompletableFuture<List<String>> run = CompletableFuture.supplyAsync(() -> {
+            try {
+                return HeadlessFirefox.evaluate(firefox, "http://127.0.0.1:" + port + "/", scripts);
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        });
+        return await(run, 150_000);
     }
 
     /** 240 one-minute candles up to the last full minute, a zigzag of +-5 % around {@code price} (raw), oldest first. */
