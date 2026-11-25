@@ -16,8 +16,8 @@
   const fmtVol = n => n.toLocaleString(undefined, { maximumFractionDigits: n < 10 ? 2 : 0 });
   const fmtRate = n => n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 4 });
   const fmtTime = ms => new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  // an untranslated key such as "item.mod.thing" -> show the item id instead
-  const displayName = m => /^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(m.name) ? m.itemId : m.name;
+  // the server sends the name with its variant details and its own fallback for untranslated names (SM-363)
+  const displayName = m => m.name || m.itemId;
   function tfLabel(tf) {
     if (!state.gameTime) return WALL_LABELS[tf] || (tf / 60000) + 'm';
     const h = tf / GAME_HOUR_MS;
@@ -151,7 +151,8 @@
       const ul = el('ul');
       for (const m of list) {
         const li = el('li', m.id === state.sel ? 'sel' : '');
-        li.title = m.itemId;
+        li.title = displayName(m) + '\n' + m.itemId;
+        li.dataset.item = m.itemId;
         li.append(el('span', 'dot ' + m.state), icon(m.itemId, displayName(m)), el('span', 'name', displayName(m)), el('span', 'price', fmtPrice(m.price)));
         li.onclick = () => { setMode('market'); select(m.id); };
         ul.append(li);
@@ -223,6 +224,7 @@
 
   function select(id) {
     if (state.sel === id) return;
+    saveView();
     state.sel = id;
     state.candleStart = null;
     state.lastBar = null;
@@ -241,6 +243,37 @@
     for (const list of lists) for (const c of list) if (c.gd !== undefined) state.gameLabels.set(c.t, c);
   }
 
+  // SM-383: a new market, pair or timeframe opens with all its candles in view. Dragging or zooming the price axis
+  // turns its autoScale off, so it is switched on again here (candles and pair series use the right price scale).
+  function fitChart() {
+    chart.timeScale().fitContent();
+    chart.priceScale('right').applyOptions({ autoScale: true });
+  }
+  // SM-383: each market and pair keeps its view in this browser ('sm.views', newest last, at most 200): the time zoom
+  // of its timeframe, and the price range only while the user has the price axis off autoScale. The page works without.
+  const views = (() => { try { return JSON.parse(localStorage.getItem('sm.views')) || {}; } catch (e) { return {}; } })();
+  const viewKey = () => state.mode === 'pair' ? `pair:${state.have},${state.want}` : state.sel === null ? null : 'm:' + state.sel;
+  /** Saves the view of the market or pair on screen; called before switching away and when the page is left. */
+  function saveView() {
+    const key = viewKey(), time = chart.timeScale().getVisibleLogicalRange();
+    if (key === null || !time) return;
+    const scale = chart.priceScale('right');
+    delete views[key]; // re-added last = newest
+    views[key] = { tf: state.tf, time, price: scale.options().autoScale ? null : scale.getVisibleRange() };
+    const keys = Object.keys(views);
+    for (const old of keys.slice(0, Math.max(0, keys.length - 200))) delete views[old];
+    try { localStorage.setItem('sm.views', JSON.stringify(views)); } catch (e) { /* only a convenience */ }
+  }
+  /** Shows the saved view of the market or pair on screen, else fits it. A time zoom only fits its own timeframe. */
+  function restoreView() {
+    const v = views[viewKey()];
+    if (!v || v.tf !== state.tf) return fitChart();
+    chart.timeScale().setVisibleLogicalRange(v.time);
+    const scale = chart.priceScale('right');
+    if (v.price) scale.setVisibleRange(v.price); // also turns autoScale off
+    else scale.applyOptions({ autoScale: true });
+  }
+  window.addEventListener('beforeunload', saveView);
   async function loadHistory(fit) {
     const id = state.sel, tf = state.tf;
     if (id === null || !tf) return;
@@ -256,7 +289,7 @@
         time: c.t, value: c.v, color: c.c >= c.o ? 'rgba(38,166,154,.45)' : 'rgba(239,83,80,.45)',
       })));
       state.lastBar = d.candles.length ? { ...d.candles[d.candles.length - 1] } : null;
-      if (fit) chart.timeScale().fitContent();
+      if (fit) restoreView();
     } catch (e) { /* next poll retries */ }
   }
 
@@ -264,6 +297,7 @@
   const byId = id => state.markets.find(m => m.id === id);
   function setMode(mode) {
     if (state.mode === mode) return;
+    saveView();
     state.mode = mode;
     $('modeMarket').classList.toggle('sel', mode === 'market');
     $('modePair').classList.toggle('sel', mode === 'pair');
@@ -356,7 +390,7 @@
       pairCandles.setData(candles);
       pairSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
       state.pairLast = candles.length ? { ...candles[candles.length - 1] } : null;
-      if (fit) chart.timeScale().fitContent();
+      if (fit) restoreView();
     } catch (e) { /* next poll retries */ }
   }
   function pairChanged() {
@@ -383,9 +417,10 @@
       showPairStyle();
     };
   }
-  $('pairHave').onchange = pairChanged;
-  $('pairWant').onchange = pairChanged;
+  $('pairHave').onchange = () => { saveView(); pairChanged(); }; // state still holds the old pair here
+  $('pairWant').onchange = () => { saveView(); pairChanged(); };
   $('pairSwap').onclick = () => {
+    saveView();
     [state.have, state.want] = [state.want, state.have];
     renderPairOptions(true);
     pairChanged();

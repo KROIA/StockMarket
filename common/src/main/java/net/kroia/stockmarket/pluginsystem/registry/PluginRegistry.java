@@ -2,6 +2,7 @@ package net.kroia.stockmarket.pluginsystem.registry;
 
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -34,6 +35,24 @@ public class PluginRegistry {
         registryObject = new PluginRegistryObject(pluginTypeID, pluginName, pluginDescription, serverPluginFactory);
         registryObjects.put(pluginTypeID, registryObject);
         return registryObject;
+    }
+
+    /**
+     * SM-377: the description text to show for a plugin. A plugin type with a description lang key
+     * shows the translation in the current language (stored descriptions of built-in plugins are
+     * only the English default, older worlds may hold an outdated one); any other plugin shows its
+     * stored plain text.
+     *
+     * @param pluginTypeID the plugin's type ID, may be null
+     * @param description  the plugin's stored description, may be null
+     * @return the text to show, never null
+     */
+    public static String displayDescription(@Nullable String pluginTypeID, @Nullable String description) {
+        PluginRegistryObject registryObject = pluginTypeID != null ? registryObjects.get(pluginTypeID) : null;
+        if (registryObject != null && registryObject.getDescriptionKey() != null) {
+            return Component.translatable(registryObject.getDescriptionKey()).getString();
+        }
+        return description != null ? description : "";
     }
 
     /** Finds a registered plugin by its type ID. */

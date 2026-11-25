@@ -194,7 +194,9 @@ public class CreateMarketTab extends StockMarketGuiElement {
         categoryButtons.clear();
 
         for (MarketPresetCategory category : cachedCategories) {
-            Button btn = new Button(category.getCategory(), () -> onCategorySelected(category.getCategory()));
+            // SM-373: show the translated name; selection keeps the stored name
+            Button btn = new Button(MarketPresetCategory.displayName(category.getCategory()),
+                    () -> onCategorySelected(category.getCategory()));
             btn.setHeight(defaultElementHeight);
             categoryButtons.add(btn);
             categoryListView.addChild(btn);
@@ -474,13 +476,12 @@ public class CreateMarketTab extends StockMarketGuiElement {
             rebuildSelectedList();
         }
 
-        // Highlight the selected category button
-        for (Button btn : categoryButtons) {
-            if (btn.getText().equals(selectedCategory)) {
-                btn.setBackgroundColor(0xFF4a6fa5);
-            } else {
-                btn.setBackgroundColor(Button.DEFAULT_BACKGROUND_COLOR);
-            }
+        // Highlight the selected category button. The buttons show translated names (SM-373),
+        // so compare the stored name of the category built at the same index.
+        for (int i = 0; i < categoryButtons.size(); i++) {
+            boolean selected = i < cachedCategories.size()
+                    && cachedCategories.get(i).getCategory().equals(selectedCategory);
+            categoryButtons.get(i).setBackgroundColor(selected ? 0xFF4a6fa5 : Button.DEFAULT_BACKGROUND_COLOR);
         }
     }
 

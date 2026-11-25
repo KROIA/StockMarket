@@ -4,7 +4,6 @@ plugins {
 }
 
 repositories {
-    maven { url 'https://maven.quiltmc.org/repository/release/' }
     maven {
         // location of the maven that hosts JEI files since January 2023
         name = "Jared's maven"
@@ -59,7 +58,6 @@ dependencies {
     //implementation("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version") // mc>=26.1
     modImplementation("com.github.KROIA.BankSystem:banksystem-fabric:$rootProject.banksystem_version") // mc<=1.21.11
     //implementation("com.github.KROIA.BankSystem:banksystem-fabric:$rootProject.banksystem_version") // mc>=26.1
-    //include("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version")
 
     //modCompileOnlyApi("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric-api:${rootProject.jei_version}") // mc<=1.21.3
     //compileOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-common-api:${rootProject.jei_version}") // mc>=1.21.4 mc<=1.21.4 (JEI has no Fabric build for 1.21.4)
