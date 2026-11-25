@@ -188,6 +188,7 @@ public class TradeScreenGuiTestSuite extends TestSuite {
             BlockPos pos = feet.south(2).above(), between = feet.south().above();
             BlockState[] before = await(server.submit(() -> new BlockState[]{
                     server.overworld().getBlockState(pos), server.overworld().getBlockState(between)}), WAIT_MS);
+            Gui.onClient(() -> { forgetSavedChartViews(a); forgetSavedChartViews(b); });
             try {
                 String problem = await(server.submit(() -> {
                     StockMarketModBackend.ServerInstances backend = StockMarketModBackend.getServerInstances();
@@ -374,6 +375,26 @@ public class TradeScreenGuiTestSuite extends TestSuite {
             return state + ", canvas height " + chart.getCanvasBounds().height + ", view " + chart.getViewportState()
                     + ", autoWiden " + chartField(chart, "autoWidenVertical") + ", candles " + candles;
         });
+    }
+
+    /**
+     * SM-387 workaround, test only: forgets the chart views this client saved for {@code market} (its trade screen
+     * view, keyed by the item name, and display views, keyed "..._&lt;item short&gt;"). A display chart without a view
+     * of its own copies the trade screen's view and never widens it, so the 0..0 view an earlier test's chart of
+     * the same temporary item fitted to SM-386's fake 0 candle stayed on the display. Drop this once SM-387 is
+     * fixed. Reflection because CandlestickChart has no API to clear saved views. Client thread.
+     */
+    @SuppressWarnings("unchecked")
+    private static void forgetSavedChartViews(ItemID market) {
+        try {
+            java.lang.reflect.Field field = CandlestickChart.class.getDeclaredField("savedViewports");
+            field.setAccessible(true);
+            String suffix = "_" + market.getShort();
+            ((java.util.Map<String, ?>) field.get(null)).keySet()
+                    .removeIf(key -> key.equals(market.getName()) || key.endsWith(suffix));
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("cannot clear CandlestickChart.savedViewports (SM-387 workaround)", e);
+        }
     }
 
     /** Diagnostic: a private field of {@link CandlestickChart} (test-only reflection), or "?" if it cannot be read. */
