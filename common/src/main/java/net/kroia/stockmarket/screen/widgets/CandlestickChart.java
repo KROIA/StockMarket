@@ -39,10 +39,13 @@ public class CandlestickChart extends StockMarketGuiElement {
     public static final int colorHorizontalLine = UI_Colors.candlestickChart_horizontalLine;
     public static final int colorZeroLine       = UI_Colors.candlestickChart_zeroLine;
     public static final int colorCurrentPrice   = UI_Colors.candlestickChart_currentPriceLine;
-    public static final SimpleDateFormat dayFormat   = new SimpleDateFormat("dd.", Locale.getDefault());
-    public static final SimpleDateFormat monthFormat = new SimpleDateFormat(" MMMM ", Locale.getDefault());
-    public static final SimpleDateFormat yearFormat  = new SimpleDateFormat("yyyy", Locale.getDefault());
+    /** SM-367: date line under a time label, shown where the day changes. */
+    public static final SimpleDateFormat dateFormat  = new SimpleDateFormat("dd. MMM", Locale.getDefault());
     public static final SimpleDateFormat timeFormat  = new SimpleDateFormat("HH:mm", Locale.getDefault());
+    /** Top of the current-price badge while it is not shown. */
+    private static final int NO_BADGE = Integer.MIN_VALUE;
+    /** Minimum horizontal gap between two time labels. */
+    private static final int TIME_LABEL_GAP = 4;
     // Number of candles shown by default when a market is opened for the first time
     private static final int DEFAULT_VISIBLE_CANDLES = 50;
 
@@ -70,7 +73,7 @@ public class CandlestickChart extends StockMarketGuiElement {
     // T-221: the timeframe is kept as its delta (ms), not as a button index: the index meant a
     // different timeframe in the other candle timebase (real 1h = index 3 = game 1W).
     private record ViewportState(double viewX, double viewY, double viewWidth, double viewHeight,
-                                 double zoomLevel, long candleDeltaMs) {}
+                                 double zoomLevel, long candleDeltaMs, boolean autoWidenVertical) {}
 
     private static final Map<String, ViewportState> savedViewports = new HashMap<>();
 
@@ -89,17 +92,28 @@ public class CandlestickChart extends StockMarketGuiElement {
     private final Rectangle canvasScissorRect = new Rectangle(1, 1, 0, 0);
     private final Rectangle volumeRect = new Rectangle(1, 1, 0, 0);
     private final Rectangle volumeScissorRect = new Rectangle(1, 1, 0, 0);
-    private double zoomLevel = 200;
+    /** The view a chart starts with, before any data or input (SM-379: see {@link #isUntouchedDefaultViewport}). */
+    private static final double DEFAULT_VIEW_X = 200, DEFAULT_VIEW_Y = 0, DEFAULT_VIEW_W = 200, DEFAULT_VIEW_H = 500,
+            DEFAULT_ZOOM = 200;
+    private double zoomLevel = DEFAULT_ZOOM;
     /** Minimum visible candle count (horizontal zoom floor); shared by live zoom and viewport restore. */
     private static final double MIN_ZOOM_CANDLES = 5.0;
-    private final RectangleF chartviewRect = new RectangleF(200, 0, 200, 500);
+    private final RectangleF chartviewRect = new RectangleF(DEFAULT_VIEW_X, DEFAULT_VIEW_Y, DEFAULT_VIEW_W, DEFAULT_VIEW_H);
     private final Point lastDragMousePos = new Point();
     private int maxPriceLabelTextWidth = 0;
+    /** Top of the last price label drawn this frame (labels go upwards), to skip one that would touch it. */
+    private int lastPriceLabelTop = Integer.MAX_VALUE;
+    /** SM-367: boxes of the axis texts and the price badge drawn in the last frame, see {@link #getDrawnTextBoxes()}. */
+    private final List<Rectangle> drawnTextBoxes = new ArrayList<>();
     private double currentPriceStep = 0;
     private int firstVisibleCandleIndex = 0;
     private int lastVisibleCandleIndex = 0;
-    private int maxTimeDateLabelWidth = 0;
     private boolean firstDraw = false;
+    /**
+     * SM-368: set by a vertical fit, cleared when the user zooms or drags vertically. While set and the newest
+     * candle is in view, the vertical range widens when the price leaves it (it was fitted only once).
+     */
+    private boolean autoWidenVertical = false;
     private boolean dragging = false;
     private boolean skipAutoCenterOnce = false;
 
@@ -269,6 +283,16 @@ public class CandlestickChart extends StockMarketGuiElement {
     }
 
     /**
+     * SM-367: the boxes (in this element's coordinates) of the price labels, the current-price badge and the
+     * time/date labels drawn in the last frame. Only read by the GUI tests, which check that no two overlap.
+     *
+     * @return a copy of the boxes
+     */
+    public List<Rectangle> getDrawnTextBoxes() {
+        return new ArrayList<>(drawnTextBoxes);
+    }
+
+    /**
      * Returns a copy of the canvas drawing area bounds.
      * Plugin developers can use this together with toCanvasSpaceX/Y
      * to draw custom overlays on top of the chart.
@@ -413,6 +437,7 @@ public class CandlestickChart extends StockMarketGuiElement {
             }
         }
 
+        drawnTextBoxes.clear();
         if (data == null || data.getCandles().isEmpty())
             return;
         lastVisibleCandleIndex = Math.min(data.getCandles().size() - 1, lastVisibleCandleIndex);
@@ -513,7 +538,31 @@ public class CandlestickChart extends StockMarketGuiElement {
             int lastIdx = candleCount - 1;
             int firstIdx = Math.max(0, candleCount - targetCandles);
             applyVerticalFitToRange(firstIdx, lastIdx);
+        } else if (autoWidenVertical && lastVisibleCandleIndex == data.getCandles().size() - 1) {
+            widenVerticalRange(firstVisibleCandleIndex, lastVisibleCandleIndex);
         }
+    }
+
+    /**
+     * SM-368: widens the vertical range so the given candles and the current price fit, with 10% margin on the
+     * side that grew. Never narrows, so the view does not jump with every price change.
+     */
+    private void widenVerticalRange(int firstIndexInclusive, int lastIndexInclusive) {
+        double min = data.toRealPrice(data.getMinPrice(firstIndexInclusive, lastIndexInclusive));
+        double max = data.toRealPrice(data.getMaxPrice(firstIndexInclusive, lastIndexInclusive));
+        double price = data.getCurrentMarketRealPrice();
+        if (price > 0) {
+            min = Math.min(min, price);
+            max = Math.max(max, price);
+        }
+        double bottom = chartviewRect.y, top = chartviewRect.y + chartviewRect.height;
+        if (min >= bottom && max <= top)
+            return;
+        double margin = (Math.max(max, top) - Math.min(min, bottom)) * 0.1;
+        if (min < bottom) bottom = Math.max(0, min - margin);
+        if (max > top) top = max + margin;
+        chartviewRect.y = bottom;
+        chartviewRect.height = top - bottom;
     }
 
     private void renderVolumeBars() {
@@ -563,7 +612,8 @@ public class CandlestickChart extends StockMarketGuiElement {
             return;
         double currentPrice = data.getCurrentMarketRealPrice();
         int yPos = toCanvasSpaceY(currentPrice);
-        if (yPos < canvasRect.y || yPos > canvasRect.y + canvasRect.height)
+        int labelY = currentPriceBadgeTop();
+        if (labelY == NO_BADGE)
             return;
 
         // Dashed horizontal line across the chart canvas
@@ -576,18 +626,41 @@ public class CandlestickChart extends StockMarketGuiElement {
         }
         disableScissor();
 
-        // Price label to the right of the chart (same position as grid labels)
+        // Price badge to the right of the chart (same position as grid labels; the grid
+        // labels it would cover are skipped in renderHorizontalValueLabel)
         String priceLabel = formatPrice(currentPrice);
         int textWidth = getTextWidth(priceLabel);
         int textHeight = getTextHeight();
         int labelX = canvasRect.x + canvasRect.width + 2;
-        int labelY = yPos - textHeight / 2;
+        // semi-transparent marker colour with white text; no grid label lies under it (see above)
         drawRect(labelX, labelY, textWidth + 6, textHeight, colorCurrentPrice);
         drawText(priceLabel, labelX + 3, labelY, 0xFFFFFFFF, getTextFontScale());
+        drawnTextBoxes.add(new Rectangle(labelX, labelY, textWidth + 6, textHeight));
+    }
+
+    /**
+     * @return the top of the current-price badge, kept inside the canvas, or {@link #NO_BADGE} while the
+     * current price is outside the visible range
+     */
+    private int currentPriceBadgeTop() {
+        if (data == null)
+            return NO_BADGE;
+        int yPos = toCanvasSpaceY(data.getCurrentMarketRealPrice());
+        if (yPos < canvasRect.y || yPos > canvasRect.y + canvasRect.height)
+            return NO_BADGE;
+        int textHeight = getTextHeight();
+        return Math.max(canvasRect.y, Math.min(yPos - textHeight / 2, canvasRect.y + canvasRect.height - textHeight));
+    }
+
+    /** SM-367: height of the time axis under the volume bars: one row for the time, one for the date. */
+    private int timeAxisHeight() {
+        return 2 * getTextHeight() + 4;
     }
 
     private void renderChartHorizontalBackground() {
-        int targetLineCount = 8;
+        // SM-367: as many grid lines as fit with a free text row between two labels (small charts got 8 crowded ones)
+        int candleAreaHeight = Math.max(1, getHeight() - timeAxisHeight()) * 7 / 8;
+        int targetLineCount = Math.max(2, Math.min(8, candleAreaHeight / (2 * getTextHeight())));
 
         double visiblePriceRange = chartviewRect.height;
         double rawStep = visiblePriceRange / targetLineCount;
@@ -609,14 +682,18 @@ public class CandlestickChart extends StockMarketGuiElement {
         double topPrice = chartviewRect.y + chartviewRect.height;
         currentPriceStep = niceStep;
         maxPriceLabelTextWidth = 0;
+        lastPriceLabelTop = Integer.MAX_VALUE;
+        int badgeTop = currentPriceBadgeTop();
         scissorPause();
         for (double price = firstLine; price <= topPrice; price += niceStep) {
-            renderHorizontalValueLabel(price);
+            renderHorizontalValueLabel(price, badgeTop);
         }
         scissorResume();
+        // SM-367: the label column is wide enough for the current-price badge too (it is 3 px wider than its text)
+        maxPriceLabelTextWidth = Math.max(maxPriceLabelTextWidth, getTextWidth(formatPrice(data.getCurrentMarketRealPrice())) + 3);
         maxPriceLabelTextWidth += 10;
         int totalWidth = Math.max(2, ((getWidth() - maxPriceLabelTextWidth) / 2) * 2);
-        int totalHeight = Math.max(1, (getHeight() - maxTimeDateLabelWidth));
+        int totalHeight = Math.max(1, (getHeight() - timeAxisHeight()));
         int volumeHeight = totalHeight / 8;
         int candleHeight = totalHeight - volumeHeight;
 
@@ -640,71 +717,68 @@ public class CandlestickChart extends StockMarketGuiElement {
         }
     }
 
+    /** One label of the time axis: the time on the first row, the date below it where the day changes. */
+    private record TimeLabel(int x, int width, String time, String date) {}
+
+    /**
+     * Draws the time axis under the volume bars. SM-367: every label shows the time ("HH:mm", or the in-game hour)
+     * and, on a second row, the date ("dd. MMM", or "Day N") where the day changes from the label before it. Labels
+     * are picked from the newest visible candle backwards; one that would overlap the label to its right is left out,
+     * so the newest candle always has a label and nothing collides on narrow charts.
+     */
     private void renderChartVerticalBackground() {
         int targetLineCount = 10;
-        int visibleTimeStamps = (int) chartviewRect.width;
-
-        double rawStep = (double) visibleTimeStamps / targetLineCount;
-
-        // Round to a "nice" number: nearest 1, 2, or 5 times a power of 10
-        double magnitude = Math.min(1, Math.pow(10, Math.floor(Math.log10(rawStep))));
-        double normalized = rawStep / magnitude;
-
-        int niceStep;
-        if      (normalized < 1.5) niceStep = (int) (1  * magnitude);
-        else if (normalized < 3.5) niceStep = (int) (2  * magnitude);
-        else if (normalized < 7.5) niceStep = (int) (5  * magnitude);
-        else                       niceStep = (int) (10 * magnitude);
-
-        maxPriceLabelTextWidth = 0;
         List<PriceHistoryData.Candle> candles = data.getCandles();
         int candleCount = candles.size();
         int offset = Math.max(1, (lastVisibleCandleIndex - firstVisibleCandleIndex) / targetLineCount);
 
-        Date lastTime = new Date(0);
-        long lastGameDay = Long.MIN_VALUE;
-        maxTimeDateLabelWidth = 0;
-        int canvasY = volumeRect.y + volumeRect.height;
-        int i = firstVisibleCandleIndex;
-
-        for (; i <= lastVisibleCandleIndex; i += offset) {
-            if (i >= lastVisibleCandleIndex - offset && offset > 1) {
-                i = lastVisibleCandleIndex;
-            }
-
+        List<TimeLabel> labels = new ArrayList<>(); // newest first
+        int leftLimit = Integer.MAX_VALUE;
+        for (int i = lastVisibleCandleIndex; i >= Math.max(0, firstVisibleCandleIndex); i -= offset) {
             PriceHistoryData.Candle candle = candles.get(i);
-            int canvasX = toCanvasSpaceX(candleCount - i - 1);
-
-            String[] timeDateStr;
+            String time, date;
             if (ClientMarket.isCandleUseGameTime() && candle.gameTime >= 0) {
-                // T-218: in-game labels, "Day N" whenever the day changes, then "hh:00".
-                // Legacy candles without game time keep their wall-clock labels.
-                long day = PriceHistoryData.gameDay(candle.gameTime);
-                String hour = PriceHistoryData.gameHourLabel(candle.gameTime);
-                timeDateStr = day != lastGameDay
-                        ? new String[]{Component.translatable(KEY_GAME_DAY, day).getString(), hour}
-                        : new String[]{hour};
-                lastGameDay = day;
+                // T-218: in-game labels. Legacy candles without game time keep their wall-clock labels.
+                time = PriceHistoryData.gameHourLabel(candle.gameTime);
+                date = Component.translatable(KEY_GAME_DAY, PriceHistoryData.gameDay(candle.gameTime)).getString();
             } else {
-                Date currentTime = new Date(candle.openTimestamp);
-                timeDateStr = timestampToTimeDate(currentTime, lastTime);
-                lastTime = currentTime;
+                Date openTime = new Date(candle.openTimestamp);
+                time = timeFormat.format(openTime);
+                date = dateFormat.format(openTime);
             }
-
-            int textHeight = getTextHeight();
-            int lineOffset = Math.max(canvasY, canvasY + 1);
-
-            for (int j = 0; j < timeDateStr.length; j++) {
-                int yPos = lineOffset + (j * textHeight);
-                int textWidth = getTextWidth(timeDateStr[j]);
-                maxTimeDateLabelWidth = Math.max(maxTimeDateLabelWidth, textWidth);
-                drawText(timeDateStr[j], Math.max(canvasRect.x, canvasX - (candleWidth + textWidth) / 2), yPos);
-            }
+            // the date row counts even where it is not drawn, so a label's room does not depend on its neighbours
+            int width = Math.max(getTextWidth(time), getTextWidth(date));
+            int center = toCanvasSpaceX(candleCount - i - 1) - candleWidth / 2;
+            int x = Math.max(canvasRect.x, Math.min(center - width / 2, canvasRect.x + canvasRect.width - width));
+            if (x + width + TIME_LABEL_GAP > leftLimit)
+                continue;
+            labels.add(new TimeLabel(x, width, time, date));
+            leftLimit = x;
         }
-        maxTimeDateLabelWidth += 10;
+
+        int textHeight = getTextHeight();
+        int y = volumeRect.y + volumeRect.height + 1;
+        String lastDate = null;
+        for (int k = labels.size() - 1; k >= 0; k--) { // oldest first: the date shows where the day changes
+            TimeLabel label = labels.get(k);
+            drawText(label.time(), label.x() + (label.width() - getTextWidth(label.time())) / 2, y);
+            boolean newDay = !label.date().equals(lastDate);
+            if (newDay)
+                drawText(label.date(), label.x() + (label.width() - getTextWidth(label.date())) / 2, y + textHeight);
+            lastDate = label.date();
+            drawnTextBoxes.add(new Rectangle(label.x(), y, label.width(), newDay ? 2 * textHeight : textHeight));
+        }
     }
 
-    private void renderHorizontalValueLabel(double price) {
+    /**
+     * Draws one price label right of the canvas. SM-367: a label the current-price badge would cover, or one that
+     * would touch the label drawn below it, is left out; its width still counts for the label column, so the canvas
+     * does not change width when the badge moves.
+     *
+     * @param price    the grid line's price
+     * @param badgeTop top of the current-price badge, or {@link #NO_BADGE}
+     */
+    private void renderHorizontalValueLabel(double price, int badgeTop) {
         if (price < 0)
             return;
         int textHeight = getTextHeight();
@@ -713,9 +787,15 @@ public class CandlestickChart extends StockMarketGuiElement {
             return;
         String priceLabel = formatPrice(price);
         int textWidth = getTextWidth(priceLabel);
-
-        drawText(priceLabel, canvasRect.x + canvasRect.width + 5, yPos - textHeight / 2);
         maxPriceLabelTextWidth = Math.max(maxPriceLabelTextWidth, textWidth);
+
+        int top = yPos - textHeight / 2;
+        if ((badgeTop != NO_BADGE && Math.abs(top - badgeTop) < textHeight + 1) || lastPriceLabelTop - top < textHeight + 1)
+            return;
+        lastPriceLabelTop = top;
+        int x = canvasRect.x + canvasRect.width + 5;
+        drawText(priceLabel, x, top);
+        drawnTextBoxes.add(new Rectangle(x, top, textWidth, textHeight));
     }
 
     private void renderHorizontalValueLine(double price) {
@@ -816,6 +896,7 @@ public class CandlestickChart extends StockMarketGuiElement {
 
         // Vertical zoom (disabled when holding Shift for horizontal-only zoom)
         if (!isKeyPressed(InputConstants.KEY_LEFT_SHIFT)) {
+            autoWidenVertical = false; // SM-368: the user picked the range now
             double newHeight = chartviewRect.height * zoomFactor;
             if (newHeight < Long.MAX_VALUE && newHeight > 0.1) {
                 chartviewRect.height = newHeight;
@@ -896,6 +977,8 @@ public class CandlestickChart extends StockMarketGuiElement {
             // Subtract because dragging right should move the view left
             chartviewRect.x -= worldDeltaX;
             chartviewRect.y = Math.max(0, chartviewRect.y - worldDeltaY);
+            if (dy != 0)
+                autoWidenVertical = false; // SM-368: the user picked the range now
 
             clampViewToNewestCandle();
             clampViewToOldestCandle();
@@ -941,6 +1024,23 @@ public class CandlestickChart extends StockMarketGuiElement {
     }
 
     /**
+     * SM-379: true if {@code tag} is the view of a chart nobody touched and that never got data (the start
+     * values, price range 0-500, first timeframe of either timebase), as displays saved it before SM-364.
+     * A view a player set never matches all of these exactly.
+     *
+     * @param tag a view from {@link #serializeViewport()}
+     */
+    public static boolean isUntouchedDefaultViewport(CompoundTag tag) {
+        long delta = NbtCompat.getLong(tag, "candleDeltaMs");
+        return NbtCompat.getDouble(tag, "viewX") == DEFAULT_VIEW_X
+                && NbtCompat.getDouble(tag, "viewY") == DEFAULT_VIEW_Y
+                && NbtCompat.getDouble(tag, "viewW") == DEFAULT_VIEW_W
+                && NbtCompat.getDouble(tag, "viewH") == DEFAULT_VIEW_H
+                && NbtCompat.getDouble(tag, "zoom") == DEFAULT_ZOOM
+                && (delta == ClientMarket.candleTimeDeltasFor(false)[0] || delta == ClientMarket.candleTimeDeltasFor(true)[0]);
+    }
+
+    /**
      * Restores viewport state from a CompoundTag previously created by
      * {@link #serializeViewport()}. Skips auto-centering after applying.
      */
@@ -954,6 +1054,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         chartviewRect.width = Math.max(NbtCompat.getDouble(tag, "viewW"), MIN_ZOOM_CANDLES);
         chartviewRect.height = NbtCompat.getDouble(tag, "viewH");
         zoomLevel = Math.max(NbtCompat.getDouble(tag, "zoom"), MIN_ZOOM_CANDLES);
+        autoWidenVertical = false; // a stored placement stays as it was
         skipAutoCenterOnce = true;
         // T-221: timeframe saved as its delta. Older tags (display blocks) hold an index into the
         // real-time deltas, the only set before T-218; a delta outside the active set falls back
@@ -1006,7 +1107,7 @@ public class CandlestickChart extends StockMarketGuiElement {
             savedViewports.put(this.priceDataProvider.getViewportKey(), new ViewportState(
                     chartviewRect.x, chartviewRect.y,
                     chartviewRect.width, chartviewRect.height,
-                    zoomLevel, currentDelta));
+                    zoomLevel, currentDelta, autoWidenVertical));
         }
     }
 
@@ -1025,6 +1126,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         chartviewRect.width = Math.max(state.viewWidth, MIN_ZOOM_CANDLES);
         chartviewRect.height = state.viewHeight;
         zoomLevel = Math.max(state.zoomLevel, MIN_ZOOM_CANDLES);
+        autoWidenVertical = state.autoWidenVertical;
         currentCandleTimeIdx = ClientMarket.candleTimeDeltaIndex(state.candleDeltaMs);
 
         // Load the correct candle data and update button colors without auto-centering
@@ -1065,6 +1167,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         double priceDifference = maxPrice - minPrice;
         chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1);
         chartviewRect.height = (maxPrice + priceDifference * 0.1) - chartviewRect.y;
+        autoWidenVertical = true;
     }
 
     public void autoCenterView() {
@@ -1079,6 +1182,7 @@ public class CandlestickChart extends StockMarketGuiElement {
 
             chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1);
             chartviewRect.height = Math.max((maxPrice + priceDifference * 0.1) - chartviewRect.y, 0.1);
+            autoWidenVertical = true;
             if (chartviewRect.width > lastIndex) {
                 chartviewRect.width = lastIndex;
             }
@@ -1214,30 +1318,6 @@ public class CandlestickChart extends StockMarketGuiElement {
                 maxWidth = w;
         }
         return maxWidth;
-    }
-
-    private String[] timestampToTimeDate(Date currentTime, Date lastTime) {
-        String currentTimeStr  = timeFormat.format(currentTime);
-        String currentDayStr   = dayFormat.format(currentTime);
-        String currentMonthStr = monthFormat.format(currentTime);
-        String currentYearStr  = yearFormat.format(currentTime);
-
-        String lastDayStr   = dayFormat.format(lastTime);
-        String lastMonthStr = monthFormat.format(lastTime);
-        String lastYearStr  = yearFormat.format(lastTime);
-
-        String dateStr = "";
-        if (!lastYearStr.equals(currentYearStr))
-            dateStr += currentYearStr + "\n";
-        if (!lastMonthStr.equals(currentMonthStr))
-            dateStr += currentMonthStr + "\n";
-        if (!lastDayStr.equals(currentDayStr))
-            dateStr += currentDayStr + "\n";
-
-        if (dateStr.isEmpty())
-            return new String[]{currentTimeStr};
-
-        return (dateStr + currentTimeStr).split("\n");
     }
 
     private String formatPrice(double price) {

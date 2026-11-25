@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.util;
 
 import net.kroia.modutilities.PermissionCompat;
+import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -53,12 +54,18 @@ public final class StockMarketPermissions {
      */
     public static final String ADMIN = "stockmarket.admin";
 
-    /** Every node, used by {@link #register()} and the registration test. */
+    /** Every node, used by {@link #register()} (the {@link #DEV_NODES} only in dev builds) and the registration test. */
     public static final String[] ALL_NODES = {COMMAND_OP, COMMAND_MANAGE, COMMAND_PRESET, COMMAND_NEWS,
             COMMAND_BACKUP, COMMAND_MARKET, COMMAND_EXPORTRECIPES, COMMAND_DEVTEST, NOTIFY, ADMIN};
 
     /** Nodes of the commands guarded by the StockMarket admin flag instead of server op (SM-266). */
     public static final Set<String> FLAG_GATED_NODES = Set.of(COMMAND_MANAGE, COMMAND_PRESET, COMMAND_NEWS, COMMAND_MARKET);
+
+    /**
+     * Nodes of the dev-build-only commands (SM-356). {@link #register()} skips them unless
+     * {@link StockMarketMod#ENABLE_DEV_FEATURES}, so release builds don't list them in permission mods.
+     */
+    public static final Set<String> DEV_NODES = Set.of(COMMAND_DEVTEST, COMMAND_EXPORTRECIPES);
 
     /**
      * @param node a node from {@link #ALL_NODES}
@@ -86,6 +93,8 @@ public final class StockMarketPermissions {
     /** Registers all nodes with ModUtilities. Must run during mod init, before the server starts (NeoForge). */
     public static void register() {
         for (String node : ALL_NODES) {
+            if (DEV_NODES.contains(node) && !StockMarketMod.ENABLE_DEV_FEATURES)
+                continue;
             PermissionCompat.registerNode(node, fallbackLevel(node));
         }
     }
