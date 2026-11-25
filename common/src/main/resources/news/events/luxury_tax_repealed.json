@@ -12,15 +12,33 @@
     "de_de": "Nach Monaten leerer Juweliergeschäfte und lautstarker Proteste der Gilden hat der Handelsrat die Luxussteuer auf Diamanten, Smaragde und Gold aufgehoben. Die Händler stauben ihre Vitrinen ab, und Käufer, die sich zurückgehalten haben, dürften an den Markt zurückkehren."
   },
   "category": "politics",
-  "weight": 2,
-  "cooldownSeconds": 86400,
-  "impact": {
-    "type": "trend",
-    "peakFactor": 0.22,
-    "rampUpSeconds": 1200,
-    "durationSeconds": 2700,
-    "reversal": "none"
+  "weight": 10,
+  "undoes": "luxury_goods_tax",
+  "undoDelaySeconds": {
+    "min": 259200,
+    "max": 1814400
   },
+  "undoRepeatDelaySeconds": {
+    "min": 86400,
+    "max": 259200
+  },
+  "sequences": [
+    {
+      "name": "reversal",
+      "steps": [
+        {
+          "name": "reversal",
+          "durationSeconds": {
+            "min": 28800,
+            "max": 86400
+          },
+          "targetFactor": 0.22,
+          "curve": "linear",
+          "permanent": true
+        }
+      ]
+    }
+  ],
   "markets": [
     {
       "item": "minecraft:diamond",
@@ -35,10 +53,7 @@
       "weightFactor": 0.6
     }
   ],
-  "requires": [
-    { "type": "firedBefore", "eventId": "luxury_goods_tax", "minSecondsAgo": 172800 },
-    { "type": "keyEquals",   "key": "luxury_tax", "value": "active" }
-  ],
-  "records": { "luxury_tax": "repealed" },
-  "undoes": "luxury_goods_tax"
+  "records": {
+    "luxury_tax": "repealed"
+  }
 }
