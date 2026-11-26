@@ -97,24 +97,26 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
     /** Recreates the market (empty book), detaches its plugins, turns the virtual book off and funds both players. */
     private TestResult setUpOnMaster(MinecraftServer server, MasterState s) {
         ServerPlayer seller = FakePlayers.get(server, SELLER), buyer = FakePlayers.get(server, BUYER);
-        return setUpOnMaster(s, seller.getUUID(), seller, SELLER, buyer.getUUID(), buyer, BUYER);
+        return setUpOnMaster(s, ITEM, seller.getUUID(), seller, SELLER, buyer.getUUID(), buyer, BUYER);
     }
 
     /**
-     * Recreates the market for {@link #ITEM} (empty book), detaches its plugins, turns the virtual book off, funds the
-     * seller with {@link #ITEMS} items and the buyer with enough money, and remembers price and balances in {@code s}.
-     * Shared with {@link ScreenTradeScenarioSuite} (real players instead of fake ones).
+     * Recreates the market for {@code item} (empty book), detaches its plugins, turns the virtual book off, funds the
+     * seller with {@link #ITEMS} items and the buyer with enough money, and remembers item, price and balances in
+     * {@code s}. Shared with {@link ScreenTradeScenarioSuite} (real players instead of fake ones).
      *
+     * @param item         the market's item: {@link #ITEM} here, {@link ScreenTradeScenario#ITEM} for the screen
+     *                     trade (both scenarios run at once in slave2-clients, so they must not share a market)
      * @param sellerPlayer the seller to add as a BankSystem user if it is none yet, or null for a real player (its
      *                     join adds it)
      * @param buyerPlayer  the same for the buyer
      */
-    TestResult setUpOnMaster(MasterState s, UUID seller, @Nullable ServerPlayer sellerPlayer, String sellerName,
+    TestResult setUpOnMaster(MasterState s, ItemStack item, UUID seller, @Nullable ServerPlayer sellerPlayer, String sellerName,
                              UUID buyer, @Nullable ServerPlayer buyerPlayer, String buyerName) {
         StockMarketModBackend.ServerInstances b = StockMarketModBackend.getServerInstances();
         if (b == null || b.MARKET_MANAGER.isSlave()) return fail("the 'master' instance is not the StockMarket master");
-        s.item = await(ItemIDManager.registerItemStackServerSide(ITEM), WAIT_MS);
-        if (!s.item.isValid()) return fail("no ItemID for " + ITEM);
+        s.item = await(ItemIDManager.registerItemStackServerSide(item), WAIT_MS);
+        if (!s.item.isValid()) return fail("no ItemID for " + item);
 
         // a run aborted before its cleanup leaves the market behind: delete it so the book starts empty
         if (Boolean.TRUE.equals(await(b.MARKET_MANAGER.getAsync().marketExistsAsync(s.item), WAIT_MS)))
