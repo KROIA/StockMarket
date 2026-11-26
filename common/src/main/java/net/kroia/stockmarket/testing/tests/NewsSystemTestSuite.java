@@ -10,9 +10,11 @@ import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
 import net.kroia.stockmarket.news.DefaultNewsEvents;
+import net.kroia.stockmarket.news.DefaultNewsPictures;
 import net.kroia.stockmarket.news.NewsEventDefinition;
 import net.kroia.stockmarket.news.NewsEventLibrary;
 import net.kroia.stockmarket.news.NewsImpactEnvelope;
+import net.kroia.stockmarket.news.NewsPictureLibrary;
 import net.kroia.stockmarket.news.NewsImpactEnvelope.ImpactType;
 import net.kroia.stockmarket.news.NewsImpactEnvelope.Phase;
 import net.kroia.stockmarket.news.NewsImpactEnvelope.ReversalMode;
@@ -34,11 +36,14 @@ import net.minecraft.world.item.Items;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -112,6 +117,7 @@ public class NewsSystemTestSuite extends TestSuite {
         addTest("library_duplicate_id_across_folders_names_both_files", this::test_library_duplicateIdAcrossFolders_namesBothFiles);
         addTest("library_splits_legacy_default_events_file", this::test_library_splitsLegacyDefaultEventsFile);
         addTest("library_legacy_file_with_existing_folder_only_renamed", this::test_library_legacyFileWithExistingFolder_onlyRenamed);
+        addTest("library_upgrades_unchanged_default_pictures", this::test_library_upgradesUnchangedDefaultPictures);
 
         // NewsRecord round-trips
         addTest("record_nbt_round_trip", this::test_record_nbtRoundTrip);
@@ -1351,6 +1357,66 @@ public class NewsSystemTestSuite extends TestSuite {
             return fail("temp dir setup failed: " + e);
         } finally {
             deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * SM-397: a default picture still equal to an old shipped version (a listed hash or the
+     * procedural placeholder) is replaced by the current baked picture; admin art stays
+     * byte-identical, an up-to-date file is not rewritten, and a missing file is still written.
+     */
+    private TestResult test_library_upgradesUnchangedDefaultPictures() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            List<String> ids = DefaultNewsEvents.DEFAULT_EVENT_IDS;
+            String oldId = ids.get(0), adminId = ids.get(1), placeholderId = ids.get(2);
+            Path current = dir.resolve(ids.get(3) + ".png");
+            Path missing = dir.resolve(ids.get(4) + ".png");
+            byte[] oldBytes = DefaultNewsPictures.encodeGrayscalePng(20, 20, new byte[20 * 20]);
+            byte[] adminBytes = DefaultNewsPictures.encodeGrayscalePng(24, 24, new byte[24 * 24]);
+            Files.write(dir.resolve(oldId + ".png"), oldBytes);
+            Files.write(dir.resolve(adminId + ".png"), adminBytes);
+            Files.write(dir.resolve(placeholderId + ".png"), DefaultNewsPictures.generatePlaceholder(placeholderId));
+            Files.write(current, bakedPicture(ids.get(3)));
+            Files.setLastModifiedTime(current, FileTime.fromMillis(946684800000L)); // 2000-01-01
+
+            // oldBytes counts as "shipped before" for oldId only; adminBytes is listed nowhere.
+            Map<String, Set<String>> legacy = Map.of(oldId,
+                    Set.of(NewsPictureLibrary.toHex(NewsPictureLibrary.sha1(oldBytes))));
+            TestResult r = assertEquals("old version and placeholder upgraded", 2,
+                    DefaultNewsPictures.upgradeUnchangedDefaults(dir, legacy));
+            if (!r.passed()) return r;
+            DefaultNewsPictures.extractMissingDefaults(dir);
+
+            r = assertTrue("listed old version replaced by the current picture",
+                    Arrays.equals(bakedPicture(oldId), Files.readAllBytes(dir.resolve(oldId + ".png"))));
+            if (!r.passed()) return r;
+            r = assertTrue("admin art byte-identical",
+                    Arrays.equals(adminBytes, Files.readAllBytes(dir.resolve(adminId + ".png"))));
+            if (!r.passed()) return r;
+            r = assertTrue("old placeholder replaced by the current picture",
+                    Arrays.equals(bakedPicture(placeholderId), Files.readAllBytes(dir.resolve(placeholderId + ".png"))));
+            if (!r.passed()) return r;
+            r = assertEquals("up-to-date picture not rewritten", 946684800000L,
+                    Files.getLastModifiedTime(current).toMillis());
+            if (!r.passed()) return r;
+            r = assertTrue("missing picture written", Files.exists(missing));
+            if (!r.passed()) return r;
+            return assertFalse("shipped legacy hash list loads", DefaultNewsPictures.loadLegacyHashes().isEmpty());
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** @return the baked jar picture of a default event (every default id ships one) */
+    private static byte[] bakedPicture(String eventId) throws IOException {
+        try (var in = DefaultNewsPictures.class.getResourceAsStream(
+                DefaultNewsPictures.RESOURCE_DIR + eventId + ".png")) {
+            if (in == null) throw new IOException("no baked picture for " + eventId);
+            return in.readAllBytes();
         }
     }
 
