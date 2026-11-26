@@ -20,6 +20,7 @@ import net.kroia.stockmarket.util.SlaveTrustCache;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
+import net.kroia.testkit.autotest.AutoTest;
 import net.kroia.testkit.players.FakePlayers;
 import net.kroia.testkit.scenario.Scenario;
 import net.minecraft.server.MinecraftServer;
@@ -43,11 +44,14 @@ import java.util.UUID;
  * the money moved between the two players' banks.
  * <p>
  * Every step runs on its server's thread ({@link Scenario} hops there), so the waits use {@link #await}, which keeps
- * the server's queued tasks running. Both slaves must be trusted by the master: an untrusted slave may not trade.
+ * the server's queued tasks running but not its ticks; the master's final check is therefore a per-tick
+ * {@link Scenario#stepUntil} (SM-395). Both slaves must be trusted by the master: an untrusted slave may not trade.
  */
 public class CrossServerTradeScenarioSuite extends TestSuite {
 
     static final long WAIT_MS = 15_000;
+    /** Master ticks the per-tick check may take: {@link #WAIT_MS} at 20 TPS, far below the others' 6000-tick wait. */
+    static final int CHECK_TICKS = 300;
     /** Fake names only: never a real player's. */
     private static final String SELLER = "ScenarioSeller", BUYER = "ScenarioBuyer";
     /** A vanilla item no default preset trades; its market is recreated by every run. */
@@ -86,12 +90,12 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
         MinecraftServer server = getServer();
         if (server == null) return skip("no server in this JVM");
         MasterState s = new MasterState();
-        return Scenario.named("sm_trade_across_slaves")
+        return runAndDeleteMarket(Scenario.named("sm_trade_across_slaves")
                 .step("master", "clean market and funded players", () -> setUpOnMaster(server, s))
                 .step("slaveA", "seller places a limit sell", () -> placeOnSlave(server, SELLER, false))
                 .step("slaveB", "buyer places a limit buy at the same price", () -> placeOnSlave(server, BUYER, true))
-                .step("master", "orders filled and balances moved", () -> checkOnMaster(s))
-                .run("trade_across_slaves", server);
+                .stepUntil("master", "orders filled and balances moved", () -> checkOnMaster(s), CHECK_TICKS),
+                "trade_across_slaves", server, s);
     }
 
     // ---- master ----------------------------------------------------------------------------------------------
@@ -151,58 +155,65 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
     }
 
     /**
-     * Reads both players' filled orders from the order history, then their balances; deletes the market at the end.
+     * One attempt of the master's check, run once per master tick by {@link Scenario#stepUntil} (up to
+     * {@link #CHECK_TICKS}): reads the order history once and passes when both players' orders are filled and both
+     * balances moved; otherwise it fails with what is missing and the next tick tries again. The market is deleted by
+     * {@link #runAndDeleteMarket}, not here.
      * <p>
-     * Trap (SM-395): this step blocks the master's server thread while it polls. {@link #pump}/{@link #await} run
-     * queued tasks but no server tick, and markets match only in their tick ({@code ServerMarket.update}), so an order
-     * still in the market's input buffer stays unmatched for the whole wait. The order must therefore be matched
-     * before this step starts: the buyer's step waits on its slave until its items arrived. A TestKit step that
-     * re-runs a check once per tick would remove the trap; {@link Scenario} has none yet.
+     * SM-395: never poll for the fill inside one plain step. Such a step blocks the master's server thread;
+     * {@link #pump}/{@link #await} run queued tasks but no tick, and markets match only in their tick
+     * ({@code ServerMarket.update}), so an order still in the market's input buffer stays unmatched for the whole
+     * wait. {@code stepUntil} lets the master tick between attempts.
      */
     TestResult checkOnMaster(MasterState s) {
         StockMarketModBackend.ServerInstances b = StockMarketModBackend.getServerInstances();
         if (b == null || s.item == null) return fail("the master's set-up step did not run");
-        long startTick = tick();
-        try {
-            UUID seller = s.seller, buyer = s.buyer;
-            OrderRecordStruct sell = null, buy = null;
-            for (long end = System.currentTimeMillis() + WAIT_MS; (sell == null || buy == null) && System.currentTimeMillis() < end; pump(250)) {
-                List<OrderRecordStruct> rows = await(b.ORDER_RECORD_MANAGER.getHistory(
-                        Optional.of(new DateFilter(s.since, Long.MAX_VALUE)), Optional.empty(), Optional.empty(), Optional.empty()), WAIT_MS);
-                sell = row(rows, seller, s.item);
-                buy = row(rows, buyer, s.item);
-            }
-            if (sell == null || buy == null)
-                return fail("no filled order in the history within " + WAIT_MS + " ms for:" + (sell == null ? " seller" : "")
-                        + (buy == null ? " buyer" : "") + "; market orders " + openOrders(b, s) + "; master tick "
-                        + startTick + " -> " + tick() + " (unchanged = the master did not tick, SM-395)");
-            TestResult r;
-            long volume = (long) ITEMS * s.scale;
-            for (OrderRecordStruct o : List.of(sell, buy)) {
-                String who = o == sell ? "seller" : "buyer";
-                r = assertEquals(who + " order filled", OrderRecordStruct.STATUS_FILLED, o.finalStatus());
-                if (!r.passed()) return r;
-                r = assertEquals(who + " volume", volume, Math.abs(o.amount()));
-                if (!r.passed()) return r;
-                r = assertEquals(who + " price = the seller's ask", s.price, o.price());
-                if (!r.passed()) return r;
-            }
+        UUID seller = s.seller, buyer = s.buyer;
+        List<OrderRecordStruct> rows = await(b.ORDER_RECORD_MANAGER.getHistory(
+                Optional.of(new DateFilter(s.since, Long.MAX_VALUE)), Optional.empty(), Optional.empty(), Optional.empty()), WAIT_MS);
+        OrderRecordStruct sell = row(rows, seller, s.item), buy = row(rows, buyer, s.item);
+        if (sell == null || buy == null)
+            return fail("no filled order in the history for:" + (sell == null ? " seller" : "") + (buy == null ? " buyer" : "")
+                    + "; market orders " + openOrders(b, s) + "; master tick " + tick());
+        TestResult r;
+        long volume = (long) ITEMS * s.scale;
+        for (OrderRecordStruct o : List.of(sell, buy)) {
+            String who = o == sell ? "seller" : "buyer";
+            r = assertEquals(who + " order filled", OrderRecordStruct.STATUS_FILLED, o.finalStatus());
+            if (!r.passed()) return r;
+            r = assertEquals(who + " volume", volume, Math.abs(o.amount()));
+            if (!r.passed()) return r;
+            r = assertEquals(who + " price = the seller's ask", s.price, o.price());
+            if (!r.passed()) return r;
+        }
 
-            IAsyncBankManager bank = BankSystemMod.getAPI().getServerBankManager().getAsync();
-            r = assertEquals("seller gave the items", s.sellerItems - volume, balance(bank, seller, s.item));
-            if (!r.passed()) return r;
-            r = assertEquals("buyer got the items", s.buyerItems + volume, balance(bank, buyer, s.item));
-            if (!r.passed()) return r;
-            long paid = s.buyerMoney - balance(bank, buyer, s.money);
-            long earned = balance(bank, seller, s.money) - s.sellerMoney;
-            r = assertTrue("buyer paid (" + paid + ")", paid > 0);
-            if (!r.passed()) return r;
-            return assertEquals("seller got what the buyer paid", paid, earned);
+        IAsyncBankManager bank = BankSystemMod.getAPI().getServerBankManager().getAsync();
+        r = assertEquals("seller gave the items", s.sellerItems - volume, balance(bank, seller, s.item));
+        if (!r.passed()) return r;
+        r = assertEquals("buyer got the items", s.buyerItems + volume, balance(bank, buyer, s.item));
+        if (!r.passed()) return r;
+        long paid = s.buyerMoney - balance(bank, buyer, s.money);
+        long earned = balance(bank, seller, s.money) - s.sellerMoney;
+        r = assertTrue("buyer paid (" + paid + ")", paid > 0);
+        if (!r.passed()) return r;
+        return assertEquals("seller got what the buyer paid", paid, earned);
+    }
+
+    /**
+     * Runs the scenario; afterwards the master deletes the test market, also after a failed step, an abort or a
+     * timeout (the per-tick check cannot do it: it runs many times). Other instances never touch the market.
+     */
+    TestResult runAndDeleteMarket(Scenario scenario, String testName, MinecraftServer server, MasterState s) {
+        try {
+            return scenario.run(testName, server);
         } finally {
-            try {
-                await(b.MARKET_MANAGER.getAsync().deleteMarketAsync(s.item), WAIT_MS);
-            } catch (RuntimeException ignored) {
-                // best effort: the next run deletes it first
+            if ("master".equals(AutoTest.label()) && s.item != null) {
+                try {
+                    Scenario.onServer(server, () -> await(StockMarketModBackend.getServerInstances().MARKET_MANAGER.getAsync()
+                            .deleteMarketAsync(s.item), WAIT_MS));
+                } catch (RuntimeException ignored) {
+                    // best effort, must not hide the test result: the next run's set-up deletes it first
+                }
             }
         }
     }
@@ -274,8 +285,8 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
     /**
      * Places the fake player's limit order for {@link #ITEMS} items at the market's current price through this
      * slave's player path (forwarded to the master). The buyer then waits until its items arrived, i.e. until the
-     * master matched both orders (SM-395): the master's check step blocks the master's server thread, so no tick
-     * and no matching runs while it waits; this wait runs on the slave, so the master keeps ticking meanwhile.
+     * master matched both orders (SM-395). This wait runs on the slave, so the master keeps ticking and matching;
+     * with the master's per-tick check it is a second guard, and its failure names the buyer's side directly.
      *
      * @param buy true for the buyer's limit buy, false for the seller's limit sell
      */
@@ -303,7 +314,7 @@ public class CrossServerTradeScenarioSuite extends TestSuite {
                 new Order(item, Order.Type.LIMIT, volume, price, 0, player.getUUID(), account.getAccountNumberAsync())), WAIT_MS));
         if (!buy || !r.passed()) return r;
 
-        // SM-395: wait for the fill here; the master's next step would block its own ticks (see checkOnMaster)
+        // SM-395: wait for the fill here, on the slave, while the master ticks and matches
         long expected = itemsBefore + volume, items = itemsBefore;
         for (long end = System.currentTimeMillis() + WAIT_MS; items < expected && System.currentTimeMillis() < end; ) {
             pump(100);
