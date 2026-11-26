@@ -210,6 +210,22 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
          * {@link Integer#MAX_VALUE} = fully ramped (no fill seen yet).
          */
         int rampSteps = Integer.MAX_VALUE;
+        /**
+         * SM-398 trailing anchor (a Schmitt trigger on the target): direction of the bot's last order on this market
+         * (+1 buy, -1 sell, 0 none yet, never a reversal). A move back against it (a reversal) trades only if the
+         * target is a full price step from the price or has moved half a step back from {@link #extremeTarget};
+         * every other move trades as soon as the target rounds to another step. So noise around a half step (0.015)
+         * can't flip a cheap market between 0.01 and 0.02, but a real move of the target (news, a default price
+         * change) still reverses the bot. A plain hold (reversals always need a full step) re-created the SM-398 bug:
+         * after the bot had sold a market down to 0.01, a reversal to a target of 0.0197 never bought again.
+         * Player trades don't change it. Memory only (no NBT): 0 again after a restart.
+         */
+        int lastDir = 0;
+        /**
+         * SM-398: the most extreme bot target since the bot's last order, in that order's direction (the highest
+         * after a buy, the lowest after a sell); see {@link #lastDir}. Memory only.
+         */
+        double extremeTarget = 0;
         /** SM-334: rolls {@link #guardBlockSeconds}; seeded by {@link #test_setGapGuardSeed} in tests. */
         final Random rng = guardSeed != null ? new Random(guardSeed) : new Random();
         float pidP, pidI, pidD, pidRate;
@@ -243,6 +259,21 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
     public StepInfo test_getLastStep(ItemID marketID) {
         RuntimeData data = marketData.get(marketID);
         return data == null ? null : data.lastStep;
+    }
+
+    /**
+     * Test hook (SM-398 diagnostics): the bot's decision state on {@code marketID}: the trailing anchor
+     * ({@link RuntimeData#lastDir}, {@link RuntimeData#extremeTarget}), whether the T-208 reference is active and
+     * whether the gap guard window after a player fill is open.
+     *
+     * @return a one-line description, or "not subscribed"
+     */
+    public String test_describeState(ItemID marketID) {
+        RuntimeData data = marketData.get(marketID);
+        if (data == null) return "not subscribed";
+        return String.format(java.util.Locale.ROOT, "lastDir %d, extreme %.4f, reference %s, guard window %s",
+                data.lastDir, data.extremeTarget, data.ref.active() ? "active" : "idle",
+                data.stepsSinceFill * STEP_SECONDS < data.guardBlockSeconds ? "open" : "closed");
     }
 
     /**
@@ -663,14 +694,26 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         double limit = botOrderVolumeLimit(market.market.getMaxRealOrderVolume(), factor);
         // T-200: size from the exact one-sided virtual depth between the price and the target, read the
         // way the matching walk reads it (incl. the depth memory). A market order of that size ends at or
-        // before the target, so the bot can never walk past its own target. Resting player limit orders
+        // before the target's nearest price step (the book rounds the target, SM-398), so the bot never walks
+        // more than half a step past its own target. Resting player limit orders
         // are not counted: counting them let the bot fill a whole player order in one go at its limit
         // price, and leaving them out only makes the order smaller.
         // Signed like the book: negative = asks to buy through (target above), positive = bids to sell into.
         float volumeToTarget = market.oderBook.getRealVirtualVolumeToPrice(data.targetPrice, limit);
-        // T-208: a target less than one price step away can't be reached without passing it (T-200), so
-        // the bot waits. The reference still advances, otherwise it would stay stuck next to the price.
-        if (Math.abs(data.targetPrice - currentPrice) < MarketManager.convertToRealAmountStatic(1)) {
+        // SM-398: wait while the target rounds to the price's own step, else trade to the target's nearest step,
+        // the one getRealVirtualVolumeToPrice sized the order for (it rounds the target the same way, floor price 1).
+        // Before, the bot waited while the target was less than a full step away (T-208): at 0.01 a step is +100%,
+        // so a target of 0.0197 never moved the price. Trailing anchor (RuntimeData#lastDir): a move back against the
+        // bot's own last order needs a full step to the price or half a step back from the target's extreme since that
+        // order, so a target hovering around a half step can't flip the price. The reference still advances,
+        // otherwise it would stay stuck next to the price.
+        if (data.lastDir > 0) data.extremeTarget = Math.max(data.extremeTarget, data.targetPrice);
+        else if (data.lastDir < 0) data.extremeTarget = Math.min(data.extremeTarget, data.targetPrice);
+        double step = MarketManager.convertToRealAmountStatic(1);
+        int dir = Long.signum(Math.max(1, MarketManager.convertToRawAmountStatic(data.targetPrice))
+                - MarketManager.convertToRawAmountStatic(currentPrice));
+        if (dir == 0 || (dir == -data.lastDir && Math.abs(data.targetPrice - currentPrice) < step
+                && Math.abs(data.targetPrice - data.extremeTarget) < step / 2)) {
             data.ref = next;
             return;
         }
@@ -710,6 +753,8 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         if(marketOrderAmount != 0)
         {
             market.market.placeOrder(marketOrderAmount);
+            data.lastDir = dir; // SM-398 trailing anchor
+            data.extremeTarget = data.targetPrice;
             data.lastStep = new StepInfo(data.targetPrice, currentPrice, volumeToTarget, marketOrderAmount);
             info("Placing order: " + marketOrderAmount + " (PID-OUT: " + output + ", fraction: " + pidFraction + ", volumeToTarget: " + volumeToTarget + ")");
         }

@@ -247,6 +247,8 @@ public class PluginTestSuite extends TestSuite {
         addTest("targetPriceBot_userWorldSpike_reverts", this::test_targetPriceBot_userWorldSpike);
         addTest("targetPriceBot_tracking_report", this::test_targetPriceBot_tracking);
         addTest("targetPriceBot_dirt_priceStep", this::test_targetPriceBot_dirtPriceStep);
+        // SM-398 (ungated): at price 0.01 the bot trades to its target's nearest step; reversals need a real target move
+        addTest("targetPriceBot_cheapMarket_roundsTarget", this::test_targetPriceBot_cheapMarket_roundsTarget);
     }
 
     /** T-206 rows' bot settings: net flow half-life (minutes) and TargetPriceBot max target move per second. */
@@ -1758,11 +1760,13 @@ public class PluginTestSuite extends TestSuite {
     // #96: re-captured after the default depth moved to the fair price (deliberate behaviour change).
     // SM-241: pump hash re-captured, the bot keeps its reference on same-direction fills (deliberate behaviour change).
     // SM-334: pump hash re-captured, the bot ramps its orders from the available volume (deliberate behaviour change).
+    // SM-398: pump hash re-captured, the bot trades to its target's nearest step (deliberate behaviour change):
+    // pump30 end 147.340 both times, pumper profit -2.45596e+06 -> -2.45594e+06.
 
     /** Golden hash of the scripted flow series over all {@link #GOLDEN_SCALES} x flow x calculator x maxMult configs. */
     private static final long GOLDEN_SCRIPT_HASH = 0x7ca4b1a5d1bba416L;
     /** Golden hash of the t208 diamond_default pump30 price path (volatility scale 0, book refill on). */
-    private static final long GOLDEN_PUMP_HASH = 0xb2c2f7df4f6cf55fL;
+    private static final long GOLDEN_PUMP_HASH = 0x0e4ab53190bfaf9dL;
     /** Volatility scales of the golden configs (they enter the flow capacity as 1 + scale). */
     private static final float[] GOLDEN_SCALES = {0f, 0.3f, 1.5f};
 
@@ -4191,15 +4195,15 @@ public class PluginTestSuite extends TestSuite {
 
     /**
      * T-208 C3c: on dirt (price 0.1, price step 0.01 = 10%) the gap guard window is at least one step,
-     * so the bot trades. A target less than one step away is left alone (it can't be reached without
-     * passing it, T-200); a target one step or more away is reached without overshooting it.
+     * so the bot trades. SM-398: a target that rounds to the price's own step is left alone; one that rounds to a
+     * higher step is reached, but never passed (T-200: the bot stops at the target's nearest step).
      */
     private TestResult test_targetPriceBot_dirtPriceStep() {
         StringBuilder out = new StringBuilder();
         harnessRefill = true;
         double step = MarketManager.convertToRealAmountStatic(1);
         try {
-            // T-214: dirt's book is ~14 max orders per step, so 2 max orders stay inside one step, 200 cross it
+            // T-214: dirt's book is ~14 max orders per step, so 2 max orders stay inside half a step, 200 cross it
             for (double flow : new double[]{2, 200}) {
                 try (T207Env env = new T207Env(0.1, 2000, MarketSettings.defaultMaxOrderVolume(2000), 2000, 3)) {
                     IPluginMarket pm = env.markets.get(0).market;
@@ -4216,20 +4220,127 @@ public class PluginTestSuite extends TestSuite {
                     boolean traded = env.bot.test_getLastStep(itemID) != first;
                     out.append(String.format(Locale.ROOT, " | flow %.0f max orders: start %.4f target %.4f end %.4f max %.4f traded %b",
                             flow, start, target, env.price(), max, traded));
-                    if (target - start < step) {
-                        if (traded || env.price() != start) return fail("Bot traded toward a target less than one step away." + out);
+                    // SM-398: the bot trades to the target's nearest step
+                    double nearest = MarketManager.convertToRealAmountStatic(MarketManager.convertToRawAmountStatic(target));
+                    if (nearest < start + step / 2) {
+                        if (traded || env.price() != start) return fail("Bot traded toward a target that rounds to the price." + out);
                     } else {
-                        if (!traded || env.price() < start + step - 1e-9) return fail("Bot did not trade toward a target one step or more away." + out);
-                        if (max > target + 1e-9) return fail("Bot pushed the price past its target (T-200)." + out);
+                        if (!traded || env.price() < start + step - 1e-9) return fail("Bot did not trade toward a target that rounds to a higher step." + out);
+                        if (max > nearest + 1e-9) return fail("Bot pushed the price past its target's nearest step (T-200)." + out);
                     }
                 }
             }
-            if (!out.toString().contains("traded true")) return fail("Harness: no flow moved the target one step away." + out);
+            if (!out.toString().contains("traded true")) return fail("Harness: no flow moved the target to another step." + out);
             return pass(out.toString());
         } catch (Exception e) {
             return fail("Exception: " + e + out);
         } finally {
             harnessRefill = false;
+        }
+    }
+
+    /**
+     * SM-398: at the lowest price (0.01, raw 1, one step = +100%) the bot trades as soon as its target rounds to
+     * another step. A move back against its own last order (a reversal) needs the target a full step from the price
+     * or half a step back from its extreme since that order (trailing anchor), so noise around 0.015 can't flip the
+     * price. Before, it waited while the target was less than a full step away, so a news reversal that lifted the
+     * target to 0.0197 left the price at 0.01 for good. Real market, 50 items on every level (refilled before every
+     * phase, the bot keeps its state), one bot with the target rate limit off (each phase's target applies at once),
+     * 40 bot steps per phase (100 for the ramp):
+     * <ul>
+     *   <li>0.0149 (rounds to 0.01): no order, the price stays at 0.01;</li>
+     *   <li>0.0151 (rounds to 0.02, first move): the bot buys to 0.02, never past it;</li>
+     *   <li>0.0149 (rounds back, but neither a full step below 0.02 nor half a step below the 0.0151 high): hold, the
+     *       price stays at 0.02;</li>
+     *   <li>0.0099 (a full step below): the bot sells back to 0.01;</li>
+     *   <li>0.0090, then 0.0151 (more than half a step above the 0.0090 low): the bot buys to 0.02 again;</li>
+     *   <li>the save: 0.0098 sells to 0.01, then the target ramps 0.0098 to 0.0197; the bot must buy before the
+     *       target reaches 0.02 (a plain hold would wait for 0.02).</li>
+     * </ul>
+     */
+    private TestResult test_targetPriceBot_cheapMarket_roundsTarget() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        long originalPrice = serverMarket.getCurrentMarketPrice();
+        StringBuilder out = new StringBuilder();
+        try {
+            MarketCache cache = new MarketCache(market);
+            List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+            serverMarket.test_setDefaultVolumeProviderFunction(real -> 50f);
+            serverMarket.test_clearOrderbook();
+            serverMarket.test_clearIncomingOrderBuffers();
+            serverMarket.test_setCurrentMarketPrice(1);
+            serverMarket.test_resetVirtualOrderBookVolume();
+            TargetPriceBot bot = new TargetPriceBot();
+            bot.setLoggerEnabled(false);
+            bot.onMarketSubscribed(itemID);
+            applySettings(bot, TargetPriceBot.Settings.CODEC, new TargetPriceBot.Settings(TargetPriceBot.DEFAULT_PID_P,
+                    TargetPriceBot.DEFAULT_PID_I, TargetPriceBot.DEFAULT_PID_D, TargetPriceBot.DEFAULT_PID_RATE,
+                    TargetPriceBot.DEFAULT_MAX_ORDER_VOLUME_FACTOR, 0f));
+            // target from, target to (a ramp over the phase), expected end price (raw), order direction (+1 buys, -1 sells, 0 none)
+            double[][] phases = {{0.0149, 0.0149, 1, 0}, {0.0151, 0.0151, 2, 1}, {0.0149, 0.0149, 2, 0},
+                    {0.0099, 0.0099, 1, -1}, {0.0090, 0.0090, 1, 0}, {0.0151, 0.0151, 2, 1},
+                    {0.0098, 0.0098, 1, -1}, {0.0098, 0.0197, 2, 1}};
+            var book = cache.getPluginOrderBook();
+            double limit = TargetPriceBot.botOrderVolumeLimit(cache.getPluginMarket().getMaxRealOrderVolume(),
+                    TargetPriceBot.DEFAULT_MAX_ORDER_VOLUME_FACTOR);
+            TargetPriceBot.StepInfo last = null;
+            for (double[] ph : phases) {
+                boolean ramp = ph[0] != ph[1];
+                int ticks = ramp ? 500 : 200;
+                cache.getPluginMarket().setTargetPrice(ph[0]);
+                cache.apply();
+                // The levels in the book window refill only through the volume distribution plugin, which doesn't run
+                // here, and the bot takes the whole level it trades to (ramp share 2, PID saturated): without a refill
+                // the 0.0151 buy after the 0.0099 sell found no asks left at 0.02. Refill before every phase so each
+                // one sees the full book; the bot keeps its runtime state (anchor, PID).
+                float leftover = book.getRealVirtualVolumeToPrice(ph[0], limit);
+                serverMarket.test_resetVirtualOrderBookVolume();
+                float toTarget = book.getRealVirtualVolumeToPrice(ph[0], limit);
+                float available = book.getRealVirtualAvailableVolume(ph[0], TargetPriceBot.DEFAULT_AVAILABLE_VOLUME_LEVELS, limit);
+                boolean gap = TargetPriceBot.crossesEmptyGap(book,
+                        MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice()), ph[0]);
+                long start = serverMarket.getCurrentMarketPrice(), min = start, max = start;
+                int buys = 0, sells = 0;
+                double buyTarget = Double.NaN, amount = 0;
+                for (int t = 0; t < ticks; t++) {
+                    cache.getPluginMarket().setTargetPrice(ph[0] + (ph[1] - ph[0]) * t / (ticks - 1));
+                    bot.update(markets);
+                    cache.apply();
+                    serverMarket.update();
+                    TargetPriceBot.StepInfo step = bot.test_getLastStep(itemID);
+                    if (step != null && step != last) {
+                        last = step;
+                        amount += step.amount();
+                        if (step.amount() > 0) {
+                            if (buys++ == 0) buyTarget = step.target();
+                        } else sells++;
+                    }
+                    min = Math.min(min, serverMarket.getCurrentMarketPrice());
+                    max = Math.max(max, serverMarket.getCurrentMarketPrice());
+                }
+                long end = serverMarket.getCurrentMarketPrice();
+                out.append(String.format(Locale.ROOT, "\n target %.4f%s: %d buys (first at target %.4f), %d sells, amount %+.2f,"
+                                + " raw %d -> %d (min %d, max %d); at start: to target %+.2f (left over %+.2f), available %+.2f,"
+                                + " gap %s; at end: %s",
+                        ph[0], ramp ? String.format(Locale.ROOT, " -> %.4f", ph[1]) : "", buys, buyTarget, sells, amount,
+                        start, end, min, max, toTarget, leftover, available, gap ? "yes" : "no", bot.test_describeState(itemID)));
+                long want = (long) ph[2];
+                int dir = (int) ph[3];
+                boolean orders = dir == 0 ? buys + sells == 0 : dir > 0 ? buys > 0 && sells == 0 : sells > 0 && buys == 0;
+                if (!orders || end != want || min < Math.min(start, want) || max > Math.max(start, want))
+                    return fail("Unexpected bot trades at price 0.01/0.02" + out);
+                // the save: the buy comes once the target rounds to 0.02, not only at 0.02
+                if (ramp && !(buyTarget >= 0.0149 && buyTarget < 0.02))
+                    return fail("Bot did not buy between the half step and 0.02 on the ramp" + out);
+            }
+            return pass("Target rounding and trailing anchor at price 0.01:" + out);
+        } catch (Exception e) {
+            return fail("Exception: " + e + out);
+        } finally {
+            serverMarket.test_setDefaultVolumeProviderFunction(null);
+            serverMarket.test_clearIncomingOrderBuffers();
+            serverMarket.test_setCurrentMarketPrice(originalPrice);
+            serverMarket.test_clearOrderbook();
         }
     }
 
