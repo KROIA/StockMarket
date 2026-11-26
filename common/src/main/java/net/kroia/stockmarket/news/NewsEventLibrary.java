@@ -60,7 +60,9 @@ import java.util.Set;
  * {@code DefaultEvents/<id>.json} ({@link DefaultNewsEvents#writeMissingEventFiles}), so a
  * deleted default comes back (switch it off with the admin enable/disable toggle instead);
  * any shipped default picture missing from
- * {@code pictures/} is written per id ({@link DefaultNewsPictures#extractMissingDefaults}).
+ * {@code pictures/} is written per id ({@link DefaultNewsPictures#extractMissingDefaults}),
+ * and a default picture still equal to an old shipped version is replaced by the current one
+ * ({@link DefaultNewsPictures#upgradeUnchangedDefaults}).
  * Admin-customized events, admin art and admin-modified defaults are always preserved — the
  * heal only adds what is missing, so existing installs receive newly shipped content while
  * keeping their edits.
@@ -386,7 +388,10 @@ public class NewsEventLibrary {
         //     defaults reach existing installs while admin art is never overwritten — then
         //     rescan the folder into the picture library. Picture problems merge into the
         //     same report so `/stockmarket news reload` shows them too.
+        //     SM-397: before that, a picture still equal to an old shipped version is
+        //     replaced by the current one (redrawn defaults reach existing installs).
         Path picturesDir = newsDir.resolve(NewsPictureLibrary.PICTURES_DIR_NAME);
+        DefaultNewsPictures.upgradeUnchangedDefaults(picturesDir);
         DefaultNewsPictures.extractMissingDefaults(picturesDir);
         pictureLibrary.rescan(picturesDir, report);
 
