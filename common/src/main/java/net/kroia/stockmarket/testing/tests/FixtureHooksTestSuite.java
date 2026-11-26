@@ -28,8 +28,10 @@ import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * BS-269: each {@link FixtureTestRequest} op once, from a trusted slave against a market it creates (and deletes):
@@ -172,9 +174,14 @@ public class FixtureHooksTestSuite extends TestSuite {
         }
     }
 
-    /** @return a vanilla item this slave has an ItemID for and that has no market yet, or null */
+    /** @return a random vanilla item this slave has an ItemID for and that has no market yet, or null */
     private static @Nullable ItemID itemWithoutMarket(List<ItemID> markets) {
-        for (Item item : BuiltInRegistries.ITEM) {
+        // random, not the first free one: two slaves of one master run this test at the same time,
+        // and the same item would give them one shared market (overlapping backfills, early delete)
+        List<Item> items = new ArrayList<>();
+        BuiltInRegistries.ITEM.forEach(items::add);
+        Collections.shuffle(items, ThreadLocalRandom.current());
+        for (Item item : items) {
             if (item == Items.AIR || !"minecraft".equals(BuiltInRegistries.ITEM.getKey(item).getNamespace()))
                 continue;
             ItemID id = ItemIDManager.getItemID(new ItemStack(item));
