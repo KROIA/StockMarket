@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.news;
 
+import com.google.gson.JsonElement;
+import net.kroia.modutilities.JsonUtilities;
 import net.kroia.stockmarket.StockMarketMod;
 import org.jetbrains.annotations.Nullable;
 
@@ -10,8 +12,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 
@@ -26,6 +33,15 @@ import java.util.zip.Deflater;
  * exist</b> — so newly shipped default pictures reach existing installs while admin art and
  * admin-modified defaults are never overwritten. (The legacy {@link #extractDefaultsIfEmpty}
  * all-or-nothing variant is retained for callers/tests that want the empty-only semantics.)
+ * <p>
+ * <b>Upgrading unchanged defaults (SM-397):</b> right before that, {@link #upgradeUnchangedDefaults}
+ * replaces an existing {@code <eventId>.png} with the current picture when it is still
+ * byte-identical to a version the mod shipped before: an earlier baked resource (SHA-1 listed
+ * in {@link #LEGACY_HASHES_RESOURCE}, generated from git history by
+ * {@code scripts/update_legacy_picture_hashes.py}) or the procedural placeholder. Any other
+ * content is admin art and is never touched. This mirrors
+ * {@link DefaultNewsEvents#migrateOldCounterparts} for the event files.
+ * <p>
  * Source priority per picture:
  * <ol>
  *   <li><b>Baked jar resource</b> {@code news/pictures/<eventId>.png} (classloader,
@@ -50,6 +66,12 @@ public final class DefaultNewsPictures {
 
     /** Classpath directory of the baked default pictures (inside the mod jar). */
     public static final String RESOURCE_DIR = "/news/pictures/";
+
+    /**
+     * Resource in {@link #RESOURCE_DIR} listing per event id the SHA-1s (lowercase hex) of
+     * earlier shipped baked pictures: {@code {"<eventId>": ["<sha1hex>", ...]}}.
+     */
+    public static final String LEGACY_HASHES_RESOURCE = "legacy_hashes.json";
 
     /** Side length of procedurally generated placeholder pictures (square, §12.3). */
     public static final int GENERATED_SIZE = 384;
@@ -109,6 +131,101 @@ public final class DefaultNewsPictures {
                     "[NewsPictureLibrary] Failed to write missing default news pictures", e);
         }
         return written;
+    }
+
+    /**
+     * Upgrades default pictures an admin never changed: for every shipped default event id
+     * whose {@code <eventId>.png} exists and differs from the current picture
+     * ({@link #loadBakedOrGenerate}), overwrites it with the current picture if the file is
+     * still exactly an old shipped version (see {@link #upgradeUnchangedDefaults(Path, Map)}).
+     * Never throws — failures are logged and skipped.
+     *
+     * @param picturesDir the pictures directory ({@code config/StockMarket/news/pictures})
+     * @return the number of pictures upgraded in this call
+     */
+    public static int upgradeUnchangedDefaults(Path picturesDir) {
+        return upgradeUnchangedDefaults(picturesDir, loadLegacyHashes());
+    }
+
+    /**
+     * {@link #upgradeUnchangedDefaults(Path)} with explicit old hashes (also the test seam).
+     * An existing file is replaced only if its SHA-1 is listed for its id in
+     * {@code legacyHashes} or it equals the id's procedural placeholder; any other content
+     * (admin art) is left untouched. Missing files are skipped — {@link #extractMissingDefaults}
+     * writes those. Never throws.
+     *
+     * @param picturesDir  the pictures directory ({@code config/StockMarket/news/pictures})
+     * @param legacyHashes per event id, the lowercase hex SHA-1s of earlier shipped pictures
+     * @return the number of pictures upgraded in this call
+     */
+    public static int upgradeUnchangedDefaults(Path picturesDir, Map<String, Set<String>> legacyHashes) {
+        int upgraded = 0;
+        for (String eventId : DefaultNewsEvents.DEFAULT_EVENT_IDS) {
+            Path target = picturesDir.resolve(eventId + ".png");
+            try {
+                if (!Files.isRegularFile(target)) continue;
+                byte[] existing = Files.readAllBytes(target);
+                byte[] current = loadBakedOrGenerate(eventId);
+                if (current == null || Arrays.equals(existing, current)) continue; // up to date
+                String hash = NewsPictureLibrary.toHex(NewsPictureLibrary.sha1(existing));
+                if (!legacyHashes.getOrDefault(eventId, Set.of()).contains(hash)
+                        && !isPlaceholder(eventId, existing)) continue; // admin art — hands off
+                Files.write(target, current);
+                upgraded++;
+            } catch (Exception e) {
+                StockMarketMod.LOGGER.warn(
+                        "[NewsPictureLibrary] Could not upgrade default news picture {} - file left unchanged",
+                        target, e);
+            }
+        }
+        if (upgraded > 0) {
+            StockMarketMod.LOGGER.info(
+                    "[NewsPictureLibrary] Upgraded {} unchanged default news picture(s) in {}",
+                    upgraded, picturesDir);
+        }
+        return upgraded;
+    }
+
+    /**
+     * Reads {@link #LEGACY_HASHES_RESOURCE} from the jar. Never throws.
+     *
+     * @return per event id the SHA-1s of earlier shipped pictures; empty (logged) if the
+     *         resource is missing or unparsable
+     */
+    public static Map<String, Set<String>> loadLegacyHashes() {
+        String text = DefaultNewsEvents.readResource(RESOURCE_DIR + LEGACY_HASHES_RESOURCE);
+        if (text == null) return Map.of(); // logged by readResource
+        try {
+            Map<String, Set<String>> result = new HashMap<>();
+            for (Map.Entry<String, JsonElement> entry
+                    : JsonUtilities.fromString(text).getAsJsonObject().entrySet()) {
+                Set<String> hashes = new HashSet<>();
+                for (JsonElement hash : entry.getValue().getAsJsonArray()) hashes.add(hash.getAsString());
+                result.put(entry.getKey(), hashes);
+            }
+            return result;
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.error(
+                    "[NewsPictureLibrary] Unparsable {} - unchanged default pictures are not upgraded",
+                    LEGACY_HASHES_RESOURCE, e);
+            return Map.of();
+        }
+    }
+
+    /**
+     * Whether the bytes are exactly the procedural placeholder of the id (what an install got
+     * for an id without baked art). Only grayscale PNGs are compared, so colour admin art costs
+     * no placeholder generation on every reload.
+     *
+     * @param eventId the event id (placeholder seed)
+     * @param png     the file bytes to check
+     */
+    private static boolean isPlaceholder(String eventId, byte[] png) {
+        // ponytail: exact bytes. A JRE whose zlib deflates differently from the one that wrote
+        // the file makes an old placeholder look like admin art (kept); compare inflated IDAT if needed.
+        PngHeader header = PngHeader.parse(png);
+        return header != null && header.getColorType() == 0
+                && Arrays.equals(png, generatePlaceholder(eventId));
     }
 
     /**
