@@ -105,8 +105,19 @@ final class ScreenTradeClientSteps {
             double price = Gui.onClient(limit::getPrice); // the master checks it against its remembered price
             if (price <= 0) return fail("limit price " + price + " after clicking 'Market'");
 
-            GuiNode trade = button(panel, PANEL_KEY + (buy ? "buy" : "sell"));
-            if (trade == null) return fail("no shown " + (buy ? "Buy" : "Sell") + " button in the limit order panel");
+            // Buy/Sell stay hidden until the panel's balances arrive (async bank request): re-query the snapshot each tick
+            GuiNode trade = null;
+            for (int t = 0; t < OPEN_TICKS && trade == null; t++) {
+                GuiNode fresh = shown(n -> n.handle() == limit);
+                trade = fresh == null ? null : button(fresh, PANEL_KEY + (buy ? "buy" : "sell"));
+                if (trade == null) Gui.waitTicks(1);
+            }
+            if (trade == null) {
+                String state = Gui.onClient(() -> "marketOpen=" + limit.isMarketOpen() + ", quantity=" + limit.getQuantity()
+                        + ", price=" + limit.getPrice() + ", itemBalance=" + limit.getItemBalance() + ", moneyBalance=" + limit.getMoneyBalance());
+                return fail("no shown " + (buy ? "Buy" : "Sell") + " button in the limit order panel within " + OPEN_TICKS
+                        + " ticks (" + state + "; client bank items=" + itemBalance(self, id) + ")");
+            }
             Button tradeButton = (Button) trade.handle();
             if (!Gui.waitUntil(tradeButton::isClickable, OPEN_TICKS)) return fail((buy ? "Buy" : "Sell") + " button stays disabled");
             Gui.click(trade);
