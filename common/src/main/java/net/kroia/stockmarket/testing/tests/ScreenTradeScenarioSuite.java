@@ -25,8 +25,8 @@ public class ScreenTradeScenarioSuite extends CrossServerTradeScenarioSuite {
         MinecraftServer server = getServer();
         if (server == null) return skip("no server in this JVM");
         MasterState s = new MasterState();
-        return ScreenTradeScenario.build(() -> setUp(s), () -> checkOnMaster(s), ScreenTradeScenario::elsewhere,
-                ScreenTradeScenario::elsewhere, ScreenTradeScenario::elsewhere).run("screen_trade", server);
+        return runAndDeleteMarket(ScreenTradeScenario.build(() -> setUp(s), () -> checkOnMaster(s), ScreenTradeScenario::elsewhere,
+                ScreenTradeScenario::elsewhere, ScreenTradeScenario::elsewhere), "screen_trade", server, s);
     }
 
     /** Finds both players' BankSystem users (added by their join, also on a slave) and sets up market and funds. */
