@@ -25,8 +25,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
-import static net.kroia.stockmarket.testing.tests.CrossServerTradeScenarioSuite.ITEM;
 import static net.kroia.stockmarket.testing.tests.CrossServerTradeScenarioSuite.ITEMS;
+import static net.kroia.stockmarket.testing.tests.ScreenTradeScenario.ITEM;
 
 /**
  * SM-352: the client step bodies of {@link ScreenTradeScenario}. Client-only (GUI and screen classes): only the
@@ -54,7 +54,7 @@ final class ScreenTradeClientSteps {
     }
 
     /**
-     * Steps 4-5: opens the trade screen on the test market, selects the limit order tab, types {@link CrossServerTradeScenarioSuite#ITEMS}
+     * Steps 4-5: opens the trade screen on the test market ({@link ScreenTradeScenario#ITEM}), selects the limit order tab, types {@link CrossServerTradeScenarioSuite#ITEMS}
      * into the quantity box, takes the shown market price ("Market" button) and clicks Sell or Buy (visible elements
      * only). The sell passes when its open order shows in the orders list (no buyer yet), the buy when the bought
      * items show in the player's bank.
