@@ -2,6 +2,8 @@ package net.kroia.stockmarket.testing.tests;
 
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.scenario.Scenario;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.function.Supplier;
 
@@ -22,6 +24,13 @@ public final class ScreenTradeScenario {
     public static final String NAME = "sm_screen_trade";
     /** The autotest client players (fake names, never a real player's). */
     public static final String SELLER = "AutoTester1", BUYER = "AutoTester2";
+    /**
+     * The traded item (master set-up and both clients). A vanilla item no default preset and no other test uses, present
+     * in every supported MC version. It must differ from {@link CrossServerTradeScenarioSuite#ITEM}: in slave2-clients
+     * both scenarios run at once on the master, and each set-up deletes and recreates its market, which would wipe the
+     * other scenario's open orders.
+     */
+    static final ItemStack ITEM = new ItemStack(Items.COBWEB);
 
     /**
      * @param setUp   master: clean market, seller holds the items, buyer the money
