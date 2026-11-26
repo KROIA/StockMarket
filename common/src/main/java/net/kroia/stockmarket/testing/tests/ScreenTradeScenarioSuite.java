@@ -10,7 +10,7 @@ import org.jetbrains.annotations.Nullable;
 /**
  * SM-352: the servers' part of {@link ScreenTradeScenario} (a {@link Side#SCENARIO} suite, runs on every server of
  * the setup). Only the master has steps; it reuses {@link CrossServerTradeScenarioSuite}'s master helpers with the
- * real autotest players instead of fake ones. Master values (price, balances) stay in {@link MasterState} in this
+ * real autotest players instead of fake ones, on its own market ({@link ScreenTradeScenario#ITEM}). Master values (price, balances) stay in {@link MasterState} in this
  * JVM: the clients take the price from their trade screen.
  */
 public class ScreenTradeScenarioSuite extends CrossServerTradeScenarioSuite {
@@ -35,7 +35,8 @@ public class ScreenTradeScenarioSuite extends CrossServerTradeScenarioSuite {
         User seller = user(bank, ScreenTradeScenario.SELLER), buyer = user(bank, ScreenTradeScenario.BUYER);
         if (seller == null || buyer == null)
             return fail((seller == null ? ScreenTradeScenario.SELLER : ScreenTradeScenario.BUYER) + " is no BankSystem user on the master");
-        return setUpOnMaster(s, seller.getUUID(), null, ScreenTradeScenario.SELLER, buyer.getUUID(), null, ScreenTradeScenario.BUYER);
+        return setUpOnMaster(s, ScreenTradeScenario.ITEM, seller.getUUID(), null, ScreenTradeScenario.SELLER,
+                buyer.getUUID(), null, ScreenTradeScenario.BUYER);
     }
 
     /** @return the user, waiting up to {@link #WAIT_MS} for a slave's join to reach the master; null if none */
