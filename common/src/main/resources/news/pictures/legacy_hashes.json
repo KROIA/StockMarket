@@ -1,0 +1,76 @@
+{
+  "iron_supply_disruption": [
+    "bb2465c054fbd4851178d829f970b896c295fc41"
+  ],
+  "wheat_harvest_festival": [
+    "569a130763b13cf6e50e4b169e9f89c4de439c22"
+  ],
+  "copper_seam_depleted": [
+    "35413ec3722aba06691776eebeab33c36e2b0237",
+    "40058e0ddd5804ee22b5a9c183339693d5b442e0"
+  ],
+  "coal_miners_strike": [
+    "d3c5503c4a2f2db1c9ac9880bde9c93860bcd09a"
+  ],
+  "volcanic_eruption": [
+    "07e26de8f8856448e23b7fd0eb452b9ea5232f5f"
+  ],
+  "great_forest_fire": [
+    "fe49044117c1e85a1ae63ae617e91d28bbeaf799"
+  ],
+  "import_tariff_lifted": [
+    "33d52d324c0688943bd4464777273f278e135dc9"
+  ],
+  "winter_solstice_gifting": [
+    "df5a3279f0031d656bd8b551c2104211e06e0994"
+  ],
+  "amethyst_geode_exhausted": [
+    "02c3027dd5706d0308deaed5054febcc589fd709"
+  ],
+  "deepslate_quarry_closed": [
+    "1c593c1810c5d4921f32a290f756e602d5b6c39e"
+  ],
+  "amethyst_speculation": [
+    "26f51e1e6f4130a36b66eeeb2d021ea8c92c65c6"
+  ],
+  "sugarcane_plantation_blight": [
+    "7c72af6f27964d28a33d25bf4cb3836a1bc2a359"
+  ],
+  "cocoa_trade_route_opens": [
+    "7a95fdbb2f968e0adfb2426c6391abcbbce0da4d"
+  ],
+  "beetroot_harvest_surplus": [
+    "7f9c431e1f7eb36feaf5d05087341cd8608e74ec"
+  ],
+  "cattle_plague_outbreak": [
+    "e14ffea8da7d9693fedb6c643423b5beddd9a776"
+  ],
+  "salmon_spawning_run": [
+    "85a7f4fd933edf42d3008e4f058cdc5fdeb99d94"
+  ],
+  "cod_grounds_recovered": [
+    "b1763e08ccd63adf26fe66af76a4a29ad70a8a30"
+  ],
+  "blaze_rod_brewing_rush": [
+    "88b423cda9314b7bdb176d344bf135532fad5f4d"
+  ],
+  "shulker_raids_resume": [
+    "883dc5dcf31ec49faeee831b614673bebf9aa651"
+  ],
+  "chorus_fruit_bumper_harvest": [
+    "fc1633441a32e5d8122c0e44a35f8c9209643505"
+  ],
+  "mint_recoinage_completed": [
+    "ca18c680852c137e2ed88e30f44bfa0d05bd5f01"
+  ],
+  "metals_embargo_lifted": [
+    "f1b52c81973c955b01381e485f504ac4d8852580",
+    "ff239c215d843a60fd09f29441f5b2d5f9388faa"
+  ],
+  "treasury_stimulus_windfall": [
+    "9161e2c01d39df99c783c0453ca1f78dc9fc1691"
+  ],
+  "gemstone_heist": [
+    "b6a032b6752247efe9af341e9fb530af235ea032"
+  ]
+}
