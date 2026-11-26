@@ -302,6 +302,21 @@ public class LimitOrderPanel extends StockMarketGuiElement
     {
         return currentMarketPrice;
     }
+    /** @return whether the market is open; Buy and Sell stay disabled while it is closed */
+    public boolean isMarketOpen()
+    {
+        return marketOpen;
+    }
+    /** @return the player's item balance the Sell validation uses, in real items */
+    public double getItemBalance()
+    {
+        return itemBalance;
+    }
+    /** @return the player's money balance the Buy validation uses */
+    public double getMoneyBalance()
+    {
+        return moneyBalance;
+    }
 
 
     @Override
