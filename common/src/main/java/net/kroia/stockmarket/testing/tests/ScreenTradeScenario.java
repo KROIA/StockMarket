@@ -34,7 +34,8 @@ public final class ScreenTradeScenario {
 
     /**
      * @param setUp   master: clean market, seller holds the items, buyer the money
-     * @param check   master: both orders filled, balances moved; deletes the market
+     * @param check   master: one attempt of "both orders filled, balances moved", re-run once per master tick
+     *                (SM-395: the master keeps ticking and matching between attempts); the caller deletes the market
      * @param inWorld client: the player is in the world (both clients, so the master funds only online players)
      * @param sell    tester1: limit sell on the trade screen at the shown price
      * @param buy     tester2: limit buy on the trade screen at the shown price
@@ -47,7 +48,7 @@ public final class ScreenTradeScenario {
                 .step("master", "clean market, " + SELLER + " holds the items, " + BUYER + " the money", setUp)
                 .step("tester1", SELLER + " sells on the trade screen at the shown price", sell)
                 .step("tester2", BUYER + " buys on the trade screen at the same price", buy)
-                .step("master", "orders filled and balances moved", check);
+                .stepUntil("master", "orders filled and balances moved", check, CrossServerTradeScenarioSuite.CHECK_TICKS);
     }
 
     /** Body for a step another instance runs; never called (each instance runs only its own label's steps). */
