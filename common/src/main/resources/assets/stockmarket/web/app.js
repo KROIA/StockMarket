@@ -198,7 +198,9 @@
         state.tf = state.tfs.includes(state.tf) ? state.tf : state.tfs[Math.min(1, state.tfs.length - 1)];
         renderTimeframes();
       }
-      state.markets = d.markets.sort((a, b) => displayName(a).localeCompare(displayName(b)));
+      // SM-405: creative inventory order (server's sort key), then name; markets without a key go last
+      const key = m => (m.sort === undefined ? Infinity : m.sort);
+      state.markets = d.markets.sort((a, b) => (key(a) - key(b)) || displayName(a).localeCompare(displayName(b)));
       if (state.sel === null || !state.markets.some(m => m.id === state.sel)) {
         if (state.markets.length) select(state.markets[0].id);
       }
