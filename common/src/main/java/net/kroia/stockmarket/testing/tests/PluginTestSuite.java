@@ -44,6 +44,7 @@ import net.minecraft.network.codec.StreamCodec;
 import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 public class PluginTestSuite extends TestSuite {
@@ -2090,7 +2091,16 @@ public class PluginTestSuite extends TestSuite {
         addTest("t213_full_G3_supplier", this::test_t213FullG3);
     }
 
-    /** G1/G2 row: anchor default (must not profit) and anchor off (reference). */
+    /**
+     * G2 rows allowed to profit (SM-401 rejected, SM-403): the user decided "A market must not be a loss for everyone
+     * at every time". They must still show the anchor helps: profit with the anchor on &lt;= profit with it off.
+     */
+    private static final Set<String> T213_ACCEPTED_PROFIT = Set.of("t213_gate_G2_f005_once", "t213_gate_G2_f005_1h");
+
+    /**
+     * G1/G2 row: anchor default and anchor off (reference). With the anchor on the push must not profit, except the
+     * {@link #T213_ACCEPTED_PROFIT} rows, which pass when their profit with the anchor on is no bigger than with it off.
+     */
     private TestResult test_t213Push(String name, int dir, double f, String back) {
         if (!t213Requested("gate", name)) return skip("T-213 gate not requested");
         int c = T213_COMPRESSION;
@@ -2100,6 +2110,8 @@ public class PluginTestSuite extends TestSuite {
                         + ", price min/max/end anchor %.4g/%.4g/%.4g off %.4g/%.4g/%.4g",
                 name, on[0], off[0], on[1], on[2], on[3], on[4], on[5], on[6], off[4], off[5], off[6]);
         StockMarketMod.LOGGER.info("[T-213 gate] {}", row);
+        if (T213_ACCEPTED_PROFIT.contains(name))
+            return on[0] <= off[0] ? pass("accepted profit (SM-401) " + row) : fail("ANCHOR WORSE " + row);
         return on[0] <= 0 ? pass(row) : fail("EXPLOIT " + row);
     }
 
