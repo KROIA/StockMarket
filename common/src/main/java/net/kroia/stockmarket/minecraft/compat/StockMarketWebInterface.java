@@ -29,6 +29,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffectUtil;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.PotionContents;
@@ -112,6 +115,12 @@ public final class StockMarketWebInterface {
     // ponytail: per-URI cache with a 1 s TTL, cleared when full; switch to a per-tick snapshot if many viewers
     // request many different URIs.
     private static final Map<String, Cached> CACHE = new ConcurrentHashMap<>();
+    /**
+     * SM-405: each item's creative inventory position, the market list's sort key ({@link #creativeOrder}). Built on
+     * the first {@code /api/markets} call, dropped by {@link #stop} (so a new server builds its own); empty when the
+     * tabs could not be built.
+     */
+    private static volatile @Nullable Map<Item, Integer> creativeOrder;
 
     private static HttpServer httpServer;
     private static ExecutorService executor;
@@ -165,6 +174,7 @@ public final class StockMarketWebInterface {
         executor = null;
         runningPort = -1;
         CACHE.clear();
+        creativeOrder = null;
         WebIconTextures.closePacks();
     }
 
@@ -445,6 +455,7 @@ public final class StockMarketWebInterface {
             tfs.add(tf);
         o.add("timeframes", tfs);
         JsonArray list = new JsonArray();
+        Map<Item, Integer> order = creativeOrder(UtilitiesPlatform.getServer());
         for (ItemID id : smm.getAvailableMarketIDs()) {
             ServerMarket market = smm.getServerMarket(id);
             if (market == null || id.equals(currency))
@@ -454,6 +465,10 @@ public final class StockMarketWebInterface {
             m.addProperty("id", id.getShort());
             m.addProperty("itemId", id.getName());
             m.addProperty("name", itemName(id));
+            // SM-405: the page sorts by this, then by name; items in no creative tab have none and go last
+            Integer sort = order.get(id.getStackTemplate().getItem());
+            if (sort != null)
+                m.addProperty("sort", sort);
             // BankSystem company shares are stamped share stacks; everything else trades against the currency as an item
             m.addProperty("category", id.getStackTemplate().getItem() == BankSystemItems.STAMPED_SHARE.get() ? "shares" : "money");
             m.addProperty("price", real(market.getCurrentMarketPrice()));
@@ -474,6 +489,45 @@ public final class StockMarketWebInterface {
         }
         o.add("markets", list);
         return o;
+    }
+
+    /**
+     * SM-405: the creative inventory order on this server, built once ({@link #creativeOrder}). Server thread.
+     * <p>
+     * Builds the tab contents the way the creative screen does ({@link CreativeModeTabs#tryRebuildTabContents}, common
+     * code in 1.21.1, so it works on a dedicated server; on NeoForge it also fires the mod-bus tab contents event),
+     * then numbers every item by its first appearance in the {@code CATEGORY} tabs, in tab registry order: the vanilla
+     * tabs (building blocks, colored, natural, functional, redstone, tools, combat, food, ingredients, spawn eggs),
+     * then mod tabs in registration order (NeoForge's before/after tab sorting is ignored). Search, hotbar and
+     * inventory are not {@code CATEGORY}; the operator tab stays empty without permissions. In singleplayer the tab
+     * contents are shared with the client, whose creative screen rebuilds them when it sees other parameters.
+     * <p>
+     * Ports: depends on {@code CreativeModeTabs.tryRebuildTabContents/allTabs}, {@code CreativeModeTab.Type} and
+     * {@code getDisplayItems}, which 1.21.2+ / 26.x change in places.
+     *
+     * @param server the running server, or null (no keys)
+     * @return item -> position; empty when the tabs could not be built (logged once per server start)
+     */
+    private static Map<Item, Integer> creativeOrder(@Nullable MinecraftServer server) {
+        Map<Item, Integer> order = creativeOrder;
+        if (order != null)
+            return order;
+        if (server == null)
+            return Map.of();
+        order = new HashMap<>();
+        try {
+            CreativeModeTabs.tryRebuildTabContents(server.getWorldData().enabledFeatures(), false, server.registryAccess());
+            int pos = 0;
+            for (CreativeModeTab tab : CreativeModeTabs.allTabs())
+                if (tab.getType() == CreativeModeTab.Type.CATEGORY)
+                    for (ItemStack stack : tab.getDisplayItems())
+                        order.putIfAbsent(stack.getItem(), pos++);
+        } catch (RuntimeException | LinkageError e) {
+            order = Map.of();
+            StockMarketMod.LOGGER.warn("[StockMarket Web] could not read the creative tabs, the market list is sorted by name: {}", e.toString());
+        }
+        creativeOrder = order;
+        return order;
     }
 
     /** Candles of one market; close[i] = open[i+1], the newest close is the current price (as in the in-game chart). */
