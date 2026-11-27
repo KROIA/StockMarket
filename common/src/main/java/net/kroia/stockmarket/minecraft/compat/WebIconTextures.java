@@ -48,7 +48,7 @@ import java.util.zip.ZipFile;
  * the texture its item model names (parents followed, {@code #references} resolved). Every resource is looked up in
  * the texture packs first, then on the class path (mod jars; in singleplayer also the game's own textures). A pack
  * is any {@code .jar} / {@code .zip} in {@code config/StockMarket/web/}: a Minecraft client jar or a resource pack an
- * admin put there, or the client jar of the opt-in download ({@code Integrations.WEB_INTERFACE_DOWNLOAD_TEXTURES}).
+ * admin put there, or the client jar of the download ({@code Integrations.WEB_INTERFACE_DOWNLOAD_TEXTURES}, on by default).
  * A dedicated server has no game textures of its own, so vanilla items need such a pack.
  * <p>
  * Security: every resource name is built from {@link #RESOURCE_LOCATION}-checked parts (no "..", no absolute path),
@@ -302,7 +302,7 @@ public final class WebIconTextures {
 
     /**
      * Starts the client jar download in the background unless it already succeeded or runs. Called by
-     * {@link StockMarketWebInterface#apply} on the master while the setting is on, so a failed attempt is retried at
+     * {@link StockMarketWebInterface#apply} on a dedicated master while the setting is on, so a failed attempt is retried at
      * the next server start or settings change. Never blocks, never throws.
      */
     static void startDownload() {
