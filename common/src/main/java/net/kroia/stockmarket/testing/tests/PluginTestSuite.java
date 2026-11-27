@@ -250,6 +250,8 @@ public class PluginTestSuite extends TestSuite {
         addTest("targetPriceBot_dirt_priceStep", this::test_targetPriceBot_dirtPriceStep);
         // SM-398 (ungated): at price 0.01 the bot trades to its target's nearest step; reversals need a real target move
         addTest("targetPriceBot_cheapMarket_roundsTarget", this::test_targetPriceBot_cheapMarket_roundsTarget);
+        // SM-399 (ungated): after a player dumps a cheap market, the bot buys back to its target's nearest step at once
+        addTest("targetPriceBot_cheapMarket_buysBackAfterDump", this::test_targetPriceBot_cheapMarket_buysBackAfterDump);
     }
 
     /** T-206 rows' bot settings: net flow half-life (minutes) and TargetPriceBot max target move per second. */
@@ -4353,6 +4355,109 @@ public class PluginTestSuite extends TestSuite {
             serverMarket.test_clearIncomingOrderBuffers();
             serverMarket.test_setCurrentMarketPrice(originalPrice);
             serverMarket.test_clearOrderbook();
+        }
+    }
+
+    /**
+     * SM-399: the SM-398 hold applies only while the price is still where the bot's last order left it. On a cheap
+     * market the bot sells 0.03 to 0.02 at a target of 0.0195 (last order a sell, target extreme 0.0195), then a
+     * player market-sells the price to 0.01. Buying back to 0.02 is no reversal to hold: the bot must buy back while
+     * its target is still 0.0195, within 10 bot steps, and never past 0.02. Before, it waited until the target
+     * reached 0.02. Same market as {@link #test_targetPriceBot_cheapMarket_roundsTarget} (50 items on every level),
+     * target rate limit and T-208 reference off (the target stays at 0.0195; a reference would follow the dump down),
+     * gap guard off so only the hold could delay the buy (the book is refilled after the dump, as the volume
+     * distribution plugin would). 2,000 ticks after the dump: the SM-334 ramp restarts on the player's fill.
+     */
+    private TestResult test_targetPriceBot_cheapMarket_buysBackAfterDump() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        long originalPrice = serverMarket.getCurrentMarketPrice();
+        int sf = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
+        StringBuilder out = new StringBuilder();
+        try {
+            MarketCache cache = new MarketCache(market);
+            List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+            serverMarket.test_setDefaultVolumeProviderFunction(real -> 50f);
+            serverMarket.test_clearOrderbook();
+            serverMarket.test_clearIncomingOrderBuffers();
+            serverMarket.test_setCurrentMarketPrice(3);
+            serverMarket.test_resetVirtualOrderBookVolume();
+            TargetPriceBot.test_setGapGuardEnabled(false);
+            TargetPriceBot bot = new TargetPriceBot();
+            bot.setLoggerEnabled(false);
+            bot.onMarketSubscribed(itemID);
+            TargetPriceBot.Settings s = new TargetPriceBot.Settings(TargetPriceBot.DEFAULT_PID_P, TargetPriceBot.DEFAULT_PID_I,
+                    TargetPriceBot.DEFAULT_PID_D, TargetPriceBot.DEFAULT_PID_RATE, TargetPriceBot.DEFAULT_MAX_ORDER_VOLUME_FACTOR, 0f);
+            applySettings(bot, TargetPriceBot.Settings.CODEC,
+                    s.withReference(0f, s.oscillationPeriodSeconds(), s.oscillationDamping(), s.oscillationAmplitude()));
+            cache.getPluginMarket().setTargetPrice(0.0195);
+            cache.apply();
+            // the bot sells 0.03 -> 0.02 (the target rounds to 0.02)
+            long low = 3;
+            for (int t = 0; t < 200; t++) {
+                bot.update(markets);
+                cache.apply();
+                serverMarket.update();
+                low = Math.min(low, serverMarket.getCurrentMarketPrice());
+            }
+            TargetPriceBot.StepInfo sold = bot.test_getLastStep(itemID);
+            out.append(String.format(Locale.ROOT, "\n bot sell: raw 3 -> %d (min %d), last order %s; %s",
+                    serverMarket.getCurrentMarketPrice(), low, sold, bot.test_describeState(itemID)));
+            if (sold == null || sold.amount() >= 0 || serverMarket.getCurrentMarketPrice() != 2 || low != 2)
+                return fail("Harness: the bot did not sell 0.03 to 0.02" + out);
+            // a player market-sells the price to 0.01 (exactly the bid volume down to it)
+            IServerBankAccount account = fixture.createBankAccount("sm399");
+            UUID player = fixture.createUser("sm399");
+            account.createBank(itemID, 1000L * sf);
+            account.createBank(backend.MARKET_MANAGER.getSync().getTradingCurrencyID(), 0);
+            float dump = cache.getPluginOrderBook().getRealVirtualVolumeToPrice(0.01, Double.POSITIVE_INFINITY);
+            sell(market, account.getBank(itemID), Math.round(dump * sf), player, account);
+            cache.apply();
+            serverMarket.update();
+            out.append(String.format(Locale.ROOT, "\n player sold %.2f: raw %d, net flow %d",
+                    dump, serverMarket.getCurrentMarketPrice(), market.getNetPlayerItemFlow()));
+            if (serverMarket.getCurrentMarketPrice() != 1)
+                return fail("Harness: the player's sell did not move the price to 0.01" + out);
+            // the volume distribution plugin doesn't run here: refill the book it would refill
+            serverMarket.test_resetVirtualOrderBookVolume();
+            TargetPriceBot.StepInfo last = sold;
+            int buys = 0, sells = 0, firstBuyTick = -1;
+            double buyTarget = Double.NaN;
+            long min = 1, max = 1;
+            for (int t = 0; t < 2000; t++) {
+                bot.update(markets);
+                cache.apply();
+                serverMarket.update();
+                TargetPriceBot.StepInfo step = bot.test_getLastStep(itemID);
+                if (step != last) {
+                    last = step;
+                    if (step.amount() > 0) {
+                        if (buys++ == 0) {
+                            firstBuyTick = t;
+                            buyTarget = step.target();
+                        }
+                    } else sells++;
+                }
+                min = Math.min(min, serverMarket.getCurrentMarketPrice());
+                max = Math.max(max, serverMarket.getCurrentMarketPrice());
+            }
+            long end = serverMarket.getCurrentMarketPrice();
+            out.append(String.format(Locale.ROOT, "\n after the dump: %d buys (first at tick %d, target %.4f), %d sells,"
+                            + " raw 1 -> %d (min %d, max %d); %s", buys, firstBuyTick, buyTarget, sells, end, min, max,
+                    bot.test_describeState(itemID)));
+            if (buys == 0 || sells > 0 || end != 2 || min < 1 || max > 2)
+                return fail("Bot did not buy back to 0.02 after the player's dump" + out);
+            if (firstBuyTick >= 50 || !(buyTarget < 0.02))
+                return fail("Bot did not buy back at once while its target was below 0.02" + out);
+            return pass("Buy-back after a player dump at price 0.02:" + out);
+        } catch (Exception e) {
+            return fail("Exception: " + e + out);
+        } finally {
+            TargetPriceBot.test_setGapGuardEnabled(true);
+            serverMarket.test_setDefaultVolumeProviderFunction(null);
+            serverMarket.test_clearIncomingOrderBuffers();
+            serverMarket.test_setCurrentMarketPrice(originalPrice);
+            serverMarket.test_clearOrderbook();
+            market.resetNetPlayerItemFlow();
         }
     }
 
