@@ -29,6 +29,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.PotionContents;
@@ -77,6 +78,7 @@ import java.util.zip.ZipOutputStream;
  * <p>
  * SM-363 (no internet needed): texture lookup through item models in a generated pack, the download's metadata,
  * size and SHA-1 checks (against a local HTTP server), icons over HTTP, and market names with variant details.
+ * SM-405: the market list's sort keys follow the creative inventory order.
  * <p>
  * In headless Firefox (skipped without Firefox): SM-363, the market list's icons and variant names as shown;
  * SM-383, the chart's per-market view, also after a page reload.
@@ -90,6 +92,28 @@ public class WebInterfaceTestSuite extends TestSuite {
     /** @param instances this server's instances (master or slave), set by DevBootstrap */
     public static void setBackend(StockMarketModBackend.ServerInstances instances) {
         backend = instances;
+    }
+
+    /** "Download item textures" before the suite, restored by {@link #teardown()}; null = not changed (no backend). */
+    private @Nullable Boolean downloadBefore;
+
+    /**
+     * SM-404: the download is on by default, so the tests that turn the web interface on would fetch the 27 MB client
+     * from Mojang on a dedicated master. It stays off for the whole suite; the download tests use a local HTTP server.
+     */
+    @Override
+    public void setup() {
+        if (backend == null || backend.SERVER_SETTINGS == null)
+            return;
+        downloadBefore = backend.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.get();
+        backend.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.set(false);
+    }
+
+    @Override
+    public void teardown() {
+        if (downloadBefore != null && backend != null && backend.SERVER_SETTINGS != null)
+            backend.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.set(downloadBefore);
+        downloadBefore = null;
     }
 
     @Override
@@ -116,6 +140,7 @@ public class WebInterfaceTestSuite extends TestSuite {
         addTest("download_metadata_checks", this::test_downloadMetadataChecks);
         addTest("download_checks_size_and_sha1", this::test_downloadChecksSizeAndSha1);
         addTest("market_names_show_variants", this::test_marketNamesShowVariants);
+        addTest("markets_sorted_like_creative_tabs", this::test_marketsSortedLikeCreativeTabs);
         addTest("icons_served_over_http", this::test_iconsServedOverHttp);
         addTest("chart_view_per_market_in_browser", this::test_chartViewPerMarket);
         addTest("icons_and_names_in_browser", this::test_iconsAndNamesInBrowser);
@@ -391,6 +416,63 @@ public class WebInterfaceTestSuite extends TestSuite {
 
     private static Holder<Enchantment> sharpness(MinecraftServer server) {
         return server.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.SHARPNESS);
+    }
+
+    // ------------------------------------------------------------------ SM-405: sort order
+
+    /**
+     * SM-405: {@code /api/markets} gives each market its creative inventory position ({@code sort}). In 1.21.1 the
+     * building blocks tab lists oak planks directly followed by oak stairs, then (after the other oak blocks) spruce
+     * planks; bread is in the food tab and diamond in the ingredients tab after it. So the keys rise in that order,
+     * and no other market's key lies between oak planks and oak stairs.
+     */
+    private TestResult test_marketsSortedLikeCreativeTabs() {
+        if (!isMaster())
+            return skip("master only");
+        StockMarketModSettings.Integrations s = backend.SERVER_SETTINGS.INTEGRATIONS;
+        boolean enabledBefore = Boolean.TRUE.equals(s.WEB_INTERFACE_ENABLED.get());
+        int portBefore = s.WEB_INTERFACE_PORT.get();
+        TestFixture fixture = new TestFixture("WebSort");
+        fixture.setBackend(backend);
+        try {
+            Item[] items = {Items.OAK_PLANKS, Items.OAK_STAIRS, Items.SPRUCE_PLANKS, Items.BREAD, Items.DIAMOND};
+            int[] ids = new int[items.length];
+            for (int i = 0; i < items.length; i++)
+                ids[i] = fixture.createMarket("sort_" + i, new ItemStack(items[i])).getItemID().getShort();
+
+            int port = freePort();
+            s.WEB_INTERFACE_ENABLED.set(true);
+            s.WEB_INTERFACE_PORT.set(port);
+            StockMarketWebInterface.apply(backend);
+            HttpResponse<String> response = get(port, "/api/markets");
+            TestResult r = assertEquals("markets status", 200, response.statusCode());
+            if (!r.passed()) return r;
+            Map<Integer, Integer> sort = new HashMap<>();
+            for (JsonElement e : JsonParser.parseString(response.body()).getAsJsonObject().getAsJsonArray("markets")) {
+                JsonObject m = e.getAsJsonObject();
+                if (m.has("sort"))
+                    sort.put(m.get("id").getAsInt(), m.get("sort").getAsInt());
+            }
+            for (int i = 0; i < items.length; i++) {
+                r = assertTrue(items[i] + " has a sort key: " + response.body(), sort.containsKey(ids[i]));
+                if (!r.passed()) return r;
+            }
+            for (int i = 1; i < items.length; i++) {
+                int before = sort.get(ids[i - 1]), after = sort.get(ids[i]);
+                r = assertTrue(items[i - 1] + " (" + before + ") before " + items[i] + " (" + after + ")", before < after);
+                if (!r.passed()) return r;
+            }
+            int planks = sort.get(ids[0]), stairs = sort.get(ids[1]);
+            return assertTrue("no other item between oak planks and oak stairs: " + sort.values(),
+                    sort.values().stream().noneMatch(k -> k > planks && k < stairs));
+        } catch (Exception e) {
+            return fail("unexpected exception: " + e);
+        } finally {
+            s.WEB_INTERFACE_ENABLED.set(enabledBefore);
+            s.WEB_INTERFACE_PORT.set(portBefore);
+            StockMarketWebInterface.apply(backend);
+            fixture.cleanup();
+        }
     }
 
     /**
