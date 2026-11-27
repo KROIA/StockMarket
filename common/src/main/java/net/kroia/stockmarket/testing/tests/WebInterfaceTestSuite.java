@@ -92,6 +92,28 @@ public class WebInterfaceTestSuite extends TestSuite {
         backend = instances;
     }
 
+    /** "Download item textures" before the suite, restored by {@link #teardown()}; null = not changed (no backend). */
+    private @Nullable Boolean downloadBefore;
+
+    /**
+     * SM-404: the download is on by default, so the tests that turn the web interface on would fetch the 27 MB client
+     * from Mojang on a dedicated master. It stays off for the whole suite; the download tests use a local HTTP server.
+     */
+    @Override
+    public void setup() {
+        if (backend == null || backend.SERVER_SETTINGS == null)
+            return;
+        downloadBefore = backend.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.get();
+        backend.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.set(false);
+    }
+
+    @Override
+    public void teardown() {
+        if (downloadBefore != null && backend != null && backend.SERVER_SETTINGS != null)
+            backend.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.set(downloadBefore);
+        downloadBefore = null;
+    }
+
     @Override
     public TestCategory getCategory() {
         return StockMarketTestCategories.WEB;

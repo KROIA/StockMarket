@@ -144,8 +144,9 @@ public final class StockMarketWebInterface {
         Integer port = b.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_PORT.get();
         int p = port == null ? b.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_PORT.getDefaultValue() : port;
         backend = b;
-        // SM-363: read on every apply (server start, settings change), so it needs no restart; a failed download retries here
-        if (Boolean.TRUE.equals(b.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.get()))
+        // SM-363: read on every apply (server start, settings change), so it needs no restart; a failed download retries here.
+        // SM-404: dedicated server only (loopbackOnly() is false only there); singleplayer / LAN use the game's own textures
+        if (Boolean.TRUE.equals(b.SERVER_SETTINGS.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.get()) && !loopbackOnly())
             WebIconTextures.startDownload();
         if (p == runningPort)
             return;
