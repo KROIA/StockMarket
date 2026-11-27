@@ -390,8 +390,9 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   - WEB_INTERFACE_ENABLED / WEB_INTERFACE_PORT (SM-347): applied right below on the master
         //     (StockMarketWebInterface.apply). Slaves keep the defaults and apply() refuses to start there
         //     (not the master), so no propagation needed.
-        //   - WEB_INTERFACE_DOWNLOAD_TEXTURES (SM-363): read by the same apply() (starts the client jar download
-        //     on the master); slaves never run the web interface, so no propagation needed.
+        //   - WEB_INTERFACE_DOWNLOAD_TEXTURES (SM-363, on by default since SM-404): read by the same apply() (starts
+        //     the client jar download on a dedicated master); slaves never run the web interface, so no
+        //     propagation needed.
         StockMarketWebInterface.apply(BACKEND_INSTANCES);
         if (Boolean.TRUE.equals(settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.get()) && StockMarketWebInterface.getRunningPort() == -1) {
             String msg = "saved, but the web interface could not start (see server log)";
@@ -520,7 +521,7 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         if (settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.get() == null)
             settings.INTEGRATIONS.WEB_INTERFACE_ENABLED.set(false);
         if (settings.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.get() == null)
-            settings.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.set(false);
+            settings.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.set(settings.INTEGRATIONS.WEB_INTERFACE_DOWNLOAD_TEXTURES.getDefaultValue());
     }
 
     /** Clamps a Float setting value into [min, max]; null, NaN and Infinite fall back to {@code fallback}. */
