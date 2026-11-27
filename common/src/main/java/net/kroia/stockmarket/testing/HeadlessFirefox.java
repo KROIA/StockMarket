@@ -106,6 +106,20 @@ public final class HeadlessFirefox {
         return bidi.call("script.evaluate", json("expression", script, "target", json("context", context), "awaitPromise", true));
     }
 
+    /** Opens a new tab and returns its browsing context id. */
+    private static String createTab(Bidi bidi) throws Exception {
+        // SM-400: right after session.new, Firefox may still be replacing its startup context and discard the call
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return bidi.call("browsingContext.create", json("type", "tab")).get("context").getAsString();
+            } catch (IOException e) {
+                String msg = String.valueOf(e.getMessage());
+                if (attempt >= 3 || !(msg.contains("no such frame") || msg.contains("DiscardedBrowsingContext"))) throw e;
+                Thread.sleep(500);
+            }
+        }
+    }
+
     private static <T> T withPage(Path firefox, String url, PageAction<T> action) throws Exception {
         int port = freePort();
         Path profile = Files.createTempDirectory("sm-firefox");
@@ -120,7 +134,7 @@ public final class HeadlessFirefox {
                 .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
         try (Bidi bidi = Bidi.connect(port)) {
             bidi.call("session.new", json("capabilities", new JsonObject()));
-            String context = bidi.call("browsingContext.create", json("type", "tab")).get("context").getAsString();
+            String context = createTab(bidi);
             bidi.call("browsingContext.setViewport", json("context", context, "viewport", json("width", 1920, "height", 1080)));
             navigate(bidi, context, url);
             T result = action.run(bidi, context);
