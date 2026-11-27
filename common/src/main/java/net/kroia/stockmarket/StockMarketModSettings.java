@@ -432,10 +432,11 @@ public class StockMarketModSettings extends ModSettings {
          * SM-363: lets the master download the Minecraft client jar of the running version from Mojang (version
          * manifest on piston-meta, SHA-1 checked) into {@code config/StockMarket/web/}, so the web interface can show
          * vanilla item icons on a dedicated server ({@code WebIconTextures}). Read on every
-         * {@code StockMarketWebInterface.apply} (server start, settings change), so not restart-required; skipped
-         * when the game's textures are on the class path (singleplayer). Master only, never propagated. Default off.
+         * {@code StockMarketWebInterface.apply} (server start, settings change), so not restart-required; only while
+         * the web interface is on, and only on a dedicated server (singleplayer / LAN use the game's own textures).
+         * Master only, never propagated. Default on (SM-404).
          */
-        public final Setting<Boolean> WEB_INTERFACE_DOWNLOAD_TEXTURES = registerSetting("WEB_INTERFACE_DOWNLOAD_TEXTURES", false, Boolean.class);
+        public final Setting<Boolean> WEB_INTERFACE_DOWNLOAD_TEXTURES = registerSetting("WEB_INTERFACE_DOWNLOAD_TEXTURES", true, Boolean.class);
 
         public Integrations() { super("Integrations"); }
     }
